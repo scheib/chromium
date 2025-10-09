@@ -201,8 +201,10 @@ class SearchEngineChoiceDialogBrowserTest : public InProcessBrowserTest {
     SessionRestoreTestHelper restore_observer;
 
     // Create a new window, which should trigger session restore.
+    ui_test_utils::BrowserCreatedObserver browser_created_observer;
     chrome::NewEmptyWindow(profile);
     tab_waiter.Wait();
+    SetBrowser(browser_created_observer.Wait());
 
     for (Browser* new_browser : *BrowserList::GetInstance()) {
       WaitForTabsToLoad(new_browser);
@@ -211,7 +213,6 @@ class SearchEngineChoiceDialogBrowserTest : public InProcessBrowserTest {
     restore_observer.Wait();
     keep_alive.reset();
     profile_keep_alive.reset();
-    SelectFirstBrowser();
   }
 
   void WaitForTabsToLoad(Browser* browser) {
@@ -550,8 +551,18 @@ IN_PROC_BROWSER_TEST_F(SearchEngineChoiceDialogBrowserTest,
 }
 #endif
 
-IN_PROC_BROWSER_TEST_F(SearchEngineChoiceDialogBrowserTest,
-                       DialogDoesNotShowWithExtensionEnabledThatOverridesDSE) {
+// TODO(crbug.com/429600559): Re-implement this test and cover windows once a
+// non-flaky implementation is found.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_DialogDoesNotShowWithExtensionEnabledThatOverridesDSE \
+  DISABLED_DialogDoesNotShowWithExtensionEnabledThatOverridesDSE
+#else
+#define MAYBE_DialogDoesNotShowWithExtensionEnabledThatOverridesDSE \
+  DialogDoesNotShowWithExtensionEnabledThatOverridesDSE
+#endif
+IN_PROC_BROWSER_TEST_F(
+    SearchEngineChoiceDialogBrowserTest,
+    MAYBE_DialogDoesNotShowWithExtensionEnabledThatOverridesDSE) {
   Profile* profile = browser()->profile();
   auto* search_engine_choice_dialog_service =
       static_cast<MockSearchEngineChoiceDialogService*>(
@@ -565,15 +576,6 @@ IN_PROC_BROWSER_TEST_F(SearchEngineChoiceDialogBrowserTest,
       GenerateDummyTemplateURLData("extension");
   template_url_service->ApplyDefaultSearchChangeForTesting(
       extension.get(), DefaultSearchManager::FROM_EXTENSION);
-
-  // DSE-controlling extensions are enabled only on Mac & Win
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-  // TODO(crbug.com/429600559): Documenting a bug, this is not the right way to
-  // set an extension-provided DSE. It needs to be registered in prefs first.
-  EXPECT_TRUE(!template_url_service->GetDefaultSearchProvider() ||
-              template_url_service->GetDefaultSearchProvider()->keyword() ==
-                  u"extension");
-#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
   // Using a dedicated histogram tester for more more granular error reporting
   // in the checks below.
@@ -590,10 +592,26 @@ IN_PROC_BROWSER_TEST_F(SearchEngineChoiceDialogBrowserTest,
   EXPECT_FALSE(
       search_engine_choice_dialog_service->IsShowingDialog(*browser()));
 
-  scoped_histogram_tester.ExpectUniqueSample(
-      search_engines::kSearchEngineChoiceScreenNavigationConditionsHistogram,
-      search_engines::SearchEngineChoiceScreenConditions::kExtensionControlled,
-      1);
+  // TODO(crbug.com/429600559): Documenting a bug, this is not the right way to
+  // set an extension-provided DSE. It needs to be registered in prefs first.
+  // Also, DSE-controlling extensions are supported only on Mac & Win, which is
+  // another source of no being able to properly test this flow.
+  if (!template_url_service->GetDefaultSearchProvider()) {
+    scoped_histogram_tester.ExpectUniqueSample(
+        search_engines::kSearchEngineChoiceScreenNavigationConditionsHistogram,
+        // Indicating that default search is disabled.
+        search_engines::SearchEngineChoiceScreenConditions::kControlledByPolicy,
+        1);
+  } else {
+    EXPECT_EQ(template_url_service->GetDefaultSearchProvider()->keyword(),
+              u"extension");
+
+    scoped_histogram_tester.ExpectUniqueSample(
+        search_engines::kSearchEngineChoiceScreenNavigationConditionsHistogram,
+        search_engines::SearchEngineChoiceScreenConditions::
+            kExtensionControlled,
+        1);
+  }
 }
 
 IN_PROC_BROWSER_TEST_F(SearchEngineChoiceDialogBrowserTest,

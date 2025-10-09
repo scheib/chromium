@@ -552,12 +552,12 @@ void SafetyCheckNotificationClient::ClearAndRescheduleSafetyCheckNotifications(
   if ([interacted_notification_metadata_ count]) {
     Browser* browser = GetActiveForegroundBrowser();
 
-    auto showUICallback = base::CallbackToBlock(base::BindOnce(
-        &SafetyCheckNotificationClient::ShowUIForNotificationMetadata,
-        weak_ptr_factory_.GetWeakPtr(), interacted_notification_metadata_,
-        browser->AsWeakPtr()));
-
     if (browser) {
+      auto showUICallback = base::CallbackToBlock(base::BindOnce(
+          &SafetyCheckNotificationClient::ShowUIForNotificationMetadata,
+          weak_ptr_factory_.GetWeakPtr(), interacted_notification_metadata_,
+          browser->AsWeakPtr()));
+
       [HandlerForProtocol(browser->GetCommandDispatcher(), ApplicationCommands)
           prepareToPresentModalWithSnackbarDismissal:NO
                                           completion:showUICallback];
@@ -601,13 +601,12 @@ void SafetyCheckNotificationClient::ShowUIForNotificationMetadata(
         AuthenticationServiceFactory::GetForProfile(browser->GetProfile());
     id<SystemIdentity> identity =
         authService->GetPrimaryIdentity(signin::ConsentLevel::kSignin);
-    const GaiaId gaiaID(identity.gaiaID);
     if (!push_notification_settings::
             GetMobileNotificationPermissionStatusForClient(
-                PushNotificationClientId::kSafetyCheck, gaiaID)) {
+                PushNotificationClientId::kSafetyCheck, identity.gaiaId)) {
       PushNotificationService* service =
           GetApplicationContext()->GetPushNotificationService();
-      service->SetPreference(gaiaID.ToNSString(),
+      service->SetPreference(identity.gaiaID,
                              PushNotificationClientId::kSafetyCheck, true);
     }
   }

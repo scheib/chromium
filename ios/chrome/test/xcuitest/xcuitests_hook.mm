@@ -4,11 +4,17 @@
 
 #import "base/test/allow_check_is_test_for_testing.h"
 #import "base/time/time.h"
+#import "components/commerce/core/shopping_service.h"
 #import "components/feature_engagement/public/feature_activation.h"
 #import "components/signin/internal/identity_manager/profile_oauth2_token_service_delegate.h"
 #import "ios/chrome/app/tests_hook.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_constants.h"
 
 namespace tests_hook {
+
+bool DisableGeminiEligibilityCheck() {
+  return false;
+}
 
 bool DisableAppGroupAccess() {
   return true;
@@ -42,7 +48,7 @@ bool DisablePromoManagerDisplayingPromo() {
   return true;
 }
 
-bool DisableUpgradeSigninPromo() {
+bool DisableFullscreenSigninPromo() {
   return true;
 }
 
@@ -81,6 +87,11 @@ std::unique_ptr<TrustedVaultClientBackend> CreateTrustedVaultClientBackend() {
 }
 
 std::unique_ptr<tab_groups::TabGroupSyncService> CreateTabGroupSyncService(
+    ProfileIOS* profile) {
+  return nullptr;
+}
+
+std::unique_ptr<commerce::ShoppingService> CreateShoppingService(
     ProfileIOS* profile) {
   return nullptr;
 }
@@ -128,10 +139,6 @@ base::TimeDelta PasswordCheckMinimumDuration() {
   return base::Seconds(0);
 }
 
-base::TimeDelta GetOverriddenSnackbarDuration() {
-  return base::Seconds(0);
-}
-
 std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
   return nullptr;
 }
@@ -147,6 +154,10 @@ void WipeProfileIfRequested(int argc, char* argv[]) {
 base::TimeDelta
 GetOverriddenDelayForRequestingTurningOnCredentialProviderExtension() {
   return base::Seconds(0);
+}
+
+base::TimeDelta GetSnackbarMessageDuration() {
+  return kSnackbarMessageDuration;
 }
 
 }  // namespace tests_hook

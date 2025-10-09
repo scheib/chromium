@@ -563,16 +563,16 @@ void OpenXrRenderLoop::UpdateLayerBounds(int16_t frame_id,
 
   source_size_ = source_size;
 
-  graphics_binding_->SetTransferSize(source_size);
+  graphics_binding_->SetBaseLayerTransferSize(source_size);
 
   // if `pending_frame_` exists and still has a `frame_data_`, then we haven't
   // sent the current texture to the page yet, and it will expect to receive the
   // shared image at this new size when it requests it. This can happen if e.g.
   // the overlay got a request in before the page made this call.
   if (pending_frame_ && pending_frame_->frame_data_ && context_provider_) {
-    graphics_binding_->UpdateActiveSwapchainImageSize(
+    graphics_binding_->UpdateBaseLayerActiveSwapchainImageSize(
         context_provider_->SharedImageInterface());
-    PopulateSharedImageData(*pending_frame_->frame_data_);
+    graphics_binding_->PopulateSharedImageData(*pending_frame_->frame_data_);
   }
 }
 
@@ -693,7 +693,7 @@ mojom::XRFrameDataPtr OpenXrRenderLoop::GetNextFrameData() {
     return frame_data;
   }
 
-  PopulateSharedImageData(*frame_data);
+  graphics_binding_->PopulateSharedImageData(*frame_data);
 
   const XrTime frame_time = openxr_->GetPredictedDisplayTime();
 
@@ -723,6 +723,11 @@ mojom::XRFrameDataPtr OpenXrRenderLoop::GetNextFrameData() {
     if (light_estimator) {
       frame_data->light_estimation_data =
           light_estimator->GetLightEstimate(frame_time);
+    }
+
+    OpenXrPlaneManager* plane_manager = openxr_->GetPlaneManager();
+    if (plane_manager) {
+      frame_data->detected_planes_data = plane_manager->GetDetectedPlanesData();
     }
   }
 
@@ -906,7 +911,7 @@ void OpenXrRenderLoop::OnWebXrTokenSignaled(
 
   {
     TRACE_EVENT0("xr", "OpenXrRenderLoop::WaitOnFence");
-    if (!graphics_binding_->WaitOnFence(*gpu_fence)) {
+    if (!graphics_binding_->WaitOnBaseLayerFence(*gpu_fence)) {
       return;
     }
   }
@@ -919,16 +924,6 @@ void OpenXrRenderLoop::OnWebXrTokenSignaled(
   if (context_provider_) {
     gpu::gles2::GLES2Interface* gl = context_provider_->ContextGL();
     gl->DestroyGpuFenceCHROMIUM(id);
-  }
-}
-
-void OpenXrRenderLoop::PopulateSharedImageData(mojom::XRFrameData& frame_data) {
-  // TODO(crbug.com/40909689): Make SwapchainInfo purely internal to the
-  // graphics bindings so that this isn't necessary here.
-  const auto& swap_chain_info = graphics_binding_->GetActiveSwapchainImage();
-  if (swap_chain_info.shared_image) {
-    frame_data.buffer_shared_image = swap_chain_info.shared_image->Export();
-    frame_data.buffer_sync_token = swap_chain_info.sync_token;
   }
 }
 
@@ -967,24 +962,16 @@ void OpenXrRenderLoop::SubscribeToHitTest(
   OpenXrHitTestManager* hit_test_manager = openxr_->GetHitTestManager();
 
   if (!hit_test_manager) {
-    std::move(callback).Run(
-        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
   std::optional<HitTestSubscriptionId> maybe_subscription_id =
       hit_test_manager->SubscribeToHitTest(std::move(native_origin_information),
                                            entity_types, std::move(ray));
-
-  if (!maybe_subscription_id) {
-    std::move(callback).Run(
-        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
-    return;
-  }
-
-  DVLOG(2) << __func__ << ": subscription_id=" << *maybe_subscription_id;
-  std::move(callback).Run(device::mojom::SubscribeToHitTestResult::SUCCESS,
-                          maybe_subscription_id->GetUnsafeValue());
+  DVLOG(2) << __func__ << ": subscription_id="
+           << maybe_subscription_id.value_or(kInvalidHitTestSubscriptionId);
+  std::move(callback).Run(maybe_subscription_id);
 }
 
 void OpenXrRenderLoop::SubscribeToHitTestForTransientInput(
@@ -999,63 +986,48 @@ void OpenXrRenderLoop::SubscribeToHitTestForTransientInput(
   OpenXrHitTestManager* hit_test_manager = openxr_->GetHitTestManager();
 
   if (!hit_test_manager) {
-    std::move(callback).Run(
-        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
   std::optional<HitTestSubscriptionId> maybe_subscription_id =
       hit_test_manager->SubscribeToHitTestForTransientInput(
           profile_name, entity_types, std::move(ray));
-
-  if (!maybe_subscription_id) {
-    std::move(callback).Run(
-        device::mojom::SubscribeToHitTestResult::FAILURE_GENERIC, 0);
-    return;
-  }
-
-  DVLOG(2) << __func__ << ": subscription_id=" << *maybe_subscription_id;
-  std::move(callback).Run(device::mojom::SubscribeToHitTestResult::SUCCESS,
-                          maybe_subscription_id->GetUnsafeValue());
+  DVLOG(2) << __func__ << ": subscription_id="
+           << maybe_subscription_id.value_or(kInvalidHitTestSubscriptionId);
+  std::move(callback).Run(maybe_subscription_id);
 }
 
-void OpenXrRenderLoop::UnsubscribeFromHitTest(uint64_t subscription_id) {
+void OpenXrRenderLoop::UnsubscribeFromHitTest(
+    const HitTestSubscriptionId& subscription_id) {
   DVLOG(2) << __func__;
   OpenXrHitTestManager* hit_test_manager = openxr_->GetHitTestManager();
   if (hit_test_manager) {
-    hit_test_manager->UnsubscribeFromHitTest(
-        HitTestSubscriptionId(subscription_id));
+    hit_test_manager->UnsubscribeFromHitTest(subscription_id);
   }
 }
 
 void OpenXrRenderLoop::CreateAnchor(
     mojom::XRNativeOriginInformationPtr native_origin_information,
     const device::Pose& native_origin_from_anchor,
+    const std::optional<PlaneId>& plane_id,
     CreateAnchorCallback callback) {
   OpenXrAnchorManager* anchor_manager = openxr_->GetAnchorManager();
   if (!anchor_manager) {
+    std::move(callback).Run(std::nullopt);
     return;
   }
   anchor_manager->AddCreateAnchorRequest(*native_origin_information,
-                                         native_origin_from_anchor,
+                                         native_origin_from_anchor, plane_id,
                                          std::move(callback));
 }
 
-void OpenXrRenderLoop::CreatePlaneAnchor(
-    mojom::XRNativeOriginInformationPtr native_origin_information,
-    const device::Pose& native_origin_from_anchor,
-    uint64_t plane_id,
-    CreatePlaneAnchorCallback callback) {
-  environment_receiver_.ReportBadMessage(
-      "OpenXrRenderLoop::CreatePlaneAnchor not yet implemented");
-}
-
-void OpenXrRenderLoop::DetachAnchor(uint64_t anchor_id) {
+void OpenXrRenderLoop::DetachAnchor(const AnchorId& anchor_id) {
   OpenXrAnchorManager* anchor_manager = openxr_->GetAnchorManager();
   if (!anchor_manager) {
     return;
   }
-  anchor_manager->DetachAnchor(AnchorId(anchor_id));
+  anchor_manager->DetachAnchor(anchor_id);
 }
 
 void OpenXrRenderLoop::StartContextProviderIfNeeded(

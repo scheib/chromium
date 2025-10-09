@@ -66,6 +66,11 @@ void SetCallNewHandlerOnMallocFailure(bool value);
 // regardless of SetCallNewHandlerOnMallocFailure().
 PA_COMPONENT_EXPORT(ALLOCATOR_SHIM) void* UncheckedAlloc(size_t size);
 
+// Allocates |n| zeroed elements of size |size| or returns nullptr. It does NOT
+// call the new_handler, regardless of SetCallNewHandlerOnMallocFailure().
+PA_COMPONENT_EXPORT(ALLOCATOR_SHIM)
+void* UncheckedCalloc(size_t n, size_t size);
+
 // Reallocates |ptr| to point at |size| bytes with the same alignment as |ptr|,
 // or returns nullptr while leaving the |ptr| unchanged. It does NOT call the
 // new_handler, regardless of SetCallNewHandlerOnMallocFailure().
@@ -151,9 +156,6 @@ using EnableMemoryTagging =
 enum class BucketDistribution : uint8_t { kNeutral, kDenser };
 using EventuallyZeroFreedMemory = partition_alloc::internal::base::
     StrongAlias<class EventuallyZeroFreedMemoryTag, bool>;
-using FewerMemoryRegions =
-    partition_alloc::internal::base::StrongAlias<class FewerMemoryRegionsTag,
-                                                 bool>;
 // If |thread_cache_on_non_quarantinable_partition| is specified, the
 // thread-cache will be enabled on the non-quarantinable partition. The
 // thread-cache on the main (malloc) partition will be disabled.
@@ -168,8 +170,9 @@ void ConfigurePartitions(
         scheduler_loop_quarantine_global_config,
     partition_alloc::internal::SchedulerLoopQuarantineConfig
         scheduler_loop_quarantine_thread_local_config,
-    EventuallyZeroFreedMemory eventually_zero_freed_memory,
-    FewerMemoryRegions fewer_memory_regions);
+    partition_alloc::internal::SchedulerLoopQuarantineConfig
+        scheduler_loop_quarantine_for_advanced_memory_safety_checks_config,
+    EventuallyZeroFreedMemory eventually_zero_freed_memory);
 
 PA_COMPONENT_EXPORT(ALLOCATOR_SHIM) uint32_t GetMainPartitionRootExtrasSize();
 

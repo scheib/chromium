@@ -4,11 +4,11 @@
 
 #import <XCTest/XCTest.h>
 
+#import "base/ios/ios_util.h"
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
 #import "build/branding_buildflags.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/content_suggestions_constants.h"
-#import "ios/chrome/browser/content_suggestions/ui_bundled/tab_resumption/tab_resumption_app_interface.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/tab_resumption/tab_resumption_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/start_surface/ui_bundled/start_surface_features.h"
@@ -71,19 +71,27 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
       ".Test:" + std::string(kReturnToStartSurfaceInactiveDurationInSeconds) +
       "/" + "0");
   config.additional_args.push_back("--test-ios-module-ranker=tab_resumption");
+  config.additional_args.push_back("--mock-shopping-service=is-eligible,"
+                                   "has-empty-price-tracked-bookmarks-results");
   return config;
 }
 
 - (void)setUp {
   [super setUp];
   [[self class] closeAllTabs];
-  [TabResumptionAppInterface setUpMockShoppingService];
   [ChromeEarlGrey openNewTab];
 }
 
 // Tests that navigating to a page and restarting upon cold start, an NTP page
 // is opened with the Return to Recent Tab tile.
-- (void)testColdStartOpenStartSurface {
+// TODO(crbug.com/443695878): Test disabled on simulator.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testColdStartOpenStartSurface \
+  DISABLED_testColdStartOpenStartSurface
+#else
+#define MAYBE_testColdStartOpenStartSurface testColdStartOpenStartSurface
+#endif
+- (void)MAYBE_testColdStartOpenStartSurface {
 // TODO(crbug.com/40262902): Test is flaky on iPad device. Re-enable the test.
 #if !TARGET_OS_SIMULATOR
   if ([ChromeEarlGrey isIPadIdiom]) {
@@ -107,7 +115,14 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
 
 // Tests that navigating to a page and then backgrounding and foregrounding, an
 // NTP page is opened.
-- (void)testWarmStartOpenStartSurface {
+// TODO(crbug.com/443695878): Test disabled on simulator.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testWarmStartOpenStartSurface \
+  DISABLED_testWarmStartOpenStartSurface
+#else
+#define MAYBE_testWarmStartOpenStartSurface testWarmStartOpenStartSurface
+#endif
+- (void)MAYBE_testWarmStartOpenStartSurface {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationUrl = self.testServer->GetURL("/pony.html");
   [ChromeEarlGrey loadURL:destinationUrl];
@@ -127,7 +142,8 @@ void WaitUntilTabResumptionTileVisibleOrTimeout(bool should_show) {
 // Tests that navigating to a page and restarting upon cold start, an NTP page
 // is opened with the Return to Recent Tab tile. Then, removing that last tab
 // also removes the tile while that NTP is still being shown.
-- (void)testRemoveRecentTabRemovesReturnToRecentTabTile {
+// TODO(crbug.com/441260657): Re-enable when fixed.
+- (void)DISABLED_testRemoveRecentTabRemovesReturnToRecentTabTile {
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
   const GURL destinationUrl = self.testServer->GetURL("/pony.html");
   [ChromeEarlGrey loadURL:destinationUrl];

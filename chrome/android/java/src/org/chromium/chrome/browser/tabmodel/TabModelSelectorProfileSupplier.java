@@ -22,7 +22,7 @@ import org.chromium.chrome.browser.tab.Tab;
  * thread.
  */
 @NullMarked
-public class TabModelSelectorProfileSupplier extends ObservableSupplierImpl<Profile>
+public class TabModelSelectorProfileSupplier extends ObservableSupplierImpl<@Nullable Profile>
         implements Destroyable {
     private final TabModelSelectorObserver mSelectorObserver;
     private final ObservableSupplier<TabModelSelector> mSelectorSupplier;
@@ -69,8 +69,9 @@ public class TabModelSelectorProfileSupplier extends ObservableSupplierImpl<Prof
         mSelectorSupplierCallback = this::setSelector;
         mSelectorSupplier.addObserver(mSelectorSupplierCallback);
 
-        if (mSelectorSupplier.hasValue()) {
-            setSelector(mSelectorSupplier.get());
+        var selector = mSelectorSupplier.get();
+        if (selector != null) {
+            setSelector(selector);
         }
     }
 
@@ -101,32 +102,19 @@ public class TabModelSelectorProfileSupplier extends ObservableSupplierImpl<Prof
     }
 
     @Override
-    public void set(Profile profile) {
-        if (profile == null) {
-            throw new IllegalStateException("Null is not a valid value to set for the profile.");
-        }
+    public void set(@Nullable Profile profile) {
+        assert profile != null : "Cannot set a null Profile";
         // TODO(365814339): Convert to checked exception once all callsites are fixed.
         assert !profile.shutdownStarted() : "Attempting to set an already destroyed Profile";
         super.set(profile);
     }
 
     @Override
-    public Profile get() {
+    public @Nullable Profile get() {
         Profile profile = super.get();
-        if (profile == null) {
-            // Prevent unintentional access to a null profile early during app initialization. If a
-            // client wants to read this when it could be null, use hasValue() and add an observer
-            // to be notified when the profile becomes available.
-            throw new IllegalStateException("Attempting to read a null profile from the supplier");
-        }
         // TODO(365814339): Convert to checked exception once all callsites are fixed.
-        assert !profile.shutdownStarted() : "Attempting to access an already destroyed Profile";
+        assert profile == null || !profile.shutdownStarted()
+                : "Attempting to access an already destroyed Profile";
         return profile;
-    }
-
-    @Override
-    public boolean hasValue() {
-        // this.get() will throw on null, so go directly to super.
-        return super.get() != null;
     }
 }

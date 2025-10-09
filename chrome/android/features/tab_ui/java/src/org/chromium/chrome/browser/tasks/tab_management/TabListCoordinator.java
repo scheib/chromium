@@ -5,6 +5,7 @@
 package org.chromium.chrome.browser.tasks.tab_management;
 
 import static org.chromium.build.NullUtil.assumeNonNull;
+import static org.chromium.chrome.browser.tasks.tab_management.RecyclerViewScroller.smoothScrollToPosition;
 import static org.chromium.chrome.browser.tasks.tab_management.TabListModel.CardProperties.CARD_TYPE;
 import static org.chromium.chrome.browser.tasks.tab_management.TabListModel.CardProperties.ModelType.TAB;
 import static org.chromium.chrome.browser.tasks.tab_management.TabProperties.TAB_ID;
@@ -38,7 +39,6 @@ import org.chromium.base.ObserverList;
 import org.chromium.base.Token;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
@@ -80,6 +80,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** Coordinator for showing UI for a list of tabs. Can be used in GRID or STRIP modes. */
 @NullMarked
@@ -136,7 +137,7 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
     private final Activity mActivity;
     private final BrowserControlsStateProvider mBrowserControlsStateProvider;
     private final TabListModel mModelList;
-    private final boolean mHasEmptyView;
+    private final ViewGroup mParentView;
     private final @DrawableRes int mEmptyStateImageResId;
     private final @StringRes int mEmptyStateHeadingResId;
     private final @StringRes int mEmptyStateSubheadingResId;
@@ -212,7 +213,8 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
             TabListMediator.@Nullable TabGridDialogHandler dialogHandler,
             @TabActionState int initialTabActionState,
             TabListMediator.@Nullable SelectionDelegateProvider selectionDelegateProvider,
-            @Nullable Supplier<PriceWelcomeMessageController> priceWelcomeMessageControllerSupplier,
+            @Nullable Supplier<@Nullable PriceWelcomeMessageController>
+                    priceWelcomeMessageControllerSupplier,
             ViewGroup parentView,
             boolean attachToParent,
             String componentName,
@@ -230,6 +232,7 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
         mActivity = activity;
         mBrowserControlsStateProvider = browserControlsStateProvider;
         mModelList = new TabListModel();
+        mParentView = parentView;
         mAdapter =
                 new SimpleRecyclerViewAdapter(mModelList) {
                     @Override
@@ -446,8 +449,6 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
             mTabStripSnapshotter =
                     new TabStripSnapshotter(onModelTokenChange, mModelList, mRecyclerView);
         }
-
-        mHasEmptyView = hasEmptyView;
         mEmptyStateHeadingResId = emptyHeadingStringResId;
         mEmptyStateSubheadingResId = emptySubheadingStringResId;
         mEmptyStateImageResId = emptyImageResId;
@@ -798,11 +799,12 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
         if (mIsEmptyViewInitialized) {
             return;
         }
-        if (mHasEmptyView && mTabListEmptyCoordinator != null) {
+        if (mTabListEmptyCoordinator != null) {
             mTabListEmptyCoordinator.initializeEmptyStateView(
                     mEmptyStateImageResId, mEmptyStateHeadingResId, mEmptyStateSubheadingResId);
             mTabListEmptyCoordinator.attachEmptyView();
             mIsEmptyViewInitialized = true;
+            TabUiUtils.applyXrEmptyStateBackplate(mParentView);
         }
     }
 
@@ -816,7 +818,7 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
     }
 
     public void destroyEmptyView() {
-        if (mHasEmptyView && mTabListEmptyCoordinator != null) {
+        if (mTabListEmptyCoordinator != null) {
             mTabListEmptyCoordinator.destroyEmptyView();
             mIsEmptyViewInitialized = false;
         }
@@ -826,7 +828,7 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
         if (!mIsEmptyViewInitialized) {
             initializeEmptyStateView();
         }
-        if (mHasEmptyView && mTabListEmptyCoordinator != null) {
+        if (mTabListEmptyCoordinator != null) {
             mTabListEmptyCoordinator.setIsTabSwitcherShowing(true);
         }
     }
@@ -839,7 +841,7 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
     void postHiding() {
         unregisterLayoutChangeListener();
         mMediator.postHiding();
-        if (mHasEmptyView && mTabListEmptyCoordinator != null) {
+        if (mTabListEmptyCoordinator != null) {
             mTabListEmptyCoordinator.setIsTabSwitcherShowing(false);
         }
     }
@@ -1095,6 +1097,17 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
     }
 
     /**
+     * Scrolls to the specified card index specified.
+     *
+     * @param cardIndex The card index to scroll to.
+     */
+    public void scrollToPosition(int cardIndex) {
+        mRecyclerView.setSmoothScrolling(true);
+        smoothScrollToPosition(
+                mRecyclerView, cardIndex, () -> mRecyclerView.setSmoothScrolling(false));
+    }
+
+    /**
      * Maps a tab ID to an index. For use with {@link #addSpecialListItem(int, int, PropertyModel)}.
      */
     /* package */ int getIndexFromTabId(@TabId int tabId) {
@@ -1142,5 +1155,9 @@ public class TabListCoordinator implements PriceWelcomeMessageProvider, DestroyO
 
     public TabListHighlighter getTabListHighlighter() {
         return mTabListHighlighter;
+    }
+
+    public TabListModel getTabListModel() {
+        return mModelList;
     }
 }

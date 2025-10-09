@@ -36,6 +36,8 @@ enum class PageContextWrapperError {
   kForceDetachError,
   // The Page Context retrieval timed out.
   kTimeout,
+  // innerText was expected, but none was extracted.
+  kInnerTextError,
 };
 
 using PageContextWrapperCallbackResponse =
@@ -75,6 +77,13 @@ using PageContextWrapperCallbackResponse =
 // nothing if `shouldGetSnapshot` is NO.
 @property(nonatomic, assign) BOOL shouldForceUpdateMissingSnapshots;
 
+// Since most of the extraction needs to run on the main thread anyways,
+// enabling this flag will simply post the task on the main thread instead of
+// executing it synchronously, so it can be picked up at a later (hopefully
+// better) time. Use this for non time-sensitive or user-facing PageContext
+// extractions.
+@property(nonatomic, assign) BOOL isLowPriorityExtraction;
+
 // Text to highlight in the snapshot. Will be highlighted just before taking the
 // snapshot, and unhighlighted right after. Nil if no text should be
 // highlighted. Only applies if the tab being processed is currently visible,
@@ -103,6 +112,11 @@ using PageContextWrapperCallbackResponse =
 // with their descendents keeping their relative (WRT to their parent
 // cross-origin iframes) hierarchy.
 @property(nonatomic, assign) BOOL shouldGetAnnotatedPageContent;
+
+// Whether the entire webpage's innerText should be fetched. This includes the
+// innerText of all of the webpage's iframes as the information is aggregated
+// while the AnnotatedPageContent (APC) tree is built.
+@property(nonatomic, assign) BOOL shouldGetInnerText;
 
 @end
 

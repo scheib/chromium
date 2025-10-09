@@ -21,6 +21,7 @@ import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
 import org.chromium.base.ObserverList;
 import org.chromium.base.TraceEvent;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
@@ -222,7 +223,25 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
         mBrowserVisibilityDelegate.addObserver(
                 (constraints) -> {
                     if (constraints == BrowserControlsState.SHOWN) {
-                        setPositionsForTabToNonFullscreen();
+                        // When compositor can drive the animation to show controls, do not call
+                        // setPositionsForTabToNonFullscreen to avoid control offset being forced
+                        // set to 0 before the render-driven animation kicks in.
+                        boolean allowRenderDrivenShowConstraint =
+                                ChromeFeatureList.sBrowserControlsRenderDrivenShowConstraint
+                                        .isEnabled();
+                        boolean renderDrivenShowConstraint =
+                                allowRenderDrivenShowConstraint
+                                        && canAnimateNativeBrowserControls();
+                        if (!renderDrivenShowConstraint) {
+                            setPositionsForTabToNonFullscreen();
+                        }
+
+                        // TODO(https://crbug.com/449011189): Maybe cleanup
+                        if (allowRenderDrivenShowConstraint) {
+                            RecordHistogram.recordBooleanHistogram(
+                                    "Android.BrowserControls.RenderDrivenShowConstraint",
+                                    renderDrivenShowConstraint);
+                        }
 
                         // If controls become locked, it's possible we've previously delayed
                         // actually setting visibility until a touch event is over. In this case, we
@@ -309,7 +328,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
                     }
 
                     @Override
-                    public void onBrowserControlsConstraintsChanged(
+                    public void onOffsetTagsInfoChanged(
                             Tab tab,
                             BrowserControlsOffsetTagsInfo oldOffsetTagsInfo,
                             BrowserControlsOffsetTagsInfo offsetTagsInfo,
@@ -363,6 +382,10 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
                 // Treat the case of no controls as controls always being totally offscreen.
                 mControlOffsetRatio = 1.0f;
                 break;
+        }
+
+        if (doSyncMinHeightWithTotalHeight()) {
+            mTopControlsMinHeight = mTopControlsHeight;
         }
 
         mRendererTopContentOffset = mTopControlsHeight;
@@ -530,6 +553,10 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
 
     @Override
     public void setTopControlsHeight(int topControlsHeight, int topControlsMinHeight) {
+        if (doSyncMinHeightWithTotalHeight()) {
+            topControlsMinHeight = topControlsHeight;
+        }
+
         if (mTopControlsHeight == topControlsHeight
                 && mTopControlsMinHeight == topControlsMinHeight) {
             return;
@@ -987,7 +1014,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
             BrowserControlsOffsetTagsInfo offsetTagsInfo,
             @BrowserControlsState int constraints) {
         for (BrowserControlsStateProvider.Observer obs : mControlsObservers) {
-            obs.onControlsConstraintsChanged(
+            obs.onOffsetTagsInfoChanged(
                     oldOffsetTagsInfo,
                     offsetTagsInfo,
                     constraints,
@@ -1343,6 +1370,13 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
         if (mActiveTabObserver != null) mActiveTabObserver.destroy();
         mBrowserVisibilityDelegate.destroy();
         if (mTabControlsObserver != null) mTabControlsObserver.destroy();
+    }
+
+    private boolean doSyncMinHeightWithTotalHeight() {
+        // When V2 flag is enabled, this logic is coordinated in TopControlsStacker.
+        if (BrowserControlsUtils.doSyncMinHeightWithTotalHeightV2()) return false;
+
+        return BrowserControlsUtils.doSyncMinHeightWithTotalHeight(mActivity);
     }
 
     @NullUnmarked

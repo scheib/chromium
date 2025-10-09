@@ -8,7 +8,7 @@ mojom("mojo_bindings") {
   sources = [ "composebox_query.mojom" ]
   public_deps = [ "//mojo/public/mojom/base" ]
 
-  webui_module_path = "/"
+  webui_module_path = "chrome://resources/mojo/components/omnibox/composebox"
 }
 
 source_set("composebox") {
@@ -17,6 +17,8 @@ source_set("composebox") {
     "composebox_metrics_recorder.h",
     "composebox_query_controller.cc",
     "composebox_query_controller.h",
+    "contextual_session_service.cc",
+    "contextual_session_service.h",
   ]
   deps = [
     ":mojo_bindings",
@@ -38,17 +40,6 @@ source_set("composebox") {
     "//third_party/icu:icuuc_public",
     "//third_party/lens_server_proto:lens_overlay_proto",
   ]
-
-  if (!is_ios) {
-    sources += [
-      "composebox_image_helper.cc",
-      "composebox_image_helper.h",
-    ]
-    deps += [
-      "//skia",
-      "//ui/gfx",
-    ]
-  }
 }
 
 source_set("test_support") {
@@ -76,6 +67,7 @@ source_set("unit_tests") {
   sources = [
     "composebox_metrics_recorder_unittest.cc",
     "composebox_query_controller_unittest.cc",
+    "contextual_session_service_unittest.cc",
   ]
   deps = [
     ":composebox",
@@ -95,13 +87,4 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//third_party/lens_server_proto:lens_overlay_proto",
   ]
-
-  if (!is_ios) {
-    sources += [ "composebox_image_helper_unittest.cc" ]
-    deps += [
-      "//components/search",
-      "//skia",
-      "//ui/gfx",
-    ]
-  }
 }

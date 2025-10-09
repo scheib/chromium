@@ -49,6 +49,10 @@ enum class ModelBasedCapabilityKey {
       proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_ENHANCED_CALENDAR,
   kZeroStateSuggestions = proto::ModelExecutionFeature::
       MODEL_EXECUTION_FEATURE_ZERO_STATE_SUGGESTIONS,
+  kWalletablePassExtraction = proto::ModelExecutionFeature::
+      MODEL_EXECUTION_FEATURE_WALLETABLE_PASS_EXTRACTION,
+  kAmountExtraction =
+      proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_AMOUNT_EXTRACTION,
 };
 
 inline std::ostream& operator<<(std::ostream& out,
@@ -90,6 +94,10 @@ inline std::ostream& operator<<(std::ostream& out,
       return out << "EnhancedCalendar";
     case ModelBasedCapabilityKey::kZeroStateSuggestions:
       return out << "ZeroStateSuggestions";
+    case ModelBasedCapabilityKey::kWalletablePassExtraction:
+      return out << "WalletablePassExtraction";
+    case ModelBasedCapabilityKey::kAmountExtraction:
+      return out << "AmountExtraction";
   }
   return out;
 }
@@ -114,6 +122,8 @@ inline constexpr auto kAllModelBasedCapabilityKeys =
         ModelBasedCapabilityKey::kWritingAssistanceApi,
         ModelBasedCapabilityKey::kEnhancedCalendar,
         ModelBasedCapabilityKey::kZeroStateSuggestions,
+        ModelBasedCapabilityKey::kWalletablePassExtraction,
+        ModelBasedCapabilityKey::kAmountExtraction,
     });
 
 // A "real" feature implemented by a model-based capability.
@@ -240,6 +250,12 @@ inline ModelBasedCapabilityKey ToModelBasedCapabilityKey(
     case proto::ModelExecutionFeature::
         MODEL_EXECUTION_FEATURE_ZERO_STATE_SUGGESTIONS:
       return ModelBasedCapabilityKey::kZeroStateSuggestions;
+    case proto::ModelExecutionFeature::
+        MODEL_EXECUTION_FEATURE_WALLETABLE_PASS_EXTRACTION:
+      return ModelBasedCapabilityKey::kWalletablePassExtraction;
+    case proto::ModelExecutionFeature::
+        MODEL_EXECUTION_FEATURE_AMOUNT_EXTRACTION:
+      return ModelBasedCapabilityKey::kAmountExtraction;
     case proto::ModelExecutionFeature::MODEL_EXECUTION_FEATURE_UNSPECIFIED:
       NOTREACHED() << "Invalid feature";
   }
@@ -297,6 +313,12 @@ inline proto::ModelExecutionFeature ToModelExecutionFeatureProto(
     case ModelBasedCapabilityKey::kZeroStateSuggestions:
       return proto::ModelExecutionFeature::
           MODEL_EXECUTION_FEATURE_ZERO_STATE_SUGGESTIONS;
+    case ModelBasedCapabilityKey::kWalletablePassExtraction:
+      return proto::ModelExecutionFeature::
+          MODEL_EXECUTION_FEATURE_WALLETABLE_PASS_EXTRACTION;
+    case ModelBasedCapabilityKey::kAmountExtraction:
+      return proto::ModelExecutionFeature::
+          MODEL_EXECUTION_FEATURE_AMOUNT_EXTRACTION;
   }
 }
 

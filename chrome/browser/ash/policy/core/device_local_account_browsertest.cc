@@ -8,8 +8,6 @@
 #pragma allow_unsafe_buffers
 #endif
 
-#include "chrome/browser/ash/policy/core/device_local_account.h"
-
 #include <stddef.h>
 
 #include <map>
@@ -75,6 +73,7 @@
 #include "chrome/browser/ash/login/users/avatar/user_image_manager_test_util.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
+#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_broker.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_service.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
@@ -106,8 +105,9 @@
 #include "chrome/browser/ui/ash/login/login_display_host.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_list.h"
-#include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "chrome/browser/ui/webui/ash/login/terms_of_service_screen_handler.h"
@@ -118,6 +118,7 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/ui_test_utils.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
@@ -343,7 +344,7 @@ TestingUpdateManifestProvider::HandleRequest(
     const net::test_server::HttpRequest& request) {
   base::AutoLock auto_lock(lock_);
   const GURL url("http://localhost" + request.relative_url);
-  if (url.path() != relative_update_url_) {
+  if (url.GetPath() != relative_update_url_) {
     return nullptr;
   }
 
@@ -419,11 +420,35 @@ void EnableUrlKeyedAnonymizedDataCollection(Profile* profile) {
   }
 }
 
+class WindowDestroyedObserver : public aura::WindowObserver {
+ public:
+  explicit WindowDestroyedObserver(aura::Window* window) {
+    CHECK(window);
+    window_observation_.Observe(window);
+  }
+
+  void Wait() {
+    if (window_observation_.IsObserving()) {
+      run_loop_.Run();
+    }
+  }
+
+  // aura::WindowObserver:
+  void OnWindowDestroyed(aura::Window* window) override {
+    window_observation_.Reset();
+    run_loop_.Quit();
+  }
+
+ private:
+  base::RunLoop run_loop_;
+  base::ScopedObservation<aura::Window, aura::WindowObserver>
+      window_observation_{this};
+};
+
 }  // namespace
 
 class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
                                public user_manager::UserManager::Observer,
-                               public BrowserListObserver,
                                public extensions::AppWindowRegistry::Observer {
  public:
   DeviceLocalAccountTest(const DeviceLocalAccountTest&) = delete;
@@ -475,7 +500,6 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
 
   void SetUpOnMainThread() override {
     DevicePolicyCrosBrowserTest::SetUpOnMainThread();
-    BrowserList::AddObserver(this);
 
     initial_locale_ = g_browser_process->GetApplicationLocale();
     initial_language_ = l10n_util::GetLanguage(initial_locale_);
@@ -502,11 +526,6 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     session_manager_test_api.SetShouldObtainTokenHandleInTests(false);
   }
 
-  void TearDownOnMainThread() override {
-    BrowserList::RemoveObserver(this);
-    DevicePolicyCrosBrowserTest::TearDownOnMainThread();
-  }
-
   // user_manager::UserManager::Observer:
   void LocalStateChanged(user_manager::UserManager* user_manager) override {
     if (local_state_changed_run_loop_) {
@@ -514,11 +533,12 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     }
   }
 
-  // BrowserListObserver:
-  void OnBrowserRemoved(Browser* browser) override {
-    if (run_loop_) {
-      run_loop_->Quit();
-    }
+  // Waits for the Browser to close and its NativeWidget to be destroyed.
+  void WaitForBrowserDestruction(Browser* browser) {
+    WindowDestroyedObserver window_destroyed_observer(
+        browser->window()->GetNativeWindow());
+    ui_test_utils::WaitForBrowserToClose(browser);
+    window_destroyed_observer.Wait();
   }
 
   // extensions::AppWindowRegistry::Observer:
@@ -1059,12 +1079,12 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, StartSession) {
   WaitForSessionStart();
 
   // Check that the startup pages specified in policy were opened.
-  BrowserList* browser_list = BrowserList::GetInstance();
-  EXPECT_EQ(1U, browser_list->size());
-  Browser* browser = browser_list->get(0);
+  EXPECT_EQ(1U, BrowserList::GetInstance()->size());
+  BrowserWindowInterface* const browser =
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile();
   ASSERT_TRUE(browser);
 
-  TabStripModel* tabs = browser->tab_strip_model();
+  TabStripModel* const tabs = browser->GetTabStripModel();
   ASSERT_TRUE(tabs);
   int expected_tab_count = static_cast<int>(std::size(kStartupURLs));
   EXPECT_EQ(expected_tab_count, tabs->count());
@@ -1093,9 +1113,10 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, FullscreenAllowed) {
 
   BrowserList* browser_list = BrowserList::GetInstance();
   EXPECT_EQ(1U, browser_list->size());
-  Browser* browser = browser_list->get(0);
+  BrowserWindowInterface* const browser =
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile();
   ASSERT_TRUE(browser);
-  BrowserWindow* browser_window = browser->window();
+  ui::BaseWindow* const browser_window = browser->GetWindow();
   ASSERT_TRUE(browser_window);
 
   // Verify that an attempt to enter fullscreen mode is allowed.
@@ -1414,8 +1435,7 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, ExternalData) {
   // Specify an external data reference for the key::kUserAvatarImage policy.
   base::Value::Dict metadata = test::ConstructExternalDataReference(
       embedded_test_server()->GetURL(kExternalDataPath).spec(), kExternalData);
-  std::string policy;
-  base::JSONWriter::Write(metadata, &policy);
+  std::string policy = base::WriteJson(metadata).value_or("");
   device_local_account_policy_.payload().mutable_useravatarimage()->set_value(
       policy);
   UploadAndInstallDeviceLocalAccountPolicy();
@@ -1496,15 +1516,12 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, UserAvatarImage) {
         &image_data));
   }
 
-  std::string policy;
-  base::JSONWriter::Write(
-      test::ConstructExternalDataReference(
-          embedded_test_server()
-              ->GetURL(std::string("/") +
-                       ash::test::kUserAvatarImage1RelativePath)
-              .spec(),
-          image_data),
-      &policy);
+  std::string path =
+      std::string("/") + ash::test::kUserAvatarImage1RelativePath;
+  std::string url = embedded_test_server()->GetURL(path).spec();
+  std::string policy =
+      base::WriteJson(test::ConstructExternalDataReference(url, image_data))
+          .value_or("");
   device_local_account_policy_.payload().mutable_useravatarimage()->set_value(
       policy);
   UploadAndInstallDeviceLocalAccountPolicy();
@@ -1609,22 +1626,21 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, LastWindowClosedLogoutReminder) {
                                     false /* preferred_containner */),
                 apps::LaunchSource::kFromChromeInternal,
                 std::make_unique<apps::WindowInfo>(
-                    display::Screen::GetScreen()->GetPrimaryDisplay().id()));
+                    display::Screen::Get()->GetPrimaryDisplay().id()));
   run_loop_->Run();
   EXPECT_EQ(1U, app_window_registry->app_windows().size());
 
   // Close the only open browser window.
-  BrowserList* browser_list = BrowserList::GetInstance();
+  BrowserList* const browser_list = BrowserList::GetInstance();
   EXPECT_EQ(1U, browser_list->size());
-  Browser* browser = browser_list->get(0);
+  BrowserWindowInterface* browser =
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile();
   ASSERT_TRUE(browser);
-  BrowserWindow* browser_window = browser->window();
+  ui::BaseWindow* browser_window = browser->GetWindow();
   ASSERT_TRUE(browser_window);
-  run_loop_ = std::make_unique<base::RunLoop>();
   browser_window->Close();
+  WaitForBrowserDestruction(browser->GetBrowserForMigrationOnly());
   browser_window = nullptr;
-  run_loop_->Run();
-  browser = nullptr;
   EXPECT_TRUE(browser_list->empty());
 
   // Verify that the logout confirmation dialog is not showing because an app
@@ -1632,7 +1648,7 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, LastWindowClosedLogoutReminder) {
   EXPECT_FALSE(IsLogoutConfirmationDialogShowing());
 
   // Open a browser window.
-  Browser* first_browser = CreateBrowser(profile);
+  BrowserWindowInterface* first_browser = CreateBrowser(profile);
   EXPECT_EQ(1U, browser_list->size());
 
   // Close the app window.
@@ -1647,16 +1663,15 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, LastWindowClosedLogoutReminder) {
   EXPECT_FALSE(IsLogoutConfirmationDialogShowing());
 
   // Open a second browser window.
-  Browser* second_browser = CreateBrowser(profile);
+  BrowserWindowInterface* second_browser = CreateBrowser(profile);
   EXPECT_EQ(2U, browser_list->size());
 
   // Close the first browser window.
-  browser_window = first_browser->window();
+  browser_window = first_browser->GetWindow();
   ASSERT_TRUE(browser_window);
-  run_loop_ = std::make_unique<base::RunLoop>();
   browser_window->Close();
+  WaitForBrowserDestruction(first_browser->GetBrowserForMigrationOnly());
   browser_window = nullptr;
-  run_loop_->Run();
   first_browser = nullptr;
   EXPECT_EQ(1U, browser_list->size());
 
@@ -1665,12 +1680,11 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, LastWindowClosedLogoutReminder) {
   EXPECT_FALSE(IsLogoutConfirmationDialogShowing());
 
   // Close the second browser window.
-  browser_window = second_browser->window();
+  browser_window = second_browser->GetWindow();
   ASSERT_TRUE(browser_window);
-  run_loop_ = std::make_unique<base::RunLoop>();
   browser_window->Close();
+  WaitForBrowserDestruction(second_browser->GetBrowserForMigrationOnly());
   browser_window = nullptr;
-  run_loop_->Run();
   second_browser = nullptr;
   EXPECT_TRUE(browser_list->empty());
 
@@ -1688,12 +1702,11 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, LastWindowClosedLogoutReminder) {
   EXPECT_EQ(1U, browser_list->size());
 
   // Close the browser window.
-  browser_window = browser->window();
+  browser_window = browser->GetWindow();
   ASSERT_TRUE(browser_window);
-  run_loop_ = std::make_unique<base::RunLoop>();
   browser_window->Close();
+  WaitForBrowserDestruction(browser->GetBrowserForMigrationOnly());
   browser_window = nullptr;
-  run_loop_->Run();
   browser = nullptr;
   EXPECT_TRUE(browser_list->empty());
 
@@ -2961,8 +2974,10 @@ class AmbientAuthenticationManagedGuestSessionTest
     int policy_value = device_local_account_policy_.payload()
                            .ambientauthenticationinprivatemodesenabled()
                            .value();
-    Profile* regular_profile = GetCurrentBrowser()->profile();
-    Profile* incognito_profile =
+    EXPECT_EQ(1U, BrowserList::GetInstance()->size());
+    Profile* const regular_profile =
+        GetLastActiveBrowserWindowInterfaceWithAnyProfile()->GetProfile();
+    Profile* const incognito_profile =
         regular_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
 
     EXPECT_TRUE(AmbientAuthenticationTestHelper::IsAmbientAuthAllowedForProfile(
@@ -2971,14 +2986,6 @@ class AmbientAuthenticationManagedGuestSessionTest
                   incognito_profile),
               AmbientAuthenticationTestHelper::IsIncognitoAllowedInPolicy(
                   policy_value));
-  }
-
-  Browser* GetCurrentBrowser() {
-    BrowserList* browser_list = BrowserList::GetInstance();
-    EXPECT_EQ(1U, browser_list->size());
-    Browser* browser = browser_list->get(0);
-    DCHECK(browser);
-    return browser;
   }
 };
 

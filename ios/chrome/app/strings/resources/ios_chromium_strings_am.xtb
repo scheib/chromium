@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">ሌንስ እዚህ መክፈት ይችላሉ።</translation>
 <translation id="1042296835509784301">በChromium ውስጥ የሚስጥር ቁልፍ አስተዳዳሪውን ይከፍታል።</translation>
 <translation id="1047130070405668746">Chromiumን ይምረጡ</translation>
-<translation id="1086486568852410168">በGoogle ሌንስ ይፈልጉ</translation>
 <translation id="1091252999271033193">ይህ ማለት Chromium የተንቀሳቃሽ ስልክ ጣቢያውን በእያንዳንዱ ጊዜ ይጠይቃል ማለት ነው።</translation>
 <translation id="1115463765356382667">ከChromium ላይ ምርጡን ለማግኘት ከታች ያሉትን እነዚህን የተጠቆሙ እርምጃዎች ያጠናቅቁ።</translation>
 <translation id="1185134272377778587">ስለChromium</translation>
@@ -42,6 +41,7 @@
 <translation id="1843424232666537147">Chromium እርስዎ የበይነመረብ ውሂብዎን እና ድረ-ገጾችን በምን ያህል ፍጥነት መጫን እንደሚችሉ እንዲያቀናብሩ የሚያስችሉዎት ባህሪያት አሉት። <ph name="BEGIN_LINK" />የበለጠ ለመረዳት<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">በChromium ውስጥ ያሉ ካርታዎች</translation>
 <translation id="1867772173333403444">4. Chromiumን ይምረጡ</translation>
+<translation id="1965068424387304464">የChromium ጠቃሚ ምክር፦ የተቀመጡ የይለፍ ቃላት</translation>
 <translation id="2006345422933397527">Chromium ዝማኔዎች ካሉ መፈተሽ አልቻለም። የበይነመረብ ግንኙነትዎን ለመፈተሽ ይሞክሩ።</translation>
 <translation id="2042889939382983733">የእርስዎን የChromium ታሪክ ይመልከቱ</translation>
 <translation id="2052320862053429062">Chromium በየጊዜው የእርስዎን የይለፍ ቃላት መስመር ላይ ከታተሙ ዝርዝሮች ጋር እያነጻጸረ ይፈትሻል። ይህን በሚያደርግበት ጊዜ የእርስዎ የይለፍ ቃላት እና የተጠቃሚ ስሞች Googleን ጨምሮ በሌላ ማንም ወገን እንዳይነበቡ ይመሠጠራሉ።</translation>
@@ -88,7 +88,6 @@
 <translation id="2977470724722393594">Chromium የተዘመነ ነው</translation>
 <translation id="3044857325852340337">የተሰረዘ Chromium ውሂብ</translation>
 <translation id="3054480780637153380">በiOS ውስጥ የChromium ቅንብሮችን ይክፈቱ ከዚያ «ነባሪ አሳሽ መተግበሪያ» ላይ መታ ያድርጉ እና Chromium ይምረጡ።</translation>
-<translation id="3102849287235003384">በሁሉም ድር ጣቢያዎች ላይ የእርስዎን የGoogle መለያ ዘግተው ለመውጣት <ph name="BEGIN_LINK" />ከChromium ዘግተው ይውጡ<ph name="END_LINK" />።</translation>
 <translation id="3115956258722352278">Chromium የእርስዎ ነባሪ አሳሽ ይደረግ?</translation>
 <translation id="3180939591219927904">Chromium በሚዘጉበት ጊዜ «ማንነት የማያሳውቁ ትሮችን ይቆልፉ» የሚለውን ያብሩ</translation>
 <translation id="328933489847748230">{count,plural, =1{አሁን 1 Chromium መስኮትን በማሳየት ላይ}one{አሁን {count} Chromium መስኮቶችን በማሳየት ላይ}other{አሁን {count} Chromium መስኮቶችን በማሳየት ላይ}}</translation>
@@ -118,6 +117,7 @@
 <translation id="3816686541346279443">Chromium የይለፍ ቃልዎን ለማስቀመጥ ጥያቄ ያቀርባል።</translation>
 <translation id="3827545470516145620">እርስዎ በዚህ መሣሪያ ላይ መደበኛ የደህንነት ጥበቃ እያገኙ ነው</translation>
 <translation id="3833326979834193417">Chromium እርስዎን ከውሂብ ጥሰቶች፣ ደህንነታቸው ካልተጠበቁ ድር ጣቢያዎች እና ሌሎችም ደህንነትዎ እንደተጠበቀ ለማቆየት በየቀኑ የደህንነት ፍተሻን በራስ-ሰር ያሄዳል። ስለ የደህንነት ፍተሻ በቅንብሮች ውስጥ የበለጠ ማግኘት ይችላሉ።</translation>
+<translation id="3837584850181228767">የChromium ጠቃሚ ምክር፦ የተሻሻለ የደህንነት አሰሳ</translation>
 <translation id="3845223911364528001">ፋይልዎን ለመስቀል ወደ Chromium ይመለሱ</translation>
 <translation id="3855938650519180865">በChromium ውስጥ ምን አዲስ ነገር አለ</translation>
 <translation id="3886689467633467988">በሁሉም መሣሪያዎችዎ ላይ የእርስዎን ዕልባቶች እና ሌሎችም ለማግኘት ወደዚህ ጣቢያ እና Chromium ይግቡ።</translation>
@@ -198,6 +198,9 @@
 <translation id="5671188105328420281">የChromium ጠቃሚ ምክሮች</translation>
 <translation id="5688047395118852662">ይህ ካርድ እንዴት ከChromium ምርጡን ማግኘት እንደሚችሉ ጥቆማዎችን ያሳይዎታል።</translation>
 <translation id="5700709190537129682">Chromium የእርስዎን የይለፍ ቃላት መፈተሽ አይችልም</translation>
+<translation id="5731004036450828399">የይለፍ ቁልፎችዎን ደህንነት ለመጠበቅ መጀመሪያ የመልሶ ማግኛ ፒን መፍጠር ያስፈልግዎታል።
+
+        የይለፍ ቃሎች በይለፍ ቃል አስተዳዳሪ ውስጥ ይቀመጣሉ፣ ይህም በማንኛውም መሣሪያ ላይ በChromium ውስጥ እንዲጠቀሙባቸው ያስችልዎታል።</translation>
 <translation id="584550191241316896">ወደ Chromium ገብተዋል</translation>
 <translation id="5862307444128926510">ወደ Chromium እንኳን በደህና መጡ</translation>
 <translation id="5889847953983052353">ሲበራ፦
@@ -263,8 +266,8 @@
 <translation id="7269362888766543920">አንዳንድ ተጨማሪዎች Chromium እንዲበላሽ ያደርጋሉ። እባክዎ እነሱን ለማራገፍ ይሞክሩ።</translation>
 <translation id="7285031092584344905">የእርስዎን የChromium የይለፍ ቃላት እና ሌሎችንም በሌሎች መተግበሪያዎች ላይ ይድረሱ።</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">የተመረጠው ውሂብ ከChromium እና የሰመሩ መሣሪያዎች ተወግዷል። የGoogle መለያዎ history.google.com ላይ እንደ የሌሎች Google አገልግሎቶች ፍለጋዎች እና እንቅስቃሴ ያለ ሌሎች የአሰሳ ታሪክ ዓይነት ሊኖረው ይችላል።</translation>
 <translation id="7395825497086981028">የይለፍ ቃልዎ ለ<ph name="EMAIL" /> በይለፍ ቃል አስተዳዳሪ ላይ ይቀመጣል።</translation>
+<translation id="7434848749522628428">ይህ የይለፍ ቁልፍ የይለፍ ቃል አስተዳዳሪ ላይ ለ<ph name="USER_EMAIL" /> ይቀመጣል።</translation>
 <translation id="7504829997542308412">Chromium ይክፈቱ</translation>
 <translation id="7531461704633548377">ከChromium</translation>
 <translation id="7554983317097061001">Chromium ጠቃሚ ምክር፦ Chromium ወደ መትከያው ያንቀሳቅሱ</translation>
@@ -298,6 +301,7 @@
 <translation id="8254729934443216898">ከChromium ማግኘት የሚቻለውን ሁሉ ለማግኘት የሚያግዙዎትን አዳዲስ ባህሪያት ያስሱ።</translation>
 <translation id="8293572045658095405">Chromium ማንነት የማያሳውቅ ውስጥ ነዎት</translation>
 <translation id="830951810931292870">የገቡትን ዩአርኤልዎች ማንነት በማያሳውቅ Chromium ውስጥ ይከፍታል።</translation>
+<translation id="8385503371191508165">የይለፍ ቁልፎችን በይለፍ ቃል አስተዳዳሪ ማስቀመጥ ይጀምሩ</translation>
 <translation id="8390323835464055390">ለራስ-ሙላ Chromium በመጠቀም በእርስዎ የተቀመጡ የይለፍ ቃላት እና የይለፍ ቁልፎች ከማንኛውም መተግበሪያ በመለያ ይግቡ</translation>
 <translation id="8409374867500149834">ከጎጂ ድር ጣቢያዎች የሚከላከል የChromium በጣም ጠንካራ ጥበቃ አለዎት</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{ይህ የሚሆነው Chromium ለ{THRESHOLD} ደቂቃ ስራ ላይ ሳይውል ሲቀር ነው። በመለያ ገብተው ሳለ በዚህ መሣሪያ ላይ የተቀመጠ ውሂብ ብቻ ይሰረዛል። ይህ ታሪክን እና የይለፍ ቃላትን ሊያካትት ይችላል።}one{ይህ የሚሆነው Chromium ለ{THRESHOLD} ደቂቃ ስራ ላይ ሳይውል ሲቀር ነው። በመለያ ገብተው ሳለ በዚህ መሣሪያ ላይ የተቀመጠ ውሂብ ብቻ ይሰረዛል። ይህ ታሪክን እና የይለፍ ቃላትን ሊያካትት ይችላል።}other{ይህ የሚሆነው Chromium ለ{THRESHOLD} ደቂቃዎች ስራ ላይ ሳይውል ሲቀር ነው። በመለያ ገብተው ሳለ በዚህ መሣሪያ ላይ የተቀመጠ ውሂብ ብቻ ይሰረዛል። ይህ ታሪክን እና የይለፍ ቃላትን ሊያካትት ይችላል።}}</translation>

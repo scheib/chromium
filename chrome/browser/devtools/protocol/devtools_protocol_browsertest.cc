@@ -19,6 +19,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "base/test/test_switches.h"
 #include "base/test/values_test_util.h"
 #include "base/threading/thread_restrictions.h"
@@ -642,9 +643,9 @@ testing::AssertionResult SimulateBtmBounce(content::WebContents* web_contents,
   }
 
   const content::BtmRedirectInfo& redirect = *final_observer.redirects()->at(0);
-  if (redirect.redirector.url != bounce_url) {
+  if (redirect.redirector_url != bounce_url) {
     return testing::AssertionFailure() << "Expected redirect at " << bounce_url
-                                       << "; found " << redirect.redirector.url;
+                                       << "; found " << redirect.redirector_url;
   }
 
   if (redirect.access_type != content::BtmDataAccessType::kWrite &&
@@ -1321,7 +1322,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionProtocolTestWithGuestViewInnerWebContents,
 
   WebContentsBarrier barrier(
       {[](const GURL& url) -> bool {
-         return base::EndsWith(url.path(), "host.html");
+         return base::EndsWith(url.GetPath(), "host.html");
        },
        [](const GURL& url) -> bool { return url.SchemeIs(url::kDataScheme); }});
 
@@ -1384,7 +1385,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionProtocolTestWithGuestViewMPArch,
   ASSERT_THAT(extension, testing::NotNull());
 
   WebContentsBarrier barrier({[](const GURL& url) -> bool {
-    return base::EndsWith(url.path(), "host.html");
+    return base::EndsWith(url.GetPath(), "host.html");
   }});
   LaunchApp(extension->id());
   std::vector<raw_ptr<content::WebContents, VectorExperimental>> wcs =
@@ -1425,7 +1426,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionProtocolTestWithGuestViewMPArch,
   ASSERT_THAT(extension, testing::NotNull());
 
   WebContentsBarrier barrier({[](const GURL& url) -> bool {
-    return base::EndsWith(url.path(), "host.html");
+    return base::EndsWith(url.GetPath(), "host.html");
   }});
   LaunchApp(extension->id());
   std::vector<raw_ptr<content::WebContents, VectorExperimental>> wcs =
@@ -1467,7 +1468,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionProtocolTestWithGuestViewMPArch,
   ASSERT_THAT(extension, testing::NotNull());
 
   WebContentsBarrier barrier({[](const GURL& url) -> bool {
-    return base::EndsWith(url.path(), "host.html");
+    return base::EndsWith(url.GetPath(), "host.html");
   }});
   LaunchApp(extension->id());
   std::vector<raw_ptr<content::WebContents, VectorExperimental>> wcs =
@@ -1954,9 +1955,11 @@ class DevToolsProtocolTest_IPProtection : public DevToolsProtocolTest {
   DevToolsProtocolTest_IPProtection() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{net::features::kEnableIpProtectionProxy,
-          {{"IpPrivacyEnableIppInDevTools", "true"}}},
+          {{net::features::kIpPrivacyEnableIppInDevTools.name, "true"},
+           {net::features::kIpPrivacyEnableIppPanelInDevTools.name, "true"}}},
          {network::features::kMaskedDomainList,
-          {{"MaskedDomainListExperimentalVersion", "2025-05.dog.01"}}}},
+          {{network::features::kMaskedDomainListExperimentalVersion.name,
+            "2025-05.dog.01"}}}},
         {});
   }
 
@@ -1987,7 +1990,7 @@ bool MockIppRequests(bool cached,
                      std::optional<std::string_view> host_to_intercept,
                      content::URLLoaderInterceptor::RequestParams* params) {
   if (host_to_intercept.has_value() &&
-      host_to_intercept.value() != params->url_request.url.host_piece()) {
+      host_to_intercept.value() != params->url_request.url.host()) {
     return false;
   }
   // Create the mocked URLResponseHead to represent a proxied request.
@@ -2113,13 +2116,258 @@ IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
               testing::Optional(true));
 }
 
+// TODO(crbug.com/440167934): add browser test for IP Proxy Status Available
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       GetIpProxyStatus_MdlNotPopulated) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, "a.test"));
+
+  SendCommandSync("Network.enable");
+
+  const base::Value::Dict* result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+
+  const std::string* status_string = result->FindString("status");
+
+  ASSERT_TRUE(status_string);
+  // Expect MaskedDomainListNotPopulated since flags are on
+  EXPECT_EQ(*status_string, "MaskedDomainListNotPopulated");
+}
+
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       SetIPProtectionProxyBypassEnabled_Toggle) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, "a.test"));
+
+  SendCommandSync("Network.enable");
+
+  // Verify initial status is MaskedDomainListNotPopulated.
+  //
+  // In reality, the expected return should be kOk when MaskedDomainList is
+  // populated.
+  // TODO(crbug.com/440167934): include a case where the MaskedDomainList is
+  // populated, replace MaskedDomainListNotPopulated with Available.
+  {
+    const base::Value::Dict* result =
+        SendCommandSync("Network.getIPProtectionProxyStatus");
+    const std::string* status_string = result->FindString("status");
+    ASSERT_TRUE(status_string);
+    EXPECT_EQ(*status_string, "MaskedDomainListNotPopulated");
+  }
+
+  // Enable the bypass and verify status changes to BypassedByDevTools.
+  {
+    SendCommandSync("Network.setIPProtectionProxyBypassEnabled",
+                    base::Value::Dict().Set("enabled", true));
+
+    const base::Value::Dict* status_result =
+        SendCommandSync("Network.getIPProtectionProxyStatus");
+    const std::string* status_string = status_result->FindString("status");
+    ASSERT_TRUE(status_string);
+    EXPECT_EQ(*status_string, "BypassedByDevTools");
+  }
+
+  // Disable the bypass and verify status returns to
+  // MaskedDomainListNotPopulated.
+  //
+  // In reality, the expected return should be kOk when MaskedDomainList is
+  // populated.
+  // TODO(crbug.com/440167934): include a case where the MaskedDomainList is
+  // populated, replace MaskedDomainListNotPopulated with Available.
+  {
+    SendCommandSync("Network.setIPProtectionProxyBypassEnabled",
+                    base::Value::Dict().Set("enabled", false));
+
+    const base::Value::Dict* status_result =
+        SendCommandSync("Network.getIPProtectionProxyStatus");
+    const std::string* status_string = status_result->FindString("status");
+    ASSERT_TRUE(status_string);
+    EXPECT_EQ(*status_string, "MaskedDomainListNotPopulated");
+  }
+}
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       DetachingCdpSessionRestoresBypass) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  SendCommandSync("Network.enable");
+
+  SendCommandSync("Network.setIPProtectionProxyBypassEnabled",
+                  base::Value::Dict().Set("enabled", true));
+
+  const base::Value::Dict* result_on =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(result_on->FindString("status"));
+  EXPECT_EQ(*result_on->FindString("status"), "BypassedByDevTools");
+
+  // Detach the DevTools session.
+  TearDownOnMainThread();
+
+  // Re-attach a new DevTools session.
+  Attach();
+
+  // Verify the bypass is no longer active and the status is restored.
+  //
+  // In reality, the expected return should be kOk when MaskedDomainList is
+  // populated.
+  // TODO(crbug.com/440167934): include a case where the MaskedDomainList is
+  // populated, replace MaskedDomainListNotPopulated with Available.
+  SendCommandSync("Network.enable");
+
+  const base::Value::Dict* result_off =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(result_off->FindString("status"));
+  EXPECT_EQ(*result_off->FindString("status"), "MaskedDomainListNotPopulated");
+}
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       CrossOriginNavigationMaintainsBypass) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, std::nullopt));
+
+  SendCommandSync("Network.enable");
+
+  // Navigate to a.test and enable the IP Protection bypass.
+  GURL first_party_url =
+      embedded_test_server()->GetURL("a.test", "/empty.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), first_party_url));
+  SendCommandSync("Network.setIPProtectionProxyBypassEnabled",
+                  base::Value::Dict().Set("enabled", true));
+
+  // Verify the bypass is active.
+  const base::Value::Dict* initial_status =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(initial_status->FindString("status"));
+  EXPECT_EQ(*initial_status->FindString("status"), "BypassedByDevTools");
+
+  // Navigate to b.test.
+  GURL third_party_url =
+      embedded_test_server()->GetURL("b.test", "/empty.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), third_party_url));
+
+  // The bypass should be maintained after the cross-origin navigation.
+  const base::Value::Dict* final_status =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(final_status->FindString("status"));
+  EXPECT_EQ(*final_status->FindString("status"), "BypassedByDevTools");
+}
+
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       GetIpProxyStatusFromIframe) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, std::nullopt));
+
+  SendCommandSync("Network.enable");
+
+  GURL main_url = embedded_test_server()->GetURL("a.test", "/iframe.html");
+
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), main_url));
+  content::RenderFrameHost* frame_host = web_contents()->GetPrimaryMainFrame();
+  ASSERT_TRUE(frame_host);
+
+  std::string script =
+      "var iframe = document.createElement('iframe');"
+      "document.body.appendChild(iframe);";
+  EXPECT_TRUE(ExecJs(web_contents(), script));
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+
+  // Check that the status in the frame is MaskedDomainListNotPopulated.
+  //
+  // In reality, the expected return should be kOk when MaskedDomainList is
+  // populated.
+  // TODO(crbug.com/440167934): include a case where the MaskedDomainList is
+  // populated, replace MaskedDomainListNotPopulated with Available.
+  const base::Value::Dict* status_result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(status_result->FindString("status"));
+  EXPECT_EQ(*status_result->FindString("status"),
+            "MaskedDomainListNotPopulated");
+
+  content::RenderFrameHost* child_frame = ChildFrameAt(frame_host, 0);
+  EXPECT_TRUE(child_frame);
+
+  AttachToFrameTreeHost(child_frame);
+
+  // Check that the status in the iframe is MaskedDomainListNotPopulated.
+  //
+  // In reality, the expected return should be kOk when MaskedDomainList is
+  // populated.
+  // TODO(crbug.com/440167934): include a case where the MaskedDomainList is
+  // populated, replace MaskedDomainListNotPopulated with Available.
+  const base::Value::Dict* iframe_status_result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(iframe_status_result->FindString("status"));
+  EXPECT_EQ(*iframe_status_result->FindString("status"),
+            "MaskedDomainListNotPopulated");
+}
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtection,
+                       GetIpProxyStatusFromIframe_Bypass) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, std::nullopt));
+
+  SendCommandSync("Network.enable");
+
+  GURL main_url = embedded_test_server()->GetURL("a.test", "/iframe.html");
+
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), main_url));
+  content::RenderFrameHost* frame_host = web_contents()->GetPrimaryMainFrame();
+  ASSERT_TRUE(frame_host);
+
+  std::string script =
+      "var iframe = document.createElement('iframe');"
+      "document.body.appendChild(iframe);";
+  EXPECT_TRUE(ExecJs(web_contents(), script));
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+
+  const base::Value::Dict* status_result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(status_result->FindString("status"));
+  EXPECT_EQ(*status_result->FindString("status"),
+            "MaskedDomainListNotPopulated");
+
+  // Set bypass to on, check that the status is now BypassedByDevTools
+  SendCommandSync("Network.setIPProtectionProxyBypassEnabled",
+                  base::Value::Dict().Set("enabled", true));
+
+  const base::Value::Dict* bypass_status_result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(bypass_status_result->FindString("status"));
+  EXPECT_EQ(*bypass_status_result->FindString("status"), "BypassedByDevTools");
+
+  content::RenderFrameHost* child_frame = ChildFrameAt(frame_host, 0);
+  EXPECT_TRUE(child_frame);
+
+  AttachToFrameTreeHost(child_frame);
+
+  // Check that the status in the iframe is BypassedByDevTools as well.
+  const base::Value::Dict* iframe_status_result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+  ASSERT_TRUE(iframe_status_result->FindString("status"));
+  EXPECT_EQ(*iframe_status_result->FindString("status"), "BypassedByDevTools");
+}
+
 class DevToolsProtocolTest_IPProtectionDisabled
     : public DevToolsProtocolTest_IPProtection {
  public:
   DevToolsProtocolTest_IPProtectionDisabled() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{net::features::kEnableIpProtectionProxy,
-          {{"IpPrivacyEnableIppInDevTools", "false"}}}},
+          {{net::features::kIpPrivacyEnableIppInDevTools.name, "false"},
+           {net::features::kIpPrivacyEnableIppPanelInDevTools.name, "true"}}}},
         {});
   }
 
@@ -2193,9 +2441,29 @@ IN_PROC_BROWSER_TEST_F(
               std::nullopt);
 }
 
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest_IPProtectionDisabled,
+                       GetIpProxyStatus_IPProtectionDisabled) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  Attach();
+
+  const content::URLLoaderInterceptor interceptor(
+      base::BindRepeating(&MockIppRequests, /*cached=*/false, "a.test"));
+
+  SendCommandSync("Network.enable");
+
+  const base::Value::Dict* result =
+      SendCommandSync("Network.getIPProtectionProxyStatus");
+
+  const std::string* status_string = result->FindString("status");
+
+  ASSERT_TRUE(status_string);
+  // Expect FeatureNotEnabled since IPProtectionDisabled
+  EXPECT_EQ(*status_string, "FeatureNotEnabled");
+}
+
 #if !BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest,
-                       OpensDevTools_FailsForNonBrowserTarget) {
+                       OpensDevTools_FailsForNonBrowserTargetSession) {
   AttachToTabTarget(web_contents());
 
   const base::Value::Dict* result = SendCommandSync("Target.getTargets");
@@ -2205,9 +2473,20 @@ IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest,
 
   base::Value::Dict params;
   params.Set("targetId", targetId);
-  result = SendCommandSync("Target.openDevTools", std::move(params));
+  SendCommandSync("Target.openDevTools", std::move(params));
 
   EXPECT_EQ(*error()->FindString("message"), "Not allowed");
+}
+
+IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest,
+                       OpensDevTools_FailsForNonExistantTarget) {
+  AttachToBrowserTarget();
+
+  base::Value::Dict params;
+  params.Set("targetId", "<NonExistantTargetId>");
+  SendCommandSync("Target.openDevTools", std::move(params));
+
+  EXPECT_EQ(*error()->FindString("message"), "No target with given id found");
 }
 
 IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest, OpensDevTools_OpensForPageTarget) {

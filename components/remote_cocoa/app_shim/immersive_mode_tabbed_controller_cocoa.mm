@@ -12,6 +12,36 @@
 #import "components/remote_cocoa/app_shim/bridged_content_view.h"
 #import "components/remote_cocoa/app_shim/browser_native_widget_window_mac.h"
 #include "components/remote_cocoa/app_shim/features.h"
+#include "components/remote_cocoa/app_shim/immersive_mode_controller_cocoa.h"
+#include "components/remote_cocoa/app_shim/override_ns_next_step_frame_hit_test.h"
+
+@interface TabTitlebarView : NSView
+@end
+
+@implementation TabTitlebarView
+- (NSView*)tabContentView {
+  CHECK(self.subviews.count > 0);
+  return base::apple::ObjCCastStrict<BridgedContentView>(self.subviews[0]);
+}
+
+- (void)viewDidMoveToWindow {
+  // During transition from regular to fullscreen, the TabTitlebarView is first
+  // added to the main browser's NSWindow, then moved to
+  // NSToolbarFullscreenWindow. Only NSToolbarFullscreenWindow needs hit test
+  // overriding.
+  if (remote_cocoa::IsNSToolbarFullScreenWindow(self.window)) {
+    remote_cocoa::SetNSNextStepFrameHitTestTargetView(self.window,
+                                                      self.tabContentView);
+  }
+}
+
+- (void)viewWillMoveToWindow:(NSWindow*)newWindow {
+  // Removing from NSToolbarFullscreenWindow, hence reset hit test overriding.
+  if (!newWindow && remote_cocoa::IsNSToolbarFullScreenWindow(self.window)) {
+    remote_cocoa::SetNSNextStepFrameHitTestTargetView(self.window, nil);
+  }
+}
+@end
 
 namespace {
 void SetAlwaysShowTrafficLights(NSWindow* browser_window, bool always_show) {
@@ -27,6 +57,10 @@ ImmersiveModeTabbedControllerCocoa::ImmersiveModeTabbedControllerCocoa(
     NativeWidgetMacOverlayNSWindow* overlay_window,
     NativeWidgetMacOverlayNSWindow* tab_window)
     : ImmersiveModeControllerCocoa(browser_window, overlay_window) {
+  // MacOS 26 has event routing issues with right-mouse events and needs to be
+  // worked around by swizzling internal AppKit methods.
+  OverrideNSNextStepFrameHitTest();
+
   tab_window_ = tab_window;
 #ifndef NDEBUG
   tab_window_.title = @"tab overlay";
@@ -36,7 +70,7 @@ ImmersiveModeTabbedControllerCocoa::ImmersiveModeTabbedControllerCocoa(
 
   tab_titlebar_view_controller_ =
       [[NSTitlebarAccessoryViewController alloc] init];
-  tab_titlebar_view_controller_.view = [[NSView alloc] init];
+  tab_titlebar_view_controller_.view = [[TabTitlebarView alloc] init];
 
   // The view is pinned to the opposite side of the traffic lights. A view long
   // enough is able to paint underneath the traffic lights. This also works with

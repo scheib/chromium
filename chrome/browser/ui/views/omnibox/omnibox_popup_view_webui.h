@@ -9,8 +9,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "chrome/browser/ui/omnibox/omnibox_popup_view.h"
 #include "components/omnibox/browser/omnibox_popup_selection.h"
-#include "components/omnibox/browser/omnibox_popup_view.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -35,11 +35,8 @@ class OmniboxPopupViewWebUI : public OmniboxPopupView {
   // OmniboxPopupView:
   bool IsOpen() const override;
   void InvalidateLine(size_t line) override;
-  void OnSelectionChanged(OmniboxPopupSelection old_selection,
-                          OmniboxPopupSelection new_selection) override;
   void UpdatePopupAppearance() override;
   void ProvideButtonFocusHint(size_t line) override;
-  void OnMatchIconUpdated(size_t match_index) override;
   void OnDragCanceled() override;
   void GetPopupAccessibleNodeData(ui::AXNodeData* node_data) const override;
 
@@ -52,10 +49,10 @@ class OmniboxPopupViewWebUI : public OmniboxPopupView {
   // Time when this instance was constructed, or null after use for histogram.
   base::TimeTicks construction_time_;
 
-  // The edit view that invokes us. May be nullptr in tests.
+  // The edit view owned by `location_bar_view_`. May be nullptr in tests.
   raw_ptr<OmniboxViewViews> omnibox_view_;
 
-  // The location bar view that owns `omnibox_view_`. May be nullptr in tests.
+  // The location bar view that owns `this`. May be nullptr in tests.
   raw_ptr<LocationBarView> location_bar_view_;
 
   // The presenter that manages its own widget and WebUI presentation.

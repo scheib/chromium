@@ -23,15 +23,18 @@
 #include "chrome/browser/performance_manager/metrics/metrics_provider_desktop.h"
 #include "chrome/browser/performance_manager/observers/page_load_metrics_observer.h"
 #include "chrome/browser/performance_manager/policies/background_tab_loading_policy.h"
+#include "chrome/browser/performance_manager/policies/best_effort_task_inhibiting_policy.h"
 #include "chrome/browser/performance_manager/policies/frame_throttling_policy.h"
 #include "chrome/browser/performance_manager/policies/freezing_opt_out_checker.h"
 #include "chrome/browser/performance_manager/policies/keep_alive_dse_policy.h"
+#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
 #include "chrome/browser/performance_manager/policies/policy_features.h"
 #include "chrome/browser/performance_manager/policies/termination_target_policy.h"
 #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy.h"
 #include "chrome/browser/performance_manager/user_tuning/profile_discard_opt_out_list_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/sessions/session_restore.h"
+#include "chrome/common/chrome_features.h"
 #include "components/performance_manager/decorators/page_aggregator.h"
 #include "components/performance_manager/embedder/graph_features.h"
 #include "components/performance_manager/embedder/performance_manager_lifetime.h"
@@ -74,10 +77,10 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/flags/android/chrome_feature_list.h"
+#include "chrome/browser/performance_manager/policies/discard_page_with_crashed_subframe_policy.h"
 #include "chrome/browser/performance_manager/policies/process_rank_policy_android.h"
 #else
 #include "chrome/browser/performance_manager/policies/memory_saver_mode_policy.h"
-#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
 #include "chrome/browser/performance_manager/policies/urgent_page_discarding_policy.h"
 #include "chrome/browser/performance_manager/public/user_tuning/battery_saver_mode_manager.h"
 #include "chrome/browser/performance_manager/public/user_tuning/performance_detection_manager.h"
@@ -91,6 +94,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/path_service.h"
+#include "chrome/browser/performance_manager/policies/priority_boost_disabler.h"
 #endif
 
 namespace {
@@ -195,21 +199,42 @@ void ChromeBrowserMainExtraPartsPerformanceManager::CreatePoliciesAndDecorators(
     graph->PassToGraph(
         std::make_unique<performance_manager::TerminationTargetPolicy>());
   }
+  if (base::FeatureList::IsEnabled(features::kDisableBoostPriority) &&
+      features::kDisableBoostPriorityMode.Get() ==
+          features::DisableBoostPriorityMode::kAfterLoading) {
+    graph->PassToGraph(
+        std::make_unique<performance_manager::PriorityBoostDisabler>());
+  }
 #endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_ANDROID)
+  const bool need_page_discarding_helper =
+      base::FeatureList::IsEnabled(features::kWebContentsDiscard);
+#else
+  const bool need_page_discarding_helper = true;
+#endif  // BUILDFLAG(IS_ANDROID)
+  if (need_page_discarding_helper) {
+    graph->PassToGraph(std::make_unique<
+                       performance_manager::policies::PageDiscardingHelper>());
+  }
 
 #if !BUILDFLAG(IS_ANDROID)
   using performance_manager::policies::FreezingOptOutChecker;
 
   graph->PassToGraph(FormInteractionTabHelper::CreateGraphObserver());
 
-  graph->PassToGraph(
-      std::make_unique<performance_manager::policies::PageDiscardingHelper>());
-
 #if URGENT_DISCARDING_FROM_PERFORMANCE_MANAGER()
   graph->PassToGraph(
       std::make_unique<
           performance_manager::policies::UrgentPageDiscardingPolicy>());
 #endif  // URGENT_DISCARDING_FROM_PERFORMANCE_MANAGER()
+
+  if (base::FeatureList::IsEnabled(performance_manager::features::
+                                       kEnableBestEffortTaskInhibitingPolicy)) {
+    graph->PassToGraph(
+        std::make_unique<
+            performance_manager::policies::BestEffortTaskInhibitingPolicy>());
+  }
 
   if (base::FeatureList::IsEnabled(
           performance_manager::features::
@@ -271,6 +296,13 @@ void ChromeBrowserMainExtraPartsPerformanceManager::CreatePoliciesAndDecorators(
     graph->PassToGraph(
         std::make_unique<
             performance_manager::policies::ProcessRankPolicyAndroid>());
+  }
+
+  if (base::FeatureList::IsEnabled(
+          chrome::android::kDiscardPageWithCrashedSubframePolicy)) {
+    graph->PassToGraph(
+        std::make_unique<performance_manager::policies::
+                             DiscardPageWithCrashedSubframePolicy>());
   }
 #endif  // BUILDFLAG(IS_ANDROID)
 
@@ -398,10 +430,8 @@ void ChromeBrowserMainExtraPartsPerformanceManager::PreMainMessageLoopRun() {
 #if !BUILDFLAG(IS_ANDROID)
   // This object requires the host frame sink manager to exist, which is
   // created after all the extra parts have run their PostCreateThreads.
-  performance_manager::user_tuning::BatterySaverModeManager::GetInstance()
-      ->Start();
-  performance_manager::user_tuning::UserPerformanceTuningManager::GetInstance()
-      ->Start();
+  battery_saver_mode_manager_->Start();
+  user_performance_tuning_manager_->Start();
 
   // This object is created by the metrics service before threads, but it
   // needs the UserPerformanceTuningManager to exist. At this point it's

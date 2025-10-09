@@ -349,6 +349,13 @@ class QueryResults {
 
 // QueryOptions ----------------------------------------------------------------
 
+// Used to specify how to handle visits that had an HTTP response code of 404,
+// when making History queries that involve visits.
+enum class VisitQuery404sPolicy {
+  kInclude404s = 0,
+  kExclude404s,
+};
+
 struct QueryOptions {
   QueryOptions();
   QueryOptions(const QueryOptions&);
@@ -377,6 +384,12 @@ struct QueryOptions {
   // the most recent first, so older results may not be returned if there is not
   // enough room. When 0, this will return everything.
   int max_count = 0;
+
+  // Temporarily defaulted to `kExclude404s`; this may change in the future.
+  // Callers are strongly encouraged to explicitly set a value, unless they are
+  // certain that the handling of 404 visits is irrelevant for their use case.
+  VisitQuery404sPolicy policy_for_404_visits =
+      VisitQuery404sPolicy::kExclude404s;
 
   enum DuplicateHandling {
     // Omit visits for which there is a more recent visit to the same URL.
@@ -427,8 +440,7 @@ struct QueryOptions {
 // QueryURLResult -------------------------------------------------------------
 
 // QueryURLResult encapsulates the result of a call to
-// `HistoryBackend::QueryURL()` or
-// `HistoryBackend::GetMostRecentVisitsForGurl()`.
+// `HistoryBackend::QueryURL()`.
 struct QueryURLResult {
   QueryURLResult();
   QueryURLResult(const QueryURLResult&);
@@ -437,8 +449,27 @@ struct QueryURLResult {
   QueryURLResult& operator=(QueryURLResult&&) noexcept;
   ~QueryURLResult();
 
+  // Indicates whether the call was successful. If false, then `row` is
+  // undefined.
+  bool success = false;
+  URLRow row;
+};
+
+// QueryURLAndVisitsResult ----------------------------------------------------
+
+// QueryURLAndVisitsResult encapsulates the result of a call to
+// `HistoryBackend::QueryURLAndVisits()` or
+// `HistoryBackend::GetMostRecentVisitsForGurl()`.
+struct QueryURLAndVisitsResult {
+  QueryURLAndVisitsResult();
+  QueryURLAndVisitsResult(const QueryURLAndVisitsResult&);
+  QueryURLAndVisitsResult(QueryURLAndVisitsResult&&) noexcept;
+  QueryURLAndVisitsResult& operator=(const QueryURLAndVisitsResult&);
+  QueryURLAndVisitsResult& operator=(QueryURLAndVisitsResult&&) noexcept;
+  ~QueryURLAndVisitsResult();
+
   // Indicates whether the call was successful. If false, then both `row` and
-  // `visits` fields are undefined.
+  // `visits` are undefined.
   bool success = false;
   URLRow row;
   VisitVector visits;
@@ -595,8 +626,7 @@ using SyncDeviceInfoMap = std::map<
 // Statistics -----------------------------------------------------------------
 
 // HistoryCountResult encapsulates the result of a call to
-// HistoryBackend::GetHistoryCount or
-// HistoryBackend::CountUniqueHostsVisitedLastMonth.
+// HistoryBackend::GetHistoryCount.
 struct HistoryCountResult {
   // Indicates whether the call was successful or not. If false, then `count`
   // is undefined.
@@ -1245,6 +1275,23 @@ struct Cluster {
 
 // Navigation -----------------------------------------------------------------
 
+// The category of HTTP response code for a page visit.
+enum class VisitResponseCodeCategory {
+  // The HTTP response code for the page visit was something other than 404, or
+  // the visit had no response code (such as for synthetic visits).
+  kNot404 = 0,
+  // The HTTP response code for the page visit was 404.
+  k404,
+};
+
+enum class VisitContextEphemerality {
+  // The page visit is not ephemeral.
+  kNotEphemeral = 0,
+  // The page visit occurred in an ephemeral context (i.e., a credentialless
+  // iframe).
+  kEphemeral,
+};
+
 // Marshalling structure for AddPage.
 struct HistoryAddPageArgs {
   // The default constructor is equivalent to:
@@ -1252,9 +1299,10 @@ struct HistoryAddPageArgs {
   //   HistoryAddPageArgs(
   //       GURL(), base::Time(), nullptr, 0, std::nullopt, GURL(),
   //       RedirectList(), ui::PAGE_TRANSITION_LINK,
-  //       false, SOURCE_BROWSED, false, true, false,
+  //       false, SOURCE_BROWSED, VisitResponseCodeCategory::kNot404, false,
+  //       true, VisitContextEphemerality::kNotEphemeral, std::nullopt,
   //       std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-  //       std::nullopt, std::nullopt)
+  //       std::nullopt)
   HistoryAddPageArgs();
   HistoryAddPageArgs(const GURL& url,
                      base::Time time,
@@ -1266,9 +1314,11 @@ struct HistoryAddPageArgs {
                      ui::PageTransition transition,
                      bool hidden,
                      VisitSource source,
+                     VisitResponseCodeCategory response_code_category,
                      bool did_replace_entry,
                      bool consider_for_ntp_most_visited,
-                     bool is_ephemeral = false,
+                     VisitContextEphemerality visit_context_ephemerality =
+                         VisitContextEphemerality::kNotEphemeral,
                      std::optional<std::u16string> title = std::nullopt,
                      std::optional<GURL> top_level_url = std::nullopt,
                      std::optional<GURL> frame_url = std::nullopt,
@@ -1289,15 +1339,19 @@ struct HistoryAddPageArgs {
   GURL referrer;
   RedirectList redirects;
   ui::PageTransition transition;
+  // Whether the visit should be hidden from UI features. Should generally be
+  // `true` for visits in subframes and ad frames, and for visits that resulted
+  // in an error response (HTTP 4XX/5XX).
   bool hidden;
   VisitSource visit_source;
+  VisitResponseCodeCategory response_code_category;
   bool did_replace_entry;
   // Specifies whether a page visit should contribute to the Most Visited tiles
   // in the New Tab Page. Note that setting this to true (most common case)
   // doesn't guarantee it's relevant for Most Visited, since other requirements
   // exist (e.g. certain page transition types).
   bool consider_for_ntp_most_visited;
-  bool is_ephemeral;
+  VisitContextEphemerality visit_context_ephemerality;
   std::optional<std::u16string> title;
   // `top_level_url` is a GURL representing the top-level frame that this
   // navigation originated from.

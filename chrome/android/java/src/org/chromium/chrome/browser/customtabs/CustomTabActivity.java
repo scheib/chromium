@@ -9,6 +9,7 @@ import static androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_DARK;
 import static androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_LIGHT;
 
 import static org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant.PRICE_INSIGHTS;
+import static org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant.PRICE_TRACKING;
 
 import android.app.Activity;
 import android.app.ActivityManager;
@@ -34,6 +35,7 @@ import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.TimeUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
@@ -66,6 +68,7 @@ import org.chromium.chrome.browser.page_info.ChromePageInfoHighlight;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TrustedCdn;
 import org.chromium.chrome.browser.ui.google_bottom_bar.GoogleBottomBarCoordinator;
+import org.chromium.chrome.browser.ui.web_app_header.WebAppHeaderUtils;
 import org.chromium.components.browser_ui.util.motion.MotionEventInfo;
 import org.chromium.components.page_info.PageInfoController.OpenedFromSource;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -93,6 +96,7 @@ public class CustomTabActivity extends BaseCustomTabActivity {
     private boolean mIsEnterAnimationCompleted;
     private @Nullable AuxiliarySearchController mAuxiliarySearchController;
     private CustomTabActivityTimeoutHandler mTimeoutHandler;
+    private static Runnable sOnFinishCallbackForTesting;
     private final CustomTabActivityTabProvider.Observer mTabChangeObserver =
             new CustomTabActivityTabProvider.Observer() {
                 @Override
@@ -239,7 +243,12 @@ public class CustomTabActivity extends BaseCustomTabActivity {
 
         // Window bounds adjustments are called here because we probe WebContents' width and height
         // from the native object.
+        // The condition including {@link #getSavedInstanceState} should be false iff the Activity
+        // has been recreated. If the Activity has been recreated, we should ignore the window
+        // features requested in the Intent as they should apply only for the initial launch of the
+        // Activity.
         if (getIntentDataProvider().getUiType() == CustomTabsUiType.POPUP
+                && getSavedInstanceState() == null
                 && ChromeFeatureList.isEnabled(
                         ChromeFeatureList.ANDROID_WINDOW_POPUP_RESIZE_AFTER_SPAWN)) {
             PopupCreator.adjustWindowBoundsToRequested(
@@ -367,14 +376,27 @@ public class CustomTabActivity extends BaseCustomTabActivity {
             Tab tab = getTabModelSelector().getCurrentTab();
             if (tab == null) return false;
             String publisher = TrustedCdn.getContentPublisher(tab);
-            new ChromePageInfo(
+            ChromePageInfo pageInfo =
+                    new ChromePageInfo(
                             getModalDialogManagerSupplier(),
                             publisher,
                             OpenedFromSource.MENU,
                             mRootUiCoordinator.getMerchantTrustSignalsCoordinatorSupplier()::get,
                             mRootUiCoordinator.getEphemeralTabCoordinatorSupplier(),
-                            getTabCreator(getCurrentTabModel().isIncognito()))
-                    .show(tab, ChromePageInfoHighlight.noHighlight());
+                            getTabCreator(getCurrentTabModel().isIncognito()));
+            boolean isMinimalUiVisible =
+                    WebAppHeaderUtils.isMinimalUiVisible(
+                            getIntentDataProvider(),
+                            getBaseCustomTabRootUiCoordinator().getDesktopWindowStateManager());
+            boolean isTWA = getIntentDataProvider().isTrustedWebActivity();
+            if (ChromeFeatureList.sAndroidWebAppMenuButton.isEnabled()
+                    && isTWA
+                    && isMinimalUiVisible) {
+                String packageName = getIntentDataProvider().getClientPackageName();
+                pageInfo.show(tab, ChromePageInfoHighlight.noHighlight(), packageName);
+                return true;
+            }
+            pageInfo.show(tab, ChromePageInfoHighlight.noHighlight());
             return true;
         } else if (id == R.id.price_insights_menu_id) {
             getBaseCustomTabRootUiCoordinator().runPriceInsightsAction();
@@ -382,6 +404,10 @@ public class CustomTabActivity extends BaseCustomTabActivity {
             CustomTabToolbar toolbar = findViewById(R.id.toolbar);
             toolbar.maybeRecordHistogramForAdaptiveToolbarButtonFallbackUi(PRICE_INSIGHTS);
             return true;
+        } else if (id == R.id.enable_price_tracking_menu_id) {
+            CustomTabToolbar toolbar = findViewById(R.id.toolbar);
+            toolbar.maybeRecordHistogramForAdaptiveToolbarButtonFallbackUi(PRICE_TRACKING);
+            // Let the flow proceed to superclass for processing the action.
         } else if (id == R.id.open_history_menu_id) {
             // The menu is visible only when the app-specific history is enabled. Assert that.
             assert HistoryManager.isAppSpecificHistoryEnabled();
@@ -417,6 +443,8 @@ public class CustomTabActivity extends BaseCustomTabActivity {
 
     @Override
     public void finish() {
+        if (sOnFinishCallbackForTesting != null) sOnFinishCallbackForTesting.run();
+
         RecordHistogram.recordLinearCountHistogram(
                 "CustomTabs.Omnibox.NumNavigationsPerSession",
                 mNumOmniboxNavigationEventsPerSession,
@@ -533,5 +561,11 @@ public class CustomTabActivity extends BaseCustomTabActivity {
         super.onEnterAnimationComplete();
 
         mIsEnterAnimationCompleted = true;
+    }
+
+    @VisibleForTesting
+    public static void setOnFinishCallbackForTesting(Runnable callback) {
+        sOnFinishCallbackForTesting = callback;
+        ResettersForTesting.register(() -> sOnFinishCallbackForTesting = null);
     }
 }

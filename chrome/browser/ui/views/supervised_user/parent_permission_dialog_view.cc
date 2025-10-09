@@ -24,7 +24,7 @@
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/signin/public/identity_manager/scope_set.h"
+#include "components/signin/public/identity_manager/oauth_consumer_ids.h"
 #include "components/supervised_user/core/browser/supervised_user_service.h"
 #include "components/supervised_user/core/common/features.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -54,7 +54,7 @@
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
@@ -347,10 +347,6 @@ struct ParentPermissionDialogView::Params {
   // The message to show. Ignored if extension is set.
   std::u16string message;
 
-  // Entry point leading to the creation of the dialog.
-  SupervisedUserExtensionParentApprovalEntryPoint
-      extension_approval_entry_point;
-
   // An optional extension whose permissions should be displayed
   raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> extension =
       nullptr;
@@ -620,10 +616,6 @@ void ParentPermissionDialogView::ShowDialog() {
           kOpened);
   if (params_->extension) {
     InitializeExtensionData(params_->extension.get());
-
-    SupervisedUserExtensionsMetricsRecorder::
-        RecordExtensionParentApprovalDialogEntryPointUmaMetrics(
-            params_->extension_approval_entry_point);
   } else {
     ShowDialogInternal();
   }
@@ -736,12 +728,10 @@ void ParentPermissionDialogView::StartReauthAccessTokenFetch(
     const std::string& parent_credential) {
   // The first step of Reauth is to fetch an OAuth2 access token for the
   // Reauth API scope.
-  signin::ScopeSet scopes;
-  scopes.insert(GaiaConstants::kAccountsReauthOAuth2Scope);
   oauth2_access_token_fetcher_ =
       identity_manager_->CreateAccessTokenFetcherForAccount(
           identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSignin),
-          "chrome_webstore_private_api", scopes,
+          signin::OAuthConsumerId::kParentPermissionDialog,
           base::BindOnce(
               &ParentPermissionDialogView::OnAccessTokenFetchComplete,
               weak_factory_.GetWeakPtr(), parent_obfuscated_gaia_id,
@@ -939,12 +929,9 @@ ParentPermissionDialog::CreateParentPermissionDialogForExtension(
     gfx::NativeWindow window,
     const gfx::ImageSkia& icon,
     const extensions::Extension* extension,
-    SupervisedUserExtensionParentApprovalEntryPoint
-        extension_approval_entry_point,
     ParentPermissionDialog::DoneCallback done_callback) {
   auto params = std::make_unique<ParentPermissionDialogView::Params>();
   params->extension = extension;
-  params->extension_approval_entry_point = extension_approval_entry_point;
   params->icon = icon;
   params->profile = profile;
   params->window = window;

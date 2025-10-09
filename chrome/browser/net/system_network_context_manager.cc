@@ -358,9 +358,7 @@ namespace features {
 // this feature is disabled any failed launches in the current browser session
 // will still result in sandbox being disabled for the lifetime of the running
 // browser.
-BASE_FEATURE(kPersistFailedLaunchState,
-             "PersistFailedLaunchState",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kPersistFailedLaunchState, base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace features
 
 class SystemNetworkContextManager::NetworkProcessLaunchWatcher
@@ -915,8 +913,13 @@ void SystemNetworkContextManager::DisableQuic() {
 void SystemNetworkContextManager::
     AddCookieEncryptionManagerToNetworkContextParams(
         network::mojom::NetworkContextParams* network_context_params) {
+  if (!cookie_encryption_provider_) {
+    cookie_encryption_provider_ =
+        std::make_unique<CookieEncryptionProviderImpl>(
+            g_browser_process->os_crypt_async());
+  }
   network_context_params->cookie_encryption_provider =
-      cookie_encryption_provider_.BindNewRemote();
+      cookie_encryption_provider_->BindNewRemote();
 }
 
 void SystemNetworkContextManager::AddSSLConfigToNetworkContextParams(

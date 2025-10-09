@@ -11,25 +11,11 @@
 #include "base/files/file_util.h"
 #include "base/notimplemented.h"
 #include "content/browser/indexed_db/file_path_util.h"
-#include "content/browser/indexed_db/indexed_db_data_loss_info.h"
 #include "content/browser/indexed_db/instance/sqlite/backing_store_database_impl.h"
 #include "content/browser/indexed_db/instance/sqlite/database_connection.h"
 #include "content/browser/indexed_db/status.h"
 
 namespace content::indexed_db::sqlite {
-
-std::tuple<std::unique_ptr<BackingStore>, Status, IndexedDBDataLossInfo, bool>
-BackingStoreImpl::OpenAndVerify(
-    base::FilePath directory,
-    storage::mojom::BlobStorageContext& blob_storage_context) {
-  return {
-      std::make_unique<BackingStoreImpl>(std::move(directory),
-                                         blob_storage_context),
-      Status::OK(),
-      IndexedDBDataLossInfo(),
-      false,
-  };
-}
 
 BackingStoreImpl::BackingStoreImpl(
     base::FilePath directory,
@@ -129,15 +115,15 @@ BackingStoreImpl::GetDatabaseNamesAndVersions() {
 StatusOr<std::unique_ptr<BackingStore::Database>>
 BackingStoreImpl::CreateOrOpenDatabase(const std::u16string& name) {
   if (auto it = open_connections_.find(name); it != open_connections_.end()) {
-    return std::make_unique<BackingStoreDatabaseImpl>(it->second->GetWeakPtr());
+    return it->second->CreateDatabaseWrapper();
   }
   base::FilePath db_path =
       in_memory() ? base::FilePath()
                   : directory_.Append(DatabaseNameToFileName(name));
   return DatabaseConnection::Open(name, std::move(db_path), *this)
       .transform([&](std::unique_ptr<DatabaseConnection> connection) {
-        auto database = std::make_unique<BackingStoreDatabaseImpl>(
-            connection->GetWeakPtr());
+        std::unique_ptr<BackingStoreDatabaseImpl> database =
+            connection->CreateDatabaseWrapper();
         open_connections_[name] = std::move(connection);
         return database;
       });

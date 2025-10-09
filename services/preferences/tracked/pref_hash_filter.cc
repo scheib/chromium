@@ -165,6 +165,7 @@ void PrefHashFilter::RegisterProfilePrefs(
   registry->RegisterStringPref(
       user_prefs::kPreferenceResetTime,
       base::NumberToString(base::Time().ToInternalValue()));
+  registry->RegisterDictionaryPref(user_prefs::kTrackedPreferencesReset);
   // Register the preference to trigger a flush to disk.
   // It's a string preference to store a timestamp.
   registry->RegisterStringPref(
@@ -191,6 +192,13 @@ base::Time PrefHashFilter::GetResetTime(PrefService* user_prefs) {
 // static
 void PrefHashFilter::ClearResetTime(PrefService* user_prefs) {
   user_prefs->ClearPref(user_prefs::kPreferenceResetTime);
+}
+
+// static
+void PrefHashFilter::SetResetTime(PrefService* user_prefs) {
+  user_prefs->SetString(
+      user_prefs::kPreferenceResetTime,
+      base::NumberToString(base::Time::Now().ToInternalValue()));
 }
 
 void PrefHashFilter::Initialize(base::Value::Dict& pref_store_contents) {
@@ -350,6 +358,9 @@ void PrefHashFilter::FinalizeFilterOnLoad(
                        weak_ptr_factory_.GetWeakPtr(),
                        pref_store_contents.Clone()));
   } else {
+    // No deferred task will be posted, so validation is complete.
+    // Log metrics now.
+    MaybeRecordTrackedPreferenceResetCount(pref_store_contents);
     // If the feature is disabled, and we have a test callback, run it now
     // as no deferred task will be posted.
     if (on_deferred_revalidation_complete_for_testing_) {
@@ -393,9 +404,15 @@ void PrefHashFilter::DeferredEncryptorRevalidation(
     // Compare the current value from pref service and the value from the copy
     // of the loaded store. If the pref has been modified, we skip the
     // encryption hash check.
-    if (current_value && (!value_at_load || *current_value != *value_at_load)) {
+    if (current_value && value_at_load) {
+      // Both values exist. Check if they are different.
+      if (*current_value != *value_at_load) {
+        continue;
+      }
+    } else if (current_value != value_at_load) {
       continue;
-    }
+    }  // If we fall through eventually, this means both values are valid and
+       // equal.
 
     if (preference->EnforceAndReport(pref_store_contents_at_load,
                                      transaction.get(),
@@ -407,6 +424,9 @@ void PrefHashFilter::DeferredEncryptorRevalidation(
       pref_to_write = user_prefs::kPreferenceResetTime;
     }
   }
+
+  // This is the final validation pass. Log metrics if we haven't already.
+  MaybeRecordTrackedPreferenceResetCount(pref_store_contents_at_load);
 
   pref_service_->SetString(
       pref_to_write, base::NumberToString(base::Time::Now().ToInternalValue()));
@@ -524,6 +544,18 @@ void PrefHashFilter::SetOnDeferredRevalidationCompleteForTesting(
     base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   on_deferred_revalidation_complete_for_testing_ = std::move(callback);
+}
+
+void PrefHashFilter::MaybeRecordTrackedPreferenceResetCount(
+    const base::Value::Dict& pref_store_contents) {
+  if (reset_metric_recorded_) {
+    return;
+  }
+  const base::Value::Dict* reset_dict =
+      pref_store_contents.FindDict(user_prefs::kTrackedPreferencesReset);
+  UMA_HISTOGRAM_COUNTS_100("Settings.TrackedPreferenceResets.Count",
+                           reset_dict ? reset_dict->size() : 0);
+  reset_metric_recorded_ = true;
 }
 
 // static

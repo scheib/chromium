@@ -152,8 +152,15 @@ static constexpr base::TimeDelta kConfirmationStateDurationIfVoiceOverRunning =
     // Log metrics for modal being shown to offer card save. We log each time
     // the modal is shown, even if it is a re-show via the omnibox chip, as
     // each show will be paired with one outcome (e.g. dismiss, accept, etc).
-    // However once the prompt has been accepted, we stop logging any re-shows
-    // as the user has already committed to the save flow.
+    // Note: Reshows are NOT logged on other platforms, this is specifc to iOS,
+    // which cannot differentiate between a first show and a reshow before the
+    // modal is accepted. However once the prompt has been accepted, we stop
+    // logging any re-shows as the user has already committed to the save flow.
+
+    delegate->LogPromptOfferMetric(
+        autofill::autofill_metrics::SaveCardPromptOffer::kShown,
+        autofill::autofill_metrics::SaveCreditCardPromptOverlayType::kModal);
+
     delegate->LogSaveCreditCardInfoBarResultMetric(
         autofill::autofill_metrics::SaveCreditCardPromptResultIOS::kShown,
         autofill::autofill_metrics::SaveCreditCardPromptOverlayType::kModal);
@@ -173,7 +180,7 @@ static constexpr base::TimeDelta kConfirmationStateDurationIfVoiceOverRunning =
 - (void)creditCardUploadCompleted:(BOOL)card_saved {
   if (!_loadingDismissedByUser) {
     autofill::autofill_metrics::LogCreditCardUploadLoadingViewResultMetric(
-        autofill::autofill_metrics::SaveCardPromptResult::kNotInteracted);
+        autofill::autofill_metrics::LegacySaveCardPromptResult::kNotInteracted);
   }
   if (card_saved) {
     autofill::autofill_metrics::LogCreditCardUploadConfirmationViewShownMetric(
@@ -273,7 +280,7 @@ static constexpr base::TimeDelta kConfirmationStateDurationIfVoiceOverRunning =
     } else {
       _loadingDismissedByUser = YES;
       autofill::autofill_metrics::LogCreditCardUploadLoadingViewResultMetric(
-          autofill::autofill_metrics::SaveCardPromptResult::kClosed);
+          autofill::autofill_metrics::LegacySaveCardPromptResult::kClosed);
     }
   } else {
     autofill::AutofillSaveCardInfoBarDelegateIOS* delegate =
@@ -307,8 +314,9 @@ static constexpr base::TimeDelta kConfirmationStateDurationIfVoiceOverRunning =
 - (void)onConfirmationClosedWithAutoClose:(BOOL)autoClosed {
   autofill::autofill_metrics::LogCreditCardUploadConfirmationViewResultMetric(
       autoClosed
-          ? autofill::autofill_metrics::SaveCardPromptResult::kNotInteracted
-          : autofill::autofill_metrics::SaveCardPromptResult::kClosed,
+          ? autofill::autofill_metrics::LegacySaveCardPromptResult::
+                kNotInteracted
+          : autofill::autofill_metrics::LegacySaveCardPromptResult::kClosed,
       /*is_card_uploaded=*/true);
   _autoCloseConfirmationTimer.Stop();
   if (!self.saveCardDelegate) {

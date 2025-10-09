@@ -18,6 +18,7 @@
 #include "base/functional/callback_forward.h"
 #include "base/functional/callback_helpers.h"
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/strings/stringprintf.h"
@@ -32,8 +33,11 @@
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
+#include "components/viz/common/frame_sinks/blit_request.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/common/frame_sinks/copy_output_util.h"
+#include "components/viz/common/resources/release_callback.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/service/debugger/viz_debugger.h"
@@ -45,6 +49,7 @@
 #include "components/viz/service/display_embedder/image_context_impl.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency.h"
 #include "components/viz/service/display_embedder/skia_output_surface_impl_on_gpu.h"
+#include "components/viz/service/display_embedder/skia_output_surface_shared_image_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "gpu/command_buffer/common/sync_token.h"
@@ -63,8 +68,10 @@
 #include "skia/buildflags.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "skia/ext/skia_trace_memory_dump_impl.h"
+#include "third_party/skia/include/core/SkAlphaType.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/gpu/GpuTypes.h"
+#include "third_party/skia/include/gpu/ganesh/GrTypes.h"
 #include "third_party/skia/include/gpu/ganesh/GrYUVABackendTextures.h"
 #include "third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
 #include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
@@ -116,8 +123,8 @@ class GraphiteVizMemoryAssistant
       base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
           this, "GraphiteVizMemoryAssistant", std::move(task_runner));
 
-      memory_pressure_listener_.emplace(
-          FROM_HERE,
+      memory_pressure_listener_registration_.emplace(
+          FROM_HERE, base::MemoryPressureListenerTag::kSkiaOutputSurfaceImpl,
           base::BindRepeating(&GraphiteVizMemoryAssistant::HandleMemoryPressure,
                               base::Unretained(this)));
     }
@@ -127,7 +134,7 @@ class GraphiteVizMemoryAssistant
   void RemoveClient() {
     num_clients_--;
     if (num_clients_ == 0) {
-      memory_pressure_listener_.reset();
+      memory_pressure_listener_registration_.reset();
       recorder_ = nullptr;
       cache_controller_ = nullptr;
       base::trace_event::MemoryDumpManager::GetInstance()
@@ -184,16 +191,15 @@ class GraphiteVizMemoryAssistant
     return true;
   }
 
-  void HandleMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+  void HandleMemoryPressure(base::MemoryPressureLevel memory_pressure_level) {
     switch (memory_pressure_level) {
-      case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+      case base::MEMORY_PRESSURE_LEVEL_NONE:
         return;
-      case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+      case base::MEMORY_PRESSURE_LEVEL_MODERATE:
         // With moderate pressure, clear any unlocked resources.
         cache_controller_->CleanUpScratchResources();
         break;
-      case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+      case base::MEMORY_PRESSURE_LEVEL_CRITICAL:
         cache_controller_->CleanUpAllResources();
         break;
     }
@@ -201,7 +207,8 @@ class GraphiteVizMemoryAssistant
 
   // NOTE: The implementation guarantees that the callback will always be called
   // on the thread that created the listener.
-  std::optional<base::AsyncMemoryPressureListener> memory_pressure_listener_;
+  std::optional<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   raw_ptr<skgpu::graphite::Recorder> recorder_ = nullptr;
   raw_ptr<gpu::raster::GraphiteCacheController> cache_controller_ = nullptr;
@@ -404,6 +411,11 @@ SkiaOutputSurfaceImpl::~SkiaOutputSurfaceImpl() {
     RemoveRenderPassResource(std::move(render_pass_ids));
   }
   DCHECK(render_pass_image_cache_.empty());
+
+  // Break reference cycle.
+  if (shared_image_interface_) {
+    shared_image_interface_->DetachOutputSurfaceOnHostThread();
+  }
 
   // Save a copy of this pointer before moving it into the task. Tasks that are
   // already enqueud may need to use it before |impl_on_gpu_| is destroyed.
@@ -1030,6 +1042,41 @@ void SkiaOutputSurfaceImpl::CopyOutput(
     const gpu::Mailbox& mailbox) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  ReleaseCallback release_callback = {};
+
+  // Set up a new blit request with a shared image for the copy if one can be
+  // created but does not already exist.
+  if (!request->has_blit_request() &&
+      request->result_destination() ==
+          CopyOutputRequest::ResultDestination::kSharedImage) {
+    scoped_refptr<gpu::ClientSharedImage> shared_image =
+        shared_image_interface_->CreateSharedImage(
+            gpu::SharedImageInfo{
+                GetSharedImageFormatFor(request->result_format()),
+                geometry.result_selection.size(), color_space,
+                kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+                CopyOutputResult::kDefaultSharedImageUsage, "CopyOutput"},
+            gpu::kNullSurfaceHandle);
+
+    // Set up deletion callback for new shared image.
+    release_callback = base::BindOnce(
+        [](scoped_refptr<gpu::ClientSharedImage> client_shared_image,
+           const gpu::SyncToken& destruction_sync_token, bool) {
+          client_shared_image->UpdateDestructionSyncToken(
+              destruction_sync_token);
+        },
+        shared_image);
+
+    // Ensure result selection exists and matches expected output.
+    request->set_result_selection(geometry.result_selection);
+
+    const gpu::SyncToken& sync_token = shared_image->creation_sync_token();
+    request->set_blit_request(
+        BlitRequest{gfx::Point{}, LetterboxingBehavior::kDoNotLetterbox,
+                    std::move(shared_image), sync_token,
+                    /*populates_gpu_memory_buffer=*/false});
+  }
+
   if (request->has_blit_request()) {
     const auto& sync_token = request->blit_request().sync_token();
     if (sync_token.HasData()) {
@@ -1039,7 +1086,8 @@ void SkiaOutputSurfaceImpl::CopyOutput(
 
   auto callback = base::BindOnce(&SkiaOutputSurfaceImplOnGpu::CopyOutput,
                                  base::Unretained(impl_on_gpu_.get()), geometry,
-                                 color_space, std::move(request), mailbox);
+                                 color_space, std::move(request), mailbox,
+                                 std::move(release_callback));
   EnqueueGpuTask(std::move(callback), std::move(resource_sync_tokens_),
                  /*make_current=*/true, /*need_framebuffer=*/mailbox.IsZero());
 }
@@ -1090,6 +1138,17 @@ bool SkiaOutputSurfaceImpl::Initialize() {
   // |capabilities_| will be initialized in InitializeOnGpuThread(), so have to
   // wait.
   FlushGpuTasks(SyncMode::kWaitForTasksFinished);
+  // Exit early if creation of `impl_on_gpu` fails.
+  if (!result) {
+    return false;
+  }
+
+  // We need to wait for `impl_on_gpu_` to be initialized to initialize
+  // `shared_image_interface_`, so can't do that before now.
+  DCHECK(impl_on_gpu_);
+  shared_image_interface_ =
+      base::MakeRefCounted<SkiaOutputSurfaceSharedImageInterface>(
+          *this, *impl_on_gpu_);
 
   if (capabilities_.damage_area_from_skia_output_device) {
     damage_of_current_buffer_.emplace();
@@ -1104,7 +1163,7 @@ bool SkiaOutputSurfaceImpl::Initialize() {
         graphite_recorder_, graphite_cache_controller_.get(),
         dependency_->GetClientTaskRunner());
   }
-  return result;
+  return true;
 }
 
 void SkiaOutputSurfaceImpl::InitializeOnGpuThread(bool* result) {
@@ -1548,9 +1607,8 @@ void SkiaOutputSurfaceImpl::RemoveContextLostObserver(
 }
 
 gpu::SyncToken SkiaOutputSurfaceImpl::Flush() {
-  gpu::SyncToken sync_token(
-      gpu::CommandBufferNamespace::VIZ_SKIA_OUTPUT_SURFACE,
-      impl_on_gpu_->command_buffer_id(), ++sync_fence_release_);
+  DCHECK(shared_image_interface_);
+  gpu::SyncToken sync_token = shared_image_interface_->GenNextSyncToken();
   sync_token.SetVerifyFlush();
   FlushGpuTasks(SyncMode::kNoWait, sync_token);
   return sync_token;

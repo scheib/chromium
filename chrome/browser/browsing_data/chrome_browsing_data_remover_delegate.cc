@@ -83,7 +83,6 @@
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "chrome/browser/ui/find_bar/find_bar_state.h"
 #include "chrome/browser/ui/find_bar/find_bar_state_factory.h"
-#include "chrome/browser/webauthn/chrome_authenticator_request_delegate.h"
 #include "chrome/browser/webdata_services/web_data_service_factory.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/url_constants.h"
@@ -91,7 +90,6 @@
 #include "components/autofill/core/browser/data_manager/autofill_ai/entity_data_manager.h"
 #include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
 #include "components/autofill/core/browser/data_manager/personal_data_manager.h"
-#include "components/autofill/core/browser/strike_databases/strike_database.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -122,8 +120,8 @@
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/browser/password_store/smart_bubble_stats_store.h"
-#include "components/payments/content/browser_binding/browser_bound_keys_deleter.h"
-#include "components/payments/content/browser_binding/browser_bound_keys_deleter_factory.h"
+#include "components/payments/content/browser_binding/browser_bound_key_deleter.h"
+#include "components/payments/content/browser_binding/browser_bound_key_deleter_factory.h"
 #include "components/payments/content/web_payments_web_data_service.h"
 #include "components/performance_manager/public/user_tuning/prefs.h"
 #include "components/permissions/permission_actions_history.h"
@@ -140,6 +138,7 @@
 #include "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_utils.h"
+#include "components/strike_database/strike_database.h"
 #include "components/sync/service/sync_service.h"
 #include "components/sync/service/sync_user_settings.h"
 #include "components/tpcd/metadata/browser/manager.h"
@@ -336,7 +335,7 @@ ChromeBrowsingDataRemoverDelegate::GetDomainsForDeferredCookieDeletion(
     std::string domain = GetDomainAndRegistry(
         url, net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES);
     if (domain.empty())
-      domain = url.host();
+      domain = url.GetHost();
     domains.insert(domain);
   }
   return {domains.begin(), domains.end()};
@@ -733,13 +732,11 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
     }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_ANDROID)
     if (payments::BrowserBoundKeyDeleter* browser_bound_key_deleter =
             payments::BrowserBoundKeyDeleterFactory::GetForBrowserContext(
                 profile_)) {
       browser_bound_key_deleter->RemoveInvalidBBKs();
     }
-#endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_CHROMEOS)
     if (base::FeatureList::IsEnabled(
@@ -783,6 +780,10 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
 
     host_content_settings_map_->ClearSettingsForOneTypeWithPredicate(
         ContentSettingsType::PERMISSION_AUTOREVOCATION_DATA, delete_begin,
+        delete_end, website_settings_filter);
+
+    host_content_settings_map_->ClearSettingsForOneTypeWithPredicate(
+        ContentSettingsType::PERMISSION_ACTIONS_HISTORY, delete_begin,
         delete_end, website_settings_filter);
 
     if (auto* privacy_sandbox_settings =
@@ -931,8 +932,14 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
         ContentSettingsType::SUSPICIOUS_NOTIFICATION_IDS, delete_begin_,
         delete_end_, website_settings_filter);
 
+    host_content_settings_map_->ClearSettingsForOneTypeWithPredicate(
+        ContentSettingsType::SUSPICIOUS_NOTIFICATION_SHOW_ORIGINAL,
+        delete_begin_, delete_end_, website_settings_filter);
+
     PermissionDecisionAutoBlockerFactory::GetForProfile(profile_)
         ->RemoveEmbargoAndResetCounts(filter);
+    PermissionActionsHistoryFactory::GetForProfile(profile_)
+        ->ResetHeuristicData(filter);
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1076,7 +1083,7 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
       // TODO(crbug.com/40594007): Respect |delete_begin_| and |delete_end_| and
       // only clear out entries whose last strikes were created in that
       // timeframe.
-      autofill::StrikeDatabase* strike_database =
+      strike_database::StrikeDatabase* strike_database =
           autofill::StrikeDatabaseFactory::GetForProfile(profile_);
       if (strike_database)
         strike_database->ClearAllStrikes();
@@ -1134,7 +1141,7 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
         if (render_process_host->GetBrowserContext() == profile_ &&
             render_process_host->IsInitializedAndNotDead()) {
           web_cache::WebCacheManager::GetInstance()->ClearCacheForProcess(
-              render_process_host->GetDeprecatedID());
+              render_process_host->GetID());
         }
       }
     }

@@ -19,7 +19,6 @@
 
 namespace content {
 class BrowserContext;
-class StoragePartition;
 }  // namespace content
 
 namespace web_app {
@@ -40,20 +39,6 @@ class IwaClient {
       content::BrowserContext* browser_context,
       const web_package::SignedWebBundleId& web_bundle_id,
       bool dev_mode) = 0;
-
-  // Infers the web bundle id of the IWA handling a particular URL with respect
-  // to the embedder-defined format.
-  // TODO(crbug.com/431980377): Consider moving chrome::kIsolatedAppScheme to
-  // components/webapps/isolated_web_apps/ to remove this link.
-  virtual base::expected<web_package::SignedWebBundleId, std::string>
-  CreateWebBundleIdFromURL(const GURL& url) = 0;
-
-  // Infers the base URL for a signed web bundle with this `web_bundle_id`;
-  // Resources from this web bundle will be served relative to it.
-  // TODO(crbug.com/431980377): Consider moving chrome::kIsolatedAppScheme to
-  // components/webapps/isolated_web_apps/ to remove this link.
-  virtual GURL CreateBaseURLForWebBundleId(
-      const web_package::SignedWebBundleId& web_bundle_id) = 0;
 
   // Tells the embedder (who manages the app system) to run the supplied
   // `callback` once all windows of the app defined by `web_bundle_id` are
@@ -76,12 +61,6 @@ class IwaClient {
       base::OnceCallback<void(
           base::expected<IwaSourceWithModeOrGeneratedResponse, std::string>)>
           callback) = 0;
-
-  // Returns the correct storage partition for the network service; each
-  // Isolated Web App is supposed to have its own unique partition.
-  virtual content::StoragePartition* GetStoragePartition(
-      content::BrowserContext* browser_context,
-      const web_package::SignedWebBundleId& web_bundle_id) = 0;
 
  protected:
   IwaClient();

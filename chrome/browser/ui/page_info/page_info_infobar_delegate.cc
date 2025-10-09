@@ -12,20 +12,19 @@
 #include "components/infobars/core/infobar.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
 
 // static
-PageInfoInfoBarDelegate* PageInfoInfoBarDelegate::Create(
-    infobars::ContentInfoBarManager* infobar_manager) {
-  auto* delegate = new PageInfoInfoBarDelegate();
+void PageInfoInfoBarDelegate::Create(
+    infobars::ContentInfoBarManager* infobar_manager,
+    content::ReloadType reload_type) {
   infobar_manager->AddInfoBar(
-      CreateConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate>(delegate)));
-  return delegate;
+      CreateConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate>(
+          new PageInfoInfoBarDelegate(reload_type))));
 }
-
-PageInfoInfoBarDelegate::PageInfoInfoBarDelegate() = default;
 
 PageInfoInfoBarDelegate::~PageInfoInfoBarDelegate() = default;
 

@@ -1002,12 +1002,6 @@ inline constexpr char kDesksNamesList[] = "ash.desks.desks_names_list";
 // for the primary user on first sign-in. The guids are stored as lowercase
 // strings.
 inline constexpr char kDesksGuidsList[] = "ash.desks.desks_guids_list";
-// A list containing the lacros profile ID associations for desks in the same
-// order of the desks in the overview desks bar. This is used so that desk <->
-// profile associations can be restored. The profile IDs are logically unsigned
-// integers, but stored as strings since they can (and will) be 64-bits large.
-inline constexpr char kDesksLacrosProfileIdList[] =
-    "ash.desks.desks_lacros_profile_id_list";
 // This list stores the metrics of virtual desks. Like |kDesksNamesList|, this
 // list stores entries in the same order of the desks in the overview desks bar.
 // Values are stored as dictionaries.
@@ -1750,6 +1744,10 @@ inline constexpr char kAssistantTimeOfLastInteraction[] =
 // Whether the user is allowed to disconnect and configure VPN connections.
 inline constexpr char kVpnConfigAllowed[] = "vpn_config_allowed";
 
+// A boolean pref that indicates whether silent printing is enabled.
+inline constexpr char kSilentPrintingEnabled[] =
+    "ash.printing.silent_printing_enabled";
+
 // A boolean pref that indicates whether power peak shift is enabled.
 // Ignored unless powerd is configured to honor charging-related prefs.
 inline constexpr char kPowerPeakShiftEnabled[] = "ash.power.peak_shift_enabled";
@@ -2002,10 +2000,6 @@ inline constexpr char kFilesAppTrashEnabled[] = "ash.filesapp.trash_enabled";
 // Boolean value for the DeviceLoginScreenWebUILazyLoading device policy.
 inline constexpr char kLoginScreenWebUILazyLoading[] =
     "ash.login.LoginScreenWebUILazyLoading";
-
-// Boolean value for the FloatingWorkspaceV2Enabled policy
-inline constexpr char kFloatingWorkspaceV2Enabled[] =
-    "ash.floating_workspace_v2_enabled";
 
 // Boolean value indicating that post reboot notification should be shown to the
 // user.
@@ -2664,6 +2658,10 @@ inline constexpr char kClassManagementToolsViewScreenEligibilitySetting[] =
 // tools OOBE page.
 inline constexpr char kClassManagementToolsOOBEAccessCountSetting[] =
     "ash.class_management_tools.oobe_access_count_setting";
+
+// A list pref containing Class Tools kiosk receiver codes.
+inline constexpr char kClassManagementToolsKioskReceiverCodes[] =
+    "ash.class_management_tools.kiosk_receiver_codes";
 
 // A boolean pref indicating whether age requirement met for GenAI access for
 // Coral.

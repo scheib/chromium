@@ -8,8 +8,10 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/extensions/commands/command_service.h"
 #include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/extensions/permissions/site_permissions_helper.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_hover_card_types.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "extensions/browser/extension_action_icon_factory.h"
@@ -18,7 +20,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_id.h"
 
-class Browser;
 class ExtensionActionPlatformDelegate;
 class IconWithBadgeImageSource;
 class ExtensionsContainer;
@@ -37,20 +38,22 @@ namespace ui {
 class ImageModel;
 }
 
-// The platform-independent controller for an ExtensionAction that is shown on
-// the toolbar (such as a page or browser action).
-// Since this class doesn't own the extension or extension action in question,
-// be sure to check for validity using ExtensionIsValid() before using those
-// members (see also comments above ExtensionIsValid()).
+// The Views controller for an ExtensionAction that is shown on the toolbar
+// (such as a page or browser action). Since this class doesn't own the
+// extension or extension action in question, be sure to check for validity
+// using ExtensionIsValid() before using those members (see also comments above
+// ExtensionIsValid()).
+// TODO(crbug.com/437774758): Enable this class on Desktop Android.
 class ExtensionActionViewController
     : public ToolbarActionViewController,
       public extensions::ExtensionActionIconFactory::Observer,
+      public extensions::CommandService::Observer,
       public extensions::ExtensionContextMenuModel::PopupDelegate,
       public extensions::ExtensionHostObserver {
  public:
   static std::unique_ptr<ExtensionActionViewController> Create(
       const extensions::ExtensionId& extension_id,
-      Browser* browser,
+      BrowserWindowInterface* browser,
       ExtensionsContainer* extensions_container);
 
   // Returns whether any of `actions` given have access to the `web_contents`.
@@ -98,6 +101,13 @@ class ExtensionActionViewController
   void RegisterCommand() override;
   void UnregisterCommand() override;
 
+  // extensions::CommandService::Observer:
+  void OnExtensionCommandAdded(const std::string& extension_id,
+                               const extensions::Command& command) override;
+  void OnExtensionCommandRemoved(const std::string& extension_id,
+                                 const extensions::Command& command) override;
+  void OnCommandServiceDestroying() override;
+
   // ExtensionContextMenuModel::PopupDelegate:
   void InspectPopup() override;
 
@@ -113,7 +123,7 @@ class ExtensionActionViewController
   bool CanHandleAccelerators() const;
 
   const extensions::Extension* extension() const { return extension_.get(); }
-  Browser* browser() { return browser_; }
+  BrowserWindowInterface* browser() { return browser_; }
   extensions::ExtensionAction* extension_action() { return extension_action_; }
   const extensions::ExtensionAction* extension_action() const {
     return extension_action_;
@@ -128,7 +138,7 @@ class ExtensionActionViewController
   // New instances should be instantiated with Create().
   ExtensionActionViewController(
       scoped_refptr<const extensions::Extension> extension,
-      Browser* browser,
+      BrowserWindowInterface* browser,
       extensions::ExtensionAction* extension_action,
       extensions::ExtensionRegistry* extension_registry,
       ExtensionsContainer* extensions_container);
@@ -176,10 +186,10 @@ class ExtensionActionViewController
   // The extension associated with the action we're displaying.
   scoped_refptr<const extensions::Extension> extension_;
 
-  // The corresponding browser.
-  // TODO(crbug.com/437774758): To be removed in favor of profile_ (or browser
-  // window interface) so controller can be compiled on Desktop Android.
-  const raw_ptr<Browser> browser_;
+  // The corresponding browser window.
+  const raw_ptr<BrowserWindowInterface> browser_;
+
+  // The corresponding profile.
   const raw_ptr<Profile> profile_;
 
   // The browser action this view represents. The ExtensionAction is not owned
@@ -220,6 +230,10 @@ class ExtensionActionViewController
   base::ScopedObservation<extensions::ExtensionHost,
                           extensions::ExtensionHostObserver>
       popup_host_observation_{this};
+
+  base::ScopedObservation<extensions::CommandService,
+                          extensions::CommandService::Observer>
+      command_service_observation_{this};
 
   base::WeakPtrFactory<ExtensionActionViewController> weak_factory_{this};
 };

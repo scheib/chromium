@@ -39,7 +39,6 @@
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
-#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/blocked_content/chrome_popup_navigation_delegate.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
@@ -47,7 +46,6 @@
 #include "chrome/browser/vr/vr_tab_helper.h"
 #include "chrome/browser/webapps/installable/installed_webapp_bridge.h"
 #include "chrome/browser/webapps/installable/installed_webapp_geolocation_context.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/url_constants.h"
 #include "components/autofill/content/browser/content_autofill_client.h"
@@ -73,6 +71,7 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/content_features.h"
 #include "third_party/blink/public/common/features_generated.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 #include "third_party/blink/public/mojom/frame/blocked_navigation_types.mojom.h"
@@ -194,9 +193,9 @@ bool TabWebContentsDelegateAndroid::ShouldFocusLocationBarByDefault(
     GURL url = entry->GetURL();
     GURL virtual_url = entry->GetVirtualURL();
     if ((url.SchemeIs(browser_ui::kChromeUINativeScheme) &&
-         url.host_piece() == chrome::kChromeUINewTabHost) ||
+         url.host() == chrome::kChromeUINewTabHost) ||
         (virtual_url.SchemeIs(browser_ui::kChromeUINativeScheme) &&
-         virtual_url.host_piece() == chrome::kChromeUINewTabHost)) {
+         virtual_url.host() == chrome::kChromeUINewTabHost)) {
       return true;
     }
   }
@@ -399,9 +398,10 @@ WebContents* TabWebContentsDelegateAndroid::AddNewContents(
     ScopedJavaLocalRef<jobject> jwindow_features =
         JNI_TabWebContentsDelegateAndroidImpl_CreateJavaWindowFeatures(
             env, window_features);
-
+    ScopedJavaLocalRef<jobject> jurl =
+        url::GURLAndroid::FromNativeGURL(env, target_url);
     handled = Java_TabWebContentsDelegateAndroidImpl_addNewContents(
-        env, obj, jsource, jnew_contents, static_cast<jint>(disposition),
+        env, obj, jsource, jnew_contents, jurl, static_cast<jint>(disposition),
         jwindow_features, user_gesture);
   }
 

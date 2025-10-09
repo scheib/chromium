@@ -150,9 +150,7 @@ using DocumentElementSetMap =
 namespace {
 
 // When enabled, CSS media queries are supported in <source> elements.
-BASE_FEATURE(kVideoSourceMediaQuerySupport,
-             "VideoSourceMediaQuerySupport",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kVideoSourceMediaQuerySupport, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // This enum is used to record histograms. Do not reorder.
 enum class MediaControlsShow {
@@ -442,12 +440,12 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tag_name,
           &HTMLMediaElement::OnRemovedFromDocumentTimerFired),
       progress_event_timer_(
           document.GetTaskRunner(TaskType::kInternalMedia),
-          WTF::BindRepeating(&HTMLMediaElement::ProgressEventTimerFired,
-                             WrapWeakPersistent(this))),
+          BindRepeating(&HTMLMediaElement::ProgressEventTimerFired,
+                        WrapWeakPersistent(this))),
       playback_progress_timer_(
           document.GetTaskRunner(TaskType::kInternalMedia),
-          WTF::BindRepeating(&HTMLMediaElement::PlaybackProgressTimerFired,
-                             WrapWeakPersistent(this))),
+          BindRepeating(&HTMLMediaElement::PlaybackProgressTimerFired,
+                        WrapWeakPersistent(this))),
       async_event_queue_(
           MakeGarbageCollected<EventQueue>(GetExecutionContext(),
                                            TaskType::kMediaElementEvent)),
@@ -2307,10 +2305,12 @@ void HTMLMediaElement::SetReadyState(ReadyState state) {
           }
         }
         if (default_audio_track) {
-          default_audio_track->setEnabled(true);
+          default_audio_track->setEnabled(true,
+                                          TrackBase::ChangeSource::kInitial);
         }
         if (default_video_track) {
-          default_video_track->setSelected(true);
+          default_video_track->setSelected(true,
+                                           TrackBase::ChangeSource::kInitial);
         }
       }
     }
@@ -2719,8 +2719,8 @@ void HTMLMediaElement::SetOfficialPlaybackPosition(double position) const {
   // officialPlaybackPosition().
   official_playback_position_needs_update_ = false;
   GetDocument().GetAgent().event_loop()->EnqueueMicrotask(
-      WTF::BindOnce(&HTMLMediaElement::RequireOfficialPlaybackPositionUpdate,
-                    WrapWeakPersistent(this)));
+      BindOnce(&HTMLMediaElement::RequireOfficialPlaybackPositionUpdate,
+               WrapWeakPersistent(this)));
 }
 
 void HTMLMediaElement::RequireOfficialPlaybackPositionUpdate() const {
@@ -3331,7 +3331,8 @@ AudioTrackList& HTMLMediaElement::audioTracks() {
   return *audio_tracks_;
 }
 
-void HTMLMediaElement::AudioTrackChanged(AudioTrack* track) {
+void HTMLMediaElement::AudioTrackChanged(AudioTrack* track,
+                                         TrackBase::ChangeSource source) {
   DVLOG(3) << "audioTrackChanged(" << *this
            << ") trackId= " << String(track->id())
            << " enabled=" << base::ToString(track->enabled())
@@ -3346,8 +3347,10 @@ void HTMLMediaElement::AudioTrackChanged(AudioTrack* track) {
   if (media_source_attachment_)
     media_source_attachment_->OnTrackChanged(media_source_tracer_, track);
 
-  if (!audio_tracks_timer_.IsActive())
+  if (source != TrackBase::ChangeSource::kDemuxer &&
+      !audio_tracks_timer_.IsActive()) {
     audio_tracks_timer_.StartOneShot(base::TimeDelta(), FROM_HERE);
+  }
 }
 
 void HTMLMediaElement::AudioTracksTimerFired(TimerBase*) {
@@ -3365,7 +3368,9 @@ VideoTrackList& HTMLMediaElement::videoTracks() {
   return *video_tracks_;
 }
 
-void HTMLMediaElement::SelectedVideoTrackChanged(VideoTrack* track) {
+void HTMLMediaElement::SelectedVideoTrackChanged(
+    VideoTrack* track,
+    TrackBase::ChangeSource source) {
   DVLOG(3) << "selectedVideoTrackChanged(" << *this << ") selectedTrackId="
            << (track->selected() ? String(track->id()) : "none");
 
@@ -3374,13 +3379,16 @@ void HTMLMediaElement::SelectedVideoTrackChanged(VideoTrack* track) {
 
   videoTracks().ScheduleChangeEvent();
 
-  if (media_source_attachment_)
+  if (media_source_attachment_) {
     media_source_attachment_->OnTrackChanged(media_source_tracer_, track);
+  }
 
-  if (track->selected()) {
-    web_media_player_->SelectedVideoTrackChanged(track->id());
-  } else {
-    web_media_player_->SelectedVideoTrackChanged(std::nullopt);
+  if (source != TrackBase::ChangeSource::kDemuxer) {
+    if (track->selected()) {
+      web_media_player_->SelectedVideoTrackChanged(track->id());
+    } else {
+      web_media_player_->SelectedVideoTrackChanged(std::nullopt);
+    }
   }
 }
 
@@ -4302,7 +4310,7 @@ SpeechSynthesisBase* HTMLMediaElement::SpeechSynthesis() {
   if (!speech_synthesis_) {
     speech_synthesis_ =
         SpeechSynthesisBase::Create(*(GetDocument().domWindow()));
-    speech_synthesis_->SetOnSpeakingCompletedCallback(WTF::BindRepeating(
+    speech_synthesis_->SetOnSpeakingCompletedCallback(BindRepeating(
         &HTMLMediaElement::OnSpeakingCompleted, WrapWeakPersistent(this)));
   }
   return speech_synthesis_.Get();
@@ -4400,47 +4408,41 @@ MediaControls* HTMLMediaElement::GetMediaControls() const {
   return media_controls_.Get();
 }
 
-void HTMLMediaElement::EnsureMediaControls() {
-  if (GetMediaControls())
-    return;
-
-  ShadowRoot& shadow_root = EnsureUserAgentShadowRoot();
-  UseCounterMuteScope scope(*this);
-  media_controls_ =
-      CoreInitializer::GetInstance().CreateMediaControls(*this, shadow_root);
-
-  // The media controls should be inserted after the text track container,
-  // so that they are rendered in front of captions and subtitles. This check
-  // is verifying the contract.
-  AssertShadowRootChildren(shadow_root);
-}
-
 void HTMLMediaElement::UpdateControlsVisibility() {
   if (!isConnected())
     return;
 
-  bool native_controls = ShouldShowControls();
+  // TODO(crbug.com/448699375): Try to re-enable lazy initialization of media
+  // controls such that we only create the media controls when
+  // ShouldShowControls() or if the cast overlay button will be shown. Currently
+  // this information is only known in /modules/ that we can't access from
+  // /core/.
+  if (!media_controls_) {
+    ShadowRoot& shadow_root = EnsureUserAgentShadowRoot();
+    UseCounterMuteScope scope(*this);
+    media_controls_ =
+        CoreInitializer::GetInstance().CreateMediaControls(*this, shadow_root);
 
-  // When LazyInitializeMediaControls is enabled, initialize the controls only
-  // if native controls should be used or if using the cast overlay.
-  if (!RuntimeEnabledFeatures::LazyInitializeMediaControlsEnabled() ||
-      RuntimeEnabledFeatures::MediaCastOverlayButtonEnabled() ||
-      native_controls) {
-    EnsureMediaControls();
-
-    // TODO(mlamouri): this doesn't sound needed but the following tests, on
-    // Android fails when removed:
-    // fullscreen/compositor-touch-hit-rects-fullscreen-video-controls.html
-    GetMediaControls()->Reset();
+    // The media controls should be inserted after the text track container,
+    // so that they are rendered in front of captions and subtitles. This check
+    // is verifying the contract.
+    AssertShadowRootChildren(shadow_root);
+  } else {
+    // This is necessary if controls change visibility because many of the state
+    // computations within MediaControlsImpl key off the visibility state.
+    media_controls_->Reset();
   }
 
-  if (native_controls)
-    GetMediaControls()->MaybeShow();
-  else if (GetMediaControls())
-    GetMediaControls()->Hide();
+  bool native_controls = ShouldShowControls();
+  if (native_controls) {
+    media_controls_->MaybeShow();
+  } else if (media_controls_) {
+    media_controls_->Hide();
+  }
 
-  if (web_media_player_)
+  if (web_media_player_) {
     web_media_player_->OnHasNativeControlsChanged(native_controls);
+  }
 }
 
 CueTimeline& HTMLMediaElement::GetCueTimeline() {
@@ -4626,8 +4628,8 @@ void HTMLMediaElement::ScheduleResolvePlayPromises() {
 
   play_promise_resolve_task_handle_ = PostCancellableTask(
       *GetDocument().GetTaskRunner(TaskType::kMediaElementEvent), FROM_HERE,
-      WTF::BindOnce(&HTMLMediaElement::ResolveScheduledPlayPromises,
-                    WrapWeakPersistent(this)));
+      BindOnce(&HTMLMediaElement::ResolveScheduledPlayPromises,
+               WrapWeakPersistent(this)));
 }
 
 void HTMLMediaElement::ScheduleRejectPlayPromises(PlayPromiseError code) {
@@ -4653,8 +4655,8 @@ void HTMLMediaElement::ScheduleRejectPlayPromises(PlayPromiseError code) {
   play_promise_error_code_ = code;
   play_promise_reject_task_handle_ = PostCancellableTask(
       *GetDocument().GetTaskRunner(TaskType::kMediaElementEvent), FROM_HERE,
-      WTF::BindOnce(&HTMLMediaElement::RejectScheduledPlayPromises,
-                    WrapWeakPersistent(this)));
+      BindOnce(&HTMLMediaElement::RejectScheduledPlayPromises,
+               WrapWeakPersistent(this)));
 }
 
 void HTMLMediaElement::ScheduleNotifyPlaying() {
@@ -5067,14 +5069,14 @@ void HTMLMediaElement::OnRemotePlaybackMetadataChange() {
   for (auto& observer : media_player_observer_remote_set_->Value()) {
     observer->OnRemotePlaybackMetadataChange(
         media_session::mojom::blink::RemotePlaybackMetadata::New(
-            WTF::String(media::GetCodecName(video_codec_
-                                                ? video_codec_.value()
-                                                : media::VideoCodec::kUnknown)),
-            WTF::String(media::GetCodecName(audio_codec_
-                                                ? audio_codec_.value()
-                                                : media::AudioCodec::kUnknown)),
+            String(media::GetCodecName(video_codec_
+                                           ? video_codec_.value()
+                                           : media::VideoCodec::kUnknown)),
+            String(media::GetCodecName(audio_codec_
+                                           ? audio_codec_.value()
+                                           : media::AudioCodec::kUnknown)),
             is_remote_playback_disabled_, is_remote_rendering_,
-            WTF::String(remote_device_friendly_name_), is_encrypted_media_));
+            String(remote_device_friendly_name_), is_encrypted_media_));
   }
 }
 

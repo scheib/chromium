@@ -468,10 +468,6 @@ void SingleThreadProxy::QueueImageDecode(int request_id,
                                          const DrawImage& image,
                                          bool speculative) {
   DCHECK(task_runner_provider_->IsMainThread());
-  if (speculative) {
-    CHECK(!speculative_decode_request_in_flight_);
-    speculative_decode_request_in_flight_ = true;
-  }
   DebugScopedSetImplThread impl(task_runner_provider_);
   host_impl_->QueueImageDecode(request_id, image, speculative);
 }
@@ -660,18 +656,10 @@ void SingleThreadProxy::SetNeedsImplSideInvalidation(
   }
 }
 
-bool SingleThreadProxy::SpeculativeDecodeRequestInFlight() const {
-  return speculative_decode_request_in_flight_;
-}
-
 void SingleThreadProxy::NotifyImageDecodeRequestFinished(
     int request_id,
     bool speculative,
     bool decode_succeeded) {
-  if (speculative) {
-    CHECK(speculative_decode_request_in_flight_);
-    speculative_decode_request_in_flight_ = false;
-  }
   DCHECK(!task_runner_provider_->HasImplThread() ||
          task_runner_provider_->IsImplThread());
   if (base::FeatureList::IsEnabled(
@@ -857,11 +845,16 @@ void SingleThreadProxy::CompositeImmediatelyForTest(
       frame.origin_begin_main_frame_args = begin_frame_args;
       DoComposite(&frame);
     }
+  }
 
     // DoComposite could abort, but because this is a synchronous composite
     // another draw will never be scheduled, so break remaining promises.
+  {
+    DebugScopedSetMainThreadBlocked main_thread_blocked(task_runner_provider_);
     host_impl_->active_tree()->BreakSwapPromises(SwapPromise::SWAP_FAILS);
-
+  }
+  {
+    DebugScopedSetImplThread impl(task_runner_provider_);
     DidFinishImplFrame(begin_frame_args);
   }
   if (callback) {

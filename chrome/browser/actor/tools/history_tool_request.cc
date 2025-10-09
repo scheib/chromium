@@ -4,10 +4,13 @@
 
 #include "chrome/browser/actor/tools/history_tool_request.h"
 
+#include <optional>
+
 #include "chrome/browser/actor/tools/history_tool.h"
 #include "chrome/browser/actor/tools/tool_request_visitor_functor.h"
 #include "chrome/common/actor.mojom.h"
 #include "chrome/common/actor/action_result.h"
+#include "chrome/common/actor/actor_utils.h"
 
 namespace actor {
 
@@ -25,6 +28,7 @@ ToolRequest::CreateToolResult HistoryToolRequest::CreateTool(
 
   if (!tab) {
     return {/*tool=*/nullptr, MakeResult(mojom::ActionResultCode::kTabWentAway,
+                                         /*requires_page_stabilization=*/false,
                                          "The tab is no longer present.")};
   }
 
@@ -40,6 +44,15 @@ void HistoryToolRequest::Apply(ToolRequestVisitorFunctor& f) const {
 
 std::string HistoryToolRequest::JournalEvent() const {
   return "History";
+}
+
+std::optional<ObservationDelayController::PageStabilityConfig>
+HistoryToolRequest::GetObservationPageStabilityConfig() const {
+  if (UseGeneralPageStabilityNavigationTools()) {
+    return ObservationDelayController::PageStabilityConfig();
+  } else {
+    return std::nullopt;
+  }
 }
 
 }  // namespace actor

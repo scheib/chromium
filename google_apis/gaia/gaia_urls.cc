@@ -92,6 +92,8 @@ const char kOAuth2IssueTokenUrlSuffix[] = "v1/issuetoken";
 // API calls from accountcapabilities-pa.googleapis.com
 const char kAccountCapabilitiesBatchGetUrlSuffix[] =
     "v1/accountcapabilities:batchGet";
+const char kAccountCapabilitiesGetAllVisibleUrlSuffix[] =
+    "v1/accountcapabilities:getAllVisible";
 
 const char kRotateBoundCookiesUrlSuffix[] = "RotateBoundCookies";
 
@@ -266,8 +268,12 @@ const GURL& GaiaUrls::reauth_url() const {
   return reauth_url_;
 }
 
-const GURL& GaiaUrls::account_capabilities_url() const {
-  return account_capabilities_url_;
+const GURL& GaiaUrls::account_capabilities_batch_get_url() const {
+  return account_capabilities_batch_get_url_;
+}
+
+const GURL& GaiaUrls::account_capabilities_get_all_visible_url() const {
+  return account_capabilities_get_all_visible_url_;
 }
 
 const std::string& GaiaUrls::oauth2_chrome_client_id() const {
@@ -324,16 +330,12 @@ const GURL& GaiaUrls::google_apis_origin_url() const {
 
 GURL GaiaUrls::ListAccountsURLWithSource(const std::string& source) {
   if (source.empty()) {
+    // TODO(crbug.com/443901858): Append laf=b64bin parameter universally.
     return list_accounts_url_;
   } else {
-    std::string query = list_accounts_url_.query();
-    if (base::FeatureList::IsEnabled(
-            gaia::features::kListAccountsUsesBinaryFormat)) {
-      return list_accounts_url_.Resolve(base::StringPrintf(
-          "?gpsia=1&source=%s&laf=b64bin&%s", source.c_str(), query.c_str()));
-    }
+    std::string query = list_accounts_url_.GetQuery();
     return list_accounts_url_.Resolve(base::StringPrintf(
-        "?gpsia=1&source=%s&%s", source.c_str(), query.c_str()));
+        "?gpsia=1&source=%s&laf=b64bin&%s", source.c_str(), query.c_str()));
   }
 }
 
@@ -450,15 +452,19 @@ void GaiaUrls::InitializeDefault() {
                       kOAuth2IssueTokenUrlSuffix);
 
   // URLs from |account_capabilities_origin_url_|.
-  ResolveURLIfInvalid(&account_capabilities_url_,
+  ResolveURLIfInvalid(&account_capabilities_batch_get_url_,
                       account_capabilities_origin_url_,
                       kAccountCapabilitiesBatchGetUrlSuffix);
+  ResolveURLIfInvalid(&account_capabilities_get_all_visible_url_,
+                      account_capabilities_origin_url_,
+                      kAccountCapabilitiesGetAllVisibleUrlSuffix);
 }
 
 void GaiaUrls::InitializeFromConfig() {
   GaiaConfig* config = GaiaConfig::GetInstance();
-  if (!config)
+  if (!config) {
     return;
+  }
 
   config->GetURLIfExists(URL_KEY_AND_PTR(google_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(secure_google_url));
@@ -496,7 +502,9 @@ void GaiaUrls::InitializeFromConfig() {
   config->GetURLIfExists(URL_KEY_AND_PTR(embedded_signin_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(add_account_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(reauth_url));
-  config->GetURLIfExists(URL_KEY_AND_PTR(account_capabilities_url));
+  config->GetURLIfExists(URL_KEY_AND_PTR(account_capabilities_batch_get_url));
+  config->GetURLIfExists(
+      URL_KEY_AND_PTR(account_capabilities_get_all_visible_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(get_check_connection_info_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(oauth2_token_url));
   config->GetURLIfExists(URL_KEY_AND_PTR(oauth2_issue_token_url));

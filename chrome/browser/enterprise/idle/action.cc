@@ -10,6 +10,7 @@
 
 #include "base/callback_list.h"
 #include "base/check_is_test.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
@@ -23,6 +24,7 @@
 #include "components/enterprise/idle/metrics.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browsing_data_remover.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -32,6 +34,8 @@
 #include "chrome/browser/enterprise/idle/dialog_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"  // nogncheck crbug.com/40147906
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/idle_bubble.h"
 #include "chrome/browser/ui/profiles/profile_picker.h"
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -319,17 +323,17 @@ class ShowBubbleAction : public Action {
         action_types_(std::move(action_types)) {}
 
   void Run(Profile* profile, Continuation continuation) override {
-    Browser* browser = BrowserList::GetInstance()->GetLastActive();
+    BrowserWindowInterface* const bwi =
+        GetLastActiveBrowserWindowInterfaceWithAnyProfile();
     profile->GetPrefs()->SetBoolean(prefs::kIdleTimeoutShowBubbleOnStartup,
                                     true);
-    if (browser && browser->IsActive() && browser->profile() == profile &&
+    if (bwi && bwi->IsActive() && bwi->GetProfile() == profile &&
         !base::Contains(action_types_, ActionType::kCloseBrowsers)) {
       // A browser for this profile has focus. Show the bubble there.
       ShowIdleBubble(
-          browser,
-          IdleServiceFactory::GetForBrowserContext(profile)->GetTimeout(),
+          bwi, IdleServiceFactory::GetForBrowserContext(profile)->GetTimeout(),
           ActionsToActionSet(action_types_),
-          base::BindOnce(&ShowBubbleAction::OnClose, browser->AsWeakPtr()));
+          base::BindOnce(&ShowBubbleAction::OnClose, bwi->GetWeakPtr()));
     } else {
       // No active browser for this profile. Show the bubble when a browser
       // gains focus, or on next startup. Let IdleService::BrowserObserver do
@@ -343,11 +347,11 @@ class ShowBubbleAction : public Action {
   }
 
  private:
-  static void OnClose(base::WeakPtr<Browser> browser) {
-    if (!browser) {
+  static void OnClose(base::WeakPtr<BrowserWindowInterface> bwi) {
+    if (!bwi) {
       return;
     }
-    browser->profile()->GetPrefs()->SetBoolean(
+    bwi->GetProfile()->GetPrefs()->SetBoolean(
         prefs::kIdleTimeoutShowBubbleOnStartup, false);
   }
 

@@ -38,10 +38,10 @@ using l10n_util::GetNSStringF;
   base::OnceCallback<void(BOOL animated, ProceduralBlock cancel_done)>
       _dialogCancelCallback;
   trusted_vault::SecurityDomainId _securityDomainID;
-  raw_ptr<signin::IdentityManager> _identityManager;
+  raw_ptr<signin::IdentityManager, DanglingUntriaged> _identityManager;
   std::unique_ptr<signin::IdentityManagerObserverBridge>
       _identityManagerObserver;
-  raw_ptr<AuthenticationService> _authService;
+  raw_ptr<AuthenticationService, DanglingUntriaged> _authService;
 }
 
 - (instancetype)
@@ -51,7 +51,7 @@ using l10n_util::GetNSStringF;
               securityDomainID:(trusted_vault::SecurityDomainId)securityDomainID
                        trigger:(syncer::TrustedVaultUserActionTriggerForUMA)
                                    trigger {
-  DCHECK(!browser->GetProfile()->IsOffTheRecord());
+  DCHECK_EQ(browser->type(), Browser::Type::kRegular);
   self = [super initWithBaseViewController:viewController browser:browser];
   if (self) {
     _intent = intent;

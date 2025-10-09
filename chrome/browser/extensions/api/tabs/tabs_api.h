@@ -23,6 +23,7 @@
 #include "extensions/browser/api/execute_code_function.h"
 #include "extensions/browser/api/web_contents_capture_client.h"
 #include "extensions/browser/extension_function.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_resource.h"
 #include "extensions/common/user_script.h"
 #include "ui/base/mojom/window_show_state.mojom-forward.h"
@@ -32,14 +33,13 @@
 #include "chrome/browser/safe_browsing/extension_telemetry/tabs_api_signal.h"
 #endif
 
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+
 class BrowserWindowInterface;
 class GURL;
+class SessionID;
 class SkBitmap;
 class TabStripModel;
-
-#if BUILDFLAG(IS_CHROMEOS)
-class Browser;
-#endif
 
 namespace base {
 class TaskRunner;
@@ -47,6 +47,10 @@ class TaskRunner;
 
 namespace content {
 class WebContents;
+}
+
+namespace tabs {
+class TabInterface;
 }
 
 namespace ui {
@@ -151,14 +155,15 @@ ui::mojom::WindowShowState ConvertToWindowShowState(
 // displays.
 bool WindowBoundsIntersectDisplays(const gfx::Rect& bounds);
 
-#if BUILDFLAG(IS_CHROMEOS)
-// This function sets the state of the browser window to a "locked"
-// fullscreen state (where the user can't exit fullscreen) in response to a
-// call to either chrome.windows.create or chrome.windows.update when the
-// screen is set locked. This is only necessary for ChromeOS and is
-// restricted to allowlisted extensions.
-void SetLockedFullscreenState(Browser* browser, bool pinned);
-#endif
+// Moves the given tab to the `target_browser`. On success, returns the
+// new index of the tab in the target tabstrip. On failure, returns -1.
+// Assumes that the caller has already checked whether the target window is
+// different from the source.
+int MoveTabToWindow(ExtensionFunction* function,
+                    int tab_id,
+                    BrowserWindowInterface* target_browser,
+                    int new_index,
+                    std::string* error);
 
 }  // namespace tabs_internal
 
@@ -191,6 +196,11 @@ class WindowsCreateFunction : public ExtensionFunction {
   ~WindowsCreateFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("windows.create", WINDOWS_CREATE)
+
+ private:
+#if BUILDFLAG(IS_CHROMEOS)
+  void OnWindowCreatedAsynchronously(const SessionID& session_id);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 class WindowsUpdateFunction : public ExtensionFunction {
   ~WindowsUpdateFunction() override = default;
@@ -225,9 +235,28 @@ class TabsGetAllInWindowFunction : public ExtensionFunction {
   DECLARE_EXTENSION_FUNCTION("tabs.getAllInWindow", TABS_GETALLINWINDOW)
 };
 class TabsQueryFunction : public ExtensionFunction {
-  ~TabsQueryFunction() override = default;
+ public:
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("tabs.query", TABS_QUERY)
+
+ private:
+  ~TabsQueryFunction() override = default;
+
+  // Returns true if the given `candidate_profile` matches the calling
+  // extension's profile (taking into account incognito access).
+  bool MatchesProfile(Profile* candidate_profile);
+
+  bool MatchesWindow(BrowserWindowInterface* candidate_browser,
+                     BrowserWindowInterface* current_browser,
+                     BrowserWindowInterface* last_active_browser,
+                     const std::string& target_window_type,
+                     int target_window_id);
+
+  bool MatchesTab(tabs::TabInterface* candidate_tab,
+                  const URLPatternSet& target_url_patterns);
+
+  // The query parameters passed by the extension.
+  api::tabs::Query::Params::QueryInfo query_info_;
 };
 class TabsCreateFunction : public ExtensionFunction {
   ~TabsCreateFunction() override = default;

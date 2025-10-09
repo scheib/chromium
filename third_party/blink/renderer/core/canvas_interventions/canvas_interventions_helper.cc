@@ -11,8 +11,8 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
-#include "third_party/blink/public/common/fingerprinting_protection/canvas_noise_token.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/core/canvas_interventions/noise_hash.h"
@@ -40,6 +40,27 @@
 namespace blink {
 
 namespace {
+
+constexpr const char kCanvasOperationMetricPrefix[] =
+    "FingerprintingProtection.CanvasNoise.OperationTriggered.";
+constexpr const char kCanvasNoiseReadbacksPerContextMetricPrefix[] =
+    "FingerprintingProtection.CanvasNoise.NoisedReadbacksPerContext.";
+
+std::string_view GetContextTypeForMetrics(ExecutionContext* execution_context) {
+  if (execution_context->IsWindow()) {
+    return "Window";
+  }
+  if (execution_context->IsDedicatedWorkerGlobalScope()) {
+    return "DedicatedWorker";
+  }
+  if (execution_context->IsSharedWorkerGlobalScope()) {
+    return "SharedWorker";
+  }
+  if (execution_context->IsServiceWorkerGlobalScope()) {
+    return "ServiceWorker";
+  }
+  return "Other";
+}
 
 // Returns true when all criteria to apply noising are met. Currently this
 // entails that
@@ -131,6 +152,10 @@ bool CanvasInterventionsHelper::MaybeNoiseSnapshot(
   UMA_HISTOGRAM_EXACT_LINEAR(kCanvasOperationMetricName,
                              static_cast<int>(high_entropy_canvas_op_types),
                              canvas_op_exclusive_max);
+  base::UmaHistogramExactLinear(
+      base::StrCat({kCanvasOperationMetricPrefix,
+                    GetContextTypeForMetrics(execution_context)}),
+      static_cast<int>(high_entropy_canvas_op_types), canvas_op_exclusive_max);
 
   AuditsIssue::ReportUserReidentificationCanvasNoisedIssue(
       CaptureSourceLocation(execution_context), execution_context);
@@ -147,7 +172,7 @@ bool CanvasInterventionsHelper::MaybeNoiseSnapshot(
 
   UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(kNoiseDurationMetricName,
                                           elapsed_time, base::Microseconds(50),
-                                          base::Milliseconds(50), 50);
+                                          base::Milliseconds(100), 100);
   UMA_HISTOGRAM_COUNTS_1M(kCanvasSizeMetricName,
                           pixmap_to_noise.width() * pixmap_to_noise.height());
   UseCounter::Count(execution_context, WebFeature::kCanvasReadbackNoise);
@@ -172,13 +197,35 @@ CanvasInterventionsHelper* CanvasInterventionsHelper::From(
 CanvasInterventionsHelper::CanvasInterventionsHelper(
     ExecutionContext& execution_context)
     : Supplement<ExecutionContext>(execution_context),
-      ExecutionContextLifecycleObserver(&execution_context) {}
+      ExecutionContextLifecycleObserver(&execution_context),
+      receiver_(this, &execution_context) {}
 
 void CanvasInterventionsHelper::ContextDestroyed() {
-  CHECK_GT(num_noised_canvas_readbacks_, 0);
-  UMA_HISTOGRAM_COUNTS_100(
-      "FingerprintingProtection.CanvasNoise.NoisedReadbacksPerContext",
+  // CanvasInterventionsHelper will be created for every ExecutionContext,
+  // which, only perhaps a subset will have a noised canvas. We should not
+  // record any ExecutionContexts that did not have a noised canvas as that
+  // would significantly bloat the 0 increments for this UMA.
+  if (num_noised_canvas_readbacks_ == 0) {
+    return;
+  }
+  UMA_HISTOGRAM_COUNTS_100(kCanvasNoiseReadbacksPerContextMetricName,
+                           num_noised_canvas_readbacks_);
+  base::UmaHistogramCounts100(
+      base::StrCat({kCanvasNoiseReadbacksPerContextMetricPrefix,
+                    GetContextTypeForMetrics(GetExecutionContext())}),
       num_noised_canvas_readbacks_);
+}
+
+void CanvasInterventionsHelper::Bind(
+    mojo::PendingReceiver<CanvasNoiseTokenUpdater> pending_receiver) {
+  receiver_.Bind(
+      std::move(pending_receiver),
+      GetExecutionContext()->GetTaskRunner(TaskType::kInternalDefault));
+}
+
+void CanvasInterventionsHelper::OnTokenReceived(
+    std::optional<NoiseToken> token) {
+  GetExecutionContext()->SetCanvasNoiseToken(token);
 }
 
 }  // namespace blink

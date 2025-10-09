@@ -30,7 +30,6 @@ NSString* const kAlternateDiscoverFeedServerURL =
 NSString* const kEnableStartupCrash = @"EnableStartupCrash";
 NSString* const kFirstRunForceEnabled = @"FirstRunForceEnabled";
 NSString* const kFirstRunForceDisabled = @"FirstRunForceDisabled";
-NSString* const kUpgradePromoForceEnabled = @"UpgradePromoForceEnabled";
 NSString* const kOriginServerHost = @"AlternateOriginServerHost";
 NSString* const kWhatsNewPromoStatus = @"WhatsNewPromoStatus";
 NSString* const kClearApplicationGroup = @"ClearApplicationGroup";
@@ -59,7 +58,6 @@ NSString* const kShouldIgnoreHistorySyncDeclineLimits =
 NSString* const kSafetyCheckNotificationsInactivityThreshold =
     @"SafetyCheckNotificationsInactivityThreshold";
 BASE_FEATURE(kEnableThirdPartyKeyboardWorkaround,
-             "EnableThirdPartyKeyboardWorkaround",
              base::FEATURE_ENABLED_BY_DEFAULT);
 NSString* const kTipsMagicStackLensShopWithImage =
     @"TipsMagicStackLensShopWithImage";
@@ -80,11 +78,6 @@ bool AlwaysDisplayFirstRun() {
 bool NeverDisplayFirstRun() {
   return
       [[NSUserDefaults standardUserDefaults] boolForKey:kFirstRunForceDisabled];
-}
-
-bool AlwaysDisplayUpgradePromo() {
-  return [[NSUserDefaults standardUserDefaults]
-      boolForKey:kUpgradePromoForceEnabled];
 }
 
 NSString* GetOriginServerHost() {
@@ -110,8 +103,10 @@ bool ShouldForceContentNotificationsPromo() {
 }
 
 bool ShouldForceFeedSigninPromo() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   return [[NSUserDefaults standardUserDefaults]
-      boolForKey:@"ForceFeedSigninPromo"];
+             boolForKey:@"ForceFeedSigninPromo"] ||
+         command_line->HasSwitch(switches::kForceFeedSigninPromo);
 }
 
 bool ShouldIgnoreDeviceLocaleConditions() {

@@ -54,6 +54,7 @@ import org.chromium.chrome.browser.toolbar.optional_button.OptionalButtonConstan
 import org.chromium.chrome.browser.toolbar.optional_button.OptionalButtonProperties.OnBeforeWidthTransitionCallback;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.components.browser_ui.widget.textbubble.TextBubble;
+import org.chromium.components.dom_distiller.core.DomDistillerFeatures;
 import org.chromium.ui.interpolators.Interpolators;
 import org.chromium.ui.listmenu.ListMenuButton;
 import org.chromium.ui.widget.ViewRectProvider;
@@ -275,7 +276,7 @@ class OptionalButtonView extends FrameLayout implements TransitionListener {
         final boolean canAnimate = isAnimationAllowedByParent && isButtonVariantChanging;
 
         mCurrentButtonVariant = buttonSpec.getButtonVariant();
-        mCanCurrentButtonShow = canShow;
+        mCanCurrentButtonShow = true;
         mCurrentButtonSupportsTinting = buttonSpec.getSupportsTinting();
 
         mIconDrawable = buttonSpec.getDrawable();
@@ -952,6 +953,7 @@ class OptionalButtonView extends FrameLayout implements TransitionListener {
     // ============================================================================================
     public static boolean isCpaSpecUpdateEnabled() {
         return ChromeFeatureList.sCpaSpecUpdate.isEnabled()
+                || DomDistillerFeatures.sReaderModeDistillInApp.isEnabled()
                 || ThemeModuleUtils.isForceEnableDependencies();
     }
 }

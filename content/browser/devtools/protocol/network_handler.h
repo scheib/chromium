@@ -74,14 +74,14 @@ class NetworkHandler : public DevToolsDomainHandler,
 #endif  // BUILDFLAG(ENABLE_REPORTING)
                        public Network::Backend {
  public:
-  NetworkHandler(
-      const std::string& host_id,
-      const base::UnguessableToken& devtools_token,
-      DevToolsIOContext* io_context,
-      base::RepeatingClosure update_loader_factories_callback,
-      DevToolsAgentHostClient* client,
-      base::OnceClosure cleanup_after_modifications_callback =
-          base::OnceClosure());
+  NetworkHandler(const std::string& host_id,
+                 const base::UnguessableToken& devtools_token,
+                 DevToolsIOContext* io_context,
+                 StoragePartition* maybe_storage_partition,
+                 base::RepeatingClosure update_loader_factories_callback,
+                 DevToolsAgentHostClient* client,
+                 base::OnceClosure cleanup_after_modifications_callback =
+                     base::OnceClosure());
 
   NetworkHandler(const NetworkHandler&) = delete;
   NetworkHandler& operator=(const NetworkHandler&) = delete;
@@ -183,6 +183,11 @@ class NetworkHandler : public DevToolsDomainHandler,
       std::optional<double> packet_loss,
       std::optional<int> packet_queue_length,
       std::optional<bool> packet_reordering) override;
+  Response EmulateNetworkConditionsByRule(
+      bool offline,
+      std::unique_ptr<protocol::Array<protocol::Network::NetworkConditions>>
+          matched_network_conditions,
+      std::unique_ptr<protocol::Array<String>>* rule_ids_result) override;
   Response SetBypassServiceWorker(bool bypass) override;
 
   DispatchResponse SetRequestInterception(
@@ -299,7 +304,8 @@ class NetworkHandler : public DevToolsDomainHandler,
       const std::vector<network::mojom::HttpRawHeaderPairPtr>& request_headers,
       const base::TimeTicks timestamp,
       const network::mojom::ClientSecurityStatePtr& security_state,
-      const network::mojom::OtherPartitionInfoPtr& other_partition_info);
+      const network::mojom::OtherPartitionInfoPtr& other_partition_info,
+      std::optional<base::UnguessableToken> applied_network_conditions_id);
   void OnResponseReceivedExtraInfo(
       const std::string& devtools_request_id,
       const net::CookieAndLineAccessResultList& response_cookie_list,
@@ -353,6 +359,14 @@ class NetworkHandler : public DevToolsDomainHandler,
       bool disable_third_party_cookie_metadata,
       bool disable_third_party_cookie_heuristics) override;
 
+  // Returns the current status of the IP Protection proxy.
+  void GetIPProtectionProxyStatus(
+      std::unique_ptr<GetIPProtectionProxyStatusCallback> callback) override;
+
+  // Enables or disables the IP Protection proxy bypass.
+  DispatchResponse SetIPProtectionProxyBypassEnabled(
+      bool bypass_proxy) override;
+
   // Protocol builders.
   static String BuildPrivateNetworkRequestPolicy(
       network::mojom::PrivateNetworkRequestPolicy policy);
@@ -375,7 +389,10 @@ class NetworkHandler : public DevToolsDomainHandler,
                                      int net_error,
                                      std::string content);
   void RequestIntercepted(std::unique_ptr<InterceptedRequestInfo> request_info);
-  void SetNetworkConditions(network::mojom::NetworkConditionsPtr conditions);
+  void SetNetworkConditions(
+      std::vector<network::mojom::MatchedNetworkConditionsPtr>
+          matched_conditions,
+      bool offline);
   void ConfigureDurableMessageCollector(
       network::mojom::NetworkDurableMessageConfigPtr config);
   void ProcessDurableMessageOrGetLocalData(
@@ -390,6 +407,7 @@ class NetworkHandler : public DevToolsDomainHandler,
 
   void GotAllCookies(std::unique_ptr<GetAllCookiesCallback> callback,
                      const std::vector<net::CanonicalCookie>& cookies);
+  void MaybeEnableDurableMessages();
 
   // TODO(dgozman): Remove this.
   const std::string host_id_;
@@ -406,6 +424,8 @@ class NetworkHandler : public DevToolsDomainHandler,
   bool enable_third_party_cookie_restriction_ = false;
   bool disable_third_party_cookie_metadata_ = false;
   bool disable_third_party_cookie_heuristics_ = false;
+  bool enable_durable_messages_ = false;
+  int durable_message_max_total_size_ = 0;
 
 #if BUILDFLAG(ENABLE_REPORTING)
   mojo::Receiver<network::mojom::ReportingApiObserver> reporting_receiver_;

@@ -12,6 +12,7 @@
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/lens/lens_overlay_entry_point_controller.h"
 #include "chrome/browser/ui/lens/lens_search_controller.h"
+#include "chrome/browser/ui/lens/lens_search_feature_flag_utils.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/interaction/browser_elements_views.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
@@ -49,7 +50,7 @@ LensOverlayHomeworkPageActionIconView::LensOverlayHomeworkPageActionIconView(
               kLensOverlayHomeworkPageActionIconElementId);
 
   SetLabel(l10n_util::GetStringUTF16(
-      IDS_CONTENT_LENS_OVERLAY_HOMEWORK_ENTRYPOINT_LABEL));
+      IDS_CONTENT_LENS_OVERLAY_ASK_GOOGLE_ENTRYPOINT_LABEL));
   // Elide behavior must be set to allow label to collapse.
   SetElideBehavior(gfx::ElideBehavior::NO_ELIDE);
   SetUseTonalColorsWhenExpanded(true);
@@ -67,6 +68,7 @@ void LensOverlayHomeworkPageActionIconView::UpdateImpl() {
     // ShowCallToAction() more than once while the chip is showing.
     if (!scoped_window_call_to_action_ptr_) {
       scoped_window_call_to_action_ptr_ = browser_->ShowCallToAction();
+      lens::IncrementLensOverlayEduActionChipShownCount(browser_->GetProfile());
     }
   } else {
     scoped_window_call_to_action_ptr_.reset();
@@ -77,7 +79,7 @@ void LensOverlayHomeworkPageActionIconView::UpdateImpl() {
 }
 
 bool LensOverlayHomeworkPageActionIconView::ShouldShow() {
-  if (!lens::features::IsLensOverlayEduActionChipEnabled()) {
+  if (!lens::ShouldShowLensOverlayEduActionChip(browser_->GetProfile())) {
     return false;
   }
 

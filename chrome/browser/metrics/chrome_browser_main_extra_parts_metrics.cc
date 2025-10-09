@@ -9,11 +9,13 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/allocator/partition_alloc_support.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/cpu.h"
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
@@ -51,10 +53,7 @@
 #include "components/policy/core/common/management/management_service.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/variations/synthetic_trials.h"
-#include "components/variations/variations_ids_provider.h"
 #include "components/variations/variations_switches.h"
-#include "components/version_info/version_info_values.h"
 #include "components/webui/flags/pref_service_flags_storage.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -79,7 +78,6 @@
 #if defined(__arm__)
 #include <cpu-features.h>
 #endif
-#include "chrome/browser/flags/android/chrome_session_state.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_LINUX)
@@ -459,216 +457,209 @@ void RecordLinuxDistro() {
   }
 
   using enum UmaLinuxDistro;
-  // This array must be kept sorted since it is binary searched.
-  constexpr std::pair<const char*, UmaLinuxDistro> kDistroPrefixes[] = {
-      {"alma", kAlma},
-      {"alpine", kAlpine},
-      {"alter", kAlter},
-      {"amazon", kAmazon},
-      {"anarchy", kAnarchy},
-      {"antergos", kAntergos},
-      {"antix", kAntiX},
-      {"aoscos", kAoscOs},
-      {"aperio", kAperio},
-      {"apricity", kApricity},
-      {"arch", kArch},
-      {"arcolinux", kArcoLinux},
-      {"artix", kArtix},
-      {"arya", kArya},
-      {"asteroidos", kAsteroidOs},
-      {"ataraxia", kJanus},
-      {"bedrock", kBedrock},
-      {"bitrig", kBitrig},
-      {"blackarch", kBlackArch},
-      {"blag", kBlag},
-      {"blankon", kBlankOn},
-      {"bluelight", kBlueLight},
-      {"bodhi", kBodhi},
-      {"bonsai", kBonsai},
-      {"bunsenlabs", kBunsenLabs},
-      {"calculate", kCalculate},
-      {"carbs", kCarbs},
-      {"cblmariner", kCblMariner},
-      {"celos", kCelOs},
-      {"centos", kCentOs},
-      {"chakra", kChakra},
-      {"chaletos", kChaletOs},
-      {"chapeau", kChapeau},
-      {"cleanjaro", kCleanjaro},
-      {"clearlinux", kClearLinux},
-      {"clearos", kClearOs},
-      {"clover", kClover},
-      {"condres", kCondres},
-      {"containerlinux", kContainerLinux},
-      {"crux", kCrux},
-      {"crystallinux", kCrystalLinux},
-      {"cucumber", kCucumber},
-      {"cyberos", kCyberOs},
-      {"dahlia", kDahlia},
-      {"darkos", kDarkOs},
-      {"debian", kDebian},
-      {"deepin", kDeepin},
-      {"desaos", kDesaOs},
-      {"devuan", kDevuan},
-      {"dracos", kDracOs},
-      {"drauger", kDrauger},
-      {"elementary", kElementary},
-      {"endeavouros", kEndeavourOs},
-      {"endless", kEndless},
-      {"eurolinux", kEuroLinux},
-      {"exherbo", kExherbo},
-      {"fedora", kFedora},
-      {"feren", kFeren},
-      {"frugalware", kFrugalware},
-      {"funtoo", kFuntoo},
-      {"galliumos", kGalliumOs},
-      {"garuda", kGaruda},
-      {"gentoo", kGentoo},
-      {"glaucus", kGlaucus},
-      {"gnewsense", kGnewSense},
-      {"gnome", kGnome},
-      {"gobolinux", kGoboLinux},
-      {"grombyang", kGrombyang},
-      {"hash", kHash},
-      {"huayra", kHuayra},
-      {"hyperbola", kHyperbola},
-      {"i3buntu", kUbuntu},
-      {"iglu", kIglu},
-      {"instantos", kInstantOs},
-      {"itc", kItc},
-      {"janus", kJanus},
-      {"kaisen", kKaisen},
-      {"kali", kKali},
-      {"kaos", kKaOs},
-      {"kde", kKde},
-      {"kibojoe", kKibojoe},
-      {"kogaion", kKogaion},
-      {"korora", kKorora},
-      {"kslinux", kKsLinux},
-      {"kubuntu", kKubuntu},
-      {"langitketujuh", kLangitKetujuh},
-      {"laxeros", kLaxerOs},
-      {"lede", kLede},
-      {"libreelec", kLibreElec},
-      {"linuxlite", kLinuxLite},
-      {"linuxmint", kLinuxMint},
-      {"liveraizo", kLiveRaizo},
-      {"lmde", kLmde},
-      {"lubuntu", kLubuntu},
-      {"lunar", kLunar},
-      {"mageia", kMageia},
-      {"magpieos", kMagpieOs},
-      {"mandrake", kMandriva},
-      {"mandriva", kMandriva},
-      {"manjaro", kManjaro},
-      {"maui", kMaui},
-      {"mer", kMer},
-      {"minix", kMinix},
-      {"mint", kLinuxMint},
-      {"mx", kMx},
-      {"namib", kNamib},
-      {"neptune", kNeptune},
-      {"netrunner", kNetrunner},
-      {"nitrux", kNitrux},
-      {"nixos", kNixOs},
-      {"nurunner", kNurunner},
-      {"nutyx", kNutyX},
-      {"obarun", kObarun},
-      {"obrevenge", kObRevenge},
-      {"openeuler", kOpenEuler},
-      {"openindiana", kOpenIndiana},
-      {"openmamba", kOpenMamba},
-      {"openmandriva", kOpenMandriva},
-      {"opensourcemediacenter", kOpenSourceMediaCenter},
-      {"openstage", kOpenStage},
-      {"opensuse", kOpenSuse},
-      {"opensuseleap", kOpenSuseLeap},
-      {"opensusetumbleweed", kOpenSuseTumbleweed},
-      {"openwrt", kOpenWrt},
-      {"oracle", kOracle},
-      {"oselbrus", kOsElbrus},
-      {"osmc", kOpenSourceMediaCenter},
-      {"parabola", kParabola},
-      {"pardus", kPardus},
-      {"parrot", kParrot},
-      {"parsix", kParsix},
-      {"pclinuxos", kPcLinuxOs},
-      {"pengwin", kPengwin},
-      {"pentoo", kPentoo},
-      {"peppermint", kPeppermint},
-      {"pisi", kPisi},
-      {"pnmlinux", kPnmLinux},
-      {"popos", kPopOs},
-      {"porteus", kPorteus},
-      {"postmarketos", kPostMarketOs},
-      {"precisepuppy", kPuppy},
-      {"proxmox", kProxmox},
-      {"puffos", kPuffOs},
-      {"puppy", kPuppy},
-      {"pureos", kPureOs},
-      {"qubes", kQubes},
-      {"qubyt", kQubyt},
-      {"quibian", kQuibian},
-      {"quirkywerewolf", kPuppy},
-      {"radix", kRadix},
-      {"raspbian", kRaspbian},
-      {"reborn", kReborn},
-      {"redcore", kRedcore},
-      {"redhat", kRedhat},
-      {"redstar", kRedStar},
-      {"refracteddevuan", kRefractedDevuan},
-      {"regata", kRegata},
-      {"regolith", kRegolith},
-      {"rhel", kRedhat},
-      {"rocky", kRocky},
-      {"rosa", kRosa},
-      {"sabayon", kSabayon},
-      {"sabotage", kSabotage},
-      {"sailfish", kSailfish},
-      {"salentos", kSalentOs},
-      {"scientific", kScientific},
-      {"semc", kSemc},
-      {"septor", kSeptor},
-      {"serene", kSerene},
-      {"sharklinux", kSharkLinux},
-      {"siduction", kSiduction},
-      {"skiffos", kSkiffOs},
-      {"slackware", kSlackware},
-      {"slitaz", kSliTaz},
-      {"smartos", kSmartOs},
-      {"solus", kSolus},
-      {"sourcemage", kSourceMage},
-      {"sparky", kSparky},
-      {"star", kStar},
-      {"steamos", kSteamOs},
-      {"suse", kOpenSuse},
-      {"swagarch", kSwagArch},
-      {"t2", kT2},
-      {"tails", kTails},
-      {"tearch", kTeArch},
-      {"trisquel", kTrisquel},
-      {"ubuntu", kUbuntu},
-      {"univention", kUnivention},
-      {"venom", kVenom},
-      {"vnux", kVnux},
-      {"void", kVoid},
-      {"whpnmlinux", kPnmLinux},
-      {"xferience", kXferience},
-      {"xubuntu", kXubuntu},
-      {"zorin", kZorin},
-  };
-  struct Compare {
-    bool operator()(const std::string& string,
-                    const std::pair<const char*, UmaLinuxDistro>& pair) {
-      return string < pair.first;
-    }
-  };
+  static constexpr auto kDistroPrefixes =
+      base::MakeFixedFlatMap<std::string_view, UmaLinuxDistro>({
+          {"alma", kAlma},
+          {"alpine", kAlpine},
+          {"alter", kAlter},
+          {"amazon", kAmazon},
+          {"anarchy", kAnarchy},
+          {"antergos", kAntergos},
+          {"antix", kAntiX},
+          {"aoscos", kAoscOs},
+          {"aperio", kAperio},
+          {"apricity", kApricity},
+          {"arch", kArch},
+          {"arcolinux", kArcoLinux},
+          {"artix", kArtix},
+          {"arya", kArya},
+          {"asteroidos", kAsteroidOs},
+          {"ataraxia", kJanus},
+          {"bedrock", kBedrock},
+          {"bitrig", kBitrig},
+          {"blackarch", kBlackArch},
+          {"blag", kBlag},
+          {"blankon", kBlankOn},
+          {"bluelight", kBlueLight},
+          {"bodhi", kBodhi},
+          {"bonsai", kBonsai},
+          {"bunsenlabs", kBunsenLabs},
+          {"calculate", kCalculate},
+          {"carbs", kCarbs},
+          {"cblmariner", kCblMariner},
+          {"celos", kCelOs},
+          {"centos", kCentOs},
+          {"chakra", kChakra},
+          {"chaletos", kChaletOs},
+          {"chapeau", kChapeau},
+          {"cleanjaro", kCleanjaro},
+          {"clearlinux", kClearLinux},
+          {"clearos", kClearOs},
+          {"clover", kClover},
+          {"condres", kCondres},
+          {"containerlinux", kContainerLinux},
+          {"crux", kCrux},
+          {"crystallinux", kCrystalLinux},
+          {"cucumber", kCucumber},
+          {"cyberos", kCyberOs},
+          {"dahlia", kDahlia},
+          {"darkos", kDarkOs},
+          {"debian", kDebian},
+          {"deepin", kDeepin},
+          {"desaos", kDesaOs},
+          {"devuan", kDevuan},
+          {"dracos", kDracOs},
+          {"drauger", kDrauger},
+          {"elementary", kElementary},
+          {"endeavouros", kEndeavourOs},
+          {"endless", kEndless},
+          {"eurolinux", kEuroLinux},
+          {"exherbo", kExherbo},
+          {"fedora", kFedora},
+          {"feren", kFeren},
+          {"frugalware", kFrugalware},
+          {"funtoo", kFuntoo},
+          {"galliumos", kGalliumOs},
+          {"garuda", kGaruda},
+          {"gentoo", kGentoo},
+          {"glaucus", kGlaucus},
+          {"gnewsense", kGnewSense},
+          {"gnome", kGnome},
+          {"gobolinux", kGoboLinux},
+          {"grombyang", kGrombyang},
+          {"hash", kHash},
+          {"huayra", kHuayra},
+          {"hyperbola", kHyperbola},
+          {"i3buntu", kUbuntu},
+          {"iglu", kIglu},
+          {"instantos", kInstantOs},
+          {"itc", kItc},
+          {"janus", kJanus},
+          {"kaisen", kKaisen},
+          {"kali", kKali},
+          {"kaos", kKaOs},
+          {"kde", kKde},
+          {"kibojoe", kKibojoe},
+          {"kogaion", kKogaion},
+          {"korora", kKorora},
+          {"kslinux", kKsLinux},
+          {"kubuntu", kKubuntu},
+          {"langitketujuh", kLangitKetujuh},
+          {"laxeros", kLaxerOs},
+          {"lede", kLede},
+          {"libreelec", kLibreElec},
+          {"linuxlite", kLinuxLite},
+          {"linuxmint", kLinuxMint},
+          {"liveraizo", kLiveRaizo},
+          {"lmde", kLmde},
+          {"lubuntu", kLubuntu},
+          {"lunar", kLunar},
+          {"mageia", kMageia},
+          {"magpieos", kMagpieOs},
+          {"mandrake", kMandriva},
+          {"mandriva", kMandriva},
+          {"manjaro", kManjaro},
+          {"maui", kMaui},
+          {"mer", kMer},
+          {"minix", kMinix},
+          {"mint", kLinuxMint},
+          {"mx", kMx},
+          {"namib", kNamib},
+          {"neptune", kNeptune},
+          {"netrunner", kNetrunner},
+          {"nitrux", kNitrux},
+          {"nixos", kNixOs},
+          {"nurunner", kNurunner},
+          {"nutyx", kNutyX},
+          {"obarun", kObarun},
+          {"obrevenge", kObRevenge},
+          {"openeuler", kOpenEuler},
+          {"openindiana", kOpenIndiana},
+          {"openmamba", kOpenMamba},
+          {"openmandriva", kOpenMandriva},
+          {"opensourcemediacenter", kOpenSourceMediaCenter},
+          {"openstage", kOpenStage},
+          {"opensuse", kOpenSuse},
+          {"opensuseleap", kOpenSuseLeap},
+          {"opensusetumbleweed", kOpenSuseTumbleweed},
+          {"openwrt", kOpenWrt},
+          {"oracle", kOracle},
+          {"oselbrus", kOsElbrus},
+          {"osmc", kOpenSourceMediaCenter},
+          {"parabola", kParabola},
+          {"pardus", kPardus},
+          {"parrot", kParrot},
+          {"parsix", kParsix},
+          {"pclinuxos", kPcLinuxOs},
+          {"pengwin", kPengwin},
+          {"pentoo", kPentoo},
+          {"peppermint", kPeppermint},
+          {"pisi", kPisi},
+          {"pnmlinux", kPnmLinux},
+          {"popos", kPopOs},
+          {"porteus", kPorteus},
+          {"postmarketos", kPostMarketOs},
+          {"precisepuppy", kPuppy},
+          {"proxmox", kProxmox},
+          {"puffos", kPuffOs},
+          {"puppy", kPuppy},
+          {"pureos", kPureOs},
+          {"qubes", kQubes},
+          {"qubyt", kQubyt},
+          {"quibian", kQuibian},
+          {"quirkywerewolf", kPuppy},
+          {"radix", kRadix},
+          {"raspbian", kRaspbian},
+          {"reborn", kReborn},
+          {"redcore", kRedcore},
+          {"redhat", kRedhat},
+          {"redstar", kRedStar},
+          {"refracteddevuan", kRefractedDevuan},
+          {"regata", kRegata},
+          {"regolith", kRegolith},
+          {"rhel", kRedhat},
+          {"rocky", kRocky},
+          {"rosa", kRosa},
+          {"sabayon", kSabayon},
+          {"sabotage", kSabotage},
+          {"sailfish", kSailfish},
+          {"salentos", kSalentOs},
+          {"scientific", kScientific},
+          {"semc", kSemc},
+          {"septor", kSeptor},
+          {"serene", kSerene},
+          {"sharklinux", kSharkLinux},
+          {"siduction", kSiduction},
+          {"skiffos", kSkiffOs},
+          {"slackware", kSlackware},
+          {"slitaz", kSliTaz},
+          {"smartos", kSmartOs},
+          {"solus", kSolus},
+          {"sourcemage", kSourceMage},
+          {"sparky", kSparky},
+          {"star", kStar},
+          {"steamos", kSteamOs},
+          {"suse", kOpenSuse},
+          {"swagarch", kSwagArch},
+          {"t2", kT2},
+          {"tails", kTails},
+          {"tearch", kTeArch},
+          {"trisquel", kTrisquel},
+          {"ubuntu", kUbuntu},
+          {"univention", kUnivention},
+          {"venom", kVenom},
+          {"vnux", kVnux},
+          {"void", kVoid},
+          {"whpnmlinux", kPnmLinux},
+          {"xferience", kXferience},
+          {"xubuntu", kXubuntu},
+          {"zorin", kZorin},
+      });
 
   std::string trimmed = TrimLinuxDistro(base::ToLowerASCII(distro));
-  auto* it = std::upper_bound(kDistroPrefixes, std::end(kDistroPrefixes),
-                              trimmed, Compare());
-  if (it != kDistroPrefixes &&
-      base::StartsWith(trimmed, (UNSAFE_TODO(--it))->first)) {
+  if (auto it = kDistroPrefixes.upper_bound(trimmed);
+      it > kDistroPrefixes.begin() &&
+      base::StartsWith(trimmed, (--it)->first)) {
     base::UmaHistogramEnumeration("Linux.Distro3", it->second);
   } else {
     base::UmaHistogramEnumeration("Linux.Distro3", UmaLinuxDistro::kOther);
@@ -1034,86 +1025,6 @@ void ChromeBrowserMainExtraPartsMetrics::PreBrowserStart() {
     ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(trial_name,
                                                               group_name);
   }
-
-#if BUILDFLAG(IS_ANDROID)
-  // Set up experiment for 64-bit Clank (incl. GWS visible IDs, so that the
-  // groups are visible to Google servers).
-  //
-  // We are specifically interested in devices that meet all of these criteria:
-  // 1) Devices with 4&6GB RAM, as we're launching the feature only for those
-  //    (using (3.2;6.5) range to match RAM targeting in Play).
-  // 2) Devices with only one Android profile (work versus personal), as having
-  //    multiple profiles is a source of a population bias (so is having
-  //    multiple users, but that bias is known to be small, and they're hard to
-  //    filter out).
-  // 3) Mixed 32-/64-bit devices, as non-mixed devices are forced to use
-  //    a particular bitness, thus don't participate in the experiment.
-  base::ByteCount ram = base::SysInfo::AmountOfPhysicalMemory();
-  auto cpu_abi_bitness_support =
-      metrics::AndroidMetricsHelper::GetInstance()->cpu_abi_bitness_support();
-  bool is_device_of_interest =
-      (3.2 < ram.InGiBF() && ram.InGiBF() < 6.5) &&
-      (chrome::android::GetMultipleUserProfilesState() ==
-       chrome::android::MultipleUserProfilesState::kSingleProfile) &&
-      (cpu_abi_bitness_support == metrics::CpuAbiBitnessSupport::k32And64bit) &&
-      IsBundleForMixedDeviceAccordingToVersionCode(
-          base::android::apk_info::package_version_code());
-  if (is_device_of_interest) {
-    std::vector<std::string> gws_experiment_ids;
-    std::string trial_group;
-    base::Version product_version(PRODUCT_VERSION);
-#if defined(ARCH_CPU_64_BITS)
-    trial_group = "64bit";
-    gws_experiment_ids.push_back("3368915");
-    if (product_version.IsValid()) {
-      // For now, we only plan to run the experiment in Chrome 117+ and 118+, so
-      // only send GWS IDs for those versions.
-      auto milestone = product_version.components()[0];
-      if (milestone >= 117) {
-        gws_experiment_ids.push_back("3367345");
-      }
-      if (milestone >= 118) {
-        gws_experiment_ids.push_back("3368917");
-      }
-      if (milestone >= 119) {
-        gws_experiment_ids.push_back("3369945");
-      }
-      if (milestone >= 120) {
-        gws_experiment_ids.push_back("3369947");
-      }
-    }
-#else   // defined(ARCH_CPU_64_BITS)
-    gws_experiment_ids.push_back("3368914");
-    trial_group = "32bit";
-    if (product_version.IsValid()) {
-      // For now, we only plan to run the experiment in Chrome 117+ and 118+, so
-      // only send GWS IDs for those versions.
-      auto milestone = product_version.components()[0];
-      if (milestone >= 117) {
-        gws_experiment_ids.push_back("3367344");
-      }
-      if (milestone >= 118) {
-        gws_experiment_ids.push_back("3368916");
-      }
-      if (milestone >= 119) {
-        gws_experiment_ids.push_back("3369944");
-      }
-      if (milestone >= 120) {
-        gws_experiment_ids.push_back("3369946");
-      }
-    }
-#endif  // defined(ARCH_CPU_64_BITS)
-    ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-        "BitnessForMidRangeRAM", trial_group,
-        variations::SyntheticTrialAnnotationMode::kCurrentLog);
-    ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-        "BitnessForMidRangeRAM_wVersion",
-        std::string(PRODUCT_VERSION) + "_" + trial_group,
-        variations::SyntheticTrialAnnotationMode::kCurrentLog);
-    variations::VariationsIdsProvider::GetInstance()->ForceVariationIds(
-        gws_experiment_ids, "");
-  }
-#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 void ChromeBrowserMainExtraPartsMetrics::PostBrowserStart() {
@@ -1155,7 +1066,7 @@ void ChromeBrowserMainExtraPartsMetrics::PostBrowserStart() {
   }
 #endif  // BUILDFLAG(IS_WIN)
 
-  auto* screen = display::Screen::GetScreen();
+  auto* screen = display::Screen::Get();
   display_count_ = screen->GetNumDisplays();
   base::UmaHistogramCounts100("Hardware.Display.Count.OnStartup",
                               display_count_);
@@ -1332,7 +1243,7 @@ void ChromeBrowserMainExtraPartsMetrics::OnDisplayMetricsChanged(
 }
 
 void ChromeBrowserMainExtraPartsMetrics::EmitDisplaysChangedMetric() {
-  int display_count = display::Screen::GetScreen()->GetNumDisplays();
+  int display_count = display::Screen::Get()->GetNumDisplays();
   if (display_count != display_count_) {
     display_count_ = display_count;
     base::UmaHistogramCounts100("Hardware.Display.Count.OnChange",

@@ -6,11 +6,14 @@
 
 #import "components/optimization_guide/machine_learning_tflite_buildflags.h"
 #import "ios/chrome/browser/affiliations/model/ios_chrome_affiliation_service_factory.h"
+#import "ios/chrome/browser/aim/model/ios_chrome_aim_eligibility_service_factory.h"
+#import "ios/chrome/browser/app_store_bundle/model/app_store_bundle_service_factory.h"
 #import "ios/chrome/browser/autocomplete/model/autocomplete_classifier_factory.h"
 #import "ios/chrome/browser/autocomplete/model/autocomplete_provider_client_impl.h"
 #import "ios/chrome/browser/autocomplete/model/autocomplete_scoring_model_service_factory.h"
 #import "ios/chrome/browser/autocomplete/model/in_memory_url_index_factory.h"
 #import "ios/chrome/browser/autocomplete/model/on_device_tail_model_service_factory.h"
+#import "ios/chrome/browser/autocomplete/model/prototype/gemini_prototype_omnibox_service_factory.h"
 #import "ios/chrome/browser/autocomplete/model/provider_state_service_factory.h"
 #import "ios/chrome/browser/autocomplete/model/remote_suggestions_service_factory.h"
 #import "ios/chrome/browser/autocomplete/model/shortcuts_backend_factory.h"
@@ -40,6 +43,7 @@
 #import "ios/chrome/browser/contextual_panel/sample/model/sample_panel_model_factory.h"
 #import "ios/chrome/browser/crash_report/model/breadcrumbs/breadcrumb_manager_keyed_service_factory.h"
 #import "ios/chrome/browser/credential_provider/model/credential_provider_buildflags.h"
+#import "ios/chrome/browser/cross_platform_promos/model/cross_platform_promos_service_factory.h"
 #import "ios/chrome/browser/data_sharing/model/data_sharing_service_factory.h"
 #import "ios/chrome/browser/device_reauth/model/ios_device_authenticator_factory.h"
 #import "ios/chrome/browser/device_sharing/model/device_sharing_manager_factory.h"
@@ -47,10 +51,13 @@
 #import "ios/chrome/browser/dom_distiller/model/distiller_service_factory.h"
 #import "ios/chrome/browser/download/model/background_service/background_download_service_factory.h"
 #import "ios/chrome/browser/download/model/browser_download_service_factory.h"
+#import "ios/chrome/browser/download/model/download_file_service_factory.h"
+#import "ios/chrome/browser/download/model/download_record_service_factory.h"
 #import "ios/chrome/browser/drive/model/drive_service_factory.h"
 #import "ios/chrome/browser/enterprise/connectors/connectors_service_factory.h"
 #import "ios/chrome/browser/enterprise/connectors/reporting/ios_realtime_reporting_client_factory.h"
 #import "ios/chrome/browser/enterprise/connectors/reporting/ios_reporting_event_router_factory.h"
+#import "ios/chrome/browser/enterprise/data_controls/model/ios_rules_service_factory.h"
 #import "ios/chrome/browser/enterprise/identifiers/profile_id_service_factory_ios.h"
 #import "ios/chrome/browser/enterprise/model/idle/idle_service_factory.h"
 #import "ios/chrome/browser/external_files/model/external_file_remover_factory.h"
@@ -108,7 +115,6 @@
 #import "ios/chrome/browser/policy/model/reporting/cloud_profile_reporting_service_factory_ios.h"
 #import "ios/chrome/browser/policy_url_blocking/model/policy_url_blocking_service_factory.h"
 #import "ios/chrome/browser/power_bookmarks/model/power_bookmark_service_factory.h"
-#import "ios/chrome/browser/prerender/model/prerender_service_factory.h"
 #import "ios/chrome/browser/price_insights/model/price_insights_model_factory.h"
 #import "ios/chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
 #import "ios/chrome/browser/promos_manager/model/promos_manager_factory.h"
@@ -116,6 +122,7 @@
 #import "ios/chrome/browser/push_notification/model/push_notification_profile_service_factory.h"
 #import "ios/chrome/browser/reading_list/model/reading_list_download_service_factory.h"
 #import "ios/chrome/browser/reading_list/model/reading_list_model_factory.h"
+#import "ios/chrome/browser/regional_capabilities/model/regional_capabilities_service_factory.h"
 #import "ios/chrome/browser/safe_browsing/model/chrome_enterprise_url_lookup_service_factory.h"
 #import "ios/chrome/browser/safe_browsing/model/chrome_password_protection_service_factory.h"
 #import "ios/chrome/browser/safe_browsing/model/hash_realtime_service_factory.h"
@@ -131,6 +138,7 @@
 #import "ios/chrome/browser/saved_tab_groups/model/tab_group_sync_service_factory.h"
 #import "ios/chrome/browser/screen_time/model/screen_time_buildflags.h"
 #import "ios/chrome/browser/script_blocking/model/script_blocking_rule_applier_service_factory.h"
+#import "ios/chrome/browser/search_engine_choice/model/search_engine_choice_triggering_service_factory.h"
 #import "ios/chrome/browser/search_engines/model/search_engine_choice_service_factory.h"
 #import "ios/chrome/browser/search_engines/model/template_url_fetcher_factory.h"
 #import "ios/chrome/browser/search_engines/model/template_url_prepopulate_data_resolver_factory.h"
@@ -142,6 +150,7 @@
 #import "ios/chrome/browser/share_extension/model/share_extension_service_factory.h"
 #import "ios/chrome/browser/share_kit/model/share_kit_service_factory.h"
 #import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/sharing_message/model/ios_sharing_message_bridge_factory.h"
 #import "ios/chrome/browser/sharing_message/model/ios_sharing_service_factory.h"
 #import "ios/chrome/browser/signin/model/about_signin_internals_factory.h"
@@ -164,6 +173,7 @@
 #import "ios/chrome/browser/sync/model/data_type_store_service_factory.h"
 #import "ios/chrome/browser/sync/model/device_info_sync_service_factory.h"
 #import "ios/chrome/browser/sync/model/ios_user_event_service_factory.h"
+#import "ios/chrome/browser/sync/model/prefs/cross_device_pref_tracker/cross_device_pref_tracker_factory.h"
 #import "ios/chrome/browser/sync/model/send_tab_to_self_sync_service_factory.h"
 #import "ios/chrome/browser/sync/model/session_sync_service_factory.h"
 #import "ios/chrome/browser/sync/model/sync_invalidations_service_factory.h"
@@ -196,12 +206,11 @@
 #import "ios/chrome/browser/screen_time/model/screen_time_history_deleter_factory.h"
 #endif
 
-// This method gets the instance of each ServiceFactory. We do this so that
+// This method gets the instance of each ServiceFactory. This is done so that
 // each ServiceFactory initializes itself and registers its dependencies with
-// the global BrowserStateDependencyManager. We need to have a complete
-// dependency graph when we create a profile so we can dispatch the profile
-// creation message to the services that want to create their services at
-// profile creation time.
+// the global ProfileDependencyManagerIOS. A complete dependency graph is
+// required to create services that uses ServiceCreation::kCreateWithProfile
+// can be created with the profile.
 void EnsureProfileKeyedServiceFactoriesBuilt() {
   // Keep this list alphabetized -- namespaced factories first, followed by
   // non-namespaced factories.
@@ -214,6 +223,7 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   collaboration::messaging::InstantMessagingServiceFactory::GetInstance();
   collaboration::messaging::MessagingBackendServiceFactory::GetInstance();
   commerce::ShoppingServiceFactory::GetInstance();
+  data_controls::IOSRulesServiceFactory::GetInstance();
   data_sharing::DataSharingServiceFactory::GetInstance();
   drive::DriveServiceFactory::GetInstance();
   enterprise::ProfileIdServiceFactoryIOS::GetInstance();
@@ -240,8 +250,10 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   ios::PasswordManagerLogRouterFactory::GetInstance();
   ios::PlaceholderServiceFactory::GetInstance();
   ios::ProviderStateServiceFactory::GetInstance();
+  ios::RegionalCapabilitiesServiceFactory::GetInstance();
   ios::SearchEngineChoiceServiceFactory::GetInstance();
   ios::ShortcutsBackendFactory::GetInstance();
+  ios::SearchEngineChoiceTriggeringServiceFactory::GetInstance();
   ios::SigninErrorControllerFactory::GetInstance();
   ios::TemplateURLFetcherFactory::GetInstance();
   ios::TemplateURLPrepopulateDataResolverFactory::GetInstance();
@@ -258,6 +270,7 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
 
   AboutThisSiteServiceFactory::GetInstance();
   AcceptLanguagesServiceFactory::GetInstance();
+  AppStoreBundleServiceFactory::GetInstance();
   AuthenticationServiceFactory::GetInstance();
   BackgroundDownloadServiceFactory::GetInstance();
   BookmarkModelMetricsServiceFactory::GetInstance();
@@ -273,6 +286,8 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   ContentNotificationServiceFactory::GetInstance();
   ContextualPanelModelServiceFactory::GetInstance();
   CredentialsCleanerRunnerFactory::GetInstance();
+  CrossDevicePrefTrackerFactory::GetInstance();
+  CrossPlatformPromosServiceFactory::GetInstance();
   DataTypeStoreServiceFactory::GetInstance();
   DeviceAuthenticatorProxyFactory::GetInstance();
   DeviceInfoSyncServiceFactory::GetInstance();
@@ -280,8 +295,13 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   DiscoverFeedServiceFactory::GetInstance();
   DistillerServiceFactory::GetInstance();
   DomainDiversityReporterFactory::GetInstance();
+  DownloadFileServiceFactory::GetInstance();
+  if (IsDownloadListEnabled()) {
+    DownloadRecordServiceFactory::GetInstance();
+  }
   ExternalFileRemoverFactory::GetInstance();
   FollowServiceFactory::GetInstance();
+  GeminiPrototypeOmniboxServiceFactory::GetInstance();
   BwgServiceFactory::GetInstance();
   GoogleGroupsManagerFactory::GetInstance();
   GoogleLogoServiceFactory::GetInstance();
@@ -296,6 +316,7 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   InactiveTabsServiceFactory::GetInstance();
   IOSChromeAccountPasswordStoreFactory::GetInstance();
   IOSChromeAffiliationServiceFactory::GetInstance();
+  IOSChromeAimEligibilityServiceFactory::GetInstance();
   IOSChromeBulkLeakCheckServiceFactory::GetInstance();
   IOSChromeFaviconLoaderFactory::GetInstance();
   IOSChromeGCMProfileServiceFactory::GetInstance();
@@ -335,7 +356,6 @@ void EnsureProfileKeyedServiceFactoriesBuilt() {
   PlusAddressSettingServiceFactory::GetInstance();
   PolicyBlocklistServiceFactory::GetInstance();
   PowerBookmarkServiceFactory::GetInstance();
-  PrerenderServiceFactory::GetInstance();
   PriceInsightsModelFactory::GetInstance();
   PromosManagerFactory::GetInstance();
   ProvisionalPushNotificationServiceFactory::GetInstance();

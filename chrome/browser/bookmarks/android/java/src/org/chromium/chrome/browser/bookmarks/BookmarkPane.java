@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.bookmarks;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.hub.HubAnimationConstants.HUB_LAYOUT_FADE_DURATION_MS;
 
 import android.app.Activity;
@@ -54,6 +55,8 @@ public class BookmarkPane implements Pane {
     private final ObservableSupplierImpl<@Nullable View> mHubOverlayViewSupplier =
             new ObservableSupplierImpl<>();
     private final ObservableSupplierImpl<Boolean> mHubSearchEnabledStateSupplier =
+            new ObservableSupplierImpl<>();
+    private final ObservableSupplierImpl<Boolean> mHubSearchBoxVisibilitySupplier =
             new ObservableSupplierImpl<>();
 
     // FrameLayout which has HistoryManager's root view as the only child.
@@ -127,7 +130,8 @@ public class BookmarkPane implements Pane {
     public void notifyLoadHint(@LoadHint int loadHint) {
         if (loadHint == LoadHint.HOT && mBookmarkManager == null) {
             ComponentName componentName = mActivity.getComponentName();
-            Profile originalProfile = mProfileProviderSupplier.get().getOriginalProfile();
+            Profile originalProfile =
+                    assumeNonNull(mProfileProviderSupplier.get()).getOriginalProfile();
             mBookmarkOpener =
                     new BookmarkOpenerImpl(
                             () -> BookmarkModel.getForProfile(originalProfile),
@@ -144,8 +148,9 @@ public class BookmarkPane implements Pane {
                             new BookmarkManagerOpenerImpl(),
                             PriceDropNotificationManagerFactory.create(originalProfile),
                             // TODO(crbug.com/427776544): make bookmark pane support edge to edge.
-                            /* edgeToEdgePadAdjusterGenerator= */ null);
-            mBookmarkManager.updateForUrl(UrlConstants.BOOKMARKS_URL);
+                            /* edgeToEdgePadAdjusterGenerator= */ null,
+                            /* backPressManager= */ null);
+            mBookmarkManager.updateForUrl(UrlConstants.BOOKMARKS_NATIVE_URL);
             mRootView.addView(mBookmarkManager.getView());
         } else if (loadHint == LoadHint.COLD) {
             destroyManagerAndRemoveView();
@@ -194,6 +199,11 @@ public class BookmarkPane implements Pane {
     @Override
     public ObservableSupplier<Boolean> getHubSearchEnabledStateSupplier() {
         return mHubSearchEnabledStateSupplier;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHubSearchBoxVisibilitySupplier() {
+        return mHubSearchBoxVisibilitySupplier;
     }
 
     private void destroyManagerAndRemoveView() {

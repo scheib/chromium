@@ -2468,15 +2468,6 @@ bool operator==(const Vector<T, InlineCapacityA, Allocator>& a,
                                                      a.size());
 }
 
-template <typename T,
-          wtf_size_t InlineCapacityA,
-          wtf_size_t InlineCapacityB,
-          typename Allocator>
-inline bool operator!=(const Vector<T, InlineCapacityA, Allocator>& a,
-                       const Vector<T, InlineCapacityB, Allocator>& b) {
-  return !(a == b);
-}
-
 namespace internal {
 template <typename Allocator, typename VisitorDispatcher, typename T>
 void TraceInlinedBuffer(VisitorDispatcher visitor,
@@ -2629,17 +2620,5 @@ auto ToVector(Range&& range, Proj proj = {}) {
 }
 
 }  // namespace blink
-
-// TODO(crbug.com/422768753): Remove these `using` directives.
-namespace WTF {
-using blink::Erase;
-using blink::EraseIf;
-using blink::kVectorNeedsDestructor;
-using blink::ToVector;
-using blink::Vector;
-using blink::VectorBuffer;
-using blink::VectorOperationOrigin;
-using blink::VectorTypeOperations;
-}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_VECTOR_H_

@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/overlays/ui_bundled/infobar_banner/save_card/save_card_infobar_banner_overlay_mediator.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import "base/feature_list.h"
 #import "base/functional/bind.h"
 #import "base/memory/raw_ptr.h"
@@ -23,6 +21,8 @@
 #import "ios/chrome/browser/infobars/ui_bundled/banners/test/fake_infobar_banner_consumer.h"
 #import "ios/chrome/browser/overlays/model/public/default/default_infobar_overlay_request_config.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message_action.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
@@ -33,11 +33,14 @@
 namespace {
 
 using testing::_;
+using SaveCardPromptOffer = autofill::autofill_metrics::SaveCardPromptOffer;
 using SaveCreditCardPromptResultIOS =
     autofill::autofill_metrics::SaveCreditCardPromptResultIOS;
 using SaveCreditCardOptions =
     autofill::payments::PaymentsAutofillClient::SaveCreditCardOptions;
 
+constexpr std::string_view kSaveCreditCardPromptOfferBaseHistogram =
+    "Autofill.SaveCreditCardPromptOffer.IOS";
 constexpr char kSaveCreditCardPromptResultHistogramStringForLocalSave[] =
     "Autofill.SaveCreditCardPromptResult.IOS.Local.Banner.NumStrikes.0."
     "NoFixFlow";
@@ -55,16 +58,23 @@ class SaveCardInfobarBannerOverlayMediatorTest : public PlatformTest {
     EXPECT_OCMOCK_VERIFY(mock_snackbar_commands_handler_);
   }
 
-  void InitInfobar(const bool for_upload) {
+  void InitInfobar(
+      const bool for_upload,
+      autofill::payments::PaymentsAutofillClient::CardSaveType card_save_type =
+          autofill::payments::PaymentsAutofillClient::CardSaveType::
+              kCardSaveOnly) {
+    feature_list_.InitAndEnableFeature(
+        autofill::features::kAutofillEnableCvcStorageAndFilling);
+
     autofill::CreditCard credit_card(
         base::Uuid::GenerateRandomV4().AsLowercaseString(),
         "https://www.example.com/");
-    ;
     std::unique_ptr<MockAutofillSaveCardInfoBarDelegateMobile> delegate =
         MockAutofillSaveCardInfoBarDelegateMobileFactory::
             CreateMockAutofillSaveCardInfoBarDelegateMobileFactory(
                 for_upload, credit_card,
-                SaveCreditCardOptions().with_num_strikes(0));
+                SaveCreditCardOptions().with_num_strikes(0).with_card_save_type(
+                    card_save_type));
     delegate_ = delegate.get();
     infobar_ = std::make_unique<InfoBarIOS>(InfobarType::kInfobarTypeSaveCard,
                                             std::move(delegate));
@@ -88,6 +98,7 @@ class SaveCardInfobarBannerOverlayMediatorTest : public PlatformTest {
   FakeInfobarBannerConsumer* consumer_ = nil;
   SaveCardInfobarBannerOverlayMediator* mediator_ = nil;
   id mock_snackbar_commands_handler_ = nil;
+  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_F(SaveCardInfobarBannerOverlayMediatorTest, SetUpConsumer) {
@@ -129,6 +140,15 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
        LogInfoBarBannerShownAndAcceptedForUploadSave) {
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/true);
+
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Server.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Server.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
   histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForServerSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
@@ -147,6 +167,15 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
        LogInfoBarBannerShownAndAcceptedForLocalSave) {
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/false);
+
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Local.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Local.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
   histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForLocalSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
@@ -172,6 +201,15 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
        LogInfoBarBannerShownAndSwipedForUploadSave) {
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/true);
+
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Server.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Server.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
   histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForServerSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
@@ -191,6 +229,14 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/false);
   histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Local.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Local.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
+  histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForLocalSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
 
@@ -209,6 +255,14 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/true);
   histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Server.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Server.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
+  histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForServerSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
 
@@ -226,6 +280,15 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest,
        LogInfoBarBannerShownAndTimedOutForLocalSave) {
   base::HistogramTester histogram_tester;
   InitInfobar(/*for_upload=*/false);
+
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram, ".Local.Banner"}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectBucketCount(
+      base::StrCat({kSaveCreditCardPromptOfferBaseHistogram,
+                    ".Local.Banner.NumStrikes.0.NoFixFlow"}),
+      SaveCardPromptOffer::kShown, 1);
+
   histogram_tester.ExpectBucketCount(
       kSaveCreditCardPromptResultHistogramStringForLocalSave,
       SaveCreditCardPromptResultIOS::kShown, 1);
@@ -247,19 +310,19 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest, ShowSnackbarForLocalSave) {
       .WillOnce(testing::Return(true));
 
   // Expected snackbar message content.
-  NSString* titleText = base::SysUTF16ToNSString(
+  NSString* expectedTitleText = base::SysUTF16ToNSString(
       l10n_util::GetStringUTF16(IDS_IOS_AUTOFILL_CARD_SAVED));
-  NSString* subTitleText = base::SysUTF16ToNSString(delegate_->card_label());
-  NSString* expectedMessageText =
-      [NSString stringWithFormat:@"%@\n%@", titleText, subTitleText];
+  NSString* expectedSubtitleText =
+      base::SysUTF16ToNSString(delegate_->card_label());
   NSString* expectedButtonText = base::SysUTF16ToNSString(
       l10n_util::GetStringUTF16(IDS_IOS_AUTOFILL_SAVE_CARD_GOT_IT));
 
   // Set up expectation for the snackbar message.
   OCMExpect([mock_snackbar_commands_handler_
       showSnackbarMessage:[OCMArg checkWithBlock:^BOOL(
-                                      MDCSnackbarMessage* message) {
-        EXPECT_NSEQ(expectedMessageText, message.text);
+                                      SnackbarMessage* message) {
+        EXPECT_NSEQ(expectedTitleText, message.title);
+        EXPECT_NSEQ(expectedSubtitleText, message.subtitle);
         // Check that action is not nil, "Got it" button is present.
         EXPECT_NE(message.action, nil);
         if (message.action) {
@@ -284,3 +347,99 @@ TEST_F(SaveCardInfobarBannerOverlayMediatorTest, NoSnackbarForUploadSave) {
 
   [mediator_ bannerInfobarButtonWasPressed:nil];
 }
+
+struct SaveCardBannerMetricsTestCase {
+  const std::string name;
+  const bool is_for_upload;
+  const autofill::payments::PaymentsAutofillClient::CardSaveType card_save_type;
+};
+
+class SaveCardInfobarBannerOverlayMediatorMetricsTest
+    : public SaveCardInfobarBannerOverlayMediatorTest,
+      public ::testing::WithParamInterface<SaveCardBannerMetricsTestCase> {
+ protected:
+  std::string GetExpectedHistogramName() {
+    const auto& test_case = GetParam();
+    std::string_view destination =
+        test_case.is_for_upload ? ".Server" : ".Local";
+    std::string_view suffix;
+    switch (test_case.card_save_type) {
+      case autofill::payments::PaymentsAutofillClient::CardSaveType::
+          kCardSaveWithCvc:
+        suffix = ".SavingWithCvc";
+        break;
+      case autofill::payments::PaymentsAutofillClient::CardSaveType::
+          kCardSaveOnly:
+        suffix = "";
+        break;
+      case autofill::payments::PaymentsAutofillClient::CardSaveType::
+          kCvcSaveOnly:
+        ADD_FAILURE() << "This test case shouldn't exist for the banner UI.";
+        break;
+    }
+    return base::StrCat({"Autofill.SaveCreditCardPromptResult.IOS", destination,
+                         ".Banner.NumStrikes.0.NoFixFlow", suffix});
+  }
+};
+
+// Tests that the "Shown" metrics for the save card prompt offer are correctly
+// recorded when the infobar banner is shown.
+TEST_P(SaveCardInfobarBannerOverlayMediatorMetricsTest, LogsOfferBannerShown) {
+  base::HistogramTester histogram_tester;
+  const auto& test_case = GetParam();
+  InitInfobar(test_case.is_for_upload, test_case.card_save_type);
+
+  std::string_view destination = test_case.is_for_upload ? ".Server" : ".Local";
+  std::string_view suffix;
+  switch (test_case.card_save_type) {
+    case autofill::payments::PaymentsAutofillClient::CardSaveType::
+        kCardSaveWithCvc:
+      suffix = ".SavingWithCvc";
+      break;
+    case autofill::payments::PaymentsAutofillClient::CardSaveType::
+        kCardSaveOnly:
+      suffix = "";
+      break;
+    case autofill::payments::PaymentsAutofillClient::CardSaveType::kCvcSaveOnly:
+      FAIL() << "This test case shouldn't exist for the banner UI.";
+  }
+
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"Autofill.SaveCreditCardPromptOffer.IOS", destination,
+                    ".Banner", suffix}),
+      SaveCardPromptOffer::kShown, 1);
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"Autofill.SaveCreditCardPromptOffer.IOS", destination,
+                    ".Banner.NumStrikes.0.NoFixFlow", suffix}),
+      SaveCardPromptOffer::kShown, 1);
+}
+
+TEST_P(SaveCardInfobarBannerOverlayMediatorMetricsTest, LogsBannerShown) {
+  base::HistogramTester histogram_tester;
+  const auto& test_case = GetParam();
+  InitInfobar(test_case.is_for_upload, test_case.card_save_type);
+
+  histogram_tester.ExpectUniqueSample(GetExpectedHistogramName(),
+                                      SaveCreditCardPromptResultIOS::kShown, 1);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    SaveCardInfobarBannerOverlayMediatorMetricsTest,
+    testing::ValuesIn<SaveCardBannerMetricsTestCase>({
+        {"ServerCardSaveOnly", true,
+         autofill::payments::PaymentsAutofillClient::CardSaveType::
+             kCardSaveOnly},
+        {"ServerCardSaveWithCvc", true,
+         autofill::payments::PaymentsAutofillClient::CardSaveType::
+             kCardSaveWithCvc},
+        {"LocalCardSaveOnly", false,
+         autofill::payments::PaymentsAutofillClient::CardSaveType::
+             kCardSaveOnly},
+        {"LocalCardSaveWithCvc", false,
+         autofill::payments::PaymentsAutofillClient::CardSaveType::
+             kCardSaveWithCvc},
+    }),
+    [](const ::testing::TestParamInfo<SaveCardBannerMetricsTestCase>& info) {
+      return info.param.name;
+    });

@@ -270,7 +270,7 @@ void AutofillDriverIOS::ExtractForm(
   NOTIMPLEMENTED();
 }
 
-void AutofillDriverIOS::ExposeDomNodeIDs() {}
+void AutofillDriverIOS::ExposeDomNodeIdsInAllFrames() {}
 
 void AutofillDriverIOS::SendTypePredictionsToRenderer(
     const FormStructure& form) {
@@ -428,8 +428,8 @@ void AutofillDriverIOS::AskForValuesToFill(const FormData& form,
   }
 }
 
-void AutofillDriverIOS::DidFillAutofillFormData(const FormData& form,
-                                                base::TimeTicks timestamp) {
+void AutofillDriverIOS::DidAutofillForm(const FormData& form,
+                                        base::TimeTicks timestamp) {
   if (UseXhrFix()) {
     // Update the last_interacted_form_ locally in the renderer frame before
     // routing so XHR detection can be done when a renderer form is deleted.
@@ -440,10 +440,10 @@ void AutofillDriverIOS::DidFillAutofillFormData(const FormData& form,
     if (!UseXhrFix()) {
       cast(&driver)->UpdateLastInteractedForm(/*form_data=*/form);
     }
-    driver.GetAutofillManager().OnDidFillAutofillFormData(form, timestamp);
+    driver.GetAutofillManager().OnDidAutofillForm(form, timestamp);
   };
   if (IsAcrossIframesEnabled()) {
-    router_->DidFillAutofillFormData(callback, *this, form, timestamp);
+    router_->DidAutofillForm(callback, *this, form, timestamp);
   } else {
     callback(*this, form, timestamp);
   }
@@ -777,6 +777,13 @@ void AutofillDriverIOS::RecordTriggeredFormExtractionMetrics() {
   base::UmaHistogramCounts10000(
       "Autofill.iOS.TriggeredFormExtractionFromDriver.LargeRange",
       form_extraction_trigger_count_);
+}
+
+void AutofillDriverIOS::DispatchEmailVerifiedEvent(
+    FieldGlobalId field_id,
+    const std::string& presentation_token) {
+  // TODO(crbug.com/380367784): Implement email verification on iOS.
+  NOTIMPLEMENTED();
 }
 
 }  // namespace autofill

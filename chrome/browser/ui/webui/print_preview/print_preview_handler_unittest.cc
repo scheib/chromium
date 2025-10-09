@@ -169,9 +169,7 @@ base::Value::List ConstructPreviewArgs(std::string_view callback_id,
                                        const base::Value::Dict& print_ticket) {
   base::Value::List args;
   args.Append(callback_id);
-  std::string json;
-  base::JSONWriter::Write(base::Value(print_ticket.Clone()), &json);
-  args.Append(json);
+  args.Append(base::WriteJson(print_ticket).value_or(""));
   return args;
 }
 
@@ -280,10 +278,9 @@ class FakePrintPreviewUI : public PrintPreviewUI {
   FakePrintPreviewUI& operator=(const FakePrintPreviewUI&) = delete;
   ~FakePrintPreviewUI() override = default;
 
-  void GetPrintPreviewDataForIndex(
-      int index,
-      scoped_refptr<base::RefCountedMemory>* data) const override {
-    *data = base::MakeRefCounted<base::RefCountedStaticMemory>(
+  scoped_refptr<base::RefCountedMemory> GetPrintPreviewDataForIndex(
+      int index) const override {
+    return base::MakeRefCounted<base::RefCountedStaticMemory>(
         base::byte_span_from_cstring(kTestData));
   }
 
@@ -1219,9 +1216,7 @@ TEST_F(PrintPreviewHandlerTest, Print) {
         "test-callback-id-" + base::NumberToString(2 * (i + 1));
     print_args.Append(print_callback_id);
     base::Value print_ticket(test::GetPrintTicket(type));
-    std::string json;
-    base::JSONWriter::Write(print_ticket, &json);
-    print_args.Append(json);
+    print_args.Append(base::WriteJson(print_ticket).value_or(""));
     handler()->HandleDoPrint(print_args);
 
     CheckHistograms(histograms, type);
@@ -1493,9 +1488,7 @@ TEST_P(ContentAnalysisPrintPreviewHandlerTest, LocalScanBeforePrinting) {
   base::Value::List print_args;
   print_args.Append(kCallbackId);
   base::Value print_ticket(test::GetPrintTicket(kAllTypes[0]));
-  std::string json;
-  base::JSONWriter::Write(print_ticket, &json);
-  print_args.Append(json);
+  print_args.Append(base::WriteJson(print_ticket).value_or(""));
 
   handler()->HandleDoPrint(print_args);
   WaitForScan();

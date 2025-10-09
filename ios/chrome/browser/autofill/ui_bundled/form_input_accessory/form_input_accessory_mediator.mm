@@ -23,6 +23,7 @@
 #import "components/autofill/ios/form_util/form_activity_observer_bridge.h"
 #import "components/autofill/ios/form_util/form_activity_params.h"
 #import "components/feature_engagement/public/tracker.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "components/prefs/pref_service.h"
 #import "ios/chrome/browser/autofill/model/bottom_sheet/autofill_bottom_sheet_observer_bridge.h"
 #import "ios/chrome/browser/autofill/model/bottom_sheet/autofill_bottom_sheet_tab_helper.h"
@@ -44,7 +45,6 @@
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
 #import "ios/chrome/browser/shared/public/commands/security_alert_commands.h"
-#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/elements/form_input_accessory_view.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_event.h"
@@ -305,7 +305,7 @@ bool IsStateless() {
     if (IsBottomOmniboxAvailable()) {
       _bottomOmniboxEnabled = [[PrefBackedBoolean alloc]
           initWithPrefService:GetApplicationContext()->GetLocalState()
-                     prefName:prefs::kBottomOmnibox];
+                     prefName:omnibox::kIsOmniboxInBottomPosition];
       [_bottomOmniboxEnabled setObserver:self];
       // Initialize to the current value.
       [self booleanDidChange:_bottomOmniboxEnabled];
@@ -464,7 +464,6 @@ bool IsStateless() {
   DCHECK(frameID.length);
 
   [self.formNavigationHandler setLastFocusFormActivityWebFrameID:frameID];
-  [self synchronizeNavigationControls];
 
   // Don't look for suggestions in the next events.
   if (params.type == "blur" || params.type == "change" ||
@@ -642,19 +641,6 @@ bool IsStateless() {
   if (_hasLastSeenParams && _webState && IsSuggestionRefreshAllowed()) {
     [self retrieveSuggestionsForForm:_lastSeenParams webState:_webState];
   }
-}
-
-// Update the status of the consumer form navigation buttons to match the
-// handler state.
-- (void)synchronizeNavigationControls {
-  __weak __typeof(self) weakSelf = self;
-  [self.formNavigationHandler
-      fetchPreviousAndNextElementsPresenceWithCompletionHandler:^(
-          bool previousButtonEnabled, bool nextButtonEnabled) {
-        weakSelf.consumer.formInputNextButtonEnabled = nextButtonEnabled;
-        weakSelf.consumer.formInputPreviousButtonEnabled =
-            previousButtonEnabled;
-      }];
 }
 
 // Updates the accessory mediator with the passed web state, its JS suggestion

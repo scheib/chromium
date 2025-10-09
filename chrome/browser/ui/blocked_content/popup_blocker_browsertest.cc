@@ -19,7 +19,11 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
@@ -41,8 +45,6 @@
 #include "components/javascript_dialogs/tab_modal_dialog_manager.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_result.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -209,18 +211,19 @@ class PopupBlockerBrowserTest : public InProcessBrowserTest {
     std::map<int32_t, GURL> blocked_requests =
         popup_blocker_helper->GetBlockedPopupRequests();
     std::map<int32_t, GURL>::const_iterator iter = blocked_requests.begin();
-    ui_test_utils::BrowserChangeObserver popup_observer(
-        nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+    ui_test_utils::BrowserCreatedObserver browser_created_observer;
     popup_blocker_helper->ShowBlockedPopup(iter->first, disposition);
 
-    Browser* new_browser;
+    BrowserWindowInterface* new_browser;
     if (what_to_expect == kExpectPopup || what_to_expect == kExpectNewWindow) {
-      ui_test_utils::WaitForBrowserSetLastActive(popup_observer.Wait());
-      new_browser = BrowserList::GetInstance()->GetLastActive();
+      ui_test_utils::WaitForBrowserSetLastActive(
+          browser_created_observer.Wait());
+      new_browser = GetLastActiveBrowserWindowInterfaceWithAnyProfile();
       EXPECT_NE(browser, new_browser);
-      web_contents = new_browser->tab_strip_model()->GetActiveWebContents();
+      web_contents = new_browser->GetTabStripModel()->GetActiveWebContents();
       if (what_to_expect == kExpectNewWindow) {
-        EXPECT_TRUE(new_browser->is_type_normal());
+        EXPECT_EQ(new_browser->GetType(),
+                  BrowserWindowInterface::Type::TYPE_NORMAL);
       }
     } else {
       tab_add.Wait();
@@ -415,10 +418,6 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
   EXPECT_EQ(expected_title, title_watcher.WaitAndGetTitle());
   WaitForHistoryBackendToRun(browser()->profile());
 
-  std::string search_string =
-      "data:text/html,<title>Popup Success!</title>you should not see this "
-      "message if popup blocker is enabled";
-
   ui_test_utils::HistoryEnumerator history(browser()->profile());
   std::vector<GURL>& history_urls = history.urls();
   ASSERT_EQ(2u, history_urls.size());
@@ -429,12 +428,15 @@ IN_PROC_BROWSER_TEST_F(PopupBlockerBrowserTest,
   TemplateURLService* service =
       TemplateURLServiceFactory::GetForProfile(browser()->profile());
   search_test_utils::WaitForTemplateURLServiceToLoad(service);
-  ui_test_utils::SendToOmniboxAndSubmit(browser(), search_string);
-  OmniboxEditModel* model =
-      browser()->window()->GetLocationBar()->GetOmniboxView()->model();
-  EXPECT_EQ(GURL(search_string), model->CurrentMatch(nullptr).destination_url);
-  EXPECT_EQ(base::ASCIIToUTF16(search_string),
-            model->CurrentMatch(nullptr).contents);
+
+  constexpr std::string_view kSearchString =
+      "data:text/html,<title>Popup Success!</title>you should not see this "
+      "message if popup blocker is enabled";
+  ui_test_utils::SendToOmniboxAndSubmit(browser(), kSearchString);
+  auto* view = browser()->window()->GetLocationBar()->GetOmniboxView();
+  AutocompleteMatch match = view->model()->CurrentMatch();
+  EXPECT_EQ(GURL(kSearchString), match.destination_url);
+  EXPECT_EQ(base::ASCIIToUTF16(kSearchString), match.contents);
 }
 
 // This test fails on linux AURA with this change

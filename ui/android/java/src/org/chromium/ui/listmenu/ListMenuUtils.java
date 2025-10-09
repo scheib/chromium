@@ -7,19 +7,22 @@ package org.chromium.ui.listmenu;
 import static org.chromium.ui.base.KeyNavigationUtil.isGoBackward;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.HOVER_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE_ID;
 import static org.chromium.ui.listmenu.ListMenuSubmenuHeaderItemProperties.KEY_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuSubmenuItemProperties.SUBMENU_ITEMS;
 
+import android.content.Context;
 import android.content.res.Resources;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.ListView;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.StringRes;
 import androidx.core.view.ViewCompat;
 
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.R;
@@ -48,7 +51,6 @@ public class ListMenuUtils {
      * @param listItems The {@link ModelList} containing the items to be displayed in the menu.
      * @return A configured {@link ModelListAdapter} ready to be set on the {@link ListView}.
      */
-    @NonNull
     public static ModelListAdapter createAdapter(ModelList listItems) {
         return createAdapter(listItems, Set.of(), /* delegate= */ null);
     }
@@ -66,7 +68,6 @@ public class ListMenuUtils {
      *     the item's CLICK_LISTENER or listMenu's onMenuItemSelected method will be used.
      * @return A configured {@link ModelListAdapter} ready to be set on the {@link ListView}.
      */
-    @NonNull
     public static ListMenuItemAdapter createAdapter(
             ModelList listItems,
             Collection<Integer> disabledTypes,
@@ -107,9 +108,19 @@ public class ListMenuUtils {
      * @param headerModelList {@link ModelList} for unscrollable top header; null if headers scroll.
      * @param contentModelList {@link ModelList} for the scrollable content of the menu.
      * @param item The menu item which was clicked.
+     * @param drillDownOverrideValue An optional override value. If non-null, we use drilldown if
+     *     it's true and flyout if it's false to display submenus. If null, we determine which to
+     *     use based on system conditions.
      */
     private static void onItemWithSubmenuClicked(
-            @Nullable ModelList headerModelList, ModelList contentModelList, ListItem item) {
+            @Nullable ModelList headerModelList,
+            ModelList contentModelList,
+            ListItem item,
+            @Nullable Boolean drillDownOverrideValue) {
+        if (!ListMenuFlyoutController.shouldUseDrillDown(drillDownOverrideValue)) {
+            return;
+        }
+
         @Nullable ModelList parentHeaderModelList =
                 headerModelList == null ? null : shallowCopy(headerModelList);
         ModelList parentModelList = shallowCopy(contentModelList);
@@ -192,29 +203,71 @@ public class ListMenuUtils {
     }
 
     /**
-     * Runs {@param dismissDialog} at the end of each callback, recursively (through submenu items).
-     * If the item doesn't already have a click callback in its model, no click callback is added.
+     * Sets up the necessary callbacks for a menu item and its sub-items, recursively. This includes
+     * setting `HOVER_LISTENER` for flyout menus and `CLICK_LISTENER` for drill-down menus. It also
+     * attaches the {@param dismissDialog} runnable to the click handlers of terminal items.
      *
      * @param headerModelList {@link ModelList} for unscrollable top header; null if headers scroll.
      * @param contentModelList {@link ModelList} for the scrollable content of the menu.
      * @param item The item to start with.
      * @param dismissDialog The {@link Runnable} to run.
+     * @param flyoutController The {@link ListMenuFlyoutController} to manage the popups.
+     * @param drillDownOverrideValue An optional override value. If non-null, we use drilldown if
+     *     it's true and flyout if it's false to display submenus. If null, this class determines
+     *     the appropriate style based on system conditions.
      */
     private static void setupCallbacksRecursivelyForItem(
             @Nullable ModelList headerModelList,
             ModelList contentModelList,
             ListItem item,
-            Runnable dismissDialog) {
+            Runnable dismissDialog,
+            @Nullable ListMenuFlyoutController flyoutController,
+            int levelOfHoveredItem,
+            @Nullable Boolean drillDownOverrideValue,
+            List<ListItem> ancestorPath) {
         if (item.model == null) return;
+
+        List<ListItem> highlightPath = new ArrayList<ListItem>(ancestorPath);
+        highlightPath.add(item);
+
+        // We add `HOVER_LISTENER` to items without submenus too because we might need to dismiss
+        // open flyout popups.
+        if (flyoutController != null && item.model.containsKey(HOVER_LISTENER)) {
+            item.model.set(
+                    HOVER_LISTENER,
+                    (view, event) -> {
+                        return flyoutController.handleHoverEvent(
+                                event,
+                                item,
+                                view,
+                                levelOfHoveredItem,
+                                drillDownOverrideValue,
+                                highlightPath);
+                    });
+        }
+
         if (item.model.containsKey(SUBMENU_ITEMS)) {
+            final View.OnClickListener existingListener = item.model.get(CLICK_LISTENER);
             item.model.set(
                     CLICK_LISTENER,
-                    (unusedView) ->
-                            onItemWithSubmenuClicked(headerModelList, contentModelList, item));
+                    (unusedView) -> {
+                        if (existingListener != null) {
+                            existingListener.onClick(unusedView);
+                        }
+                        onItemWithSubmenuClicked(
+                                headerModelList, contentModelList, item, drillDownOverrideValue);
+                    });
             for (ListItem submenuItem :
                     PropertyModel.getFromModelOrDefault(item.model, SUBMENU_ITEMS, List.of())) {
                 setupCallbacksRecursivelyForItem(
-                        headerModelList, contentModelList, submenuItem, dismissDialog);
+                        headerModelList,
+                        contentModelList,
+                        submenuItem,
+                        dismissDialog,
+                        flyoutController,
+                        levelOfHoveredItem + 1,
+                        drillDownOverrideValue,
+                        highlightPath);
             }
         } else {
             // Note: SUBMENU_HEADER items should be (and are) excluded by this, because
@@ -233,27 +286,68 @@ public class ListMenuUtils {
      * @param headerModelList {@link ModelList} for unscrollable top header; null if headers scroll.
      * @param contentModelList {@link ModelList} for the scrollable content of the menu.
      * @param dismissDialog The {@link Runnable} to run.
+     * @param flyoutController The {@link ListMenuFlyoutController} to manage the flyout popups.
+     * @param drillDownOverrideValue An optional override value. If non-null, we use drilldown if
+     *     it's true and flyout if it's false to display submenus. If null, this class determines
+     *     the appropriate style based on system conditions.
      */
     public static void setupCallbacksRecursively(
             @Nullable ModelList headerModelList,
             ModelList contentModelList,
-            Runnable dismissDialog) {
+            Runnable dismissDialog,
+            @Nullable ListMenuFlyoutController flyoutController,
+            @Nullable Boolean drillDownOverrideValue) {
+        long time = SystemClock.elapsedRealtime();
         if (headerModelList != null) {
             for (ListItem listItem : headerModelList) {
                 setupCallbacksRecursivelyForItem(
-                        headerModelList, contentModelList, listItem, dismissDialog);
+                        headerModelList,
+                        contentModelList,
+                        listItem,
+                        dismissDialog,
+                        flyoutController,
+                        /* levelOfHoveredItem= */ 0,
+                        drillDownOverrideValue,
+                        new ArrayList<ListItem>());
             }
         }
         for (ListItem listItem : contentModelList) {
             setupCallbacksRecursivelyForItem(
-                    headerModelList, contentModelList, listItem, dismissDialog);
+                    headerModelList,
+                    contentModelList,
+                    listItem,
+                    dismissDialog,
+                    flyoutController,
+                    /* levelOfHoveredItem= */ 0,
+                    drillDownOverrideValue,
+                    new ArrayList<ListItem>());
         }
+        RecordHistogram.recordTimesHistogram(
+                "ListMenuUtils.SetupCallbacksRecursively.Duration",
+                SystemClock.elapsedRealtime() - time);
+    }
+
+    /**
+     * Constructs a {@link ModelList} containing the submenu items of a given parent item.
+     *
+     * @param item The parent {@link ListItem} that contains the submenu.
+     * @return A new {@link ModelList} populated with the children of the given item.
+     */
+    public static ModelList getModelListSubtree(ListItem item) {
+        ModelList modelList = new ModelList();
+        for (ListItem listItem : item.model.get(SUBMENU_ITEMS)) {
+            modelList.add(listItem);
+        }
+        return modelList;
     }
 
     /** Watches a ModelList and updates the accessibility pane title of the View accordingly. */
     public static class AccessibilityListObserver implements ListObserver<Void> {
 
         private final View mView;
+        private final @Nullable ListView mHeaderView;
+        private final ListView mContentView;
+        private final Context mContext;
         private final @Nullable ModelList mHeaderModelList;
         private final ModelList mContentModelList;
 
@@ -262,8 +356,15 @@ public class ListMenuUtils {
          * headerModelList and {@param contentModelList}, the are backing models for {@param view}.
          */
         public AccessibilityListObserver(
-                View view, @Nullable ModelList headerModelList, ModelList contentModelList) {
-            mView = view;
+                View parentView,
+                @Nullable ListView headerView,
+                ListView contentView,
+                @Nullable ModelList headerModelList,
+                ModelList contentModelList) {
+            mView = parentView;
+            mHeaderView = headerView;
+            mContentView = contentView;
+            mContext = parentView.getContext();
             mHeaderModelList = headerModelList;
             mContentModelList = contentModelList;
         }
@@ -274,7 +375,7 @@ public class ListMenuUtils {
                 ListObservable<Void> source, int index, int count, @Nullable Void payload) {
             if (index != 0) return; // If the 1st element wasn't changed, the "header" is the same.
             String accessibilityPaneTitle =
-                    mView.getContext().getString(R.string.listmenu_a11y_default_pane_title);
+                    mContext.getString(R.string.listmenu_a11y_default_pane_title);
             Object firstItem = null;
             if (mHeaderModelList != null && !mHeaderModelList.isEmpty()) {
                 firstItem = mHeaderModelList.get(0);
@@ -292,11 +393,17 @@ public class ListMenuUtils {
                     @StringRes int titleId = firstListItem.model.get(TITLE_ID);
                     if (titleId != Resources.ID_NULL) {
                         accessibilityPaneTitle =
-                                mView.getContext().getString(firstListItem.model.get(TITLE_ID));
+                                mContext.getString(firstListItem.model.get(TITLE_ID));
                     }
                 }
             }
             ViewCompat.setAccessibilityPaneTitle(mView, accessibilityPaneTitle);
+            // The method calls below ensure that when we transition to a different submenu, the
+            // keyboard focus goes to the topmost element.
+            mContentView.setSelection(0);
+            if (mHeaderView != null && mHeaderModelList != null && !mHeaderModelList.isEmpty())
+                mHeaderView.setSelection(0);
+            mView.requestFocus();
         }
     }
 }

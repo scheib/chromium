@@ -172,6 +172,8 @@ viz_component("service") {
     "display_embedder/skia_output_surface_impl_on_gpu.h",
     "display_embedder/skia_output_surface_impl_on_gpu_debug_capture.cc",
     "display_embedder/skia_output_surface_impl_on_gpu_debug_capture.h",
+    "display_embedder/skia_output_surface_shared_image_interface.cc",
+    "display_embedder/skia_output_surface_shared_image_interface.h",
     "display_embedder/skia_render_copy_results.cc",
     "display_embedder/skia_render_copy_results.h",
     "display_embedder/software_output_surface.cc",
@@ -230,6 +232,8 @@ viz_component("service") {
     "hit_test/hit_test_manager.h",
     "input/input_manager.cc",
     "input/input_manager.h",
+    "input/input_on_viz_state_processing_result.cc",
+    "input/input_on_viz_state_processing_result.h",
     "input/peak_gpu_memory_tracker_impl.cc",
     "input/peak_gpu_memory_tracker_impl.h",
     "input/render_input_router_delegate_impl.cc",
@@ -291,7 +295,7 @@ viz_component("service") {
     "//components/input:mojom",
     "//components/startup_metric_utils",
 
-    # Note that dependency on //gpu/ipc/client is for GpuMemoryBufferImpl. This
+    # Note that dependency on //gpu/ipc/client is for MappableBuffer. This
     # dependency should not be in public_deps.
     "//components/version_info",
     "//components/viz/client",
@@ -360,7 +364,7 @@ viz_component("service") {
       "//media/mojo/services",
     ]
 
-    if (use_v4l2_codec || use_vaapi) {
+    if (use_linux_video_acceleration) {
       deps += [ "//chromeos/ash/experiences/arc/video_accelerator" ]
     }
   }

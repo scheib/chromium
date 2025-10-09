@@ -53,8 +53,8 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
-import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
@@ -738,7 +738,7 @@ public class AutofillPaymentMethodsFragmentTest {
         SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity();
 
         // Verify that the Reauth preference is checked on non-automotive devices.
-        if (!BuildInfo.getInstance().isAutomotive) {
+        if (!DeviceInfo.isAutomotive()) {
             assertTrue(getMandatoryReauthPreference(activity).isChecked());
         }
 
@@ -785,7 +785,7 @@ public class AutofillPaymentMethodsFragmentTest {
         SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity();
 
         // Verify that the Reauth preference is checked on non-automotive devices.
-        if (!BuildInfo.getInstance().isAutomotive) {
+        if (!DeviceInfo.isAutomotive()) {
             assertTrue(getMandatoryReauthPreference(activity).isChecked());
         }
 
@@ -1751,7 +1751,6 @@ public class AutofillPaymentMethodsFragmentTest {
 
     @Test
     @MediumTest
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_PAYMENT_SETTINGS_CARD_PROMO_AND_SCAN_CARD})
     public void testFirstCardPromo_promoShownAndButtonOpensAddCard() throws Exception {
         var cardsShownWithoutExistingCardsHistogram =
                 HistogramWatcher.newBuilder()
@@ -1782,7 +1781,6 @@ public class AutofillPaymentMethodsFragmentTest {
 
     @Test
     @MediumTest
-    @EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_PAYMENT_SETTINGS_CARD_PROMO_AND_SCAN_CARD})
     public void testFirstCardPromo_promoNotShownWithExistingCards() throws Exception {
         var cardsShownWithoutExistingCardsHistogram =
                 HistogramWatcher.newBuilder()
@@ -1793,26 +1791,6 @@ public class AutofillPaymentMethodsFragmentTest {
                         .build();
 
         mAutofillTestHelper.addServerCreditCard(SAMPLE_CARD_VISA);
-
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity();
-
-        cardsShownWithoutExistingCardsHistogram.assertExpected();
-
-        Preference cardPreference = getFirstPaymentMethodPreference(activity);
-        assertFalse(cardPreference instanceof CardWithButtonPreference);
-    }
-
-    @Test
-    @MediumTest
-    @DisableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_PAYMENT_SETTINGS_CARD_PROMO_AND_SCAN_CARD})
-    public void testFirstCardPromo_featureDisabledPromoNotShown() throws Exception {
-        var cardsShownWithoutExistingCardsHistogram =
-                HistogramWatcher.newBuilder()
-                        .expectBooleanRecord(
-                                AutofillPaymentMethodsFragment
-                                        .VIEWED_CARDS_WITHOUT_EXISTING_CARDS_HISTOGRAM,
-                                true)
-                        .build();
 
         SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity();
 
@@ -2242,7 +2220,7 @@ public class AutofillPaymentMethodsFragmentTest {
     }
 
     private static Preference getFirstPaymentMethodPreference(SettingsActivity activity) {
-        boolean mandatoryReauthToggleShown = !BuildInfo.getInstance().isAutomotive;
+        boolean mandatoryReauthToggleShown = !DeviceInfo.isAutomotive();
         boolean saveCvcToggleShown =
                 ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_ENABLE_CVC_STORAGE);
         // The first payment method will come after the general settings for enabling

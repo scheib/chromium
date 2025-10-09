@@ -30,7 +30,13 @@ class MockPaymentAppFactoryDelegate : public PaymentAppFactory::Delegate {
 
   void SetRequestedPaymentMethod(mojom::PaymentMethodDataPtr method_data);
 
+  void ResetSpec();
+
   void set_is_off_the_record() { is_off_the_record_ = true; }
+
+  void set_prefs_can_make_payment(bool enabled) {
+    prefs_can_make_payment_ = enabled;
+  }
 
   // PaymentAppFactory::Delegate implementation:
   content::WebContents* GetWebContents() override { return web_contents_; }
@@ -48,8 +54,9 @@ class MockPaymentAppFactoryDelegate : public PaymentAppFactory::Delegate {
                      scoped_refptr<WebPaymentsWebDataService>());
   MOCK_METHOD0(MayCrawlForInstallablePaymentApps, bool());
   bool IsOffTheRecord() const override { return is_off_the_record_; }
+  bool PrefsCanMakePayment() const override { return prefs_can_make_payment_; }
   base::WeakPtr<PaymentRequestSpec> GetSpec() const override {
-    return spec_->AsWeakPtr();
+    return spec_ ? spec_->AsWeakPtr() : nullptr;
   }
   MOCK_METHOD1(GetTwaPackageName, void(GetTwaPackageNameCallback));
   MOCK_METHOD0(ShowProcessingSpinner, void());
@@ -76,6 +83,7 @@ class MockPaymentAppFactoryDelegate : public PaymentAppFactory::Delegate {
   GURL frame_origin_;
   std::unique_ptr<PaymentRequestSpec> spec_;
   bool is_off_the_record_ = false;
+  bool prefs_can_make_payment_ = true;
   base::WeakPtrFactory<PaymentAppFactory::Delegate> weak_ptr_factory_{this};
 };
 

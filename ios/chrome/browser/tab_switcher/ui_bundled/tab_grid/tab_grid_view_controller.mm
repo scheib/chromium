@@ -65,14 +65,12 @@
 #import "ios/web/public/web_state_id.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
 @interface UIScrollEdgeElementContainerInteraction (Compatibility)
 - (void)_setScrollView:(UIScrollView*)scrollView;
 - (void)setScrollView:(UIScrollView*)scrollView;
 - (void)_setEdge:(UIRectEdge)edge;
 - (void)setEdge:(UIRectEdge)edge;
 @end
-#endif
 
 namespace {
 
@@ -182,6 +180,11 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   TabGridMode _mode;
   // The app bar, for diamond prototype.
   ChromeAppBarPrototype* _appBar;
+  // Top and bottom toolbar edge effects.
+  UIScrollEdgeElementContainerInteraction* _topToolbarEdgeEffect
+      API_AVAILABLE(ios(26.0));
+  UIScrollEdgeElementContainerInteraction* _bottomToolbarEdgeEffect
+      API_AVAILABLE(ios(26.0));
 }
 
 - (instancetype)initWithPageConfiguration:
@@ -208,6 +211,8 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   }
   [self setupBottomToolbar];
 
+  [self updateToolbarEdgeEffects];
+
   if (IsPinnedTabsEnabled()) {
     CHECK(self.pinnedTabsViewController);
     [self setupPinnedTabsViewController];
@@ -222,7 +227,7 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
 
   NSArray<UITrait>* traits = TraitCollectionSetForTraits(nil);
   [self registerForTraitChanges:traits
-                     withAction:@selector(updateConstraintsOnTraitChange)];
+                     withAction:@selector(handleTraitChanges)];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -347,7 +352,7 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
       stringID = IDS_IOS_TAB_GRID_INCOGNITO_TABS_TITLE;
       break;
     case TabGridPageRegularTabs:
-        stringID = IDS_IOS_TAB_GRID_REGULAR_TABS_WITH_GROUPS_TITLE;
+      stringID = IDS_IOS_TAB_GRID_REGULAR_TABS_WITH_GROUPS_TITLE;
       break;
     case TabGridPageTabGroups:
       stringID = IDS_IOS_TAB_GRID_TAB_GROUPS_TITLE;
@@ -500,6 +505,34 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
 }
 
 #pragma mark - Private
+
+// Updates elements in response to trait collection changes.
+- (void)handleTraitChanges {
+  [self updateConstraintsOnTraitChange];
+  [self updateToolbarEdgeEffects];
+}
+
+// Updates the edge effects on the top and bottom toolbars based on the current
+// layout.
+- (void)updateToolbarEdgeEffects {
+  if (!@available(iOS 26, *)) {
+    return;
+  }
+
+  UIView* topToolbar = self.topToolbar;
+  UIView* bottomToolbar = self.bottomToolbar;
+
+  // Only use the edge effects for compact layout (not large width).
+  BOOL shouldUseCompactLayout = [self shouldUseCompactLayout];
+
+  if (shouldUseCompactLayout) {
+    [topToolbar addInteraction:_topToolbarEdgeEffect];
+    [bottomToolbar addInteraction:_bottomToolbarEdgeEffect];
+  } else {
+    [topToolbar removeInteraction:_topToolbarEdgeEffect];
+    [bottomToolbar removeInteraction:_bottomToolbarEdgeEffect];
+  }
+}
 
 // Records the idle page status for the current `currentPage`.
 - (void)recordIdlePageStatus {
@@ -780,7 +813,6 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
         constraintEqualToAnchor:self.view.trailingAnchor],
   ]];
 
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     UIScrollEdgeElementContainerInteraction* edgeEffect =
         [[UIScrollEdgeElementContainerInteraction alloc] init];
@@ -794,9 +826,8 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
     } else {
       [edgeEffect setEdge:UIRectEdgeTop];
     }
-    [topToolbar addInteraction:edgeEffect];
+    _topToolbarEdgeEffect = edgeEffect;
   }
-#endif
 }
 
 // Adds the app bar.
@@ -842,7 +873,6 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   [self.layoutGuideCenter referenceView:bottomToolbar
                               underName:kTabGridBottomToolbarGuide];
 
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     UIScrollEdgeElementContainerInteraction* edgeEffect =
         [[UIScrollEdgeElementContainerInteraction alloc] init];
@@ -856,9 +886,8 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
     } else {
       [edgeEffect setEdge:UIRectEdgeBottom];
     }
-    [bottomToolbar addInteraction:edgeEffect];
+    _bottomToolbarEdgeEffect = edgeEffect;
   }
-#endif
 }
 
 // Adds the PinnedTabsViewController and sets constraints.
@@ -1348,7 +1377,7 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   _searchText = searchText;
   searchBar.searchTextField.accessibilityIdentifier =
       [kTabGridSearchTextFieldIdentifierPrefix
-          stringByAppendingString:searchText];
+          stringByAppendingString:searchText ?: @""];
   [self updateScrimVisibilityForText:searchText];
   switch (self.currentPage) {
     case TabGridPageIncognitoTabs:
@@ -1889,14 +1918,17 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   if (command.action == @selector(keyCommand_select1)) {
     newTitle = l10n_util::GetNSStringWithFixup(
         IDS_IOS_KEYBOARD_GO_TO_INCOGNITO_TAB_GRID);
+    command.image = CustomSymbolWithConfiguration(kIncognitoSymbol, nil);
   }
   if (command.action == @selector(keyCommand_select2)) {
     newTitle = l10n_util::GetNSStringWithFixup(
         IDS_IOS_KEYBOARD_GO_TO_REGULAR_TAB_GRID);
+    command.image = DefaultSymbolWithConfiguration(kTabsSymbol, nil);
   }
   if (command.action == @selector(keyCommand_select3)) {
     newTitle =
         l10n_util::GetNSStringWithFixup(IDS_IOS_KEYBOARD_GO_TO_TAB_GROUPS_GRID);
+    command.image = DefaultSymbolWithConfiguration(kTabGroupsSymbol, nil);
   }
   // If a new title was determined, set it on the command.
   if (newTitle.length > 0) {

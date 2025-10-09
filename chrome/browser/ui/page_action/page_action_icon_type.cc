@@ -9,7 +9,7 @@
 
 namespace {
 
-const base::FeatureParam<bool>* GetPageActionMigrationParam(
+const base::FeatureParam<bool>* GetPageActionsMigrationParam(
     PageActionIconType page_action) {
   switch (page_action) {
     case PageActionIconType::kLensOverlay:
@@ -32,8 +32,6 @@ const base::FeatureParam<bool>* GetPageActionMigrationParam(
       return &features::kPageActionsMigrationPriceInsights;
     case PageActionIconType::kDiscounts:
       return &features::kPageActionsMigrationDiscounts;
-    case PageActionIconType::kProductSpecifications:
-      return &features::kPageActionsMigrationProductSpecifications;
     case PageActionIconType::kManagePasswords:
       return &features::kPageActionsMigrationManagePasswords;
     case PageActionIconType::kCookieControls:
@@ -50,6 +48,10 @@ const base::FeatureParam<bool>* GetPageActionMigrationParam(
       return &features::kPageActionsMigrationAutofillMandatoryReauth;
     case PageActionIconType::kClickToCall:
       return &features::kPageActionsMigrationClickToCall;
+    case PageActionIconType::kSharingHub:
+      return &features::kPageActionsMigrationSharingHub;
+    case PageActionIconType::kAiMode:
+      return &features::kPageActionsMigrationAiMode;
     default:
       return nullptr;
   }
@@ -58,7 +60,7 @@ const base::FeatureParam<bool>* GetPageActionMigrationParam(
 }  // namespace
 
 bool IsPageActionMigrated(PageActionIconType page_action) {
-  const auto* feature_param = GetPageActionMigrationParam(page_action);
+  const auto* feature_param = GetPageActionsMigrationParam(page_action);
   if (feature_param == nullptr) {
     return false;
   }

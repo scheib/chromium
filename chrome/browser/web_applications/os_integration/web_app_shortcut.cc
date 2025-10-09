@@ -292,23 +292,24 @@ void PopulateFaviconPurposeForShortcutInfo(
                      app->is_diy_app())
           .Then(std::move(callback));
 
+  auto icons_packaging_callback =
+      base::BindOnce(&PackageIconsIntoImageFamily,
+                     /*allow_empty=*/purpose != IconPurpose::ANY)
+          .Then(std::move(populate_and_return_shortcut_info));
+
   if (!icon_sizes_in_px.empty()) {
     icon_manager.ReadTrustedIconsWithFallbackToManifestIcons(
         app->app_id(), icon_sizes_in_px, purpose,
-        base::BindOnce(&PackageIconsIntoImageFamily,
-                       /*allow_empty=*/purpose != IconPurpose::ANY)
-            .Then(std::move(populate_and_return_shortcut_info)));
+        web_app::WebAppIconManager::BitmapsFromIconMetadataExtractor(
+            std::move(icons_packaging_callback)));
     return;
   }
 
   // If there is no single icon at the desired sizes, we will resize what we can
   // get.
   SquareSizePx desired_icon_size = GetDesiredIconSizesForShortcut().back();
-  icon_manager.ReadIconAndResize(
-      app->app_id(), purpose, desired_icon_size,
-      base::BindOnce(&PackageIconsIntoImageFamily,
-                     /*allow_empty=*/purpose != IconPurpose::ANY)
-          .Then(std::move(populate_and_return_shortcut_info)));
+  icon_manager.ReadIconAndResize(app->app_id(), purpose, desired_icon_size,
+                                 std::move(icons_packaging_callback));
 }
 
 void PopulateFaviconForShortcutInfo(
@@ -402,9 +403,9 @@ base::FilePath GetOsIntegrationResourcesDirectoryForApp(
     return app_data_dir.AppendASCII(GenerateApplicationNameFromAppId(app_id));
   }
 
-  std::string host(url.host());
-  std::string scheme(url.has_scheme() ? url.scheme() : "http");
-  std::string port(url.has_port() ? url.port() : "80");
+  std::string host(url.GetHost());
+  std::string scheme(url.has_scheme() ? url.GetScheme() : "http");
+  std::string port(url.has_port() ? url.GetPort() : "80");
   std::string scheme_port(scheme + "_" + port);
 
 #if BUILDFLAG(IS_WIN)
@@ -448,14 +449,15 @@ gfx::ImageSkia CreateDefaultApplicationIcon(int size) {
 namespace internals {
 
 void PostShortcutIOTask(base::OnceCallback<void(const ShortcutInfo&)> task,
-                        std::unique_ptr<ShortcutInfo> shortcut_info) {
+                        std::unique_ptr<ShortcutInfo> shortcut_info,
+                        const base::Location& location) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Ownership of |shortcut_info| moves to the Reply, which is guaranteed to
   // outlive the const reference.
   const ShortcutInfo& shortcut_info_ref = *shortcut_info;
   GetShortcutIOTaskRunner()->PostTaskAndReply(
-      FROM_HERE, base::BindOnce(std::move(task), std::cref(shortcut_info_ref)),
+      location, base::BindOnce(std::move(task), std::cref(shortcut_info_ref)),
       base::BindOnce(
           [](std::unique_ptr<ShortcutInfo> shortcut_info) {
             // This lambda is to own and delete the shortcut info.
@@ -466,13 +468,14 @@ void PostShortcutIOTask(base::OnceCallback<void(const ShortcutInfo&)> task,
 
 void PostAsyncShortcutIOTask(
     base::OnceCallback<void(std::unique_ptr<ShortcutInfo>)> task,
-    std::unique_ptr<ShortcutInfo> shortcut_info) {
+    std::unique_ptr<ShortcutInfo> shortcut_info,
+    const base::Location& location) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Ownership of |shortcut_info| is transferred to the task. The task must
   // ensure that it is destroyed on the UI thread.
   GetShortcutIOTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(task), std::move(shortcut_info)));
+      location, base::BindOnce(std::move(task), std::move(shortcut_info)));
 }
 
 void ScheduleCreatePlatformShortcuts(

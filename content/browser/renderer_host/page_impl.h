@@ -24,6 +24,7 @@
 #include "services/metrics/public/cpp/ukm_source.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/fingerprinting_protection/noise_token.h"
 #include "third_party/blink/public/common/shared_storage/shared_storage_utils.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
@@ -84,10 +85,10 @@ class CONTENT_EXPORT PageImpl : public Page {
   // window can be resized or not. `std::nullopt` means the value is not set.
   void SetResizable(std::optional<bool> resizable);
 
-  std::optional<uint64_t> canvas_noise_token() const {
+  std::optional<blink::NoiseToken> canvas_noise_token() const {
     return canvas_noise_token_;
   }
-  void set_canvas_noise_token(std::optional<uint64_t> token) {
+  void set_canvas_noise_token(std::optional<blink::NoiseToken> token) {
     canvas_noise_token_ = token;
   }
 
@@ -104,11 +105,14 @@ class CONTENT_EXPORT PageImpl : public Page {
     is_on_load_completed_in_main_document_ = completed;
   }
 
-  bool did_first_contentful_paint_in_main_document() const {
-    return did_first_contentful_paint_in_main_document_;
+  std::optional<base::TimeDelta> GetFirstContentfulPaintInMainDocumentLoadTime()
+      const {
+    return first_contentful_paint_in_main_document_load_time_;
   }
-  void set_did_first_contentful_paint_in_main_document() {
-    did_first_contentful_paint_in_main_document_ = true;
+
+  void SetFirstContentfulPaintInMainDocumentLoadTime(
+      base::TimeDelta load_time) {
+    first_contentful_paint_in_main_document_load_time_ = load_time;
   }
 
   bool is_main_document_element_available() const {
@@ -181,6 +185,8 @@ class CONTENT_EXPORT PageImpl : public Page {
   // TODO(falken): Plumb NavigationRequest to
   // RenderFrameHostManager::CommitPending and remove this.
   void SetActivationStartTime(base::TimeTicks activation_start);
+
+  void NotifyCrossOriginSubframePrerenderIsAllowed();
 
   // Called during the activation navigation. Sends an IPC to the RenderViews in
   // the renderers, instructing them to transition their documents from
@@ -320,8 +326,9 @@ class CONTENT_EXPORT PageImpl : public Page {
   // run for the main document.
   bool is_on_load_completed_in_main_document_ = false;
 
-  // True if the main document had done a first contentful paint.
-  bool did_first_contentful_paint_in_main_document_ = false;
+  // Time taken for first contentful paint to occur.
+  std::optional<base::TimeDelta>
+      first_contentful_paint_in_main_document_load_time_;
 
   // True if we've received a notification that the window.document element
   // became available for the main document.
@@ -367,8 +374,7 @@ class CONTENT_EXPORT PageImpl : public Page {
   // more details). Modifying the token value must happen prior to the commit of
   // the page's main frame navigation and will be communicated to the renderer
   // process during commit via CommitNavigationParams.
-  // TODO(https://crbug.com/377325952): Make a more specific type than uint64_t.
-  std::optional<uint64_t> canvas_noise_token_ = std::nullopt;
+  std::optional<blink::NoiseToken> canvas_noise_token_ = std::nullopt;
 
   // The theme color for the underlying document as specified
   // by theme-color meta tag.
@@ -439,6 +445,9 @@ class CONTENT_EXPORT PageImpl : public Page {
   // TODO(b:291867362): Plumb NavigationRequest to
   // RenderFrameHostManager::CommitPending and remove this.
   std::optional<base::TimeTicks> activation_start_time_;
+
+  // True if cross origin iframe prerender is allowed.
+  bool is_cross_origin_subframe_prerender_allowed_ = false;
 
   // The resizing mode requested by Blink for the virtual keyboard.
   ui::mojom::VirtualKeyboardMode virtual_keyboard_mode_ =

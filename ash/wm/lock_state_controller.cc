@@ -13,7 +13,7 @@
 #include "ash/cancel_mode.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/multi_user/multi_user_window_manager_impl.h"
+#include "ash/multi_user/multi_user_window_manager.h"
 #include "ash/public/cpp/saved_desk_delegate.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/shutdown_controller.h"
@@ -216,6 +216,12 @@ bool ShouldTakeInformedRestoreScreenshot() {
         ScreenshotOnShutdownStatus::kFailedInLockScreen);
     return false;
   }
+  if (session_controller->GetSessionState() !=
+      session_manager::SessionState::ACTIVE) {
+    RecordScreenshotOnShutdownStatus(
+        ScreenshotOnShutdownStatus::kFailedSessionIsNotActive);
+    return false;
+  }
   if (session_controller->IsUserGuest() ||
       session_controller->IsUserPublicAccount()) {
     RecordScreenshotOnShutdownStatus(
@@ -239,7 +245,7 @@ bool ShouldTakeInformedRestoreScreenshot() {
     return false;
   }
 
-  auto* multi_user_window_manager = MultiUserWindowManagerImpl::Get();
+  auto* multi_user_window_manager = MultiUserWindowManager::Get();
   CHECK(multi_user_window_manager);
 
   const AccountId& current_active_user =

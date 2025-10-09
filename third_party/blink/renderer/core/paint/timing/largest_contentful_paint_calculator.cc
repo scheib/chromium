@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/core/paint/timing/paint_timing.h"
 #include "third_party/blink/renderer/core/paint/timing/paint_timing_record.h"
 #include "third_party/blink/renderer/core/paint/timing/text_paint_timing_detector.h"
+#include "third_party/blink/renderer/core/timing/navigation_id_generator.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
@@ -70,25 +71,27 @@ void LargestContentfulPaintCalculator::
     UpdateWebExposedLargestContentfulPaintIfNeeded(
         const TextRecord* largest_text,
         const ImageRecord* largest_image,
-        bool is_triggered_by_soft_navigation) {
+        bool is_triggered_by_soft_navigation,
+        uint32_t navigation_id) {
   uint64_t text_size = largest_text ? largest_text->RecordedSize() : 0u;
   uint64_t image_size = largest_image ? largest_image->RecordedSize() : 0u;
   if (image_size > text_size) {
     if (image_size > largest_reported_size_ && largest_image->HasPaintTime()) {
-      UpdateWebExposedLargestContentfulImage(largest_image,
-                                             is_triggered_by_soft_navigation);
+      UpdateWebExposedLargestContentfulImage(
+          largest_image, is_triggered_by_soft_navigation, navigation_id);
     }
   } else {
     if (text_size > largest_reported_size_ && largest_text->HasPaintTime()) {
-      UpdateWebExposedLargestContentfulText(*largest_text,
-                                            is_triggered_by_soft_navigation);
+      UpdateWebExposedLargestContentfulText(
+          *largest_text, is_triggered_by_soft_navigation, navigation_id);
     }
   }
 }
 
 void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
     const ImageRecord* largest_image,
-    bool is_triggered_by_soft_navigation) {
+    bool is_triggered_by_soft_navigation,
+    uint32_t navigation_id) {
   DCHECK(window_performance_);
   DCHECK(largest_image);
   const MediaTiming* media_timing = largest_image->GetMediaTiming();
@@ -105,15 +108,8 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
     return;
   }
 
-  uint64_t size = largest_image->RecordedSize();
-  double bpp = largest_image->EntropyForLCP();
-
-  if (bpp < kMinimumEntropyForLCP) {
-    return;
-  }
-
-  largest_image_bpp_ = bpp;
-  largest_reported_size_ = size;
+  largest_image_bpp_ = largest_image->EntropyForLCP();
+  largest_reported_size_ = largest_image->RecordedSize();
   const KURL& url = media_timing->Url();
   const String& image_string = url.GetString();
   const String& image_url =
@@ -127,6 +123,7 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
       image_element ? image_element->GetIdAttribute() : AtomicString();
 
   if (!is_triggered_by_soft_navigation) {
+    CHECK_EQ(kNavigationIdAbsentValue, navigation_id);
     window_performance_->OnLargestContentfulPaintUpdated(
         std::make_optional(largest_image->PaintTimingInfo()),
         /*paint_size=*/largest_image->RecordedSize(),
@@ -137,7 +134,8 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
         std::make_optional(largest_image->PaintTimingInfo()),
         /*paint_size=*/largest_image->RecordedSize(),
         /*load_time=*/largest_image->LoadTime(),
-        /*id=*/image_id, /*url=*/image_url, /*element=*/image_element);
+        /*id=*/image_id, /*url=*/image_url, /*element=*/image_element,
+        /*navigation_id=*/navigation_id);
   }
 
   // TODO: update trace value with animated frame data
@@ -149,15 +147,15 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulImage(
 
     TRACE_EVENT_MARK_WITH_TIMESTAMP2(
         kTraceCategories, kLCPCandidate, largest_image->PaintTime(), "data",
-        ImageCandidateTraceData(largest_image, is_triggered_by_soft_navigation,
-                                image_element),
+        ImageCandidateTraceData(largest_image, is_triggered_by_soft_navigation),
         "frame", GetFrameIdForTracing(window->GetFrame()));
   }
 }
 
 void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
     const TextRecord& largest_text,
-    bool is_triggered_by_soft_navigation) {
+    bool is_triggered_by_soft_navigation,
+    uint32_t navigation_id) {
   DCHECK(window_performance_);
   Node* text_node = largest_text.GetNode();
   // |text_node| could be null and |largest_text| should be ignored in this
@@ -176,6 +174,7 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
 
   // Always use paint time as start time for text LCP candidate.
   if (!is_triggered_by_soft_navigation) {
+    CHECK_EQ(kNavigationIdAbsentValue, navigation_id);
     window_performance_->OnLargestContentfulPaintUpdated(
         largest_text.PaintTimingInfo(),
         /*paint_size=*/largest_text.RecordedSize(),
@@ -188,7 +187,8 @@ void LargestContentfulPaintCalculator::UpdateWebExposedLargestContentfulText(
         /*paint_size=*/largest_text.RecordedSize(),
         /*load_time=*/base::TimeTicks(),
         /*id=*/text_id,
-        /*url=*/g_empty_string, /*element=*/text_element);
+        /*url=*/g_empty_string, /*element=*/text_element,
+        /*navigation_id=*/navigation_id);
   }
 
   if (LocalDOMWindow* window = window_performance_->DomWindow()) {
@@ -222,12 +222,6 @@ bool LargestContentfulPaintCalculator::NotifyMetricsIfLargestImagePaintChanged(
     ImageRecord* image_record,
     double image_bpp,
     std::optional<WebURLRequest::Priority> priority) {
-  // (Experimental) Images with insufficient entropy are not considered
-  // candidates for LCP
-  if (image_bpp < kMinimumEntropyForLCP) {
-    return false;
-  }
-
   if (!HasLargestImagePaintChangedForMetrics(image_paint_time,
                                              image_paint_size)) {
     return false;
@@ -371,14 +365,18 @@ LargestContentfulPaintCalculator::TextCandidateTraceData(
   // event for soft lcp to be issued (Interaction Contentful Paint).
   value->SetInteger("performanceTimelineNavigationId",
                     window_performance_->NavigationId());
+
+  if (Node* node = largest_text.GetNode()) {
+    value->SetString("nodeName", node->DebugName());
+  }
+
   return value;
 }
 
 std::unique_ptr<TracedValue>
 LargestContentfulPaintCalculator::ImageCandidateTraceData(
     const ImageRecord* largest_image,
-    bool is_triggered_by_soft_navigation,
-    Element* image_element) {
+    bool is_triggered_by_soft_navigation) {
   auto value = std::make_unique<TracedValue>();
   value->SetString("type", "image");
   value->SetInteger("nodeId", largest_image->NodeIdForTracing());
@@ -408,15 +406,14 @@ LargestContentfulPaintCalculator::ImageCandidateTraceData(
                    window_performance_->MonotonicTimeToDOMHighResTimeStamp(
                        largest_image->GetMediaTiming()->LoadEnd()));
 
-  String loading_attr = "";
-
-  if (HTMLImageElement* html_image_element =
-          DynamicTo<HTMLImageElement>(image_element)) {
-    loading_attr =
-        html_image_element->FastGetAttribute(html_names::kLoadingAttr);
-    value->SetString("nodeName", html_image_element->DebugName());
+  if (Node* node = largest_image->GetNode()) {
+    value->SetString("nodeName", node->DebugName());
+    if (auto* html_image_element = DynamicTo<HTMLImageElement>(node)) {
+      const AtomicString& loadingAttr =
+          html_image_element->FastGetAttribute(html_names::kLoadingAttr);
+      value->SetString("loadingAttr", loadingAttr);
+    }
   }
-  value->SetString("loadingAttr", loading_attr);
 
   return value;
 }

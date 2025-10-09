@@ -53,6 +53,7 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_registry_update.h"
+#include "chrome/browser/web_applications/web_app_scope.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/browser/web_applications/web_app_translation_manager.h"
 #include "chrome/browser/web_applications/web_app_ui_manager.h"
@@ -213,6 +214,29 @@ void ApplyUserDisplayModeSyncMitigations(
   web_app.SetSyncProto(std::move(sync_proto));
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+// Returns true if the WebAppManagement type can be considered "trusted" to
+// consider all manifest icons as trusted ones.
+bool CanSourceUseManifestIconsAsTrusted(const WebAppManagement::Type type) {
+  switch (type) {
+    case WebAppManagement::kDefault:
+    case WebAppManagement::kPolicy:
+      return true;
+    case WebAppManagement::kSystem:
+    case WebAppManagement::kIwaShimlessRma:
+    case WebAppManagement::kKiosk:
+    case WebAppManagement::kIwaPolicy:
+    case WebAppManagement::kOem:
+    case WebAppManagement::kSubApp:
+    case WebAppManagement::kWebAppStore:
+    case WebAppManagement::kOneDriveIntegration:
+    case WebAppManagement::kSync:
+    case WebAppManagement::kUserInstalled:
+    case WebAppManagement::kIwaUserInstalled:
+    case WebAppManagement::kApsDefault:
+      return false;
+  }
+}
 
 }  // namespace
 
@@ -395,15 +419,15 @@ void WebAppInstallFinalizer::OnOriginAssociationValidated(
   if (options.iwa_options) {
     UpdateIsolationDataAndResetPendingUpdateInfo(
         web_app.get(), options.iwa_options->location,
-        web_app_info.isolated_web_app_version,
+        web_app_info.isolated_web_app_version(),
         options.iwa_options->integrity_block_data);
 
-      HostContentSettingsMap* const host_content_settings_map =
-          HostContentSettingsMapFactory::GetForProfile(profile_);
+    HostContentSettingsMap* const host_content_settings_map =
+        HostContentSettingsMapFactory::GetForProfile(profile_);
 
-      host_content_settings_map->SetContentSettingDefaultScope(
-          web_app_info.scope, web_app_info.scope, ContentSettingsType::POPUPS,
-          CONTENT_SETTING_ALLOW);
+    host_content_settings_map->SetContentSettingDefaultScope(
+        web_app_info.scope, web_app_info.scope, ContentSettingsType::POPUPS,
+        CONTENT_SETTING_ALLOW);
   }
 
   web_app->SetParentAppId(web_app_info.parent_app_id);
@@ -431,14 +455,21 @@ void WebAppInstallFinalizer::OnOriginAssociationValidated(
         << "Cannot create os hooks for a non-fully installed app";
   }
 
+  std::optional<WebAppScope> old_scope;
+  if (existing_web_app) {
+    old_scope = existing_web_app->GetScope();
+  }
+
   CommitCallback commit_callback = base::BindOnce(
       &WebAppInstallFinalizer::OnDatabaseCommitCompletedForInstall,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback), app_id, options);
+      weak_ptr_factory_.GetWeakPtr(), std::move(callback), app_id, options,
+      std::move(old_scope));
 
   if (options.overwrite_existing_manifest_fields || !existing_web_app) {
     SetWebAppManifestFieldsAndWriteData(
         web_app_info, std::move(web_app), std::move(commit_callback),
-        options.skip_icon_writes_on_download_failure);
+        options.skip_icon_writes_on_download_failure,
+        CanSourceUseManifestIconsAsTrusted(options.source));
   } else {
     // Updates the web app with an additional source.
     CommitToSyncBridge(std::move(web_app), std::move(commit_callback),
@@ -446,9 +477,8 @@ void WebAppInstallFinalizer::OnOriginAssociationValidated(
   }
 }
 
-void WebAppInstallFinalizer::FinalizeUpdate(
-    const WebAppInstallInfo& web_app_info,
-    InstallFinalizedCallback callback) {
+void WebAppInstallFinalizer::FinalizeUpdate(const WebAppInstallInfo& web_app_info,
+                                            InstallFinalizedCallback callback) {
   CHECK(started_);
   webapps::ManifestId manifest_id = web_app_info.manifest_id();
   const webapps::AppId app_id = GenerateAppIdFromManifestId(manifest_id);
@@ -464,34 +494,19 @@ void WebAppInstallFinalizer::FinalizeUpdate(
     return;
   }
 
-  CommitCallback commit_callback = base::BindOnce(
-      &WebAppInstallFinalizer::OnDatabaseCommitCompletedForUpdate,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback), app_id,
-      provider_->registrar_unsafe().GetAppShortName(app_id),
-      GetFileHandlerUpdateAction(app_id, web_app_info), web_app_info.Clone());
-
-  auto web_app = std::make_unique<WebApp>(*existing_web_app);
-  if (web_app->isolation_data().has_value()) {
-    const std::optional<IsolationData::PendingUpdateInfo>& pending_update_info =
-        web_app->isolation_data()->pending_update_info();
-    CHECK(pending_update_info.has_value())
-        << "Isolated Web Apps can only be updated if "
-           "`IsolationData::PendingUpdateInfo` is set.";
-    CHECK_EQ(web_app_info.isolated_web_app_version,
-             pending_update_info->version);
-    UpdateIsolationDataAndResetPendingUpdateInfo(
-        web_app.get(), pending_update_info->location,
-        pending_update_info->version,
-        pending_update_info->integrity_block_data);
+  // Remove this shortcut after the ManifestUpdateCheckCommand is deleted:
+  if (web_app_info.validated_scope_extensions.has_value() &&
+      !web_app_info.validated_scope_extensions->empty()) {
+    OnOriginAssociationValidatedForUpdate(web_app_info.Clone(),
+                                          std::move(callback), app_id, {});
+    return;
   }
-
-  // Prepare copy-on-write to update existing app.
-  // This is not reached unless the data obtained from the manifest
-  // update process is valid, so an invariant of the system is that
-  // icons are valid here.
-  SetWebAppManifestFieldsAndWriteData(
-      web_app_info, std::move(web_app), std::move(commit_callback),
-      /*skip_icon_writes_on_download_failure=*/false);
+  provider_->origin_association_manager().GetWebAppOriginAssociations(
+      manifest_id, web_app_info.scope_extensions,
+      base::BindOnce(
+          &WebAppInstallFinalizer::OnOriginAssociationValidatedForUpdate,
+          weak_ptr_factory_.GetWeakPtr(), web_app_info.Clone(),
+          std::move(callback), app_id));
 }
 
 void WebAppInstallFinalizer::SetProvider(base::PassKey<WebAppProvider>,
@@ -519,10 +534,8 @@ void WebAppInstallFinalizer::SetClockForTesting(base::Clock* clock) {
 void WebAppInstallFinalizer::UpdateIsolationDataAndResetPendingUpdateInfo(
     WebApp* web_app,
     const IsolatedWebAppStorageLocation& location,
-    const base::Version& version,
+    const IwaVersion& version,
     std::optional<IsolatedWebAppIntegrityBlockData> integrity_block_data) {
-  CHECK(version.IsValid());
-
   IsolationData::Builder builder(location, version);
   if (web_app->isolation_data()) {
     builder.PersistFieldsForUpdate(*web_app->isolation_data());
@@ -535,13 +548,82 @@ void WebAppInstallFinalizer::UpdateIsolationDataAndResetPendingUpdateInfo(
   web_app->SetIsolationData(std::move(builder).Build());
 }
 
+void WebAppInstallFinalizer::OnOriginAssociationValidatedForUpdate(
+    WebAppInstallInfo web_app_info,
+    InstallFinalizedCallback callback,
+    webapps::AppId app_id,
+    ScopeExtensions validated_scope_extensions) {
+  const WebApp* existing_web_app =
+      provider_->registrar_unsafe().GetAppById(app_id);
+
+  if (!existing_web_app ||
+      existing_web_app->is_from_sync_and_pending_installation() ||
+      app_id != existing_web_app->app_id()) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), webapps::AppId(),
+                                  webapps::InstallResultCode::kWebAppDisabled));
+    return;
+  }
+
+  std::optional<WebAppScope> old_scope = existing_web_app->GetScope();
+
+  CommitCallback commit_callback = base::BindOnce(
+      &WebAppInstallFinalizer::OnDatabaseCommitCompletedForUpdate,
+      weak_ptr_factory_.GetWeakPtr(), std::move(callback), app_id,
+      provider_->registrar_unsafe().GetAppShortName(app_id),
+      GetFileHandlerUpdateAction(app_id, web_app_info), web_app_info.Clone(),
+      std::move(old_scope));
+
+  auto web_app = std::make_unique<WebApp>(*existing_web_app);
+  if (web_app->isolation_data().has_value()) {
+    const std::optional<IsolationData::PendingUpdateInfo>& pending_update_info =
+        web_app->isolation_data()->pending_update_info();
+    CHECK(pending_update_info.has_value())
+        << "Isolated Web Apps can only be updated if "
+           "`IsolationData::PendingUpdateInfo` is set.";
+    CHECK_EQ(web_app_info.isolated_web_app_version(),
+             pending_update_info->version);
+    UpdateIsolationDataAndResetPendingUpdateInfo(
+        web_app.get(), pending_update_info->location,
+        pending_update_info->version,
+        pending_update_info->integrity_block_data);
+  }
+
+  for (auto& scope_extension : validated_scope_extensions) {
+    // This is done to prune any queries or fragments from the scope URL which
+    // may have been skipped by WebAppOriginAssociationManager validation.
+    scope_extension = ScopeExtensionInfo::CreateForScope(
+        scope_extension.scope, scope_extension.has_origin_wildcard);
+  }
+  web_app->SetValidatedScopeExtensions(validated_scope_extensions);
+
+  // Only trusted installs like policy or preinstalled apps are allowed to
+  // overwrite their trusted icons with manifest provided ones.
+  // TODO(http://crbug.com/447607762): Move the logic for
+  // `should_consider_manifest_icons_as_trusted` into the creation of the
+  // WebAppInstallInfo, to remove the need for this here.
+  bool add_manifest_icons_to_trusted_icons =
+      web_app->IsPolicyInstalledApp() || web_app->IsPreinstalledApp();
+
+  // Prepare copy-on-write to update existing app.
+  // This is not reached unless the data obtained from the manifest
+  // update process is valid, so an invariant of the system is that
+  // icons are valid here.
+  SetWebAppManifestFieldsAndWriteData(
+      web_app_info, std::move(web_app), std::move(commit_callback),
+      /*skip_icon_writes_on_download_failure=*/false,
+      add_manifest_icons_to_trusted_icons);
+}
+
 void WebAppInstallFinalizer::SetWebAppManifestFieldsAndWriteData(
     const WebAppInstallInfo& web_app_info,
     std::unique_ptr<WebApp> web_app,
     CommitCallback commit_callback,
-    bool skip_icon_writes_on_download_failure) {
+    bool skip_icon_writes_on_download_failure,
+    bool overwrite_trusted_icons_with_manifest_ones) {
   SetWebAppManifestFields(web_app_info, *web_app,
-                          skip_icon_writes_on_download_failure);
+                          skip_icon_writes_on_download_failure,
+                          overwrite_trusted_icons_with_manifest_ones);
 
   webapps::AppId app_id = web_app->app_id();
   auto write_translations_callback = base::BindOnce(
@@ -566,6 +648,12 @@ void WebAppInstallFinalizer::SetWebAppManifestFieldsAndWriteData(
         web_app_info.shortcuts_menu_icon_bitmaps;
     IconsMap other_icon_bitmaps = web_app_info.other_icon_bitmaps;
     IconBitmaps trusted_icon_bitmaps = web_app_info.trusted_icon_bitmaps;
+
+    // Overwrite bitmaps if the trusted icon metadata is populated but trusted
+    // icons are not and needs to be overwritten.
+    if (overwrite_trusted_icons_with_manifest_ones) {
+      trusted_icon_bitmaps = icon_bitmaps;
+    }
 
     provider_->icon_manager().WriteData(
         app_id, std::move(icon_bitmaps), std::move(trusted_icon_bitmaps),
@@ -615,6 +703,7 @@ void WebAppInstallFinalizer::OnDatabaseCommitCompletedForInstall(
     InstallFinalizedCallback callback,
     webapps::AppId app_id,
     FinalizeOptions finalize_options,
+    std::optional<WebAppScope> old_scope,
     bool success) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   if (!success) {
@@ -622,8 +711,6 @@ void WebAppInstallFinalizer::OnDatabaseCommitCompletedForInstall(
                             webapps::InstallResultCode::kWriteDataFailed);
     return;
   }
-
-  provider_->install_manager().NotifyWebAppInstalled(app_id);
 
   const WebApp* web_app = provider_->registrar_unsafe().GetAppById(app_id);
   // TODO(dmurph): Verify this check is not needed and remove after
@@ -634,6 +721,11 @@ void WebAppInstallFinalizer::OnDatabaseCommitCompletedForInstall(
         webapps::InstallResultCode::kAppNotInRegistrarAfterCommit);
     return;
   }
+  if (old_scope.has_value() && old_scope.value() != web_app->GetScope()) {
+    provider_->registrar_unsafe().NotifyWebAppEffectiveScopeChanged(app_id);
+  }
+
+  provider_->install_manager().NotifyWebAppInstalled(app_id);
 
   SynchronizeOsOptions synchronize_options;
   synchronize_options.add_shortcut_to_desktop = finalize_options.add_to_desktop;
@@ -695,12 +787,18 @@ void WebAppInstallFinalizer::OnDatabaseCommitCompletedForUpdate(
     std::string old_name,
     FileHandlerUpdateAction file_handlers_need_os_update,
     const WebAppInstallInfo& web_app_info,
+    std::optional<WebAppScope> old_scope,
     bool success) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   if (!success) {
     std::move(callback).Run(webapps::AppId(),
                             webapps::InstallResultCode::kWriteDataFailed);
     return;
+  }
+
+  const WebApp* web_app = provider_->registrar_unsafe().GetAppById(app_id);
+  if (old_scope.has_value() && old_scope.value() != web_app->GetScope()) {
+    provider_->registrar_unsafe().NotifyWebAppEffectiveScopeChanged(app_id);
   }
 
   // OS integration should always be enabled on ChromeOS for manifest updates.

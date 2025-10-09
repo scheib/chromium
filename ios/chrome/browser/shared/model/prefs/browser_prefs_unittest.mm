@@ -4,8 +4,11 @@
 
 #import "ios/chrome/browser/shared/model/prefs/browser_prefs.h"
 
+#import "components/ntp_tiles/pref_names.h"
+#import "components/omnibox/browser/omnibox_pref_names.h"
 #import "components/password_manager/core/common/password_manager_pref_names.h"
 #import "components/policy/core/common/policy_pref_names.h"
+#import "components/safety_check/safety_check_pref_names.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
 #import "ios/chrome/browser/content_suggestions/ui_bundled/safety_check/safety_check_prefs.h"
@@ -39,90 +42,6 @@ class BrowserPrefsTest : public PlatformTest {
   sync_preferences::TestingPrefServiceSyncable pref_service_;
 };
 
-// Check that the migration of a pref from profile prefService to
-// localState prefService is performed correctly.
-TEST_F(BrowserPrefsTest, VerifyProfilePrefsMigration) {
-  base::Time now = base::Time::Now();
-
-  // Simulate registering a value different from default in profile prefService.
-  pref_service_.SetBoolean(
-      password_manager::prefs::kCredentialProviderEnabledOnStartup, true);
-  pref_service_.SetTime(prefs::kIdentityConfirmationSnackbarLastPromptTime,
-                        now);
-  pref_service_.SetInteger(prefs::kIdentityConfirmationSnackbarDisplayCount, 1);
-  pref_service_.SetBoolean(prefs::kIncognitoInterstitialEnabled, true);
-  pref_service_.SetInteger(prefs::kAddressBarSettingsNewBadgeShownCount, 1);
-
-  EXPECT_EQ(pref_service_.GetBoolean(
-                password_manager::prefs::kCredentialProviderEnabledOnStartup),
-            true);
-  EXPECT_EQ(local_state()->GetBoolean(
-                password_manager::prefs::kCredentialProviderEnabledOnStartup),
-            false);
-
-  EXPECT_EQ(
-      pref_service_.GetTime(prefs::kIdentityConfirmationSnackbarLastPromptTime),
-      now);
-  EXPECT_EQ(local_state()->GetTime(
-                prefs::kIdentityConfirmationSnackbarLastPromptTime),
-            base::Time());
-
-  EXPECT_EQ(pref_service_.GetInteger(
-                prefs::kIdentityConfirmationSnackbarDisplayCount),
-            1);
-  EXPECT_EQ(local_state()->GetInteger(
-                prefs::kIdentityConfirmationSnackbarDisplayCount),
-            0);
-
-  EXPECT_EQ(pref_service_.GetBoolean(prefs::kIncognitoInterstitialEnabled),
-            true);
-  EXPECT_EQ(local_state()->GetBoolean(prefs::kIncognitoInterstitialEnabled),
-            false);
-
-  EXPECT_EQ(
-      pref_service_.GetInteger(prefs::kAddressBarSettingsNewBadgeShownCount),
-      1);
-  EXPECT_EQ(
-      local_state()->GetInteger(prefs::kAddressBarSettingsNewBadgeShownCount),
-      0);
-
-  MigrateObsoleteProfilePrefs(&pref_service_);
-
-  // Verify that the prefs were migrated successfully.
-  EXPECT_EQ(pref_service_.GetBoolean(
-                password_manager::prefs::kCredentialProviderEnabledOnStartup),
-            false);
-  EXPECT_EQ(local_state()->GetBoolean(
-                password_manager::prefs::kCredentialProviderEnabledOnStartup),
-            true);
-
-  EXPECT_EQ(
-      pref_service_.GetTime(prefs::kIdentityConfirmationSnackbarLastPromptTime),
-      base::Time());
-  EXPECT_EQ(local_state()->GetTime(
-                prefs::kIdentityConfirmationSnackbarLastPromptTime),
-            now);
-
-  EXPECT_EQ(pref_service_.GetInteger(
-                prefs::kIdentityConfirmationSnackbarDisplayCount),
-            0);
-  EXPECT_EQ(local_state()->GetInteger(
-                prefs::kIdentityConfirmationSnackbarDisplayCount),
-            1);
-
-  EXPECT_EQ(pref_service_.GetBoolean(prefs::kIncognitoInterstitialEnabled),
-            false);
-  EXPECT_EQ(local_state()->GetBoolean(prefs::kIncognitoInterstitialEnabled),
-            true);
-
-  EXPECT_EQ(
-      pref_service_.GetInteger(prefs::kAddressBarSettingsNewBadgeShownCount),
-      0);
-  EXPECT_EQ(
-      local_state()->GetInteger(prefs::kAddressBarSettingsNewBadgeShownCount),
-      1);
-}
-
 // Check that the migration of a pref from localState prefService to
 // profile prefService is performed correctly.
 TEST_F(BrowserPrefsTest, VerifyLocalStatePrefsMigration) {
@@ -132,10 +51,6 @@ TEST_F(BrowserPrefsTest, VerifyLocalStatePrefsMigration) {
   dict_example.Set("Example_key", "Example_value");
 
   // Set initial values in local_state
-
-  // Account Info
-  local_state()->SetDict(prefs::kIosPreRestoreAccountInfo,
-                         dict_example.Clone());
 
   // Magic Stack Segmentation Impressions
   local_state()->SetInteger(
@@ -156,13 +71,20 @@ TEST_F(BrowserPrefsTest, VerifyLocalStatePrefsMigration) {
   local_state()->SetInteger(prefs::kNTPHomeCustomizationNewBadgeImpressionCount,
                             99);
 
-  // Verify initial state before migration
+  // Set the old Safety Check module pref value to test its migration to the new
+  // name.
+  pref_service_.SetBoolean(
+      prefs::kHomeCustomizationMagicStackSafetyCheckEnabled, false);
 
-  // Check Account Info
-  EXPECT_EQ(pref_service_.GetDict(prefs::kIosPreRestoreAccountInfo).size(),
-            0ul);
-  EXPECT_EQ(local_state()->GetDict(prefs::kIosPreRestoreAccountInfo),
-            dict_example);
+  // Set the old Tab Resumption module pref value to test its migration to the
+  // new name.
+  pref_service_.SetBoolean(
+      prefs::kHomeCustomizationMagicStackTabResumptionEnabled, false);
+
+  // Bottom omnibox position
+  local_state()->SetBoolean(prefs::kBottomOmnibox, true);
+
+  // Verify initial state before migration.
 
   // Check Magic Stack Segmentation Impressions in pref_service (should be -1)
   EXPECT_EQ(pref_service_.GetInteger(
@@ -219,17 +141,31 @@ TEST_F(BrowserPrefsTest, VerifyLocalStatePrefsMigration) {
                 prefs::kNTPHomeCustomizationNewBadgeImpressionCount),
             99);
 
+  EXPECT_FALSE(pref_service_.GetBoolean(
+      prefs::kHomeCustomizationMagicStackSafetyCheckEnabled));
+  EXPECT_TRUE(
+      pref_service_
+          .FindPreference(safety_check::prefs::kSafetyCheckHomeModuleEnabled)
+          ->IsDefaultValue());
+
+  EXPECT_FALSE(pref_service_.GetBoolean(
+      prefs::kHomeCustomizationMagicStackTabResumptionEnabled));
+  EXPECT_TRUE(
+      pref_service_
+          .FindPreference(ntp_tiles::prefs::kTabResumptionHomeModuleEnabled)
+          ->IsDefaultValue());
+
+  // Check bottom omnibox position.
+  EXPECT_TRUE(local_state()->GetBoolean(prefs::kBottomOmnibox));
+  EXPECT_TRUE(local_state()
+                  ->FindPreference(omnibox::kIsOmniboxInBottomPosition)
+                  ->IsDefaultValue());
+
   // Perform migration
   MigrateObsoleteLocalStatePrefs(local_state());
   MigrateObsoleteProfilePrefs(&pref_service_);
 
-  // Verify state after migration
-
-  // Check Account Info
-  EXPECT_EQ(pref_service_.GetDict(prefs::kIosPreRestoreAccountInfo),
-            dict_example);
-  EXPECT_EQ(local_state()->GetDict(prefs::kIosPreRestoreAccountInfo).size(),
-            0ul);
+  // Verify state after migration.
 
   // Check Magic Stack Segmentation Impressions in pref_service
   EXPECT_EQ(pref_service_.GetInteger(
@@ -285,6 +221,29 @@ TEST_F(BrowserPrefsTest, VerifyLocalStatePrefsMigration) {
   EXPECT_EQ(local_state()->GetInteger(
                 prefs::kNTPHomeCustomizationNewBadgeImpressionCount),
             0);
+
+  EXPECT_TRUE(
+      pref_service_
+          .FindPreference(prefs::kHomeCustomizationMagicStackSafetyCheckEnabled)
+          ->IsDefaultValue());
+  // The new pref `safety_check::prefs::kSafetyCheckHomeModuleEnabled` should
+  // now be false (the migrated value).
+  EXPECT_FALSE(pref_service_.GetBoolean(
+      safety_check::prefs::kSafetyCheckHomeModuleEnabled));
+
+  EXPECT_TRUE(pref_service_
+                  .FindPreference(
+                      prefs::kHomeCustomizationMagicStackTabResumptionEnabled)
+                  ->IsDefaultValue());
+  // The new pref `ntp_tiles::prefs::kTabResumptionHomeModuleEnabled` should
+  // now be false (the migrated value).
+  EXPECT_FALSE(pref_service_.GetBoolean(
+      ntp_tiles::prefs::kTabResumptionHomeModuleEnabled));
+
+  // Check bottom omnibox position.
+  EXPECT_TRUE(
+      local_state()->FindPreference(prefs::kBottomOmnibox)->IsDefaultValue());
+  EXPECT_TRUE(local_state()->GetBoolean(omnibox::kIsOmniboxInBottomPosition));
 }
 
 TEST_F(BrowserPrefsTest, VerifyUserDefaultsToProfilePrefsMigration) {

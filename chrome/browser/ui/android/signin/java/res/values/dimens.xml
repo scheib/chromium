@@ -5,7 +5,7 @@ Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
 
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
     <!-- Default height of the logo in fullscreen signin -->
     <dimen name="fullscreen_signin_logo_default_height">110dp</dimen>
     <!-- Signin promo dimensions -->

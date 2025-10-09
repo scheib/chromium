@@ -77,7 +77,7 @@ class TestPageContentAnnotationsObserver
     : public PageContentAnnotationsService::PageContentAnnotationsObserver {
  public:
   void OnPageContentAnnotated(
-      const GURL& url,
+      const HistoryVisit& visit,
       const PageContentAnnotationsResult& result) override {
     last_page_content_annotations_result_ = result;
   }
@@ -1373,11 +1373,11 @@ IN_PROC_BROWSER_TEST_F(PageContentAnnotationsServiceContentExtractionTest,
   optimization_guide::RetryForHistogramUntilCountReached(
       &histogram_tester, "OptimizationGuide.AIPageContent.TotalLatency", 1);
   histogram_tester.ExpectTotalCount(
-      "OptimizationGuide.AnnotatedPageContent.TotalSize2", 1);
+      "OptimizationGuide.AnnotatedPageContent.TotalSize2.Default", 1);
   histogram_tester.ExpectTotalCount(
       "OptimizationGuide.AnnotatedPageContent.TotalWordCount", 1);
   histogram_tester.ExpectTotalCount(
-      "OptimizationGuide.AnnotatedPageContent.TotalNodeCount", 1);
+      "OptimizationGuide.AnnotatedPageContent.TotalNodeCount.Default", 1);
   histogram_tester.ExpectTotalCount(
       "OptimizationGuide.AnnotatedPageContent.ComputeMetricsLatency", 1);
 
@@ -1546,11 +1546,11 @@ IN_PROC_BROWSER_TEST_P(
   // that brought us to the current document, so we should *not* trigger a page
   // content extraction from this navigation.
   histogram_tester.ExpectTotalCount(
-      "OptimizationGuide.AnnotatedPageContent.TotalSize2", 0);
+      "OptimizationGuide.AnnotatedPageContent.TotalSize2.Default", 0);
   histogram_tester.ExpectTotalCount(
       "OptimizationGuide.AnnotatedPageContent.TotalWordCount", 0);
   histogram_tester.ExpectTotalCount(
-      "OptimizationGuide.AnnotatedPageContent.TotalNodeCount", 0);
+      "OptimizationGuide.AnnotatedPageContent.TotalNodeCount.Default", 0);
   histogram_tester.ExpectTotalCount(
       "OptimizationGuide.AnnotatedPageContent.ComputeMetricsLatency", 0);
 
@@ -1685,6 +1685,55 @@ IN_PROC_BROWSER_TEST_F(
   // Make sure cached content is cleared with a new navigation.
   ASSERT_FALSE(service->GetExtractedPageContentAndEligibilityForPage(
       web_contents->GetPrimaryPage()));
+}
+
+class PageContentAnnotationsServiceContentExtractionTestActionable
+    : public InProcessBrowserTest {
+ public:
+  virtual void InitializeFeatureList() {
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kAnnotatedPageContentExtraction,
+        {{"capture_delay", "0s"}, {"mode", "actionable"}});
+  }
+
+  void SetUp() override {
+    InitializeFeatureList();
+    InProcessBrowserTest::SetUp();
+  }
+
+  void SetUpOnMainThread() override {
+    host_resolver()->AddRule("*", "127.0.0.1");
+    InProcessBrowserTest::SetUpOnMainThread();
+
+    embedded_test_server()->ServeFilesFromSourceDirectory(
+        GetChromeTestDataDir());
+    ASSERT_TRUE(embedded_test_server()->Start());
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(
+    PageContentAnnotationsServiceContentExtractionTestActionable,
+    Basic) {
+  FakeExtractionServiceObserver observer;
+  auto* service =
+      PageContentExtractionServiceFactory::GetForProfile(browser()->profile());
+  service->AddObserver(&observer);
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  GURL url(embedded_test_server()->GetURL("a.test",
+                                          "/optimization_guide/hello.html"));
+  content::NavigateToURLBlockUntilNavigationsComplete(web_contents, url, 1);
+
+  observer.Wait();
+  auto& page_content = observer.page_content_future_.Get();
+  EXPECT_TRUE(page_content.IsInitialized());
+  EXPECT_EQ(page_content.mode(),
+            optimization_guide::proto::
+                ANNOTATED_PAGE_CONTENT_MODE_ACTIONABLE_ELEMENTS);
 }
 
 }  // namespace page_content_annotations

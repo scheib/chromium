@@ -25,6 +25,7 @@
 #include "cc/paint/paint_flags.h"
 #include "cc/paint/paint_recorder.h"
 #include "cc/paint/paint_shader.h"
+#include "chrome/browser/glic/public/glic_enabling.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
@@ -94,7 +95,7 @@
 #include "ui/views/view_targeter.h"
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "ui/views/win/pen_event_handler_util.h"
@@ -256,7 +257,9 @@ Tab::Tab(TabSlotController* controller)
       AddChildView(std::make_unique<AlertIndicatorButton>(this));
 
 #if BUILDFLAG(ENABLE_GLIC)
-  if (base::FeatureList::IsEnabled(features::kGlicMultitabUnderlines)) {
+  if (base::FeatureList::IsEnabled(features::kGlicMultitabUnderlines) &&
+      glic::GlicEnabling::IsProfileEligible(
+          controller_->GetBrowser()->GetProfile())) {
     glic_tab_underline_view_ = AddChildView(
         views::Builder<glic::GlicTabUnderlineView>(
             glic::GlicTabUnderlineView::Factory::Create(
@@ -352,8 +355,15 @@ void Tab::Layout(PassKey) {
   const int start = contents_rect.x();
 
 #if BUILDFLAG(ENABLE_GLIC)
+  // Position the underline under the tab contents.
+  constexpr int kGlicUnderlineYOffset = 8;
   if (glic_tab_underline_view_) {
-    gfx::Rect glic_bounds = contents_rect + gfx::Vector2d(0, 9);
+    gfx::Rect glic_bounds =
+        contents_rect + gfx::Vector2d(0, kGlicUnderlineYOffset);
+    // Use the full width of the tab in order to accommodate small tab sizes
+    // where the width of the contents bounds is 0.
+    glic_bounds.set_x(0);
+    glic_bounds.set_width(size().width());
     glic_tab_underline_view_->SetBoundsRect(glic_bounds);
   }
 #endif
@@ -441,6 +451,7 @@ void Tab::Layout(PassKey) {
     }
     alert_indicator_button_->SetBoundsRect(bounds);
   }
+  alert_indicator_button_->UpdateAlertIndicatorAnimation();
   alert_indicator_button_->SetVisible(showing_alert_indicator_);
 
   // Size the title to fill the remaining width and use all available height.
@@ -780,6 +791,11 @@ void Tab::OnAXNameChanged(ax::mojom::StringAttribute attribute,
 
 void Tab::SetGroup(std::optional<tab_groups::TabGroupId> group) {
   TabSlotView::SetGroup(group);
+  UpdateAccessibleName();
+}
+
+void Tab::SetSplit(std::optional<split_tabs::SplitTabId> split) {
+  TabSlotView::SetSplit(split);
   UpdateAccessibleName();
 }
 

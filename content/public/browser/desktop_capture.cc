@@ -46,15 +46,12 @@ bool CGDisplayStreamCreateIsAvailable() {
 // TODO(crbug.com/409473386): Remove this flag once it has been in stable for a
 // few milestones.
 BASE_FEATURE(kUseHeuristicForWindowsFullScreenPowerPoint,
-             "UseHeuristicForWindowsFullScreenPowerPoint",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Controls the rollout of a finch experiment.
 // TODO(crbug.com/409473386): Remove this feature once it has been rolled out to
 // stable for a few milestones.
-BASE_FEATURE(kUseFullScreenHeuristicForWgc,
-             "UseFullScreenHeuristicForWgc",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kUseFullScreenHeuristicForWgc, base::FEATURE_DISABLED_BY_DEFAULT);
 #endif
 
 namespace content::desktop_capture {

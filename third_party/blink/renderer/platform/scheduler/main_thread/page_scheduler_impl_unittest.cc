@@ -72,7 +72,7 @@ std::unique_ptr<FrameSchedulerImpl> CreateFrameScheduler(
     bool is_in_embedded_frame_tree,
     FrameScheduler::FrameType frame_type) {
   auto frame_scheduler = page_scheduler->CreateFrameScheduler(
-      delegate, is_in_embedded_frame_tree, frame_type);
+      delegate, LocalFrameToken(), is_in_embedded_frame_tree, frame_type);
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler_impl(
       static_cast<FrameSchedulerImpl*>(frame_scheduler.release()));
   return frame_scheduler_impl;
@@ -273,22 +273,22 @@ class PageSchedulerImplTest : public testing::Test {
 TEST_F(PageSchedulerImplTest, TestDestructionOfFrameSchedulersBefore) {
   std::unique_ptr<blink::FrameScheduler> frame1(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, LocalFrameToken(), /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   std::unique_ptr<blink::FrameScheduler> frame2(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, LocalFrameToken(), /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
 }
 
 TEST_F(PageSchedulerImplTest, TestDestructionOfFrameSchedulersAfter) {
   std::unique_ptr<blink::FrameScheduler> frame1(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, LocalFrameToken(), /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   std::unique_ptr<blink::FrameScheduler> frame2(
       page_scheduler_->CreateFrameScheduler(
-          nullptr, /*is_in_embedded_frame_tree=*/false,
+          nullptr, LocalFrameToken(), /*is_in_embedded_frame_tree=*/false,
           FrameScheduler::FrameType::kSubframe));
   page_scheduler_.reset();
 }
@@ -1226,6 +1226,10 @@ TEST_F(PageSchedulerImplTest, BackgroundTimerThrottling) {
 }
 
 TEST_F(PageSchedulerImplTest, OpenWebSocketExemptsFromBudgetThrottling) {
+  // Disabling StopInBackground (Android only) makes this easier to test as
+  // WebSockets are not exempt from background freezing.
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(blink::features::kStopInBackground);
   InitializeTrialParams();
   std::unique_ptr<PageSchedulerImpl> page_scheduler =
       CreatePageScheduler(nullptr, scheduler_.get(), *agent_group_scheduler_);

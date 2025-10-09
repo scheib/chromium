@@ -12,7 +12,6 @@ import './language_toast.js';
 import {ColorChangeUpdater} from '//resources/cr_components/color_change_listener/colors_css_updater.js';
 import {WebUiListenerMixinLit} from '//resources/cr_elements/web_ui_listener_mixin_lit.js';
 import {assert} from '//resources/js/assert.js';
-import {loadTimeData} from '//resources/js/load_time_data.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
 import {getCss} from './app.css.js';
@@ -20,16 +19,19 @@ import {getHtml} from './app.html.js';
 import {AppStyleUpdater} from './app_style_updater.js';
 import type {SettingsPrefs} from './common.js';
 import {minOverflowLengthToScroll} from './common.js';
-import {ContentController} from './content_controller.js';
+import {ContentController, ContentType} from './content_controller.js';
+import type {ContentListener, ContentState} from './content_controller.js';
 import type {LanguageToastElement} from './language_toast.js';
 import {NodeStore} from './node_store.js';
 import {SpeechController} from './read_aloud/speech_controller.js';
 import type {SpeechListener} from './read_aloud/speech_controller.js';
+import {TextSegmenter} from './read_aloud/text_segmenter.js';
 import {VoiceLanguageController} from './read_aloud/voice_language_controller.js';
 import type {VoiceLanguageListener} from './read_aloud/voice_language_controller.js';
+import {VoiceNotificationManager} from './read_aloud/voice_notification_manager.js';
 import {ReadAnythingLogger, TimeFrom} from './read_anything_logger.js';
 import type {ReadAnythingToolbarElement} from './read_anything_toolbar.js';
-import {VoiceNotificationManager} from './voice_notification_manager.js';
+import {SelectionController} from './selection_controller.js';
 
 const AppElementBase = WebUiListenerMixinLit(CrLitElement);
 
@@ -43,8 +45,9 @@ export interface AppElement {
   };
 }
 
-export class AppElement extends AppElementBase implements
-    SpeechListener, VoiceLanguageListener {
+export class AppElement extends AppElementBase implements SpeechListener,
+                                                          VoiceLanguageListener,
+                                                          ContentListener {
   static get is() {
     return 'read-anything-app';
   }
@@ -67,27 +70,16 @@ export class AppElement extends AppElementBase implements
       availableVoices_: {type: Array},
       previewVoicePlaying_: {type: Object},
       localeToDisplayName_: {type: Object},
-      hasContent_: {type: Boolean},
+      contentState_: {type: Object},
       speechEngineLoaded_: {type: Boolean},
       willDrawAgainSoon_: {type: Boolean},
-      emptyStateImagePath_: {type: String},
-      emptyStateDarkImagePath_: {type: String},
-      emptyStateHeading_: {type: String},
-      emptyStateSubheading_: {type: String},
+      pageLanguage_: {type: String},
     };
   }
 
-  private startTime = Date.now();
-  private constructorTime: number;
+  private startTime_ = Date.now();
 
-  private scrollingOnSelection_ = false;
-  protected accessor hasContent_ = false;
-  protected accessor emptyStateImagePath_: string|undefined;
-  protected accessor emptyStateDarkImagePath_: string|undefined;
-  protected accessor emptyStateHeading_: string|undefined;
-  protected accessor emptyStateSubheading_ = '';
-
-  private previousRootId_?: number;
+  protected accessor contentState_: ContentState;
 
   private isReadAloudEnabled_: boolean;
   protected isDocsLoadMoreButtonVisible_: boolean = false;
@@ -117,6 +109,7 @@ export class AppElement extends AppElementBase implements
   protected accessor previewVoicePlaying_: SpeechSynthesisVoice|null = null;
 
   protected accessor localeToDisplayName_: {[locale: string]: string} = {};
+  protected accessor pageLanguage_: string = '';
 
   private notificationManager_ = VoiceNotificationManager.getInstance();
   private logger_: ReadAnythingLogger = ReadAnythingLogger.getInstance();
@@ -127,6 +120,8 @@ export class AppElement extends AppElementBase implements
   private speechController_: SpeechController = SpeechController.getInstance();
   private contentController_: ContentController =
       ContentController.getInstance();
+  private selectionController_: SelectionController =
+      SelectionController.getInstance();
   protected accessor settingsPrefs_: SettingsPrefs = {
     letterSpacing: 0,
     lineSpacing: 0,
@@ -141,13 +136,14 @@ export class AppElement extends AppElementBase implements
 
   constructor() {
     super();
-    this.constructorTime = Date.now();
-    this.logger_.logTimeFrom(
-        TimeFrom.APP, this.startTime, this.constructorTime);
+    this.logger_.logTimeFrom(TimeFrom.APP, this.startTime_, Date.now());
     this.isReadAloudEnabled_ = chrome.readingMode.isReadAloudEnabled;
     this.styleUpdater_ = new AppStyleUpdater(this);
     this.nodeStore_.clear();
     ColorChangeUpdater.forDocument().start();
+    TextSegmenter.getInstance().updateLanguage(
+        chrome.readingMode.baseLanguageForSpeech);
+    this.contentState_ = this.contentController_.getState();
   }
 
   override disconnectedCallback() {
@@ -171,8 +167,8 @@ export class AppElement extends AppElementBase implements
     // to take place.
     setTimeout(() => chrome.readingMode.shouldShowUi(), 0);
     this.styleUpdater_.setMaxLineWidth();
-    this.showLoading();
 
+    this.contentController_.addListener(this);
     if (this.isReadAloudEnabled_) {
       this.speechController_.addListener(this);
       this.voiceLanguageController_.addListener(this);
@@ -180,9 +176,9 @@ export class AppElement extends AppElementBase implements
 
       // Clear state. We don't do this in disconnectedCallback because that's
       // not always reliabled called.
-      this.hasContent_ = false;
       this.nodeStore_.clearDomNodes();
     }
+    this.showLoading();
 
     this.settingsPrefs_ = {
       letterSpacing: chrome.readingMode.letterSpacing,
@@ -197,43 +193,16 @@ export class AppElement extends AppElementBase implements
       // When Read Aloud is playing, user-selection is disabled on the Read
       // Anything panel, so don't attempt to update selection, as this can
       // end up clearing selection in the main part of the browser.
-      if (!this.hasContent_ || this.speechController_.isSpeechActive()) {
-        return;
-      }
-      const selection: Selection = this.getSelection();
-      assert(selection, 'no selection');
-      if (!selection.anchorNode || !selection.focusNode) {
-        // The selection was collapsed by clicking inside the selection.
-        chrome.readingMode.onCollapseSelection();
+      if (!this.contentController_.hasContent() ||
+          this.speechController_.isSpeechActive()) {
         return;
       }
 
-      const {anchorNodeId, anchorOffset, focusNodeId, focusOffset} =
-          this.isReadAloudEnabled_ ?
-          this.speechController_.getSelectionAdjustedForHighlights(
-              selection.anchorNode, selection.anchorOffset, selection.focusNode,
-              selection.focusOffset) :
-          this.getSelection();
-      if (!anchorNodeId || !focusNodeId) {
-        return;
-      }
-
-      // Only send this selection to the main panel if it is different than the
-      // current main panel selection.
-      const mainPanelAnchor =
-          this.nodeStore_.getDomNode(chrome.readingMode.startNodeId);
-      const mainPanelFocus =
-          this.nodeStore_.getDomNode(chrome.readingMode.endNodeId);
-      if (!mainPanelAnchor || !mainPanelAnchor.contains(selection.anchorNode) ||
-          !mainPanelFocus || !mainPanelFocus.contains(selection.focusNode) ||
-          selection.anchorOffset !== chrome.readingMode.startOffset ||
-          selection.focusOffset !== chrome.readingMode.endOffset) {
-        chrome.readingMode.onSelectionChange(
-            anchorNodeId, anchorOffset, focusNodeId, focusOffset);
-      }
-
+      const selection = this.getSelection();
+      this.selectionController_.onSelectionChange(selection);
       if (this.isReadAloudEnabled_) {
         this.speechController_.onSelectionChange();
+        this.contentController_.onSelectionChange(this.shadowRoot);
       }
     };
 
@@ -264,7 +233,7 @@ export class AppElement extends AppElementBase implements
     };
 
     chrome.readingMode.updateSelection = () => {
-      this.updateSelection();
+      this.selectionController_.updateSelection(this.getSelection());
     };
 
     chrome.readingMode.updateVoicePackStatus =
@@ -277,7 +246,7 @@ export class AppElement extends AppElementBase implements
     };
 
     chrome.readingMode.showEmpty = () => {
-      this.showEmpty();
+      this.contentController_.setEmpty();
     };
 
     chrome.readingMode.restoreSettingsFromPrefs = () => {
@@ -301,13 +270,12 @@ export class AppElement extends AppElementBase implements
     };
 
     chrome.readingMode.onNodeWillBeDeleted = (nodeId: number) => {
-      this.onNodeWillBeDeleted(nodeId);
+      this.contentController_.onNodeWillBeDeleted(nodeId);
     };
   }
 
   protected onContainerScroll_() {
-    chrome.readingMode.onScroll(this.scrollingOnSelection_);
-    this.scrollingOnSelection_ = false;
+    this.selectionController_.onScroll();
     if (this.isReadAloudEnabled_) {
       this.speechController_.onScroll();
     }
@@ -317,229 +285,40 @@ export class AppElement extends AppElementBase implements
     this.nodeStore_.estimateWordsSeenWithDelay();
   }
 
-  showEmpty() {
-    if (!chrome.readingMode.isGoogleDocs) {
-      this.emptyStateHeading_ = loadTimeData.getString('emptyStateHeader');
-    } else {
-      this.emptyStateHeading_ = loadTimeData.getString('notSelectableHeader');
-    }
-    this.emptyStateImagePath_ = './images/empty_state.svg';
-    this.emptyStateDarkImagePath_ = './images/empty_state.svg';
-    this.emptyStateSubheading_ = loadTimeData.getString('emptyStateSubheader');
-    this.hasContent_ = false;
-  }
-
-  isEmptyState(): boolean {
-    // In rare cases it is possible for hasContent_ to be false but the loading
-    // screen to be shown without ever terminating, such as when reading mode
-    // receives bad selection data. When this happens, reading mode needs to
-    // check whether or not the empty state is currently showing, not whether
-    // or not there is content.
-    return this.emptyStateImagePath_ === './images/empty_state.svg';
-  }
-
   showLoading() {
-    this.emptyStateImagePath_ = '//resources/images/throbber_small.svg';
-    this.emptyStateDarkImagePath_ =
-        '//resources/images/throbber_small_dark.svg';
-    this.emptyStateHeading_ =
-        loadTimeData.getString('readAnythingLoadingMessage');
-    this.emptyStateSubheading_ = '';
-    this.hasContent_ = false;
+    this.contentController_.setState(ContentType.LOADING);
     if (this.isReadAloudEnabled_) {
-      this.speechController_.clearReadAloudState();
+      this.speechController_.resetForNewContent();
     }
   }
 
   // TODO: crbug.com/40927698 - Handle focus changes for speech, including
   // updating speech state.
   updateContent() {
-    // This shouldn't happen. If it does, there is likely a bug, so log it so
-    // we can monitor it.
-    if (this.speechController_.isSpeechActive()) {
-      console.error(
-          'updateContent called while speech is active. ',
-          'There may be a bug.');
-      this.logger_.logSpeechStopSource(
-          chrome.readingMode.unexpectedUpdateContentStopSource);
-    }
-
-    if (this.isReadAloudEnabled_) {
-      this.speechController_.saveReadAloudState();
-      this.speechController_.clearReadAloudState();
-    }
-    const container = this.$.container;
-
-    // Remove all children from container. Use `replaceChildren` rather than
-    // setting `innerHTML = ''` in order to remove all listeners, too.
-    container.replaceChildren();
-    this.nodeStore_.clearDomNodes();
-
-    // Construct a dom subtree starting with the display root and append it to
-    // the container. The display root may be invalid if there are no content
-    // nodes and no selection.
-    // This does not use Lit's templating abstraction, which would create a
-    // shadow node element representing each AXNode, because experimentation
-    // (with Polymer) found the shadow node creation to be ~8-10x slower than
-    // constructing and appending nodes directly to the container element.
-    const rootId = chrome.readingMode.rootId;
-    if (!rootId) {
-      return;
-    }
-
     this.willDrawAgainSoon_ = chrome.readingMode.requiresDistillation;
-    const node = this.contentController_.buildSubtree(rootId);
-    // If there is no text or images in the tree, do not proceed. The empty
-    // state container will show instead.
-    if (!node.textContent && !this.nodeStore_.hasImagesToFetch()) {
-      // Sometimes the controller thinks there will be content and redraws
-      // without showing the empty page, but we end up not actually having any
-      // content and also not showing the empty page sometimes. In this case,
-      // send that info back to the controller.
-      if (this.hasContent_) {
-        this.hasContent_ = false;
-        chrome.readingMode.onNoTextContent(/* previouslyHadContent*/ true);
-      } else if (!this.isEmptyState()) {
-        // If no text content is found but reading mode is not showing the
-        // empty state, signal back to the renderer that this is the case.
-        // This is possible when the AXTree returns bad selection data and
-        // reading mode believes it has selected content to distll but
-        // nothing valid is selected. This can cause the loading screen
-        // to never switch to the empty state.
-        // TODO: crbug.com/411198154- Longer term, once reading mode and read
-        // aloud traversal is more in line, the renderer should be able to call
-        // showEmpty directly, rather than signaling to the WebUI to update
-        // content and then WebUI signaling back to the renderer that there is
-        // no text content.
-        chrome.readingMode.onNoTextContent(/* previouslyHadContent*/ false);
-      }
-      return;
-    }
-
-    if (this.previousRootId_ !== rootId) {
-      this.previousRootId_ = rootId;
-      this.logger_.logNewPage(/*speechPlayed=*/ false);
-    }
-
-    // Always load images even if they are disabled to ensure a fast response
-    // when toggling.
-    this.contentController_.loadImages();
-
     this.isDocsLoadMoreButtonVisible_ =
         chrome.readingMode.isDocsLoadMoreButtonVisible;
 
-    this.hasContent_ = true;
-    container.appendChild(node);
-    this.updateImages_();
-
-    // If the previous reading position still exists and we haven't reached the
-    // end of speech, keep that spot.
-    let setPreviousReadingPosition = false;
-    if (this.isReadAloudEnabled_) {
-      setPreviousReadingPosition =
-          this.speechController_.setPreviousReadingPositionIfExists();
+    // Remove all children from container. Use `replaceChildren` rather than
+    // setting `innerHTML = ''` in order to remove all listeners, too.
+    this.$.container.replaceChildren();
+    const newRoot = this.contentController_.updateContent();
+    if (newRoot) {
+      this.$.container.appendChild(newRoot);
     }
-
-    requestAnimationFrame(() => {
-      // Scroll back to the top after we've drawn as long as we aren't keeping
-      // the reading position from before.
-      if (!setPreviousReadingPosition) {
-        this.$.containerScroller.scrollTop = 0;
-      }
-      this.nodeStore_.estimateWordsSeenWithDelay();
-    });
   }
 
-  getSelection(): any {
+  getSelection(): Selection|null {
     assert(this.shadowRoot, 'no shadow root');
     return this.shadowRoot.getSelection();
   }
 
-  updateSelection() {
-    const selection: Selection = this.getSelection();
-    selection.removeAllRanges();
-
-    const range = new Range();
-    const startNodeId = chrome.readingMode.startNodeId;
-    const endNodeId = chrome.readingMode.endNodeId;
-    let startOffset = chrome.readingMode.startOffset;
-    let endOffset = chrome.readingMode.endOffset;
-    let startNode = this.nodeStore_.getDomNode(startNodeId);
-    let endNode = this.nodeStore_.getDomNode(endNodeId);
-    if (!startNode || !endNode) {
-      return;
-    }
-
-    // Range.setStart/setEnd behaves differently if the node is an element or a
-    // text node. If the former, the offset refers to the index of the children.
-    // If the latter, the offset refers to the character offset inside the text
-    // node. The start and end nodes are elements if they've been read aloud
-    // because we add formatting to the text that wasn't there before. However,
-    // the information we receive from chrome.readingMode is always the id of a
-    // text node and character offset for that text, so find the corresponding
-    // text child here and adjust the offset
-    if (startNode.nodeType !== Node.TEXT_NODE) {
-      const startTreeWalker =
-          document.createTreeWalker(startNode, NodeFilter.SHOW_TEXT);
-      while (startTreeWalker.nextNode()) {
-        const textNodeLength = startTreeWalker.currentNode.textContent!.length;
-        // Once we find the child text node inside which the starting index
-        // fits, update the start node to be that child node and the adjusted
-        // offset will be relative to this child node
-        if (startOffset < textNodeLength) {
-          startNode = startTreeWalker.currentNode;
-          break;
-        }
-
-        startOffset -= textNodeLength;
-      }
-    }
-    if (endNode.nodeType !== Node.TEXT_NODE) {
-      const endTreeWalker =
-          document.createTreeWalker(endNode, NodeFilter.SHOW_TEXT);
-      while (endTreeWalker.nextNode()) {
-        const textNodeLength = endTreeWalker.currentNode.textContent!.length;
-        if (endOffset <= textNodeLength) {
-          endNode = endTreeWalker.currentNode;
-          break;
-        }
-
-        endOffset -= textNodeLength;
-      }
-    }
-
-    // Gmail will try to select text when collapsing the node. At the same time,
-    // the node contents are then shortened because of the collapse which causes
-    // the range to go out of bounds. When this happens we should reset the
-    // selection.
-    try {
-      range.setStart(startNode, startOffset);
-      range.setEnd(endNode, endOffset);
-    } catch (err) {
-      selection.removeAllRanges();
-      return;
-    }
-
-    selection.addRange(range);
-
-    // Scroll the start node into view. ScrollIntoView is available on the
-    // Element class.
-    const startElement = startNode.nodeType === Node.ELEMENT_NODE ?
-        startNode as Element :
-        startNode.parentElement;
-    if (!startElement) {
-      return;
-    }
-    this.scrollingOnSelection_ = true;
-    startElement.scrollIntoViewIfNeeded();
-  }
-
   protected updateLinks_() {
-    this.contentController_.updateLinks(this.hasContent_, this.shadowRoot);
+    this.contentController_.updateLinks(this.shadowRoot);
   }
 
   protected updateImages_() {
-    this.contentController_.updateImages(this.hasContent_, this.shadowRoot);
+    this.contentController_.updateImages(this.shadowRoot);
   }
 
   protected onDocsLoadMoreButtonClick_() {
@@ -575,8 +354,21 @@ export class AppElement extends AppElementBase implements
   }
 
   protected onPlayPauseClick_() {
-    this.speechController_.onPlayPauseToggle(
-        this.getSelection(), this.$.container.textContent);
+    this.speechController_.onPlayPauseToggle(this.$.container);
+  }
+
+  onContentStateChange(): void {
+    this.contentState_ = this.contentController_.getState();
+  }
+
+  onNewPageDrawn(): void {
+    this.$.containerScroller.scrollTop = 0;
+  }
+
+  onPlayingFromSelection(): void {
+    // Clear the selection so we don't keep trying to play from the same
+    // selection every time they press play.
+    this.getSelection()?.removeAllRanges();
   }
 
   onIsSpeechActiveChange(): void {
@@ -695,39 +487,29 @@ export class AppElement extends AppElementBase implements
     this.styleUpdater_.setHighlight();
   }
 
-  onNodeWillBeDeleted(nodeId: number) {
-    const deletedNode = this.nodeStore_.getDomNode(nodeId) as ChildNode;
-    if (deletedNode) {
-      this.nodeStore_.removeDomNode(deletedNode);
-      deletedNode.remove();
-    }
-    const root = this.nodeStore_.getDomNode(chrome.readingMode.rootId);
-    if (this.hasContent_ && !root?.textContent) {
-      this.hasContent_ = false;
-      chrome.readingMode.onNoTextContent(/*previouslyHadContent*/ true);
+  languageChanged() {
+    this.pageLanguage_ = chrome.readingMode.baseLanguageForSpeech;
+    if (this.isReadAloudEnabled_) {
+      this.voiceLanguageController_.onPageLanguageChanged();
+      TextSegmenter.getInstance().updateLanguage(this.pageLanguage_);
     }
   }
 
-  languageChanged() {
-    this.$.toolbar.updateFonts();
-    if (this.isReadAloudEnabled_) {
-      this.voiceLanguageController_.onPageLanguageChanged();
-    }
+  protected computeHasContent(): boolean {
+    return this.contentState_.type === ContentType.HAS_CONTENT;
   }
 
   protected computeIsReadAloudPlayable(): boolean {
-    return this.hasContent_ && this.speechEngineLoaded_ &&
-        !!this.selectedVoice_ && !this.willDrawAgainSoon_;
+    return (this.contentState_.type === ContentType.HAS_CONTENT) &&
+        this.speechEngineLoaded_ && !!this.selectedVoice_ &&
+        !this.willDrawAgainSoon_;
   }
 
   protected onKeyDown_(e: KeyboardEvent) {
     if (e.key === 'k') {
       e.stopPropagation();
-      if (this.speechController_.isSpeechActive()) {
-        this.logger_.logSpeechStopSource(
-            chrome.readingMode.keyboardShortcutStopSource);
-      }
-      this.onPlayPauseClick_();
+      e.preventDefault();
+      this.speechController_.onPlayPauseKeyPress(this.$.container);
     }
   }
 }

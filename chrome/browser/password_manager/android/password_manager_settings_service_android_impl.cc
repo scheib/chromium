@@ -12,7 +12,6 @@
 #include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
-#include "chrome/browser/password_manager/android/password_manager_android_util.h"
 #include "chrome/browser/password_manager/android/password_manager_lifecycle_helper_impl.h"
 #include "chrome/browser/password_manager/android/password_settings_updater_android_bridge_helper.h"
 #include "components/password_manager/core/browser/features/password_features.h"
@@ -164,6 +163,13 @@ void PasswordManagerSettingsServiceAndroidImpl::TurnOffAutoSignIn() {
       account, PasswordManagerSetting::kAutoSignIn, false);
 }
 
+void PasswordManagerSettingsServiceAndroidImpl::Shutdown() {
+  if (sync_service_) {
+    sync_service_->RemoveObserver(this);
+    sync_service_ = nullptr;
+  }
+}
+
 void PasswordManagerSettingsServiceAndroidImpl::Init() {
   bridge_helper_->SetConsumer(weak_ptr_factory_.GetWeakPtr());
   lifecycle_helper_->RegisterObserver(base::BindRepeating(
@@ -245,4 +251,10 @@ void PasswordManagerSettingsServiceAndroidImpl::OnStateChanged(
   // Fetch settings from the backend to align values stored in GMS Core and
   // Chrome's cache.
   RequestSettingsFromBackend();
+}
+
+void PasswordManagerSettingsServiceAndroidImpl::OnSyncShutdown(
+    syncer::SyncService* sync) {
+  // Unreachable, since this service is Shutdown() before the SyncService.
+  NOTREACHED();
 }

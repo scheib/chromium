@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string_view>
 #include <utility>
 
 #include "base/base_paths.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
@@ -55,7 +57,6 @@
 #include "components/crx_file/id_util.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/signin/public/base/signin_pref_names.h"
-#include "components/signin/public/base/signin_switches.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/supervised_user/core/common/features.h"
 #include "components/sync/test/fake_sync_change_processor.h"
@@ -78,6 +79,7 @@
 #include "extensions/browser/test_event_router_observer.h"
 #include "extensions/browser/test_extension_registry_observer.h"
 #include "extensions/browser/user_script_manager.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
@@ -93,10 +95,17 @@
 #include "services/service_manager/public/cpp/test/test_connector_factory.h"
 #include "ui/shell_dialogs/selected_file_info.h"
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/ui/extensions/extension_install_ui.h"  // nogncheck
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/test/android/content_uri_test_utils.h"
+#include "chrome/browser/ui/android/extensions/extension_util_bridge.h"
+#endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -393,6 +402,31 @@ void ItemStatePrefsChangedObserver::OnWillDispatchEvent(const Event& event) {
   }
 }
 
+// On Android, the returned FilePath points to a temporary file managed
+// by `temp_dir`. The caller MUST ensure `temp_dir` is not destroyed before
+// they are finished using the FilePath, as its destruction will delete the
+// underlying file, resulting in a broken path.
+
+// TODO(crbug.com/448823672): Refactor TestExtensionDir to abstract Android's
+// Content URI requirements.
+ui::SelectedFileInfo GetSelectedFileInfoForPath(const base::FilePath& path,
+                                                base::ScopedTempDir& temp_dir) {
+#if BUILDFLAG(IS_ANDROID)
+  // On Android, tests need to work with content URIs instead of direct file
+  // paths. This helper copies the extension files to a temporary cache
+  // directory and creates a content URI pointing to it.
+  CHECK(temp_dir.CreateUniqueTempDir());
+
+  std::optional<base::FilePath> cache_path =
+      base::test::android::CreateCacheCopyAndGetContentUri(path, temp_dir);
+  CHECK(cache_path.has_value());
+  return ui::SelectedFileInfo(*cache_path);
+#else
+  // On other platforms, we can use the direct file path.
+  return ui::SelectedFileInfo(path);
+#endif  // BUILDFLAG(IS_ANDROID)
+}
+
 }  // namespace
 
 // TODO(crbug.com/408458901): Port these tests to desktop Android when we have
@@ -585,8 +619,6 @@ void DeveloperPrivateApiUnitTest::TestExtensionPrefSetting(
   }
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
 testing::AssertionResult DeveloperPrivateApiUnitTest::TestPackExtensionFunction(
     const base::Value::List& args,
     api::developer_private::PackStatus expected_status,
@@ -621,7 +653,6 @@ testing::AssertionResult DeveloperPrivateApiUnitTest::TestPackExtensionFunction(
 
   return testing::AssertionSuccess();
 }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 void DeveloperPrivateApiUnitTest::UpdateProfileConfigurationDevMode(
     bool dev_mode) {
@@ -789,8 +820,6 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateReload) {
   EXPECT_EQ(extension_id, reloaded_extension->id());
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
 // Test developerPrivate.packDirectory.
 TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivatePackFunction) {
   // Use a temp dir isolating the extension dir and its generated files.
@@ -799,6 +828,21 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivatePackFunction) {
   base::FilePath root_path = data_dir().AppendASCII("simple_with_popup");
   ASSERT_TRUE(base::CopyDirectory(root_path, temp_dir.GetPath(), true));
 
+#if BUILDFLAG(IS_ANDROID)
+  // Android will pack extension under downloads.
+  base::FilePath temp_root_path =
+      *base::test::android::GetInMemoryContentTreeUriFromCacheDirDirectory(
+          temp_dir.GetPath().Append(root_path.BaseName()));
+
+  std::optional<base::FilePath> optional_crx_path =
+      GetFileUnderDownloads("simple_with_popup.crx");
+  std::optional<base::FilePath> optional_pem_path =
+      GetFileUnderDownloads("simple_with_popup.pem");
+
+  // Shouldn't exist now.
+  EXPECT_FALSE(optional_crx_path.has_value());
+  EXPECT_FALSE(optional_pem_path.has_value());
+#else
   base::FilePath temp_root_path =
       temp_dir.GetPath().Append(root_path.BaseName());
   base::FilePath crx_path =
@@ -810,6 +854,7 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivatePackFunction) {
       << "crx should not exist before the test is run!";
   EXPECT_FALSE(base::PathExists(pem_path))
       << "pem should not exist before the test is run!";
+#endif
 
   // First, test a directory that should pack properly.
   base::Value::List pack_args;
@@ -817,10 +862,27 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivatePackFunction) {
   EXPECT_TRUE(TestPackExtensionFunction(
       pack_args, api::developer_private::PackStatus::kSuccess, 0));
 
+#if BUILDFLAG(IS_ANDROID)
+  // Query again
+  optional_crx_path = GetFileUnderDownloads("simple_with_popup.crx");
+  optional_pem_path = GetFileUnderDownloads("simple_with_popup.pem");
+  EXPECT_TRUE(optional_crx_path.has_value());
+  EXPECT_TRUE(optional_pem_path.has_value());
+
+  base::FilePath crx_path = optional_crx_path.value();
+  base::FilePath pem_path = optional_pem_path.value();
+  // Make sure the crx is packed and the key is generated. Since Android will
+  // create the content URI during the whole process whether the packing is
+  // successful or not. Apply a size check here.
+  std::optional<int64_t> crx_file_size = base::GetFileSize(crx_path);
+  std::optional<int64_t> pem_file_size = base::GetFileSize(pem_path);
+  EXPECT_TRUE(crx_file_size.has_value() && crx_file_size.value() > 0);
+  EXPECT_TRUE(pem_file_size.has_value() && pem_file_size.value() > 0);
+#else
   // Should have created crx file and pem file.
   EXPECT_TRUE(base::PathExists(crx_path));
   EXPECT_TRUE(base::PathExists(pem_path));
-
+#endif
   // Deliberately don't cleanup the files, and append the pem path.
   pack_args.Append(pem_path.AsUTF8Unsafe());
 
@@ -841,8 +903,18 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivatePackFunction) {
   pack_args.erase(pack_args.begin() + 1, pack_args.begin() + 3);
   EXPECT_TRUE(TestPackExtensionFunction(
       pack_args, api::developer_private::PackStatus::kError, 0));
+
+// In Android, even if the process fails, two empty files are still
+// created under downloads. In this teardown, we clean up these files
+// to prevent them from impacting subsequent tests.
+#if BUILDFLAG(IS_ANDROID)
+  // Needs to query crx_path again to get the latest content URI for newly
+  // created empty file.
+  optional_crx_path = GetFileUnderDownloads("simple_with_popup.crx");
+  base::DeleteFile(optional_crx_path.value());
+  base::DeleteFile(pem_path);
+#endif
 }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 // Test developerPrivate.choosePath.
 TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateChoosePath) {
@@ -903,8 +975,6 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateChoosePath) {
   EXPECT_EQ(std::string("File selection was canceled."), function->GetError());
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
 // Test developerPrivate.loadUnpacked.
 TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpacked) {
   std::unique_ptr<content::WebContents> web_contents(
@@ -930,7 +1000,17 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpacked) {
   function = base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
   base::FilePath path = data_dir().AppendASCII("simple_with_popup");
   function->set_accept_dialog_for_testing(true);
+#if BUILDFLAG(IS_ANDROID)
+  base::ScopedTempDir temp_dir_copy;
+  ASSERT_TRUE(temp_dir_copy.CreateUniqueTempDir());
+
+  base::FilePath cache_path =
+      *base::test::android::CreateCacheCopyAndGetContentUri(path,
+                                                            temp_dir_copy);
+  function->set_selected_file_for_testing(ui::SelectedFileInfo(cache_path));
+#else
   function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+#endif  // BUILDFLAG(IS_ANDROID)
   function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
 
   // Function should succeed and extension is added.
@@ -940,15 +1020,29 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpacked) {
       registry()->enabled_extensions().GetIDs(), current_ids);
   ASSERT_EQ(1u, id_difference.size());
   // The new extension should have the same path.
+#if BUILDFLAG(IS_ANDROID)
+  // In Android, the unpacked extension source will be resolved as virtual
+  // document path.
+  EXPECT_EQ(
+      *base::ResolveToVirtualDocumentPath(cache_path),
+      registry()->enabled_extensions().GetByID(*id_difference.begin())->path());
+#else
   EXPECT_EQ(
       path,
       registry()->enabled_extensions().GetByID(*id_difference.begin())->path());
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // Try loading a bad extension and accepting the dialog.
   function = base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
   path = data_dir().AppendASCII("empty_manifest");
   function->set_accept_dialog_for_testing(true);
+#if BUILDFLAG(IS_ANDROID)
+  cache_path = *base::test::android::CreateCacheCopyAndGetContentUri(
+      path, temp_dir_copy);
+  function->set_selected_file_for_testing(ui::SelectedFileInfo(cache_path));
+#else
   function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+#endif  // BUILDFLAG(IS_ANDROID)
   function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
   base::Value::List unpacked_args;
   base::Value::Dict options;
@@ -983,7 +1077,9 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpackedLoadError) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+    base::ScopedTempDir temp_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(path, temp_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1012,7 +1108,9 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpackedLoadError) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+    base::ScopedTempDir temp_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(path, temp_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1045,7 +1143,9 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateLoadUnpackedLoadError) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+    base::ScopedTempDir temp_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(path, temp_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1071,6 +1171,9 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
            "manifest_version": 2
          })");
   base::FilePath path = dir.UnpackedPath();
+  base::ScopedTempDir first_dir_copy;
+  ui::SelectedFileInfo selected_path =
+      GetSelectedFileInfoForPath(path, first_dir_copy);
 
   DeveloperPrivateAPI::UnpackedRetryId retry_guid;
   {
@@ -1079,7 +1182,7 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+    function->set_selected_file_for_testing(selected_path);
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1101,7 +1204,7 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(path));
+    function->set_selected_file_for_testing(selected_path);
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1131,7 +1234,9 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(second_path));
+    base::ScopedTempDir second_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(second_path, second_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::optional<base::Value> result =
         api_test_utils::RunFunctionAndReturnSingleResult(
@@ -1153,17 +1258,29 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
            "version": "1.0",
            "manifest_version": 2
          })");
+#if BUILDFLAG(IS_ANDROID)
+  // Since Android copies the directory from the source path, the operation
+  // above will not modify the content in Android's local directory. We need to
+  // manually copy the directory again to overwrite the file in Android.
+  ASSERT_TRUE(base::CopyDirectory(path, first_dir_copy.GetPath(), true));
+#endif  // BUILDFLAG(IS_ANDROID)
 
-  // Set the picker to choose an invalid path (the picker should be skipped if
-  // we supply a retry id).
-  base::FilePath empty_path;
+  // Set the picker to an invalid path. Here, we create a real file with an
+  // invalid manifest. This file is never actually used because the retry GUID
+  // takes precedence, but it is required for the file picker setup. (Note: the
+  // picker should be skipped if a retry ID is supplied).
+  TestExtensionDir invalid_dir;
+  invalid_dir.WriteManifest("This is an invalid file.");
+  base::FilePath invalid_path = invalid_dir.UnpackedPath();
 
   {
     // Try reloading the extension by supplying the retry id. It should succeed.
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(empty_path));
+    base::ScopedTempDir invalid_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(invalid_path, invalid_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     TestExtensionRegistryObserver observer(registry());
     api_test_utils::RunFunction(function.get(),
@@ -1175,7 +1292,12 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
     scoped_refptr<const Extension> extension =
         observer.WaitForExtensionLoaded();
     ASSERT_TRUE(extension);
+#if BUILDFLAG(IS_ANDROID)
+    EXPECT_EQ(extension->path(),
+              *base::ResolveToVirtualDocumentPath(selected_path.file_path));
+#else
     EXPECT_EQ(extension->path(), path);
+#endif  // BUILDFLAG(IS_ANDROID)
   }
 
   {
@@ -1183,7 +1305,9 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
     auto function =
         base::MakeRefCounted<api::DeveloperPrivateLoadUnpackedFunction>();
     function->set_accept_dialog_for_testing(true);
-    function->set_selected_file_for_testing(ui::SelectedFileInfo(empty_path));
+    base::ScopedTempDir invalid_dir_copy;
+    function->set_selected_file_for_testing(
+        GetSelectedFileInfoForPath(invalid_path, invalid_dir_copy));
     function->SetRenderFrameHost(web_contents->GetPrimaryMainFrame());
     std::string error = api_test_utils::RunFunctionAndReturnError(
         function.get(),
@@ -1195,6 +1319,8 @@ TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedRetryId) {
   }
 }
 
+// TODO(crbug.com/439448250): Enable on desktop android.
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 // Tests calling "reload" on an unpacked extension with a manifest error,
 // resulting in the reload failing. The reload call should then respond with
 // the load error, which includes a retry GUID to be passed to loadUnpacked().
@@ -1638,7 +1764,7 @@ TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateDevMode) {
   }
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(DeveloperPrivateApiUnitTest, LoadUnpackedFailsWithoutDevMode) {
   std::unique_ptr<content::WebContents> web_contents(
@@ -1710,7 +1836,7 @@ TEST_F(DeveloperPrivateApiUnitTest,
   EXPECT_TRUE(info.can_load_unpacked);
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(DeveloperPrivateApiUnitTest, InstallDroppedFileNoDraggedPath) {
   base::AutoReset<bool> disable_ui =
@@ -2224,7 +2350,7 @@ class DeveloperPrivateApiZipFileUnitTest
   base::FilePath expected_extension_install_directory_;
 };
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(DeveloperPrivateApiZipFileUnitTest, InstallDroppedFileZip) {
   base::FilePath zip_path = data_dir().AppendASCII("simple_empty.zip");
@@ -3032,7 +3158,7 @@ TEST_F(DeveloperPrivateApiUnitTest,
       permissions_manager->HasGrantedHostPermission(*extension_2, kGoogleCom));
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 // Test uninstalling multiple extensions.
 TEST_F(DeveloperPrivateApiUnitTest, DeveloperPrivateRemoveMultipleExtensions) {
@@ -3297,7 +3423,7 @@ class DeveloperPrivateApiSupervisedUserUnitTest
   bool ProfileIsSupervised() const override { return true; }
 };
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 // Tests trying to call loadUnpacked when the profile shouldn't be allowed to.
 TEST_F(DeveloperPrivateApiSupervisedUserUnitTest,
@@ -3348,7 +3474,7 @@ class DeveloperPrivateApiWithMV2DeprecationDisabledUnitTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(DeveloperPrivateApiWithMV2DeprecationWarningUnitTest,
        TestAcknowledgingAnExtension) {
@@ -3420,7 +3546,7 @@ TEST_F(DeveloperPrivateApiWithMV2DeprecationWarningUnitTest,
   EXPECT_TRUE(experiment_manager->DidUserAcknowledgeNoticeGlobally());
 }
 
-// TODO(crbug.com/392777363): Enable on desktop android.
+// TODO(crbug.com/439448250): Enable on desktop android.
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 TEST_F(DeveloperPrivateApiWithMV2DeprecationDisabledUnitTest,
        TestAcknowledgingAnExtension) {
@@ -3461,14 +3587,15 @@ TEST_F(DeveloperPrivateApiWithMV2DeprecationDisabledUnitTest,
 }
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
+// Signing into transport mode and Sign outs are not supported for ChromeOS
+// hence DeveloperPrivateApiTransportModeUnitTest is not run for ChromeOS.
+// TODO(crbug.com/439448250): Enable on desktop android. Currently all the
+// DeveloperPrivateApiTransportModeUnitTest tests block forever on WaitForEvent.
+#if BUILDFLAG(ENABLE_EXTENSIONS) && !BUILDFLAG(IS_CHROMEOS)
 class DeveloperPrivateApiTransportModeUnitTest
     : public DeveloperPrivateApiUnitTest {
  public:
-  DeveloperPrivateApiTransportModeUnitTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {switches::kEnableExtensionsExplicitBrowserSignin},
-        /*disabled_features=*/{});
-  }
+  DeveloperPrivateApiTransportModeUnitTest() = default;
 
   void SetUp() override {
     DeveloperPrivateApiUnitTest::SetUp();
@@ -3547,15 +3674,10 @@ class DeveloperPrivateApiTransportModeUnitTest
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_profile_adaptor_;
 };
 
-// TODO(crbug.com/392777363): Enable on desktop android. Currently all the
-// DeveloperPrivateApiTransportModeUnitTest tests block forever on WaitForEvent.
-#if BUILDFLAG(ENABLE_EXTENSIONS)
 // Test that extensions cannot be uploaded if the user is signed out.
 TEST_F(DeveloperPrivateApiTransportModeUnitTest,
        UploadExtensionToAccount_SignedOut) {
@@ -3779,9 +3901,6 @@ TEST_F(DeveloperPrivateApiTransportModeUnitTest,
   EXPECT_FALSE(CanUploadToAccount(*extension));
 }
 
-// Sign outs are not supported for ChromeOS hence this test is not run for
-// ChromeOS.
-#if !BUILDFLAG(IS_CHROMEOS)
 // Test that extensions can no longer be uploaded once the user signs out.
 TEST_F(DeveloperPrivateApiTransportModeUnitTest, CannotUploadAfterSignOut) {
   // Test setup: Sign in and simulate an empty initial sync so the extension is
@@ -3808,7 +3927,6 @@ TEST_F(DeveloperPrivateApiTransportModeUnitTest, CannotUploadAfterSignOut) {
   EXPECT_FALSE(info.can_upload_as_account_extension);
   EXPECT_FALSE(CanUploadToAccount(*extension));
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 // Test that extensions can no longer be uploaded by the user if they sign into
 // full sync mode.
@@ -3876,6 +3994,6 @@ TEST_F(DeveloperPrivateApiTransportModeUnitTest,
   EXPECT_FALSE(info.can_upload_as_account_extension);
   EXPECT_FALSE(CanUploadToAccount(*extension));
 }
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS) && !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace extensions

@@ -73,7 +73,6 @@ PageTimingMetricsSender::PageTimingMetricsSender(
       soft_navigation_metrics_(CreateSoftNavigationMetrics()),
       buffer_timer_delay_ms_(GetBufferTimerDelayMillis(TimerType::kRenderer)),
       metadata_recorder_(initial_monotonic_timing, is_main_frame) {
-  InitiateUserInteractionTiming();
   if (initial_request) {
     int resource_id = initial_request->resource_id();
     page_resource_data_use_[resource_id] = std::move(initial_request);
@@ -232,10 +231,10 @@ void PageTimingMetricsSender::OnMainFrameViewportRectangleChanged(
   EnsureSendTimer();
 }
 
-void PageTimingMetricsSender::OnMainFrameImageAdRectangleChanged(
+void PageTimingMetricsSender::OnMainFrameAdRectangleChanged(
     int element_id,
-    const gfx::Rect& image_ad_rect) {
-  metadata_->main_frame_image_ad_rects[element_id] = image_ad_rect;
+    const gfx::Rect& ad_rect) {
+  metadata_->main_frame_ad_rects[element_id] = ad_rect;
   EnsureSendTimer();
 }
 
@@ -356,11 +355,10 @@ void PageTimingMetricsSender::SendNow() {
                       soft_navigation_metrics_);
 
   input_timing_delta_ = mojom::InputTiming::New();
-  InitiateUserInteractionTiming();
   new_features_.clear();
   metadata_->main_frame_intersection_rect.reset();
   metadata_->main_frame_viewport_rect.reset();
-  metadata_->main_frame_image_ad_rects.clear();
+  metadata_->main_frame_ad_rects.clear();
   last_cpu_timing_->task_time = base::TimeDelta();
   modified_resources_.clear();
   render_data_.new_layout_shifts.clear();
@@ -380,27 +378,21 @@ PageResourceDataUse* PageTimingMetricsSender::FindOrInsertPageResourceDataUse(
   return data_use.get();
 }
 
-void PageTimingMetricsSender::InitiateUserInteractionTiming() {
-  input_timing_delta_->max_event_durations =
-      mojom::UserInteractionLatencies::NewUserInteractionLatencies({});
-}
-
 void PageTimingMetricsSender::DidObserveUserInteraction(
     base::TimeTicks max_event_start,
     base::TimeTicks max_event_queued_main_thread,
     base::TimeTicks max_event_commit_finish,
     base::TimeTicks max_event_end,
     uint64_t interaction_offset) {
-  input_timing_delta_->num_interactions++;
   metadata_recorder_.AddInteractionDurationMetadata(max_event_start,
                                                     max_event_end);
   metadata_recorder_.AddInteractionDurationAfterQueueingMetadata(
       max_event_start, max_event_queued_main_thread, max_event_commit_finish,
       max_event_end);
   base::TimeDelta max_event_duration = max_event_end - max_event_start;
-  input_timing_delta_->max_event_durations->get_user_interaction_latencies()
-      .emplace_back(mojom::UserInteractionLatency::New(
-          max_event_duration, interaction_offset, max_event_start));
+  input_timing_delta_->user_interaction_latencies.emplace_back(
+      mojom::UserInteractionLatency::New(max_event_duration, interaction_offset,
+                                         max_event_start));
   EnsureSendTimer();
 }
 }  // namespace page_load_metrics

@@ -198,18 +198,6 @@ class WTF_EXPORT StringView {
     })
   }
 
-  // Use Span16() instead.
-  UNSAFE_BUFFER_USAGE const LChar* Characters8() const {
-    DCHECK(Is8Bit());
-    return static_cast<const LChar*>(bytes_);
-  }
-
-  // Use Span16() instead.
-  UNSAFE_BUFFER_USAGE const UChar* Characters16() const {
-    DCHECK(!Is8Bit());
-    return static_cast<const UChar*>(bytes_);
-  }
-
   base::span<const LChar> Span8() const {
     DCHECK(Is8Bit());
     // SAFETY: bytes_ have length_ elements.
@@ -328,9 +316,9 @@ inline StringView::StringView(const StringView& view,
   // SAFETY: Invariants are checked last two line.
   UNSAFE_BUFFERS({
     if (Is8Bit()) {
-      bytes_ = view.Characters8() + offset;
+      bytes_ = view.Span8().data() + offset;
     } else {
-      bytes_ = view.Characters16() + offset;
+      bytes_ = view.Span16().data() + offset;
     }
   });
 }
@@ -410,17 +398,13 @@ inline bool EqualIgnoringASCIICase(const StringView& a,
                     : EqualIgnoringASCIICase(a.Span16(), span);
 }
 
-// TODO(esprehn): Can't make this an overload of WTF::equal since that makes
-// calls to equal() that pass literal strings ambiguous. Figure out if we can
-// replace all the callers with equalStringView and then rename it to equal().
+// TODO(esprehn): Can't make this an overload of blink::Equal since that makes
+// calls to Equal() that pass literal strings ambiguous. Figure out if we can
+// replace all the callers with EqualStringView and then rename it to Equal().
 WTF_EXPORT bool EqualStringView(const StringView&, const StringView&);
 
 inline bool operator==(const StringView& a, const StringView& b) {
   return EqualStringView(a, b);
-}
-
-inline bool operator!=(const StringView& a, const StringView& b) {
-  return !(a == b);
 }
 
 inline wtf_size_t StringView::Find(CharacterMatchFunctionPtr match_function,

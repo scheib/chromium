@@ -26,10 +26,16 @@ class WEB_MODAL_EXPORT WebContentsModalDialogManagerDelegate {
 
   // Returns the WebContentsModalDialogHost for use in positioning web contents
   // modal dialogs within the browser window.
-  virtual WebContentsModalDialogHost* GetWebContentsModalDialogHost();
+  virtual WebContentsModalDialogHost* GetWebContentsModalDialogHost(
+      content::WebContents* web_contents);
 
   // Returns whether the WebContents is currently visible or not.
   virtual bool IsWebContentsVisible(content::WebContents* web_contents);
+
+  // Used to handle any logic that should be run when a modal dialog is first
+  // shown.
+  virtual void OnWebContentsModalDialogFirstShown(
+      content::WebContents* web_contents) {}
 
  protected:
   virtual ~WebContentsModalDialogManagerDelegate();

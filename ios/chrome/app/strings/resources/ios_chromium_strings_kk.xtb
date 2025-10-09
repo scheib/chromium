@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">Lens-ді осы жерден аша аласыз.</translation>
 <translation id="1042296835509784301">Chromium-нен "Password Manager" бөлімін ашады.</translation>
 <translation id="1047130070405668746">Chromium браузерін таңдаңыз.</translation>
-<translation id="1086486568852410168">Google Lens арқылы іздеу</translation>
 <translation id="1091252999271033193">Chromium браузерін әрдайым телефонда ашу қажет болады.</translation>
 <translation id="1115463765356382667">Chromium браузерін барынша тиімді пайдалану үшін төменде ұсынылған әрекеттерді орындаңыз.</translation>
 <translation id="1185134272377778587">Chromium туралы ақпарат</translation>
@@ -43,6 +42,7 @@
 <ph name="BEGIN_LINK" />Толығырақ<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">Chromium-дағы Maps</translation>
 <translation id="1867772173333403444">4. Chromium браузерін таңдаңыз.</translation>
+<translation id="1965068424387304464">Chromium-мен жұмыс істеу бойынша кеңес: құпия сөздерді сақтаңыз</translation>
 <translation id="2006345422933397527">Chromium жаңа нұсқалардың бар-жоғын тексере алмады. Интернет байланысын тексеріп көріңіз.</translation>
 <translation id="2042889939382983733">Chromium тарихын көру</translation>
 <translation id="2052320862053429062">Chromium браузері құпия сөздеріңізді онлайн жарияланған тізімдермен салыстырып тексеріп тұрады. Тексеру кезінде құпия сөздер мен пайдаланушылар аты шифрланады. Сондықтан оларды ешкім, тіпті Google да оқи алмайды.</translation>
@@ -89,7 +89,6 @@ Chromium тәжірибесін жақсарту үшін деректерді �
 <translation id="2977470724722393594">Chromium жаңартылған</translation>
 <translation id="3044857325852340337">Chromium деректері жойылды</translation>
 <translation id="3054480780637153380">iOS жүйесінде Chromium параметрлерін ашып, "Әдепкі браузер қолданбасы" түймесін түртіп, Chromium опциясын таңдаңыз.</translation>
-<translation id="3102849287235003384">Барлық веб-сайтта Google аккаунтынан шығу үшін <ph name="BEGIN_LINK" />Chromium-нен шығыңыз<ph name="END_LINK" />.</translation>
 <translation id="3115956258722352278">Chromium қолданбасын әдепкі браузер ету керек пе?</translation>
 <translation id="3180939591219927904">"Chromium-ді жапқанда инкогнито қойындыларын құлыптау" параметрін қосыңыз.</translation>
 <translation id="328933489847748230">{count,plural, =1{1 Chromium терезесі көрсетіліп жатыр}other{{count} Chromium терезесі көрсетіліп жатыр}}</translation>
@@ -119,6 +118,7 @@ Chromium тәжірибесін жақсарту үшін деректерді �
 <translation id="3816686541346279443">Chromium құпия сөзіңізді сақтауды ұсынады.</translation>
 <translation id="3827545470516145620">Бұл құрылғыда стандартты қауіпсіздік жүйесі қолданылады</translation>
 <translation id="3833326979834193417">Chromium деректерге рұқсатсыз қол сұғудан, қауіпті веб-сайттар мен басқа да зиян әрекеттерден қорғау үшін қауіпсіздік тексерісін күнде автоматты түрде жүргізеді. Қауіпсіздік тексерісі туралы толық ақпаратты параметрлерден қарасаңыз болады.</translation>
+<translation id="3837584850181228767">Chromium-мен жұмыс істеу бойынша кеңес: Күшейтілген Safe Browsing</translation>
 <translation id="3845223911364528001">Файлды жүктеп салу үшін Chromium-ге оралыңыз.</translation>
 <translation id="3855938650519180865">Chromium-дегі жаңалықтар</translation>
 <translation id="3886689467633467988">Барлық құрылғыда бетбелгілер мен т.б. алу үшін осы сайт пен Chromium-ге кіріңіз.</translation>
@@ -199,6 +199,9 @@ Chromium тәжірибесін жақсарту үшін деректерді �
 <translation id="5671188105328420281">Chromium-ді пайдалану кеңестері</translation>
 <translation id="5688047395118852662">Бұл карта Chromium мүмкіндіктерін барынша пайдалану туралы ұсыныстарды көрсетеді.</translation>
 <translation id="5700709190537129682">Chromium құпия сөздеріңізді тексере алмайды.</translation>
+<translation id="5731004036450828399">Кіру кілттерін қорғау үшін алдымен қалпына келтірудің PIN кодын жасауыңыз қажет.
+
+        Кіру кілттері Password Manager-ге сақталады. Ол кіру кілттерін кез келген құрылғыдағы Chromium-де пайдалануға мүмкіндік береді.</translation>
 <translation id="584550191241316896">Chromium-ге кірдіңіз</translation>
 <translation id="5862307444128926510">Chromium жүйесіне қош келдіңіз</translation>
 <translation id="5889847953983052353">Параметр қосулы болғанда:
@@ -264,8 +267,8 @@ Chromium тәжірибесін жақсарту үшін деректерді �
 <translation id="7269362888766543920">Кейбір қондырмалар Chromium қызметін бұзады. Оларды жойып көріңіз.</translation>
 <translation id="7285031092584344905">Басқа қолданбаларда Chromium құпия сөздеріңізді және т.б. пайдаланыңыз.</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">Таңдалған деректер Chromium жүйесінен және синхрондалған құрылғылардан өшірілді. Google аккаунтының шолу тарихы басқа Google қызметтеріндегі іздеулер мен әрекеттер тізімі түрінде де болуы мүмкін, оларды history.google.com мекенжайынан табуға болады.</translation>
 <translation id="7395825497086981028">Құпия сөзіңіз <ph name="EMAIL" /> аккаунтына арналған Құпия сөздер реттегішіне сақталады.</translation>
+<translation id="7434848749522628428">Бұл кіру кілті Password Manager (<ph name="USER_EMAIL" />) қызметіне сақталады.</translation>
 <translation id="7504829997542308412">Chromium-ді ашыңыз.</translation>
 <translation id="7531461704633548377">Chromium-нен</translation>
 <translation id="7554983317097061001">Chromium кеңесі: Chromium-ді бекіту аймағына жылжытыңыз</translation>
@@ -299,6 +302,7 @@ Chromium тәжірибесін жақсарту үшін деректерді �
 <translation id="8254729934443216898">Chromium-ді барынша тиімді пайдалануға көмектесетін жаңа функцияларды зерттеңіз.</translation>
 <translation id="8293572045658095405">Chromium-нің инкогнито режиміндесіз</translation>
 <translation id="830951810931292870">Енгізілген URL мекенжайларын Chromium-нің инкогнито режимінде ашу</translation>
+<translation id="8385503371191508165">Password Manager-мен кіру кілттерін сақтауды бастаңыз</translation>
 <translation id="8390323835464055390">Автотолтыруға арналған Chromium арқылы кез келген қолданбаның сақталған құпия сөздерімен және кіру кілттерімен кіріңіз.</translation>
 <translation id="8409374867500149834">Енді Chromium зиянды веб-сайттардан сенімді қорғайды.</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{Бұл жағдай Chromium браузері {THRESHOLD} минут қолданылмаған кезде орын алады. Сіз аккаунтқа кірген кезде тек осы құрылғыға сақталған деректер жойылады. Оларға тарих пен құпия сөздер кіруі мүмкін.}other{Бұл жағдай Chromium браузері {THRESHOLD} минут қолданылмаған кезде орын алады. Сіз аккаунтқа кірген кезде тек осы құрылғыға сақталған деректер жойылады. Оларға тарих пен құпия сөздер кіруі мүмкін.}}</translation>

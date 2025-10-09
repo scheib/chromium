@@ -69,7 +69,7 @@ void DomDistillerRequestViewBase::OnArticleReady(
     SendJavaScript(viewer::GetSetTextDirectionJs(text_direction));
     SendJavaScript(viewer::GetUnsafeArticleContentJs(article_proto));
     SendJavaScript(viewer::GetDistilledPageFontScalingJs(
-        distilled_page_prefs_->GetFontScaling()));
+        distilled_page_prefs_->GetFontScaling(), /* restoreCenter= */ false));
   } else {
     // It's possible that we didn't get some incremental updates from the
     // distiller. Ensure all remaining pages are flushed to the viewer.
@@ -102,12 +102,14 @@ void DomDistillerRequestViewBase::OnArticleUpdated(
       SendJavaScript(viewer::GetSetTitleJs(page.title()));
       SendJavaScript(viewer::GetSetTextDirectionJs(page.text_direction()));
       SendJavaScript(viewer::GetDistilledPageFontScalingJs(
-          distilled_page_prefs_->GetFontScaling()));
+          distilled_page_prefs_->GetFontScaling(), /* restoreCenter= */ false));
     }
   }
 }
 
-void DomDistillerRequestViewBase::OnChangeTheme(mojom::Theme new_theme) {
+void DomDistillerRequestViewBase::OnChangeTheme(
+    mojom::Theme new_theme,
+    ThemeSettingsUpdateSource source) {
   SendJavaScript(viewer::GetDistilledPageThemeJs(new_theme));
 }
 
@@ -117,7 +119,8 @@ void DomDistillerRequestViewBase::OnChangeFontFamily(
 }
 
 void DomDistillerRequestViewBase::OnChangeFontScaling(float scaling) {
-  SendJavaScript(viewer::GetDistilledPageFontScalingJs(scaling));
+  SendJavaScript(viewer::GetDistilledPageFontScalingJs(
+      scaling, /* restoreCenter= */ true));
 }
 
 void DomDistillerRequestViewBase::TakeViewerHandle(
@@ -131,7 +134,7 @@ void DomDistillerRequestViewBase::TakeViewerHandle(
 void DomDistillerRequestViewBase::SendCommonJavaScript() {
   SendJavaScript(viewer::GetJavaScript());
   SendJavaScript(viewer::GetDistilledPageFontScalingJs(
-      distilled_page_prefs_->GetFontScaling()));
+      distilled_page_prefs_->GetFontScaling(), /* restoreCenter= */ false));
   SendJavaScript(viewer::SetDistilledPageBaseFontSize(GetBaseFontSize()));
 }
 

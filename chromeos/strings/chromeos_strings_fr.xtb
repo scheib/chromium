@@ -365,7 +365,7 @@
 <translation id="2446553403094072641">Précision en virgule flottante</translation>
 <translation id="2448312741937722512">Type</translation>
 <translation id="2448857983905133469">Outils de cours</translation>
-<translation id="2468124392950503650">Sélectionnez une requête pour la créer ou consultez le <ph name="BEGIN_LINK_PROMPTING_GUIDE" />Guide de rédaction de requêtes<ph name="END_LINK_PROMPTING_GUIDE" /></translation>
+<translation id="2468124392950503650">Sélectionnez un prompt pour créer ou consultez le <ph name="BEGIN_LINK_PROMPTING_GUIDE" />Guide sur la création de prompts<ph name="END_LINK_PROMPTING_GUIDE" /></translation>
 <translation id="2472215337771558851">Utilisez M'aider à écrire pour créer un brouillon ou améliorer un travail existant grâce à l'IA de Google</translation>
 <translation id="2475982808118771221">Une erreur s'est produite.</translation>
 <translation id="2480572840229215612">crabes</translation>
@@ -479,7 +479,7 @@
 <translation id="3102119246920354026">Vider le cache</translation>
 <translation id="3103783611481501187">surréaliste</translation>
 <translation id="3119672627216736407">Traduction disponible</translation>
-<translation id="3122464029669770682">UC</translation>
+<translation id="3122464029669770682">CPU</translation>
 <translation id="3122614491980756867">plans d'eau</translation>
 <translation id="3122883569442693641">Plus d'informations</translation>
 <translation id="3124039320086536031">L'appareil est connecté.</translation>

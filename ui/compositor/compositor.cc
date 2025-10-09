@@ -327,7 +327,7 @@ Compositor::~Compositor() {
     host_frame_sink_manager->UnregisterFrameSinkHierarchy(frame_sink_id_,
                                                           client);
   }
-  host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_, this);
+  host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_, this, {});
 }
 
 void Compositor::AddChildFrameSink(const viz::FrameSinkId& frame_sink_id) {
@@ -895,7 +895,7 @@ void Compositor::DidPresentCompositorFrame(
       "cc,benchmark", "FramePresented",
       frame_timing_details.presentation_feedback.timestamp, "environment",
       "browser");
-  observer_list_.Notify(&CompositorObserver::OnDidPresentCompositorFrame,
+  observer_list_.Notify(&CompositorObserver::OnDidPresentCompositorFrame, this,
                         frame_token,
                         frame_timing_details.presentation_feedback);
 }

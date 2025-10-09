@@ -48,6 +48,22 @@ bool IsAutofillEnabled();
 // Whether showing the iframe origin is enabled.
 bool IsIframeOriginEnabled();
 
+// Whether nonce usage in params is enabled.
+bool IsNonceInParamsEnabled();
+
+// Whether showing the non-string token is enabled.
+bool IsNonStringTokenEnabled();
+
+// Controls whether FedCM requires explicit accounts_endpoint and
+// login_url in well-known files when using client_metadata.
+bool IsWellKnownEndpointValidationEnabled();
+
+// Whether preserving ports for testing is enabled.
+bool IsPreservePortsForTestingEnabled();
+
+// Whether accessing error attribute is enabled.
+bool IsErrorAttributeEnabled();
+
 }  // namespace content::webid
 
 #endif  // CONTENT_BROWSER_WEBID_FLAGS_H_

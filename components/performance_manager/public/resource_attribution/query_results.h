@@ -6,11 +6,12 @@
 #define COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_RESOURCE_ATTRIBUTION_QUERY_RESULTS_H_
 
 #include <compare>
-#include <map>
 #include <optional>
 
 #include "base/byte_count.h"
+#include "base/containers/variant_map.h"
 #include "base/time/time.h"
+#include "base/types/pass_key.h"
 #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
 #include "components/performance_manager/public/resource_attribution/resource_types.h"
 
@@ -94,6 +95,9 @@ struct MemorySummaryResult {
   base::ByteCount resident_set_size;
   base::ByteCount private_footprint;
 
+  // The private swapped memory. Only reported on Linux, ChromeOS and Android.
+  base::ByteCount private_swap;
+
   friend constexpr auto operator<=>(const MemorySummaryResult&,
                                     const MemorySummaryResult&) = default;
   friend constexpr bool operator==(const MemorySummaryResult&,
@@ -113,7 +117,14 @@ struct QueryResults {
 };
 
 // A map from a ResourceContext to all query results received for that context.
-using QueryResultMap = std::map<ResourceContext, QueryResults>;
+// TODO(crbug.com/433462519): Replace this with a concrete map type after
+// using VariantMap to measure the performance of various impls.
+class QueryResultMap : public base::VariantMap<ResourceContext, QueryResults> {
+ public:
+  QueryResultMap()
+      : base::VariantMap<ResourceContext, QueryResults>(
+            base::PassKey<QueryResultMap>{}) {}
+};
 
 }  // namespace resource_attribution
 

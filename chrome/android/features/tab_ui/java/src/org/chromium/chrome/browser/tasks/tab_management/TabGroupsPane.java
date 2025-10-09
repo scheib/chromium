@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.tasks.tab_management;
 
+import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 import static org.chromium.chrome.browser.hub.HubAnimationConstants.HUB_LAYOUT_FADE_DURATION_MS;
 
@@ -16,7 +17,6 @@ import org.chromium.base.supplier.LazyOneshotSupplier;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.data_sharing.DataSharingTabManager;
@@ -44,6 +44,7 @@ import org.chromium.components.tab_group_sync.TabGroupUiActionHandler;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
 import java.util.function.DoubleConsumer;
+import java.util.function.Supplier;
 
 /** A {@link Pane} representing the tab group UI. Contains opened and closed tab groups. */
 @NullMarked
@@ -171,7 +172,7 @@ public class TabGroupsPane implements Pane {
                     new TabGroupListCoordinator(
                             mContext,
                             assumeNonNull(mTabGroupModelFilterSupplier.get()),
-                            mProfileProviderSupplier.get(),
+                            assertNonNull(mProfileProviderSupplier.get()),
                             mPaneManagerSupplier.get(),
                             mTabGroupUiActionHandlerSupplier.get(),
                             mModalDialogManagerSupplier.get(),
@@ -226,6 +227,11 @@ public class TabGroupsPane implements Pane {
 
     @Override
     public ObservableSupplier<Boolean> getHubSearchEnabledStateSupplier() {
+        return mHubSearchEnabledStateSupplier;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHubSearchBoxVisibilitySupplier() {
         return mHubSearchEnabledStateSupplier;
     }
 }

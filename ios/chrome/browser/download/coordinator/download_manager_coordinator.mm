@@ -31,6 +31,7 @@
 #import "ios/chrome/browser/download/model/download_directory_util.h"
 #import "ios/chrome/browser/download/model/download_manager_metric_names.h"
 #import "ios/chrome/browser/download/model/download_manager_tab_helper.h"
+#import "ios/chrome/browser/download/model/download_record_service_factory.h"
 #import "ios/chrome/browser/download/model/external_app_util.h"
 #import "ios/chrome/browser/download/model/installation_notifier.h"
 #import "ios/chrome/browser/download/ui/download_manager_view_controller.h"
@@ -57,6 +58,7 @@
 #import "ios/chrome/browser/shared/public/commands/auto_deletion_commands.h"
 #import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/download_list_commands.h"
 #import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/shared/public/commands/save_to_drive_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -139,6 +141,10 @@
   _mediator.SetIdentityManager(IdentityManagerFactory::GetForProfile(profile));
   _mediator.SetDriveService(drive::DriveServiceFactory::GetForProfile(profile));
   _mediator.SetPrefService(profile->GetPrefs());
+  if (IsDownloadListEnabled()) {
+    _mediator.SetDownloadRecordService(
+        DownloadRecordServiceFactory::GetForProfile(profile));
+  }
 
   _mediator.SetDownloadTask(_downloadTask);
   _mediator.SetConsumer(_viewController);
@@ -170,6 +176,9 @@
   _mediator.SetDriveService(nullptr);
   _mediator.SetPrefService(nullptr);
   _mediator.SetIdentityManager(nullptr);
+  if (IsDownloadListEnabled()) {
+    _mediator.SetDownloadRecordService(nullptr);
+  }
   if (base::FeatureList::IsEnabled(kIOSDownloadNoUIUpdateInBackground)) {
     _mediator.StopObservingNotifications();
   }
@@ -328,7 +337,8 @@
 #pragma mark - DownloadManagerViewControllerDelegate
 
 - (void)downloadManagerViewControllerDidClose:(UIViewController*)controller {
-  if (_mediator.GetDownloadManagerState() != kDownloadManagerStateInProgress) {
+  if (_mediator.GetDownloadManagerState() !=
+      DownloadManagerState::kInProgress) {
     base::UmaHistogramEnumeration("Download.IOSDownloadFileResult",
                                   DownloadFileResult::NotStarted,
                                   DownloadFileResult::Count);
@@ -409,6 +419,12 @@
 
 - (void)presentOpenInForDownloadManagerViewController:
     (UIViewController*)controller {
+  if (IsDownloadListEnabled()) {
+    id<DownloadListCommands> downloadListHandler = HandlerForProtocol(
+        self.browser->GetCommandDispatcher(), DownloadListCommands);
+    [downloadListHandler showDownloadList];
+    return;
+  }
   base::RecordAction(base::UserMetricsAction("IOSDownloadOpenIn"));
   base::FilePath path = _mediator.GetDownloadPath();
   NSURL* URL = [NSURL fileURLWithPath:base::SysUTF8ToNSString(path.value())];

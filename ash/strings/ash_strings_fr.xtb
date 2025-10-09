@@ -332,10 +332,12 @@ Pour commencer, voici des exemples de ce que vous pouvez me demander.</translati
 <translation id="2083190527011054446">Bonsoir <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Ouvrir le sélecteur d'emoji</translation>
 <translation id="2088116547584365419">jeux</translation>
+<translation id="2093792000875799555">Actualités de Steam pour Chromebook</translation>
 <translation id="209965399369889474">Aucune connexion réseau</translation>
 <translation id="2107581415810719320">Autre bouton <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Votre câble USB-C n'est pas compatible Thunderbolt. Cela peut limiter les performances de l'appareil.</translation>
 <translation id="2108303511227308752">Le raccourci clavier Alt+Retour arrière a été modifié. Pour utiliser la touche Supprimer, appuyez sur la touche du <ph name="LAUNCHER_KEY_NAME" />+Retour arrière.</translation>
+<translation id="2115680839221566783">Batterie à <ph name="PERCENTAGE" /> %. Recharge suspendue.</translation>
 <translation id="2126242104232412123">Nouveau bureau</translation>
 <translation id="2132302418721800944">Enregistrer tout l'écran</translation>
 <translation id="2135456203358955318">Loupe ancrée</translation>
@@ -632,7 +634,7 @@ Sinon, le pavé tactile intégré sera réactivé dans <ph name="TIMEOUT_SECONDS
 <translation id="3121411970001795539">Le pavé tactile intégré est désactivé, car une souris est connectée. Utilisez la souris ou le clavier pour confirmer la modification.
 
 Sinon, le pavé tactile intégré sera réactivé dans <ph name="TIMEOUT_SECONDS" />.</translation>
-<translation id="3122464029669770682">UC</translation>
+<translation id="3122464029669770682">CPU</translation>
 <translation id="3125690294288312932">Type de travaux et devoirs</translation>
 <translation id="3126026824346185272">Ctrl</translation>
 <translation id="3130793786899299931">Modifier la longueur</translation>
@@ -1057,7 +1059,7 @@ Certaines fonctionnalités sont limitées afin d'augmenter l'autonomie de la bat
 <translation id="445923051607553918">Se connecter à un réseau Wi-Fi</translation>
 <translation id="4471354919263203780">Téléchargement des fichiers de reconnaissance vocale… <ph name="PERCENT" /> %</translation>
 <translation id="4471432286288241507">{0,plural, =0{Mettre à jour l'appareil maintenant}=1{Mettre à jour l'appareil d'ici 1 seconde}one{Mettre à jour l'appareil d'ici # seconde}other{Mettre à jour l'appareil d'ici # secondes}}</translation>
-<translation id="4472575034687746823">Premiers pas</translation>
+<translation id="4472575034687746823">Commencer</translation>
 <translation id="4473489370276014885">Google Contacts</translation>
 <translation id="4477350412780666475">Titre suivant</translation>
 <translation id="4477751544736611934">La consommation de données peut entraîner des frais.
@@ -1588,6 +1590,7 @@ Aucun appareil connecté.</translation>
 <translation id="612734058257491180">L'Assistant Google n'est pas disponible dans une session Invité.</translation>
 <translation id="6127395413317891856">Vous n'êtes pas connecté à Internet. Vérifiez la connexion, puis réessayez.</translation>
 <translation id="6129953537138746214">Espace</translation>
+<translation id="6136872094979134163">Impossible de récupérer les actualités de Steam pour Chromebook.</translation>
 <translation id="6137566720514957455">Ouvrir la boîte de dialogue de suppression du compte <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">À quoi souhaitez-vous donner la priorité ?</translation>
 <translation id="6141988275892716286">Confirmer le téléchargement</translation>
@@ -1677,6 +1680,7 @@ Aucun appareil connecté.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> vers <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">CPU</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> événement</translation>
+<translation id="6448529022565414427">Recharge suspendue</translation>
 <translation id="6449483711453944360">Les applis Linux et les fenêtres de navigation privée ne sont pas prises en charge actuellement</translation>
 <translation id="6450245544201845082">Le raccourci par clic droit est actuellement désactivé</translation>
 <translation id="6452181791372256707">Refuser</translation>

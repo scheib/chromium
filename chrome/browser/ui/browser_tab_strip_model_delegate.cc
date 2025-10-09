@@ -54,6 +54,10 @@
 #include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/gfx/range/range.h"
 
+#if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/public/glic_keyed_service.h"
+#endif  // BUILDFLAG(ENABLE_GLIC)
+
 namespace chrome {
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -181,14 +185,16 @@ void BrowserTabStripModelDelegate::DuplicateSplit(
 void BrowserTabStripModelDelegate::MoveToExistingWindow(
     const std::vector<int>& indices,
     int browser_index) {
-  std::vector<Browser*> existing_browsers =
+  std::vector<BrowserWindowInterface*> existing_browsers =
       browser_->GetFeatures().tab_menu_model_delegate()->GetOtherBrowserWindows(
           web_app::AppBrowserController::IsWebApp(browser_));
   size_t existing_browser_count = existing_browsers.size();
   if (static_cast<size_t>(browser_index) < existing_browser_count &&
       existing_browsers[browser_index]) {
-    chrome::MoveTabsToExistingWindow(browser_, existing_browsers[browser_index],
-                                     indices);
+    chrome::MoveTabsToExistingWindow(
+        browser_,
+        existing_browsers[browser_index]->GetBrowserForMigrationOnly(),
+        indices);
   }
 }
 

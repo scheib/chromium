@@ -79,7 +79,7 @@ public class BaseJUnit4ClassRunner extends AndroidJUnit4ClassRunner {
         /**
          * @param targetContext the instrumentation context that will be used during the test.
          */
-        public void run(Context targetContext, Class<?> testClass);
+        void run(Context targetContext, Class<?> testClass);
     }
 
     /**
@@ -95,7 +95,7 @@ public class BaseJUnit4ClassRunner extends AndroidJUnit4ClassRunner {
          * @param targetContext the instrumentation context that will be used during the test.
          * @param testMethod the test method to be run.
          */
-        public void run(Context targetContext, FrameworkMethod testMethod);
+        void run(Context targetContext, FrameworkMethod testMethod);
     }
 
     /** Makes it more obvious that all tests are being marked as failed. */
@@ -127,26 +127,12 @@ public class BaseJUnit4ClassRunner extends AndroidJUnit4ClassRunner {
      * failure.
      */
     public static class CascadingFailureException extends RuntimeException {
-        private CascadingFailureException(String message) {
-            super(message);
-        }
-
-        @Override
-        public String toString() {
-            // Shorten full name to just simple name.
-            return getClass().getSimpleName() + ": " + getLocalizedMessage();
-        }
-
-        /**
-         * Returns a new CascadingFailureException with the originalException marked as suppressed.
-         *
-         * @param message Error message for the CascadingFailureException
-         * @param originalException The original throwable being suppressed.
-         */
-        public static CascadingFailureException wrap(String message, Throwable originalException) {
-            CascadingFailureException exception = new CascadingFailureException(message);
-            exception.addSuppressed(originalException);
-            return exception;
+        private CascadingFailureException(String failedTestName, Throwable orig) {
+            super(
+                    "A previous batched test ("
+                            + failedTestName
+                            + ") failed and may be the cause of this failure (see \"Caused By\").",
+                    orig);
         }
     }
 
@@ -446,12 +432,7 @@ public class BaseJUnit4ClassRunner extends AndroidJUnit4ClassRunner {
 
     private Throwable wrapExceptionIfCascadingFailure(Throwable originalFailure) {
         if (mFailedBatchTestName == null) return originalFailure;
-        return CascadingFailureException.wrap(
-                "A previous batched test ("
-                        + mFailedBatchTestName
-                        + ") failed and may be the cause of the current failure. See suppressed"
-                        + " failure below.",
-                originalFailure);
+        return new CascadingFailureException(mFailedBatchTestName, originalFailure);
     }
 
     private void onBeforeTestMethod(FrameworkMethod method) {

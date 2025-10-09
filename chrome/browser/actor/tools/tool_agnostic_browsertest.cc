@@ -2,17 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
+#include "base/time/time.h"
 #include "chrome/browser/actor/actor_test_util.h"
+#include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/tools/tool_request.h"
 #include "chrome/browser/actor/tools/tools_test_util.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/common/actor.mojom.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/result_codes.h"
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -154,6 +161,42 @@ IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest,
   EXPECT_EQ(true, EvalJs(subframe, "button_clicked"));
 }
 
+// Basic test to ensure sending a click to a coordinate in cross origin subframe
+// works.
+IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest,
+                       InvokeToolCrossSiteSubframeWithCoordinateTarget) {
+  const GURL url = embedded_https_test_server().GetURL(
+      "/actor/positioned_iframe_no_scroll.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), url));
+
+  const GURL cross_origin_iframe_url = embedded_https_test_server().GetURL(
+      "foo.com", "/actor/page_with_clickable_element.html");
+  ASSERT_TRUE(
+      NavigateIframeToURL(web_contents(), "iframe", cross_origin_iframe_url));
+
+  content::RenderFrameHost* subframe =
+      ChildFrameAt(web_contents()->GetPrimaryMainFrame(), 0);
+  // Addressing flaky test due to layout shift on the iframe
+  ASSERT_TRUE(content::ExecJs(web_contents(), "wait()"));
+  ASSERT_TRUE(subframe->IsCrossProcessSubframe());
+
+  ASSERT_EQ(EvalJs(subframe, "button_clicked"), false);
+  gfx::Point click_point = gfx::ToFlooredPoint(
+      GetCenterCoordinatesOfElementWithId(subframe, "clickable"));
+  gfx::RectF subframe_rect = GetBoundingClientRect(*main_frame(), "#iframe");
+  gfx::Point transformed_point = gfx::Point(
+      subframe_rect.x() + click_point.x(), subframe_rect.y() + click_point.y());
+
+  std::unique_ptr<ToolRequest> action =
+      MakeClickRequest(*active_tab(), transformed_point);
+  ActResultFuture result;
+  actor_task().Act(ToRequestList(action), result.GetCallback());
+  ExpectOkResult(result);
+
+  // Ensure the button's event handler was invoked.
+  EXPECT_EQ(true, EvalJs(subframe, "button_clicked"));
+}
+
 // Sending an action to an offscreen element on a page should succeed by
 // scrolling it into view first.
 IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest, OffscreenElement) {
@@ -173,6 +216,27 @@ IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest, OffscreenElement) {
   actor_task().Act(ToRequestList(action), result.GetCallback());
   ExpectOkResult(result);
   EXPECT_EQ(EvalJs(web_contents(), "offscreen_button_clicked"), true);
+}
+
+// Same as above but the element is an inline element. (i.e. doesn't have a
+// LayoutBox).
+IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest, OffscreenElementInline) {
+  const GURL url =
+      embedded_test_server()->GetURL("/actor/page_with_clickable_element.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), url));
+
+  ASSERT_EQ(EvalJs(web_contents(), "offscreen_inline_clicked"), false);
+
+  std::optional<int> anchor_id =
+      GetDOMNodeId(*main_frame(), "a#offscreenInline");
+  ASSERT_TRUE(anchor_id);
+
+  std::unique_ptr<ToolRequest> action =
+      MakeClickRequest(*main_frame(), anchor_id.value());
+  ActResultFuture result;
+  actor_task().Act(ToRequestList(action), result.GetCallback());
+  ExpectOkResult(result);
+  EXPECT_EQ(EvalJs(web_contents(), "offscreen_inline_clicked"), true);
 }
 
 // Sending an action to an offscreen coordinate should fail.
@@ -276,5 +340,139 @@ IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest, OffscreenFixedElement) {
 
   EXPECT_EQ(EvalJs(web_contents(), "window.scrollY"), 0);
 }
+
+IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTest,
+                       ToolFailsWhenNodeInteractionPointObscured) {
+  const GURL url =
+      embedded_test_server()->GetURL("/actor/page_with_obscured_element.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), url));
+  ASSERT_EQ(EvalJs(web_contents(), "target_button_clicked"), false);
+  ASSERT_EQ(EvalJs(web_contents(), "obstruction_button_clicked"), false);
+  std::optional<int> button_id = GetDOMNodeId(*main_frame(), "button#target");
+  ASSERT_TRUE(button_id);
+  std::unique_ptr<ToolRequest> action =
+      MakeClickRequest(*main_frame(), button_id.value());
+  ActResultFuture result;
+  actor_task().Act(ToRequestList(action), result.GetCallback());
+  ExpectErrorResult(
+      result, mojom::ActionResultCode::kTargetNodeInteractionPointObscured);
+  EXPECT_EQ(EvalJs(web_contents(), "target_button_clicked"), false);
+  EXPECT_EQ(EvalJs(web_contents(), "obstruction_button_clicked"), false);
+}
+
+class ActorToolAgnosticBrowserTestWithCustomDelay
+    : public ActorToolAgnosticBrowserTest {
+ public:
+  void SetUp() override {
+    // Ensure tool doesn't finish before the tab is closed.
+    feature_list_.InitAndEnableFeatureWithParameters(
+        features::kGlicActor,
+        {{"glic-actor-page-stability-invoke-callback-delay", "500ms"}});
+    ActorToolAgnosticBrowserTest::SetUp();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+// Closing a tab before tool finishes should cancel callbacks and not crash.
+IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTestWithCustomDelay,
+                       CloseTabBeforeToolFinishes) {
+  // Use a new tab so closing it later won't trigger destruction of browser
+  // (needed for proper test teardown).
+  AddBlankTabAndShow(browser());
+  const GURL url =
+      embedded_test_server()->GetURL("/actor/page_with_clickable_element.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), url));
+
+  std::optional<int> button_id =
+      GetDOMNodeId(*main_frame(), "button#clickable");
+  ASSERT_TRUE(button_id);
+
+  std::unique_ptr<ToolRequest> action =
+      MakeClickRequest(*main_frame(), button_id.value());
+  ActResultFuture result;
+  actor_task().Act(ToRequestList(action), result.GetCallback());
+  web_contents()->Close();
+  // ActorTask::OnTabWillDetach will return kError before renderer tool
+  // completes.
+  ExpectErrorResult(result, mojom::ActionResultCode::kTabWentAway);
+
+  // Continue running so tool finish callback from ToolController can proceed
+  // after WebContents closed, it should not crash.
+  {
+    base::RunLoop run_loop;
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(500));
+    run_loop.Run();
+  }
+}
+
+class ToolInvokeWaiter : public ExecutionEngine::StateObserver {
+ public:
+  ToolInvokeWaiter(base::OnceClosure callback,
+                   ExecutionEngine* execution_engine)
+      : callback_(std::move(callback)), execution_engine_(execution_engine) {
+    execution_engine_->AddObserver(this);
+  }
+  ~ToolInvokeWaiter() override { execution_engine_->RemoveObserver(this); }
+
+  // `ExecutionEngine::StateObserver`:
+  void OnStateChanged(ExecutionEngine::State old_state,
+                      ExecutionEngine::State new_state) override {
+    if (new_state == ExecutionEngine::State::kToolInvoke) {
+      std::move(callback_).Run();
+    }
+  }
+
+ private:
+  base::OnceClosure callback_;
+  const raw_ptr<ExecutionEngine> execution_engine_;
+};
+
+IN_PROC_BROWSER_TEST_F(ActorToolAgnosticBrowserTestWithCustomDelay,
+                       RendererCrashesBeforeToolFinishes) {
+  const GURL url =
+      embedded_test_server()->GetURL("/actor/page_with_clickable_element.html");
+  ASSERT_TRUE(content::NavigateToURL(web_contents(), url));
+
+  std::optional<int> button_id =
+      GetDOMNodeId(*main_frame(), "button#clickable");
+  ASSERT_TRUE(button_id);
+
+  base::test::TestFuture<void> tool_invoke_future;
+  ToolInvokeWaiter waiter(tool_invoke_future.GetCallback(),
+                          actor_task().GetExecutionEngine());
+  std::unique_ptr<ToolRequest> action =
+      MakeClickRequest(*main_frame(), button_id.value());
+  ActResultFuture result;
+  actor_task().Act(ToRequestList(action), result.GetCallback());
+  ASSERT_TRUE(tool_invoke_future.Wait());
+
+  // Crash the renderer.
+  {
+    content::RenderFrameHostWrapper crashed(
+        web_contents()->GetPrimaryMainFrame());
+    content::RenderProcessHostWatcher crashed_obs(
+        crashed->GetProcess(),
+        content::RenderProcessHostWatcher::WATCH_FOR_PROCESS_EXIT);
+    crashed->GetProcess()->Shutdown(content::RESULT_CODE_KILLED);
+    crashed_obs.Wait();
+    ASSERT_TRUE(crashed.WaitUntilRenderFrameDeleted());
+    ASSERT_FALSE(crashed->IsRenderFrameLive());
+    ASSERT_FALSE(crashed->GetView());
+  }
+
+  ExpectErrorResult(result, mojom::ActionResultCode::kFrameWentAway);
+
+  // Finish the callback from ToolController. No crashes.
+  {
+    base::RunLoop run_loop;
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(500));
+    run_loop.Run();
+  }
+}
+
 }  // namespace
 }  // namespace actor

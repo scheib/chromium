@@ -4,17 +4,17 @@
 
 // clang-format off
 // <if expr="is_chromeos">
-import {isGoogle} from '../voice_language_util.js';
+import {isGoogle} from './voice_language_conversions.js';
 // </if>
 // clang-format on
 
 import type {SpeechBrowserProxy} from '../speech_browser_proxy.js';
 import {SpeechBrowserProxyImpl} from '../speech_browser_proxy.js';
-import type {VoicePackStatus} from '../voice_language_util.js';
-import {areVoicesEqual, AVAILABLE_GOOGLE_TTS_LOCALES, convertLangOrLocaleForVoicePackManager, convertLangOrLocaleToExactVoicePackLocale, convertLangToAnAvailableLangIfPresent, createInitialListOfEnabledLanguages, doesLanguageHaveNaturalVoices, EXTENSION_RESPONSE_TIMEOUT_MS, getFilteredVoiceList, getNaturalVoiceOrDefault, getVoicePackConvertedLangIfExists, isNatural, isVoicePackStatusError, isVoicePackStatusSuccess, mojoVoicePackStatusToVoicePackStatusEnum, VoiceClientSideStatusCode, VoicePackServerStatusErrorCode, VoicePackServerStatusSuccessCode} from '../voice_language_util.js';
-import {VoiceNotificationManager} from '../voice_notification_manager.js';
+import {areVoicesEqual, AVAILABLE_GOOGLE_TTS_LOCALES, convertLangOrLocaleForVoicePackManager, convertLangOrLocaleToExactVoicePackLocale, convertLangToAnAvailableLangIfPresent, createInitialListOfEnabledLanguages, doesLanguageHaveNaturalVoices, EXTENSION_RESPONSE_TIMEOUT_MS, getFilteredVoiceList, getNaturalVoiceOrDefault, getVoicePackConvertedLangIfExists, isNatural, isVoicePackStatusError, isVoicePackStatusSuccess, mojoVoicePackStatusToVoicePackStatusEnum, VoiceClientSideStatusCode, VoicePackServerStatusErrorCode, VoicePackServerStatusSuccessCode} from './voice_language_conversions.js';
 
+import type {VoicePackStatus} from './voice_language_conversions.js';
 import {VoiceLanguageModel} from './voice_language_model.js';
+import {VoiceNotificationManager} from './voice_notification_manager.js';
 
 export interface VoiceLanguageListener {
   onEnabledLangsChange(): void;
@@ -499,12 +499,15 @@ export class VoiceLanguageController {
 
   updateLanguageStatus(lang: string, status: string) {
     this.stopWaitingForSpeechExtension();
+    const newStatus = mojoVoicePackStatusToVoicePackStatusEnum(status);
     if (!lang.length) {
+      if (newStatus.code === VoicePackServerStatusErrorCode.NOT_REACHED) {
+        this.notificationManager_.onNoEngineConnection();
+      }
       return;
     }
 
     const lowerLang = lang.toLowerCase();
-    const newStatus = mojoVoicePackStatusToVoicePackStatusEnum(status);
     this.setServerStatus(lowerLang, newStatus);
     this.updateApplicationState_(lowerLang, newStatus);
 
@@ -567,6 +570,7 @@ export class VoiceLanguageController {
         case VoicePackServerStatusErrorCode.WRONG_ID:
         case VoicePackServerStatusErrorCode.NEED_REBOOT:
         case VoicePackServerStatusErrorCode.UNSUPPORTED_PLATFORM:
+        case VoicePackServerStatusErrorCode.NOT_REACHED:
           this.setLocalStatus(lang, VoiceClientSideStatusCode.ERROR_INSTALLING);
           break;
         case VoicePackServerStatusErrorCode.ALLOCATION:
@@ -674,7 +678,6 @@ export class VoiceLanguageController {
         language,
         isRetry ? VoiceClientSideStatusCode.SENT_INSTALL_REQUEST_ERROR_RETRY :
                   VoiceClientSideStatusCode.SENT_INSTALL_REQUEST);
-
     chrome.readingMode.sendInstallVoicePackRequest(language);
   }
 

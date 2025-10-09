@@ -12,9 +12,9 @@ source_set("ui") {
   deps = [
     ":constants",
     "//build:branding_buildflags",
-    "//components/plus_addresses",
+    "//components/plus_addresses/core/browser",
     "//components/plus_addresses/core/browser/metrics",
-    "//components/plus_addresses/resources/strings",
+    "//components/plus_addresses/core/browser/resources/strings",
     "//components/resources",
     "//ios/chrome/browser/plus_addresses/ui/cells",
     "//ios/chrome/browser/shared/public/commands",
@@ -45,13 +45,12 @@ source_set("eg2_tests") {
   deps = [
     ":constants",
     "//components/feature_engagement/public",
-    "//components/plus_addresses",
-    "//components/plus_addresses:test_support",
+    "//components/plus_addresses/core/browser",
+    "//components/plus_addresses/core/browser:test_support",
     "//components/plus_addresses/core/browser/metrics",
-    "//components/plus_addresses/resources/strings",
+    "//components/plus_addresses/core/browser/resources/strings",
     "//components/strings",
-    "//ios/chrome/browser/authentication/ui_bundled:eg_test_support+eg2",
-    "//ios/chrome/browser/autofill/ui_bundled:eg_test_support+eg2",
+    "//ios/chrome/browser/authentication/test:eg_test_support+eg2",
     "//ios/chrome/browser/metrics/model:eg_test_support+eg2",
     "//ios/chrome/browser/plus_addresses/ui:eg_test_support+eg2",
     "//ios/chrome/browser/settings/ui_bundled:constants",
@@ -93,8 +92,8 @@ source_set("eg_app_support+eg2") {
   ]
 
   deps = [
-    "//components/plus_addresses",
-    "//components/plus_addresses:test_support",
+    "//components/plus_addresses/core/browser",
+    "//components/plus_addresses/core/browser:test_support",
     "//components/plus_addresses/core/browser:types",
     "//ios/chrome/browser/plus_addresses/model",
     "//ios/chrome/browser/shared/model/profile",
@@ -108,7 +107,7 @@ source_set("unit_tests") {
   deps = [
     ":ui",
     "//base/test:test_support",
-    "//components/plus_addresses",
+    "//components/plus_addresses/core/browser",
     "//components/plus_addresses/core/browser/metrics",
     "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/common/ui/confirmation_alert",

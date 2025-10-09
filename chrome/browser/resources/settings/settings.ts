@@ -57,7 +57,6 @@ export {SettingsAutofillPageElement} from './autofill_page/autofill_page.js';
 export {SettingsAutofillPageIndexElement} from './autofill_page/autofill_page_index.js';
 export {PasswordCheckReferrer, PasswordManagerImpl, PasswordManagerPage, PasswordManagerProxy} from './autofill_page/password_manager_proxy.js';
 export {BaseMixin} from './base_mixin.js';
-export {SettingsBasicPageElement} from './basic_page/basic_page.js';
 export {SettingsCheckboxListEntryElement} from './controls/settings_checkbox_list_entry.js';
 // <if expr="not is_chromeos">
 export {DefaultBrowserBrowserProxy, DefaultBrowserBrowserProxyImpl, DefaultBrowserInfo} from './default_browser_page/default_browser_browser_proxy.js';
@@ -73,7 +72,7 @@ export {loadTimeData} from './i18n_setup.js';
 // <if expr="not is_chromeos">
 export {convertLanguageCodeForChrome, convertLanguageCodeForTranslate, getBaseLanguage, isTranslateBaseLanguage} from './languages_page/languages_util.js';
 // </if>
-export {AiPageCompareInteractions, AiPageComposeInteractions, AiPageHistorySearchInteractions, AiPageInteractions, AiPageTabOrganizationInteractions, CardBenefitsUserAction, CvcDeletionUserAction, DeleteBrowsingDataAction, MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyElementInteractions, PrivacyGuideInteractions, PrivacyGuideSettingsStates, PrivacyGuideStepsEligibleAndReached, SafeBrowsingInteractions, SafetyCheckNotificationsModuleInteractions, SafetyCheckUnusedSitePermissionsModuleInteractions, SafetyHubCardState, SafetyHubEntryPoint, SafetyHubModuleType, SafetyHubSurfaces} from './metrics_browser_proxy.js';
+export {AiPageCompareInteractions, AiPageComposeInteractions, AiPageHistorySearchInteractions, AiPageInteractions, AiPageTabOrganizationInteractions, AutofillSettingsReferrer, CardBenefitsUserAction, CvcDeletionUserAction, DeleteBrowsingDataAction, MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyElementInteractions, PrivacyGuideInteractions, PrivacyGuideSettingsStates, PrivacyGuideStepsEligibleAndReached, SafeBrowsingInteractions, SafetyCheckNotificationsModuleInteractions, SafetyCheckUnusedSitePermissionsModuleInteractions, SafetyHubCardState, SafetyHubEntryPoint, SafetyHubModuleType, SafetyHubSurfaces} from './metrics_browser_proxy.js';
 export {NtpExtension, OnStartupBrowserProxy, OnStartupBrowserProxyImpl} from './on_startup_page/on_startup_browser_proxy.js';
 export {SettingsOnStartupPageElement} from './on_startup_page/on_startup_page.js';
 export {SettingsStartupUrlDialogElement} from './on_startup_page/startup_url_dialog.js';
@@ -125,3 +124,5 @@ export {SettingsUiElement} from './settings_ui/settings_ui.js';
 export {SiteFaviconElement} from './site_favicon.js';
 export {convertDateToWindowsEpoch} from './time.js';
 export {TooltipMixin, TooltipMixinInterface} from './tooltip_mixin.js';
+export {SettingsYourSavedInfoPageElement} from './your_saved_info_page/your_saved_info_page.js';
+export {SettingsYourSavedInfoPageIndexElement} from './your_saved_info_page/your_saved_info_page_index.js';

@@ -45,6 +45,8 @@
 #include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
 #include "components/autofill/core/browser/integrators/autofill_ai/autofill_ai_manager.h"
 #include "components/autofill/core/browser/integrators/compose/autofill_compose_delegate.h"
+#include "components/autofill/core/browser/integrators/identity_credential/identity_credential_delegate.h"
+#include "components/autofill/core/browser/integrators/one_time_tokens/otp_suggestion.h"
 #include "components/autofill/core/browser/integrators/plus_addresses/autofill_plus_address_delegate.h"
 #include "components/autofill/core/browser/metrics/autofill_in_devtools_metrics.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
@@ -68,6 +70,7 @@
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/autofill/core/common/autofill_util.h"
 #include "components/autofill/core/common/mojom/autofill_types.mojom-shared.h"
+#include "components/autofill/core/common/plus_address_survey_type.h"
 #include "components/autofill/core/common/signatures.h"
 #include "components/signin/public/base/signin_metrics.h"
 #include "components/strings/grit/components_strings.h"
@@ -115,8 +118,6 @@ AutofillTriggerSource TriggerSourceFromSuggestionTriggerSource(
     case AutofillSuggestionTriggerSource::kOpenTextDataListChooser:
     case AutofillSuggestionTriggerSource::kPasswordManager:
     case AutofillSuggestionTriggerSource::kiOS:
-    case AutofillSuggestionTriggerSource::
-        kShowPromptAfterDialogClosedNonManualFallback:
     case AutofillSuggestionTriggerSource::kComposeDialogLostFocus:
     case AutofillSuggestionTriggerSource::kComposeDelayedProactiveNudge:
     case AutofillSuggestionTriggerSource::kPasswordManagerProcessedFocusedField:
@@ -133,8 +134,6 @@ AutofillTriggerSource TriggerSourceFromSuggestionTriggerSource(
       // context menu) and a trigger source (by selecting a suggestion generated
       // through the context menu).
       return AutofillTriggerSource::kManualFallback;
-    case AutofillSuggestionTriggerSource::kAutofillAi:
-      return AutofillTriggerSource::kAutofillAi;
     case AutofillSuggestionTriggerSource::kProactivePasswordRecovery:
       return AutofillTriggerSource::kProactivePasswordRecovery;
   }
@@ -320,9 +319,7 @@ const AutofillField* AutofillExternalDelegate::GetQueriedAutofillField() const {
 
 void AutofillExternalDelegate::OnSuggestionsReturned(
     FieldGlobalId field_id,
-    const std::vector<Suggestion>& input_suggestions,
-    std::optional<autofill_metrics::SuggestionRankingContext>
-        suggestion_ranking_context) {
+    const std::vector<Suggestion>& input_suggestions) {
   // These are guards against outdated suggestion results.
   if (field_id != query_field_.global_id()) {
     return;
@@ -332,15 +329,12 @@ void AutofillExternalDelegate::OnSuggestionsReturned(
     return;
   }
 #endif
-  AttemptToDisplayAutofillSuggestions(
-      input_suggestions, std::move(suggestion_ranking_context), trigger_source_,
-      /*is_update=*/false);
+  AttemptToDisplayAutofillSuggestions(input_suggestions, trigger_source_,
+                                      /*is_update=*/false);
 }
 
 void AutofillExternalDelegate::AttemptToDisplayAutofillSuggestions(
     std::vector<Suggestion> suggestions,
-    std::optional<autofill_metrics::SuggestionRankingContext>
-        suggestion_ranking_context,
     AutofillSuggestionTriggerSource trigger_source,
     bool is_update) {
   PossiblyRemoveAutofillWarnings(suggestions);
@@ -354,7 +348,6 @@ void AutofillExternalDelegate::AttemptToDisplayAutofillSuggestions(
   // it on, not AED.
   trigger_source_ = trigger_source;
 
-  suggestion_ranking_context_ = std::move(suggestion_ranking_context);
   shown_suggestion_types_.clear();
   for (const Suggestion& suggestion : suggestions) {
     shown_suggestion_types_.push_back(suggestion.type);
@@ -435,10 +428,9 @@ AutofillExternalDelegate::CreateUpdateSuggestionsCallback() {
                 .value_or(SessionId()) != session_id) {
           return;
         }
-        self->AttemptToDisplayAutofillSuggestions(
-            std::move(suggestions),
-            /*suggestion_ranking_context=*/std::nullopt, trigger_source,
-            /*is_update=*/true);
+        self->AttemptToDisplayAutofillSuggestions(std::move(suggestions),
+                                                  trigger_source,
+                                                  /*is_update=*/true);
       },
       GetWeakPtr(), *session_id);
 }
@@ -562,10 +554,10 @@ void AutofillExternalDelegate::DidSelectSuggestion(
     case SuggestionType::kAddressEntry:
     case SuggestionType::kCreditCardEntry:
     case SuggestionType::kDevtoolsTestAddressEntry:
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, /*metadata=*/std::nullopt,
-          /*is_preview=*/true,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload,
+                   /*metadata=*/std::nullopt,
+                   /*is_preview=*/true,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     case SuggestionType::kAutocompleteEntry:
       manager_->FillOrPreviewField(mojom::ActionPersistence::kPreview,
@@ -613,10 +605,10 @@ void AutofillExternalDelegate::DidSelectSuggestion(
       }
       break;
     case SuggestionType::kVirtualCreditCardEntry:
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, /*metadata=*/std::nullopt,
-          /*is_preview=*/true,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload,
+                   /*metadata=*/std::nullopt,
+                   /*is_preview=*/true,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     case SuggestionType::kFillAutofillAi:
       if (EntityDataManager* edm = manager_->client().GetEntityDataManager()) {
@@ -654,6 +646,9 @@ void AutofillExternalDelegate::DidSelectSuggestion(
           mojom::ActionPersistence::kPreview,
           mojom::FieldActionType::kReplaceAll, query_form_, query_field_,
           suggestion.main_text.value, suggestion.type, LOYALTY_MEMBERSHIP_ID);
+      break;
+    case SuggestionType::kWebauthnSignInWithAnotherDevice:
+      manager_->DelegateSelectToPasswordManager(suggestion, query_field_);
       break;
     case SuggestionType::kAllLoyaltyCardsEntry:
     case SuggestionType::kComposeDisable:
@@ -694,7 +689,6 @@ void AutofillExternalDelegate::DidSelectSuggestion(
     case SuggestionType::kAllSavedPasswordsEntry:
     case SuggestionType::kGeneratePasswordEntry:
     case SuggestionType::kWebauthnCredential:
-    case SuggestionType::kWebauthnSignInWithAnotherDevice:
     case SuggestionType::kPasswordFieldByFieldFilling:
     case SuggestionType::kFillPassword:
     case SuggestionType::kViewPasswordDetails:
@@ -902,21 +896,25 @@ void AutofillExternalDelegate::DidAcceptSuggestion(
       break;
     }
     case SuggestionType::kOneTimePasswordEntry: {
-      // Dereferencing is safe, because it wouldn't be possible to get a
-      // suggestion of this type if the OTP delegate did not exist, and the
-      // destruction of the delegate happens on the tab destruction, after
-      // which no filling should happen.
-      const OtpDelegate& otp_delegate =
-          CHECK_DEREF(manager_->client().GetOtpDelegate());
-      OtpFillData otp_fill_data = otp_delegate.GetFillDataForOtpSuggestion(
-          query_form_.global_id(), query_field_.global_id(),
-          suggestion.main_text.value);
+      FormStructure* form_structure = nullptr;
+      AutofillField* autofill_field = nullptr;
+      if (!manager_->GetCachedFormAndField(query_form_.global_id(),
+                                           query_field_.global_id(),
+                                           &form_structure, &autofill_field)) {
+        break;
+      }
+      OtpFillData otp_fill_data = CreateFillDataForOtpSuggestion(
+          *form_structure, *autofill_field, suggestion.main_text.value);
       manager_->FillOrPreviewForm(
           mojom::ActionPersistence::kFill, query_form_,
           query_field_.global_id(), &otp_fill_data,
           TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     }
+    case SuggestionType::kWebauthnSignInWithAnotherDevice:
+      manager_->DelegateAcceptToPasswordManager(suggestion, metadata,
+                                                query_field_);
+      break;
     case SuggestionType::kTitle:
     case SuggestionType::kSeparator:
     case SuggestionType::kPasswordEntry:
@@ -930,7 +928,6 @@ void AutofillExternalDelegate::DidAcceptSuggestion(
     case SuggestionType::kDevtoolsTestAddresses:
     case SuggestionType::kDevtoolsTestAddressByCountry:
     case SuggestionType::kWebauthnCredential:
-    case SuggestionType::kWebauthnSignInWithAnotherDevice:
     case SuggestionType::kPasswordFieldByFieldFilling:
     case SuggestionType::kFillPassword:
     case SuggestionType::kViewPasswordDetails:
@@ -1146,7 +1143,7 @@ void AutofillExternalDelegate::FillAddressFieldByFieldFillingSuggestion(
   }
 }
 
-void AutofillExternalDelegate::FillAutofillFormData(
+void AutofillExternalDelegate::AutofillForm(
     SuggestionType type,
     const Suggestion::Payload& payload,
     std::optional<SuggestionMetadata> metadata,
@@ -1223,34 +1220,6 @@ void AutofillExternalDelegate::InsertDataListValues(
   }
 }
 
-AutofillSuggestionTriggerSource
-AutofillExternalDelegate::GetReopenTriggerSource() const {
-  // Manual fallbacks show suggestions of a specific type. If the Autofill
-  // wasn't triggered manually, return
-  // `kShowPromptAfterDialogClosedNonManualFallback` to avoid showing other
-  // suggestion types.
-  return IsAutofillManuallyTriggered(trigger_source_)
-             ? trigger_source_
-             : AutofillSuggestionTriggerSource::
-                   kShowPromptAfterDialogClosedNonManualFallback;
-}
-
-void AutofillExternalDelegate::LogRankingContextAfterSuggestionAccepted(
-    const Suggestion& accepted_suggestion) {
-  CHECK(accepted_suggestion.type == SuggestionType::kCreditCardEntry);
-  const Suggestion::Guid& suggestion_guid =
-      accepted_suggestion.GetPayload<Suggestion::Guid>();
-  if (suggestion_ranking_context_ &&
-      suggestion_ranking_context_->RankingsAreDifferent() &&
-      suggestion_ranking_context_->suggestion_rankings_difference_map.contains(
-          suggestion_guid)) {
-    autofill_metrics::LogAutofillRankingSuggestionDifference(
-        suggestion_ranking_context_->suggestion_rankings_difference_map
-            .find(suggestion_guid)
-            ->second);
-  }
-}
-
 void AutofillExternalDelegate::DidAcceptAddressSuggestion(
     const Suggestion& suggestion,
     const SuggestionMetadata& metadata) {
@@ -1281,10 +1250,9 @@ void AutofillExternalDelegate::DidAcceptAddressSuggestion(
         manager_->client().TriggerPlusAddressUserPerceptionSurvey(
             plus_addresses::hats::SurveyType::kDidChooseEmailOverPlusAddress);
       }
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, metadata,
-          /*is_preview=*/false,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload, metadata,
+                   /*is_preview=*/false,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     }
     case SuggestionType::kAddressFieldByFieldFilling:
@@ -1304,10 +1272,9 @@ void AutofillExternalDelegate::DidAcceptAddressSuggestion(
       CHECK(profile);
       autofill_metrics::OnDevtoolsTestAddressesAccepted(
           profile->GetInfo(ADDRESS_HOME_COUNTRY, "en-US"));
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, metadata,
-          /*is_preview=*/false,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload, metadata,
+                   /*is_preview=*/false,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     }
     default:
@@ -1337,23 +1304,18 @@ void AutofillExternalDelegate::DidAcceptPaymentsSuggestion(
       autofill_metrics::LogSuggestionAcceptedIndex(
           metadata.row, FillingProduct::kCreditCard,
           manager_->client().IsOffTheRecord());
-      if (base::FeatureList::IsEnabled(
-              features::kAutofillEnableRankingFormulaCreditCards)) {
-        LogRankingContextAfterSuggestionAccepted(suggestion);
-      }
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, metadata,
-          /*is_preview=*/false,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload, metadata,
+                   /*is_preview=*/false,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     case SuggestionType::kVirtualCreditCardEntry:
       // There can be multiple virtual credit cards that all rely on
       // SuggestionType::kVirtualCreditCardEntry as a `type`.
       // In this case, the payload contains the backend id, which is a GUID
       // that identifies the actually chosen credit card.
-      FillAutofillFormData(
-          suggestion.type, suggestion.payload, metadata, /*is_preview=*/false,
-          TriggerSourceFromSuggestionTriggerSource(trigger_source_));
+      AutofillForm(suggestion.type, suggestion.payload, metadata,
+                   /*is_preview=*/false,
+                   TriggerSourceFromSuggestionTriggerSource(trigger_source_));
       break;
     case SuggestionType::kIbanEntry:
       // User chooses an IBAN suggestion and if it is a local IBAN, full IBAN
@@ -1428,15 +1390,13 @@ void AutofillExternalDelegate::DidAcceptPaymentsSuggestion(
                          GetWeakPtr()));
       break;
     case SuggestionType::kBnplEntry: {
-      CHECK(suggestion.GetPayload<Suggestion::PaymentsPayload>()
-                .extracted_amount_in_micros.has_value());
       payments::BnplManager* bnpl_manager = manager_->GetPaymentsBnplManager();
       CHECK(bnpl_manager);
 
       bnpl_manager->OnDidAcceptBnplSuggestion(
           /*final_checkout_amount=*/suggestion
               .GetPayload<Suggestion::PaymentsPayload>()
-              .extracted_amount_in_micros.value(),
+              .extracted_amount_in_micros,
           base::BindOnce(
               [](base::WeakPtr<AutofillExternalDelegate> delegate,
                  const CreditCard& card) {

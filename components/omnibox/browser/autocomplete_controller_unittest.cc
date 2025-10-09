@@ -17,7 +17,7 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "components/omnibox/browser/actions/omnibox_answer_action.h"
+#include "components/omnibox/browser/actions/contextual_search_action.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_enums.h"
 #include "components/omnibox/browser/autocomplete_match.h"
@@ -2065,6 +2065,7 @@ TEST_F(AutocompleteControllerTest, UpdateResult_ContextualSuggestionsAndLens) {
   contextual_search_config.Get().contextual_zps_limit = 3;
   contextual_search_config.Get().show_open_lens_action = true;
   contextual_search_config.Get().use_apc_paywall_signal = true;
+  contextual_search_config.Get().show_suggestions_on_no_apc = true;
 
   // Populate TemplateURLService with a keyword.
   TemplateURLData turl_data;
@@ -2142,9 +2143,9 @@ TEST_F(AutocompleteControllerTest, UpdateResult_ContextualSuggestionsAndLens) {
     check_results(/*expect_contextual=*/false, /*expect_lens=*/true);
   }
 
-  // Paywall is unknown. No contextual suggestions but has Lens entrypoint.
+  // Paywall is unknown. Contextual suggestions and Lens entrypoint.
   {
-    SCOPED_TRACE("Paywall statis is unknown");
+    SCOPED_TRACE("Paywall status is unknown");
     EXPECT_CALL(*provider_client(), AreLensEntrypointsVisible())
         .WillRepeatedly(testing::Return(true));
     EXPECT_CALL(*provider_client(), IsPagePaywalled())
@@ -2152,7 +2153,7 @@ TEST_F(AutocompleteControllerTest, UpdateResult_ContextualSuggestionsAndLens) {
 
     controller_.SimulateAutocompletePass(/*sync=*/true, /*done=*/true,
                                          provider_matches, zps_input);
-    check_results(/*expect_contextual=*/false, /*expect_lens=*/true);
+    check_results(/*expect_contextual=*/true, /*expect_lens=*/true);
   }
 }
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
@@ -2580,41 +2581,7 @@ TEST_F(AutocompleteControllerTest, ShouldRunProvider_AndroidHubSearch) {
 }
 #endif
 
-TEST_F(AutocompleteControllerTest, UpdateSearchboxStatsForAnswerAction) {
-  // Populate TemplateURLService with a keyword.
-  TemplateURLData turl_data;
-  turl_data.SetShortName(u"Keyword");
-  turl_data.SetKeyword(u"keyword");
-  turl_data.SetURL("https://google.com/search?q={searchTerms}");
-  controller_.template_url_service_->Add(
-      std::make_unique<TemplateURL>(turl_data));
-
-  omnibox::SuggestionEnhancement enhancement;
-  enhancement.set_display_text("Similar and opposite words");
-  auto answer_action = base::MakeRefCounted<OmniboxAnswerAction>(
-      std::move(enhancement), TemplateURLRef::SearchTermsArgs(),
-      omnibox::ANSWER_TYPE_DICTIONARY);
-  AutocompleteMatch match1 = CreateSearchMatch("match1", true, 1300);
-  match1.actions.push_back(answer_action);
-
-  controller_.Stop(AutocompleteStopReason::kClobbered);
-  EXPECT_THAT(controller_.SimulateAutocompletePass(
-                  /*sync=*/true, /*done=*/true,
-                  {match1, CreateSearchMatch("match2", true, 1200),
-                   CreateSearchMatch("match3", true, 1100)}),
-              testing::ElementsAreArray({
-                  "match1",
-                  "match2",
-                  "match3",
-              }));
-
-  EXPECT_EQ(
-      answer_action->search_terms_args.searchbox_stats.SerializeAsString(),
-      controller_.published_result_.match_at(0)
-          ->search_terms_args->searchbox_stats.SerializeAsString());
-}
-
-// Anroid and iOS have different handling for pedals.
+// Android and iOS have different handling for pedals.
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(AutocompleteControllerTest, NoActionsAttachedToLensSearchboxMatches) {
   std::unordered_map<OmniboxPedalId, scoped_refptr<OmniboxPedal>> pedals;
@@ -2674,6 +2641,48 @@ TEST_F(AutocompleteControllerTest, NoActionsAttachedToLensSearchboxMatches) {
 }
 #endif
 
+// Android and iOS have different handling for pedals.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+TEST_F(AutocompleteControllerTest, NoActionsAttachedToNtpComposeboxMatches) {
+  // Create input with lens searchbox page classification.
+  controller_.input_ = AutocompleteInput(
+      u"Clear History", metrics::OmniboxEventProto::NTP_COMPOSEBOX,
+      TestSchemeClassifier());
+
+  SetAutocompleteMatches(
+      {CreateSearchMatch(u"search 2"),
+       CreateHistoryURLMatch(
+           /*destination_url=*/"http://this-site-matches.com")});
+
+  static_cast<FakeTabMatcher&>(
+      const_cast<TabMatcher&>(provider_client()->GetTabMatcher()))
+      .set_url_substring_match("matches");
+
+  controller_.AttachActions();
+
+  // For a Lens Searchbox, AttachActions shouldn't attach a switch to this tab
+  // action to the last match.
+  EXPECT_FALSE(
+      controller_.internal_result_.match_at(1)->has_tab_match.value_or(false));
+
+  controller_.input_ =
+      AutocompleteInput(u"Clear History", metrics::OmniboxEventProto::OTHER,
+                        TestSchemeClassifier());
+
+  SetAutocompleteMatches(
+      {CreateSearchMatch(u"Clear History"),
+       CreateHistoryURLMatch(
+           /*destination_url=*/"http://this-site-matches.com")});
+
+  controller_.AttachActions();
+
+  // For any other page classification, AttachActions should attach a switch
+  // to this tab action to the relevant matches.
+  EXPECT_TRUE(
+      controller_.internal_result_.match_at(1)->has_tab_match.value_or(false));
+}
+#endif
+
 // Feature not enabled on Android and iOS.
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 TEST_F(AutocompleteControllerTest,
@@ -2722,6 +2731,54 @@ TEST_F(AutocompleteControllerTest,
   EXPECT_EQ(
       OmniboxActionId::CONTEXTUAL_SEARCH_FULFILLMENT,
       controller_.internal_result_.match_at(1)->takeover_action->ActionId());
+}
+
+TEST_F(AutocompleteControllerTest, ContextualQueryAppendsSearchboxStats) {
+  omnibox_feature_configs::ScopedConfigForTesting<
+      omnibox_feature_configs::ContextualSearch>
+      contextual_search_config;
+  contextual_search_config.Get().contextual_zero_suggest_lens_fulfillment =
+      true;
+  TemplateURLData turl_data;
+  turl_data.SetShortName(u"Contextual");
+  turl_data.SetKeyword(u"contextual");
+  turl_data.SetURL(
+      "https://google.com/search?q={searchTerms}/{google:assistedQueryStats}");
+  controller_.template_url_service_->Add(
+      std::make_unique<TemplateURL>(turl_data));
+
+  // Create input with lens searchbox page classification.
+  controller_.input_ = AutocompleteInput(u"", metrics::OmniboxEventProto::OTHER,
+                                         TestSchemeClassifier());
+  controller_.input_.set_focus_type(
+      metrics::OmniboxFocusType::INTERACTION_FOCUS);
+
+  SetAutocompleteMatches(
+      {CreateZeroSuggestContextualSearchMatch(u"Summary"),
+       CreateZeroSuggestContextualSearchMatch(u"Summarize this page")});
+
+  controller_.AttachActions();
+  UpdateSearchboxStats();
+
+  // The takeover action should be for the contextual search action, not pedals.
+  ASSERT_TRUE(controller_.internal_result_.match_at(0)->takeover_action);
+  auto* contextual_takover_action_0 =
+      ContextualSearchFulfillmentAction::FromAction(
+          controller_.internal_result_.match_at(0)->takeover_action.get());
+  EXPECT_EQ(OmniboxActionId::CONTEXTUAL_SEARCH_FULFILLMENT,
+            contextual_takover_action_0->ActionId());
+  EXPECT_TRUE(base::Contains(
+      contextual_takover_action_0->get_fulfillment_url_for_testing().spec(),
+      "gs_lcrp="));
+  ASSERT_TRUE(controller_.internal_result_.match_at(1)->takeover_action);
+  auto* contextual_takover_action_1 =
+      ContextualSearchFulfillmentAction::FromAction(
+          controller_.internal_result_.match_at(1)->takeover_action.get());
+  EXPECT_EQ(OmniboxActionId::CONTEXTUAL_SEARCH_FULFILLMENT,
+            contextual_takover_action_1->ActionId());
+  EXPECT_TRUE(base::Contains(
+      contextual_takover_action_1->get_fulfillment_url_for_testing().spec(),
+      "gs_lcrp="));
 }
 
 TEST_F(AutocompleteControllerTest,
@@ -2838,8 +2895,7 @@ TEST_F(AutocompleteControllerTest, UpdateAssociatedKeywords) {
 
     std::vector<std::u16string> attached_keywords;
     for (const auto& match : result) {
-      attached_keywords.push_back(
-          match.associated_keyword ? match.associated_keyword->keyword : u"");
+      attached_keywords.push_back(match.associated_keyword);
     }
     return attached_keywords;
   };
@@ -2923,10 +2979,7 @@ AutocompleteMatch CreateDefaultMatch(std::u16string fill_into_edit,
   AutocompleteMatch match;
   match.fill_into_edit = fill_into_edit;
   match.icon_url = icon_url;
-  if (!associated_keyword.empty()) {
-    match.associated_keyword = std::make_unique<AutocompleteMatch>();
-    match.associated_keyword->keyword = associated_keyword;
-  }
+  match.associated_keyword = associated_keyword;
   match.keyword = keyword;
 
   // Set other fields to make it a plausible default match
@@ -3198,5 +3251,28 @@ TEST_F(AutocompleteControllerTest,
   EXPECT_EQ(
       OmniboxActionId::CONTEXTUAL_SEARCH_OPEN_LENS,
       controller_.internal_result_.match_at(1)->takeover_action->ActionId());
+}
+
+TEST_F(AutocompleteControllerTest, SmartComposeClearedWithNewResults) {
+  auto match1 = CreateSearchMatch("match1", true, 1300);
+  EXPECT_THAT(controller_.SimulateAutocompletePass(true, false, {match1}),
+              testing::ElementsAreArray({
+                  "match1",
+              }));
+
+  controller_.internal_result_.set_smart_compose_inline_hint("smart compose!");
+
+  // Verify smart compose field is set initially
+  ASSERT_TRUE(
+      !controller_.internal_result_.smart_compose_inline_hint().empty());
+
+  EXPECT_THAT(controller_.SimulateAutocompletePass(true, false, {match1}),
+              testing::ElementsAreArray({
+                  "match1",
+              }));
+
+  // Smart compose field should not be set after autocomplete pass with no
+  // smart compose result.
+  ASSERT_TRUE(controller_.internal_result_.smart_compose_inline_hint().empty());
 }
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)

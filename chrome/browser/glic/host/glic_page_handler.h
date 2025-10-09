@@ -12,6 +12,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/glic/host/glic.mojom.h"
+#include "chrome/browser/glic/host/host.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -63,6 +64,8 @@ class GlicPageHandler : public glic::mojom::PageHandler {
 
   void SignInAndClosePanel() override;
 
+  void OpenDisabledByAdminLinkAndClosePanel() override;
+
   void ResizeWidget(const gfx::Size& size,
                     base::TimeDelta duration,
                     ResizeWidgetCallback callback) override;
@@ -75,10 +78,14 @@ class GlicPageHandler : public glic::mojom::PageHandler {
 
   void WebUiStateChanged(glic::mojom::WebUiState new_state) override;
 
+  Host& host() { return *host_; }
+
  private:
   void AllowedChanged();
   GlicKeyedService* GetGlicService();
 
+  // HostManager keeps the host alive while GlicPageHandler is alive.
+  raw_ptr<Host> host_;
   // There should at most one WebClientHandler at a time. A new one is created
   // each time the webview loads a page.
   std::unique_ptr<GlicWebClientHandler> web_client_handler_;

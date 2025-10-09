@@ -7,6 +7,10 @@
 
 #import <UIKit/UIKit.h>
 
+namespace bookmarks {
+class BookmarkModel;
+}  // namespace bookmarks
+
 namespace commerce {
 class ShoppingService;
 }
@@ -15,6 +19,7 @@ namespace segmentation_platform {
 class SegmentationPlatformService;
 }
 
+class AppStoreBundleService;
 class AuthenticationService;
 @class ContentSuggestionsMetricsRecorder;
 enum class ContentSuggestionsModuleType;
@@ -50,6 +55,8 @@ class TipsManagerIOS;
                 moduleMediators:(NSArray*)moduleMediators
                     tipsManager:(TipsManagerIOS*)tipsManager
              templateURLService:(TemplateURLService*)templateURLService
+          appStoreBundleService:(AppStoreBundleService*)appStoreBundleService
+                  bookmarkModel:(bookmarks::BookmarkModel*)bookmarkModel
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;

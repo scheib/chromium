@@ -32,6 +32,7 @@
 #include "content/public/browser/media_player_id.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -44,6 +45,7 @@
 #include "net/http/http_response_headers.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "third_party/blink/public/common/loader/resource_type_util.h"
+#include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom.h"
 #include "ui/base/page_transition_types.h"
 #include "url/url_constants.h"
@@ -393,9 +395,12 @@ void MetricsWebContentsObserver::WillStartNavigationRequestImpl(
   auto insertion_result = provisional_loads_.insert(std::make_pair(
       navigation_handle,
       std::make_unique<PageLoadTracker>(
-          in_foreground, embedder_interface_.get(), currently_committed_url,
-          !has_navigated_, navigation_handle, user_initiated_info, source_id,
-          parent_tracker)));
+          PageLoadTracker::InForegroundBool{in_foreground},
+          embedder_interface_.get(), currently_committed_url,
+          PageLoadTracker::IsFirstNavigationInWebContentsBool{!has_navigated_},
+          PageLoadTracker::IsReloadAfterDiscardBool{
+              navigation_handle->ExistingDocumentWasDiscarded()},
+          navigation_handle, user_initiated_info, source_id, parent_tracker)));
   CHECK(insertion_result.second)
       << "provisional_loads_ already contains NavigationHandle.";
   for (auto& observer : lifecycle_observers_) {
@@ -483,7 +488,7 @@ void MetricsWebContentsObserver::ResourceLoadComplete(
     content::RenderFrameHost* render_frame_host,
     const content::GlobalRequestID& request_id,
     const blink::mojom::ResourceLoadInfo& resource_load_info) {
-  if (!ShouldTrackScheme(resource_load_info.final_url.scheme_piece())) {
+  if (!ShouldTrackScheme(resource_load_info.final_url.scheme())) {
     return;
   }
 
@@ -504,9 +509,8 @@ void MetricsWebContentsObserver::ResourceLoadComplete(
         url::SchemeHostPort(resource_load_info.final_url),
         network_info->remote_endpoint.value(),
         render_frame_host->GetFrameTreeNodeId(), resource_load_info.was_cached,
-        base::ByteCount(resource_load_info.raw_body_bytes),
-        original_content_length, resource_load_info.request_destination,
-        resource_load_info.net_error,
+        resource_load_info.raw_body_bytes, original_content_length,
+        resource_load_info.request_destination, resource_load_info.net_error,
         std::make_unique<net::LoadTimingInfo>(
             resource_load_info.load_timing_info));
     tracker->OnLoadedResource(extra_request_complete_info);
@@ -1223,7 +1227,7 @@ bool MetricsWebContentsObserver::DoesTimingUpdateHaveError(
     return true;
   }
 
-  if (!ShouldTrackScheme(tracker->GetUrl().scheme_piece())) {
+  if (!ShouldTrackScheme(tracker->GetUrl().scheme())) {
     RecordInternalError(ERR_IPC_FROM_BAD_URL_SCHEME);
     return true;
   }
@@ -1308,12 +1312,14 @@ bool MetricsWebContentsObserver::ShouldTrackMainFrameNavigation(
   }
 
   const GURL& url = navigation_handle->GetURL();
-  if (embedder_interface_->IsNonTabWebUI(url) ||
-      embedder_interface_->IsNewTabPageUrl(url)) {
+  if (embedder_interface_->IsNewTabPageUrl(url) ||
+      (embedder_interface_->HasWebUIConfig(url) &&
+       !embedder_interface_->IsInternalWebUI(url)) ||
+      embedder_interface_->IsNonTabWebUI(url)) {
     return true;
   }
 
-  return ShouldTrackSchemeForNonWebUI(url.scheme_piece());
+  return ShouldTrackSchemeForNonWebUI(url.scheme());
 }
 
 bool MetricsWebContentsObserver::ShouldTrackScheme(

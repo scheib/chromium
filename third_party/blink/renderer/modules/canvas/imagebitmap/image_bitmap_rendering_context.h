@@ -21,6 +21,7 @@ class Layer;
 namespace blink {
 
 class ExceptionState;
+class ExecutionContext;
 class ImageBitmap;
 class ImageLayerBridge;
 class V8UnionHTMLCanvasElementOrOffscreenCanvas;
@@ -41,6 +42,7 @@ class MODULES_EXPORT ImageBitmapRenderingContext final
     ~Factory() override = default;
 
     CanvasRenderingContext* Create(
+        ExecutionContext*,
         CanvasRenderingContextHost*,
         const CanvasContextCreationAttributesCore&) override;
     CanvasRenderingContext::CanvasRenderingAPI GetRenderingAPI()
@@ -108,11 +110,12 @@ class MODULES_EXPORT ImageBitmapRenderingContext final
   // This is used to follow the standard regarding transferToBitmap
   scoped_refptr<StaticBitmapImage> GetImageAndResetInternal();
 
-  CanvasResourceProvider* GetOrCreateResourceProviderForOffscreenCanvas();
+  CanvasResourceProviderSharedImage*
+  GetOrCreateResourceProviderForOffscreenCanvas();
   void ResetInternalBitmapToBlackTransparent(int width, int height);
 
   Member<ImageLayerBridge> image_layer_bridge_;
-  std::unique_ptr<CanvasResourceProvider>
+  std::unique_ptr<CanvasResourceProviderSharedImage>
       resource_provider_for_offscreen_canvas_;
 };
 

@@ -74,6 +74,8 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
+#include "ui/display/display.h"
+#include "ui/display/screen.h"
 #include "ui/events/blink/web_input_event.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
@@ -314,6 +316,7 @@ bool PopupViewViews::Show(
     }
   }
 
+  MaybeAnnouncePasswordRecoveryPopup();
   MaybeA11yFocusInformationalSuggestion();
 
   return !CanActivate() || (GetWidget() && GetWidget()->IsActive());
@@ -690,6 +693,7 @@ void PopupViewViews::OnSuggestionsChanged(bool prefer_prev_arrow_side) {
     return;
   }
 
+  MaybeAnnouncePasswordRecoveryPopup();
   MaybeA11yFocusInformationalSuggestion();
   ShowIPHFeaturePromos();
 }
@@ -907,6 +911,20 @@ void PopupViewViews::ShowIPHFeaturePromos() {
   }
 }
 
+void PopupViewViews::MaybeAnnouncePasswordRecoveryPopup() {
+  if (!controller_ || controller_->GetSuggestions().empty()) {
+    return;
+  }
+
+  if (controller_->GetSuggestionAt(0).type ==
+      SuggestionType::kBackupPasswordEntry) {
+    a11y_announcer_.Run(
+        l10n_util::GetStringUTF16(
+            IDS_PASSWORD_MANAGER_UI_PASSWORD_RECOVERY_SHOWN_A11Y_ANNOUNCEMENT),
+        /*polite=*/true);
+  }
+}
+
 void PopupViewViews::UpdateAccessibleStates() const {
   if (controller_) {
     GetViewAccessibility().SetIsExpanded();
@@ -1088,6 +1106,15 @@ void PopupViewViews::CreateSuggestionViews() {
                                     kIPHAutofillEnableLoyaltyCardsFeature) {
             row_view->SetProperty(views::kElementIdentifierKey,
                                   kAutofillEnableLoyaltyCardsElementId);
+          } else if (feature ==
+                     &feature_engagement::
+                         kIPHAutofillAccountNameEmailSuggestionFeature) {
+            row_view->SetProperty(views::kElementIdentifierKey,
+                                  kAutofillAccountNameEmailSuggestionElementId);
+          } else if (feature ==
+                     &feature_engagement::kIPHAutofillAiValuablesFeature) {
+            row_view->SetProperty(views::kElementIdentifierKey,
+                                  kAutofillAiValuablesElementId);
           }
       }
     }
@@ -1209,6 +1236,11 @@ bool PopupViewViews::DoUpdateBoundsAndRedrawPopup(bool prefer_prev_arrow_side) {
           ? top_window_bounds
           : content_area_bounds;
 
+  // Intersect with the current monitor's work area to avoid showing popups
+  // outside the screen.
+  gfx::Rect visible_content_area_bounds =
+      IntersectWithDisplayBounds(max_bounds_for_popup);
+
   gfx::Rect element_bounds =
       gfx::ToEnclosingRect(controller_->element_bounds());
 
@@ -1216,7 +1248,7 @@ bool PopupViewViews::DoUpdateBoundsAndRedrawPopup(bool prefer_prev_arrow_side) {
   // which means either the height or the width is 0) is never outside the
   // content area. An empty element case can happen with caret bounds, which
   // sometimes has 0 width.
-  if (!content_area_bounds.Contains(element_bounds)) {
+  if (!visible_content_area_bounds.Contains(element_bounds)) {
     // If the element exceeds the content area, ensure that the popup is still
     // visually attached to the input element.
     element_bounds.Intersect(content_area_bounds);
@@ -1238,12 +1270,12 @@ bool PopupViewViews::DoUpdateBoundsAndRedrawPopup(bool prefer_prev_arrow_side) {
     return false;
   }
 
-  if (!CanShowDropdownInBounds(max_bounds_for_popup)) {
+  if (!CanShowDropdownInBounds(visible_content_area_bounds)) {
     controller_->Hide(SuggestionHidingReason::kInsufficientSpace);
     return false;
   }
 
-  CalculatePopupYAndHeight(preferred_size.height(), max_bounds_for_popup,
+  CalculatePopupYAndHeight(preferred_size.height(), visible_content_area_bounds,
                            element_bounds, &popup_bounds);
 
   // Adjust the width to compensate for a scroll bar, if necessary, and for
@@ -1269,7 +1301,7 @@ bool PopupViewViews::DoUpdateBoundsAndRedrawPopup(bool prefer_prev_arrow_side) {
           /*is_root_popup=*/!parent_, prefer_prev_arrow_side,
           /*prev_arrow=*/border ? border->arrow() : BubbleBorder::Arrow::NONE);
   popup_bounds = GetOptimalPositionAndPlaceArrowOnPopup(
-      element_bounds, content_area_bounds, preferred_size,
+      element_bounds, visible_content_area_bounds, preferred_size,
       preferred_popup_sides);
 
   if (BoundsOverlapWithAnyOpenPrompt(popup_bounds,
@@ -1340,12 +1372,14 @@ bool PopupViewViews::IsFooterScrollable() const {
   return parent_ && body_container_;
 }
 
-bool PopupViewViews::CanShowDropdownInBounds(const gfx::Rect& bounds) const {
+bool PopupViewViews::CanShowDropdownInBounds(
+    const gfx::Rect& visible_content_area_bounds) const {
   gfx::Rect element_bounds =
       gfx::ToEnclosingRect(controller_->element_bounds());
 
-  // At least one suggestion and the sticky footer should be shown in the bounds
-  // of the content area so that the user notices the presence of the popup.
+  // At least one suggestion and the sticky footer should be shown in the
+  // visible_content_area_bounds of the content area so that the user notices
+  // the presence of the popup.
   int min_height = 0;
   if (body_container_ && !body_container_->children().empty()) {
     min_height += body_container_->children()[0]->GetPreferredSize().height();
@@ -1359,7 +1393,8 @@ bool PopupViewViews::CanShowDropdownInBounds(const gfx::Rect& bounds) const {
     min_height += footer_container_->GetPreferredSize().height();
   }
 
-  return CanShowDropdownHere(min_height, bounds, element_bounds);
+  return CanShowDropdownHere(min_height, visible_content_area_bounds,
+                             element_bounds);
 }
 
 void PopupViewViews::SetRowWithOpenSubPopup(
@@ -1449,6 +1484,8 @@ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(
     PopupViewViews,
     kAutofillCreditCardSuggestionEntryElementId);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PopupViewViews,
+                                      kAutofillAiValuablesElementId);
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PopupViewViews,
                                       kAutofillAiOptInIphElementId);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(
     PopupViewViews,
@@ -1459,6 +1496,9 @@ DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PopupViewViews,
                                       kAutofillHomeWorkSuggestionElementId);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(PopupViewViews,
                                       kAutofillEnableLoyaltyCardsElementId);
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(
+    PopupViewViews,
+    kAutofillAccountNameEmailSuggestionElementId);
 
 // static
 base::WeakPtr<AutofillPopupView> AutofillPopupView::Create(

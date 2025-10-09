@@ -106,6 +106,12 @@ class FingerprintingProtectionFilterBrowserTest
   // Same as GetTestUrl, but uses a cross-origin base url, `cross-origin.test`.
   GURL GetCrossSiteTestUrl(const std::string& relative_url) const;
 
+  // Returns a URL for a test frame which will load a script from the given
+  // URL, to allow testing both same-origin scripts (using `GetTestUrl`) and
+  // cross-origin scripts (using `GetCrossSiteTestUrl`).
+  GURL GetFrameWithScriptUrl(const GURL& frame_url,
+                             const GURL& script_url) const;
+
   void SetUpOnMainThread() override;
 
   void SetRulesetToDisallowURLsWithPathSuffix(const std::string& suffix);
@@ -139,9 +145,6 @@ class FingerprintingProtectionFilterBrowserTest
   // Navigate all subframes of `kMultiPlatformTestFrameSetPath` to cross-origin
   // sites, i.e. `cross-origin.test/`.
   void NavigateSubframesToCrossOriginSite();
-
-  // Update the src of included_script.js with the input.
-  void UpdateIncludedScriptSource(const GURL& url);
 
   // Navigate subframes in `kMultiPlatformTestFrameSetPath` and load scripts in
   // 3p (cross-origin.test) contexts.
@@ -250,6 +253,30 @@ class FingerprintingProtectionFilterTrackingProtectionSettingBrowserTest
       delete;
 
   ~FingerprintingProtectionFilterTrackingProtectionSettingBrowserTest()
+      override;
+
+ protected:
+  void SetUpOnMainThread() override;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+class
+    FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest
+    : public FingerprintingProtectionFilterBrowserTest {
+ public:
+  FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest();
+
+  FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest(
+      const FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest&) =
+      delete;
+  FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest&
+  operator=(
+      const FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest&) =
+      delete;
+
+  ~FingerprintingProtectionFilterTrackingProtectionSettingAndNonIncognitoFilteringBrowserTest()
       override;
 
  protected:

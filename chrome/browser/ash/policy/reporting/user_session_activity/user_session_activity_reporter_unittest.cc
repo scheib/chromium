@@ -28,6 +28,7 @@
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "components/reporting/client/mock_report_queue.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
+#include "components/session_manager/core/fake_session_manager_delegate.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user.h"
@@ -114,7 +115,8 @@ class UserSessionActivityReporterTest : public ::testing::Test {
 
   std::unique_ptr<ash::SessionTerminationManager> session_termination_manager_;
 
-  session_manager::SessionManager session_manager_;
+  session_manager::SessionManager session_manager_{
+      std::make_unique<session_manager::FakeSessionManagerDelegate>()};
 
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
@@ -248,8 +250,9 @@ TEST_F(UserSessionActivityReporterTest, ReportWhenSessionEnds) {
 
   // Expect the delegate to report session activity.
   base::RunLoop run_loop;
-  EXPECT_CALL(*delegate, ReportSessionActivity())
-      .WillOnce(testing::Invoke([&run_loop]() { run_loop.Quit(); }));
+  EXPECT_CALL(*delegate, ReportSessionActivity()).WillOnce([&run_loop]() {
+    run_loop.Quit();
+  });
 
   std::unique_ptr<UserSessionActivityReporter> reporter = CreateReporter(
       &managed_session_service, fake_user_manager_.Get(), std::move(delegate));

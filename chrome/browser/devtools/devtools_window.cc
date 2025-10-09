@@ -105,6 +105,7 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"  // nogncheck crbug.com/40147906
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #endif
@@ -143,7 +144,8 @@ static const char kFallbackFrontendURL[] =
     "devtools://devtools/bundled/inspector.html";
 
 void SetPreferencesFromJson(Profile* profile, const std::string& json) {
-  std::optional<base::Value::Dict> parsed = base::JSONReader::ReadDict(json);
+  std::optional<base::Value::Dict> parsed =
+      base::JSONReader::ReadDict(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!parsed) {
     return;
   }
@@ -307,7 +309,8 @@ class DevToolsEventForwarder {
 
 void DevToolsEventForwarder::SetWhitelistedShortcuts(
     const std::string& message) {
-  std::optional<base::Value> parsed_message = base::JSONReader::Read(message);
+  std::optional<base::Value> parsed_message =
+      base::JSONReader::Read(message, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!parsed_message || !parsed_message->is_list()) {
     return;
   }
@@ -559,6 +562,15 @@ void DevToolsWindow::RegisterProfilePrefs(
   registry->RegisterIntegerPref(
       prefs::kDevToolsGenAiSettings,
       static_cast<int>(DevToolsGenAiEnterprisePolicyValue::kAllow));
+  registry->RegisterIntegerPref(
+      prefs::kDevToolsGoogleDeveloperProgramProfileAvailability,
+      /* enabled */ 0);
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || \
+    BUILDFLAG(IS_MAC)
+  registry->RegisterListPref(prefs::kDeveloperToolsAvailabilityAllowlist);
+  registry->RegisterListPref(prefs::kDeveloperToolsAvailabilityBlocklist);
+#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 }
 
 // static
@@ -1066,7 +1078,7 @@ void DevToolsWindow::Show(const DevToolsToggleAction& action) {
   MaybeShowSharedProcessInfobar();
 
   if (should_show_window) {
-    browser_->window()->Show();
+    browser_->GetWindow()->Show();
     main_web_contents_->SetInitialFocus();
   }
   if (toolbox_web_contents_) {
@@ -1254,7 +1266,7 @@ DevToolsWindow* DevToolsWindow::Create(
   if (inspected_web_contents) {
     // Check for a place to dock.
     Browser* browser = chrome::FindBrowserWithTab(inspected_web_contents);
-    if (!browser || !browser->is_type_normal()) {
+    if (!browser || !browser->window()->CanDockDevTools()) {
       can_dock = false;
     }
   }
@@ -1421,7 +1433,7 @@ void DevToolsWindow::ActivateContents(WebContents* contents) {
     NOTIMPLEMENTED();
 #else
     if (browser_) {
-      browser_->window()->Activate();
+      browser_->GetWindow()->Activate();
     }
 #endif
   }
@@ -1467,7 +1479,7 @@ void DevToolsWindow::WebContentsCreated(WebContents* source_contents,
                                         const GURL& target_url,
                                         WebContents* new_contents) {
   if (target_url.SchemeIs(content::kChromeDevToolsScheme) &&
-      target_url.path().rfind("device_mode_emulation_frame.html") !=
+      target_url.GetPath().rfind("device_mode_emulation_frame.html") !=
           std::string::npos) {
     CHECK(can_dock_);
 
@@ -1566,8 +1578,8 @@ void DevToolsWindow::ActivateWindow() {
 #else
   if (is_docked_ && GetInspectedBrowserWindow()) {
     main_web_contents_->Focus();
-  } else if (!is_docked_ && browser_ && !browser_->window()->IsActive()) {
-    browser_->window()->Activate();
+  } else if (!is_docked_ && browser_ && !browser_->GetWindow()->IsActive()) {
+    browser_->GetWindow()->Activate();
   }
 #endif
 }
@@ -1643,7 +1655,7 @@ void DevToolsWindow::SetIsDocked(bool dock_requested) {
   if (dock_requested && !was_docked && browser_) {
     // Detach window from the external devtools browser. It will lead to
     // the browser object's close and delete. Remove observer first.
-    TabStripModel* tab_strip_model = browser_->tab_strip_model();
+    TabStripModel* const tab_strip_model = browser_->GetTabStripModel();
     DCHECK(!owned_main_web_contents_);
 
     // Removing the only WebContents from the tab strip of browser_ will
@@ -1795,14 +1807,15 @@ void DevToolsWindow::RenderProcessGone(bool crashed) {
   } else {
 #if !BUILDFLAG(IS_ANDROID)
     if (browser_ && crashed) {
-      browser_->window()->Close();
+      browser_->GetWindow()->Close();
     }
 #endif
   }
 }
 
 void DevToolsWindow::ShowCertificateViewer(const std::string& cert_chain) {
-  std::optional<base::Value> value = base::JSONReader::Read(cert_chain);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(cert_chain, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   CHECK(value && value->is_list());
   std::vector<std::string> decoded;
   for (const auto& item : value->GetList()) {
@@ -1887,7 +1900,7 @@ void DevToolsWindow::CreateDevToolsBrowser() {
   bool resetPrefs = false;
   if (!prefs->GetDict(prefs::kAppWindowPlacement).Find(kDevToolsApp)) {
     // Ensure there is always a default size so that
-    // BrowserFrame::InitBrowserFrame can retrieve it later.
+    // BrowserWidget::InitBrowserFrame can retrieve it later.
     resetPrefs = true;
   } else {
     // Reset to default if stored window size is too small.
@@ -1924,7 +1937,7 @@ void DevToolsWindow::CreateDevToolsBrowser() {
   }
   browser_ =
       Browser::Create(Browser::CreateParams::CreateForDevTools(profile_));
-  browser_->tab_strip_model()->AddWebContents(
+  browser_->GetTabStripModel()->AddWebContents(
       OwnedMainWebContents::TakeWebContents(
           std::move(owned_main_web_contents_)),
       -1, ui::PAGE_TRANSITION_AUTO_TOPLEVEL, AddTabTypes::ADD_ACTIVE);

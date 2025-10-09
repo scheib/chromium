@@ -214,11 +214,24 @@ TEST(ProtoExtrasToValueTest, EmptyEmbeddedMessage) {
   })!"));
 }
 
+TEST(ProtoExtrasToValueTest, CordBytesField) {
+  TestMessage message;
+  message.set_cord_bytes_field("123");
+  EXPECT_EQ(Serialize(message), base::test::ParseJson(R"!({
+    "cord_bytes_field": "MTIz",
+    "double_field": 0.0,
+    "enum_field": "UNKNOWN",
+    "int32_field": 0,
+    "uint64_field": "0",
+  })!"));
+}
+
 TEST(ProtoExtrasProto2ToValueTest, Basic) {
   TestMessageProto2 message;
   const std::string expected_empty_message_str = R"({})";
   EXPECT_EQ(Serialize(message),
-            base::JSONReader::Read(expected_empty_message_str));
+            base::JSONReader::Read(expected_empty_message_str,
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.mutable_embedded_message()->set_str_field("test");
   message.add_repeated_embedded_message()->set_str_field("1");
   message.add_repeated_embedded_message()->set_str_field("2");
@@ -261,34 +274,48 @@ TEST(ProtoExtrasProto2ToValueTest, Basic) {
       "uint64_field": "0",
       "unknown_fields": "dW5rbm93bmZpZWxkZGF0YQ=="
     })";
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(expected_json_str));
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(expected_json_str,
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
 }
 
 TEST(ProtoExtrasProto2ToValueTest, OneofField) {
   TestMessageProto2 message;
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({})"));
+  EXPECT_EQ(
+      Serialize(message),
+      base::JSONReader::Read(R"({})", base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.set_maybe_int(1);
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(R"({
     "maybe_int": 1
-})"));
+})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.set_maybe_bool(true);
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(R"({
     "maybe_bool": true
-})"));
+})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.mutable_maybe_message()->set_str_field("test");
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(R"({
     "maybe_message": {
       "str_field": "test"
     }
-})"));
+})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.set_maybe_enum(OUTER_ENUM_OPTION1);
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(R"({
     "maybe_enum": "OUTER_ENUM_OPTION1"
-})"));
+})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
   message.set_maybe_bytes("test");
-  EXPECT_EQ(Serialize(message), base::JSONReader::Read(R"({
+  EXPECT_EQ(Serialize(message),
+            base::JSONReader::Read(R"({
     "maybe_bytes": "dGVzdA=="
-})"));
+})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
 }
 
 TEST(ProtoExtrasProto2ToValueTest, Uint64Field) {
@@ -320,8 +347,10 @@ TEST(ProtoExtrasProto2StreamTest, Basic) {
   message.set_maybe_int(1);
   std::ostringstream stream;
   stream << message;
-  EXPECT_EQ(base::JSONReader::Read(stream.str()),
-            base::JSONReader::Read(R"({"maybe_int": 1})"));
+  EXPECT_EQ(base::JSONReader::Read(stream.str(),
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS),
+            base::JSONReader::Read(R"({"maybe_int": 1})",
+                                   base::JSON_PARSE_CHROMIUM_EXTENSIONS));
 }
 
 TEST(ProtoExtrasEquality, Basic) {

@@ -38,6 +38,9 @@ class ZeroSuggestCacheService;
 struct AutocompleteMatch;
 struct ProviderStateService;
 class AimEligibilityService;
+#if BUILDFLAG(IS_IOS)
+class GeminiPrototypeOmniboxService;
+#endif  // BUILDFLAG(IS_IOS)
 
 namespace bookmarks {
 class BookmarkModel;
@@ -118,6 +121,10 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
       LensOverlaySuggestInputsCallback callback) const = 0;
   virtual tab_groups::TabGroupSyncService* GetTabGroupSyncService() const = 0;
   virtual AimEligibilityService* GetAimEligibilityService() const = 0;
+#if BUILDFLAG(IS_IOS)
+  virtual GeminiPrototypeOmniboxService* GetGeminiPrototypeOmniboxService()
+      const = 0;
+#endif  // BUILDFLAG(IS_IOS)
 
   // The value to use for Accept-Languages HTTP header when making an HTTP
   // request.
@@ -245,13 +252,18 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
   // shown to the user.
   virtual std::optional<bool> IsPagePaywalled() const;
 
+  // Whether the client should send the `ctxus=` URL parameter to Suggest in
+  // order to request contextual search suggestions in the Omnibox.
+  virtual bool ShouldSendContextualUrlSuggestParam() const;
+
+  // Whether the client should send the `pageTitle=` URL parameter to Suggest
+  // when requesting ZPS suggestions in the Omnibox.
+  virtual bool ShouldSendPageTitleSuggestParam() const;
+
   // Returns whether the app is currently in the background state (Mobile only).
   virtual bool in_background_state() const;
 
   virtual void set_in_background_state(bool in_background_state) {}
-
-  // Returns true if AI mode is enabled.
-  virtual bool IsAimEligible() const;
 
   // Gets a weak pointer to the client. Used when providers need to use the
   // client when the client may no longer be around.

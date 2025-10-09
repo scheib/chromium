@@ -31,6 +31,7 @@
 #include "components/autofill/core/browser/foundations/autofill_client.h"
 #include "components/autofill/core/browser/foundations/autofill_driver.h"
 #include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
+#include "components/autofill/core/browser/integrators/identity_credential/identity_credential_delegate.h"
 #include "components/autofill/core/browser/suggestions/suggestion.h"
 #include "components/autofill/core/browser/suggestions/suggestion_hiding_reason.h"
 #include "components/autofill/core/browser/suggestions/suggestion_type.h"
@@ -45,6 +46,7 @@
 #include "components/device_reauth/device_authenticator.h"
 #include "components/favicon/core/favicon_util.h"
 #include "components/favicon_base/favicon_types.h"
+#include "components/password_manager/core/browser/features/password_features.h"
 #include "components/password_manager/core/browser/manage_passwords_referrer.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
@@ -72,8 +74,73 @@ namespace password_manager {
 namespace {
 
 using autofill::Suggestion;
+using autofill::SuggestionType;
 using autofill::password_generation::PasswordGenerationType;
+using SuggestionMetadata =
+    autofill::AutofillSuggestionDelegate::SuggestionMetadata;
 using IsLoading = autofill::Suggestion::IsLoading;
+
+bool IsSuggestionHandledInPasswordManager(SuggestionType type) {
+  switch (type) {
+    case SuggestionType::kWebauthnSignInWithAnotherDevice:
+      return true;
+    case SuggestionType::kAddressEntry:
+    case SuggestionType::kAddressFieldByFieldFilling:
+    case SuggestionType::kDevtoolsTestAddressEntry:
+    case SuggestionType::kCreditCardEntry:
+    case SuggestionType::kVirtualCreditCardEntry:
+    case SuggestionType::kIbanEntry:
+    case SuggestionType::kMerchantPromoCodeEntry:
+    case SuggestionType::kSaveAndFillCreditCardEntry:
+    case SuggestionType::kSeePromoCodeDetails:
+    case SuggestionType::kScanCreditCard:
+    case SuggestionType::kBnplEntry:
+    case SuggestionType::kManageAddress:
+    case SuggestionType::kManageAutofillAi:
+    case SuggestionType::kManageCreditCard:
+    case SuggestionType::kManageIban:
+    case SuggestionType::kManageLoyaltyCard:
+    case SuggestionType::kManagePlusAddress:
+    case SuggestionType::kUndoOrClear:
+    case SuggestionType::kDatalistEntry:
+    case SuggestionType::kAutocompleteEntry:
+    case SuggestionType::kFillExistingPlusAddress:
+    case SuggestionType::kCreateNewPlusAddress:
+    case SuggestionType::kCreateNewPlusAddressInline:
+    case SuggestionType::kPlusAddressError:
+    case SuggestionType::kComposeResumeNudge:
+    case SuggestionType::kComposeProactiveNudge:
+    case SuggestionType::kComposeSavedStateNotification:
+    case SuggestionType::kComposeDisable:
+    case SuggestionType::kComposeGoToSettings:
+    case SuggestionType::kComposeNeverShowOnThisSiteAgain:
+    case SuggestionType::kFillAutofillAi:
+    case SuggestionType::kInsecureContextPaymentDisabledMessage:
+    case SuggestionType::kMixedFormMessage:
+    case SuggestionType::kAddressEntryOnTyping:
+    case SuggestionType::kIdentityCredential:
+    case SuggestionType::kLoyaltyCardEntry:
+    case SuggestionType::kOneTimePasswordEntry:
+    case SuggestionType::kTitle:
+    case SuggestionType::kSeparator:
+    case SuggestionType::kPasswordEntry:
+    case SuggestionType::kBackupPasswordEntry:
+    case SuggestionType::kTroubleSigningInEntry:
+    case SuggestionType::kFreeformFooter:
+    case SuggestionType::kAccountStoragePasswordEntry:
+    case SuggestionType::kAllLoyaltyCardsEntry:
+    case SuggestionType::kAllSavedPasswordsEntry:
+    case SuggestionType::kGeneratePasswordEntry:
+    case SuggestionType::kDevtoolsTestAddresses:
+    case SuggestionType::kDevtoolsTestAddressByCountry:
+    case SuggestionType::kWebauthnCredential:
+    case SuggestionType::kPasswordFieldByFieldFilling:
+    case SuggestionType::kFillPassword:
+    case SuggestionType::kViewPasswordDetails:
+    case SuggestionType::kPendingStateSignin:
+      return false;
+  }
+}
 
 // If `suggestion` was made for an empty username, then return the empty
 // string, otherwise return `suggestion`.
@@ -157,6 +224,11 @@ void PasswordAutofillManager::ShowKeyboardReplacingSurface(
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
+std::optional<autofill::Suggestion>
+PasswordAutofillManager::GetWebauthnSignInWithAnotherDeviceSuggestion() const {
+  return suggestion_generator_.GetWebauthnSignInWithAnotherDeviceSuggestion();
+}
+
 std::variant<autofill::AutofillDriver*, PasswordManagerDriver*>
 PasswordAutofillManager::GetDriver() {
   return password_manager_driver_.get();
@@ -200,14 +272,14 @@ void PasswordAutofillManager::DidAcceptSuggestion(
   switch (suggestion.type) {
     case autofill::SuggestionType::kGeneratePasswordEntry:
       password_client_->GeneratePassword(PasswordGenerationType::kAutomatic);
-      metrics_util::LogPasswordDropdownItemSelected(
+      metrics_util::LogPasswordSuggestionSelected(
           PasswordDropdownSelectedOption::kGenerate,
           password_client_->IsOffTheRecord());
       break;
     case autofill::SuggestionType::kAllSavedPasswordsEntry:
       password_client_->NavigateToManagePasswordsPage(
           ManagePasswordsReferrer::kPasswordDropdown);
-      metrics_util::LogPasswordDropdownItemSelected(
+      metrics_util::LogPasswordSuggestionSelected(
           PasswordDropdownSelectedOption::kShowAll,
           password_client_->IsOffTheRecord());
 
@@ -219,7 +291,7 @@ void PasswordAutofillManager::DidAcceptSuggestion(
       }
       break;
     case autofill::SuggestionType::kWebauthnCredential:
-      metrics_util::LogPasswordDropdownItemSelected(
+      metrics_util::LogPasswordSuggestionSelected(
           PasswordDropdownSelectedOption::kWebAuthn,
           password_client_->IsOffTheRecord());
       password_client_
@@ -235,7 +307,7 @@ void PasswordAutofillManager::DidAcceptSuggestion(
           std::move(last_popup_open_args_).suggestions, suggestion));
       break;
     case autofill::SuggestionType::kWebauthnSignInWithAnotherDevice:
-      metrics_util::LogPasswordDropdownItemSelected(
+      metrics_util::LogPasswordSuggestionSelected(
           PasswordDropdownSelectedOption::kWebAuthnSignInWithAnotherDevice,
           password_client_->IsOffTheRecord());
       password_client_
@@ -270,6 +342,9 @@ void PasswordAutofillManager::DidAcceptSuggestion(
       break;
     }
     case autofill::SuggestionType::kBackupPasswordEntry: {
+      metrics_util::LogPasswordSuggestionSelected(
+          PasswordDropdownSelectedOption::kBackupPassword,
+          password_client_->IsOffTheRecord());
       // The payload is set during suggestion generation and contains the backup
       // password in its password field.
       auto payload =
@@ -281,6 +356,9 @@ void PasswordAutofillManager::DidAcceptSuggestion(
       break;
     }
     case autofill::SuggestionType::kTroubleSigningInEntry: {
+      metrics_util::LogPasswordSuggestionSelected(
+          PasswordDropdownSelectedOption::kTroubleSigningIn,
+          password_client_->IsOffTheRecord());
       auto payload =
           suggestion
               .GetPayload<autofill::Suggestion::PasswordSuggestionDetails>();
@@ -292,7 +370,7 @@ void PasswordAutofillManager::DidAcceptSuggestion(
       return;
     }
     default: {
-      metrics_util::LogPasswordDropdownItemSelected(
+      metrics_util::LogPasswordSuggestionSelected(
           PasswordDropdownSelectedOption::kPassword,
           password_client_->IsOffTheRecord());
 
@@ -410,7 +488,7 @@ void PasswordAutofillManager::DeleteFillData() {
 
 void PasswordAutofillManager::ShowSuggestions(
     const autofill::TriggeringField& field) {
-  if (autofill::IsAutofillManuallyTriggered(field.trigger_source)) {
+  if (autofill::IsPasswordsAutofillManuallyTriggered(field.trigger_source)) {
     if (!manual_fallback_flow_) {
       manual_fallback_flow_ = std::make_unique<PasswordManualFallbackFlow>(
           password_manager_driver_, autofill_client_, password_client_,
@@ -432,6 +510,18 @@ void PasswordAutofillManager::ShowSuggestions(
     wait_for_passkeys_timer_.Stop();
     ContinueShowingSuggestions(field);
   }
+}
+
+void PasswordAutofillManager::SelectSuggestion(const Suggestion& suggestion) {
+  CHECK(IsSuggestionHandledInPasswordManager(suggestion.type));
+  DidSelectSuggestion(suggestion);
+}
+
+void PasswordAutofillManager::AcceptSuggestion(
+    const Suggestion& suggestion,
+    const SuggestionMetadata& metadata) {
+  CHECK(IsSuggestionHandledInPasswordManager(suggestion.type));
+  DidAcceptSuggestion(suggestion, metadata);
 }
 
 bool PasswordAutofillManager::ShouldWaitForPasskeys(

@@ -27,6 +27,7 @@ class OpenXRSceneUnderstandingManagerAndroid
   ~OpenXRSceneUnderstandingManagerAndroid() override;
 
   // OpenXRSceneUnderstandingManager
+  OpenXrSceneUnderstandingManagerType GetType() const override;
   OpenXrPlaneManager* GetPlaneManager() override;
   OpenXrAnchorManager* GetAnchorManager() override;
   OpenXrHitTestManager* GetHitTestManager() override;
@@ -56,7 +57,7 @@ class OpenXrSceneUnderstandingManagerAndroidFactory
 
   std::unique_ptr<OpenXRSceneUnderstandingManager>
   CreateSceneUnderstandingManager(const OpenXrExtensionHelper& extension_helper,
-                                  XrSession session,
+                                  OpenXrApiWrapper* openxr,
                                   XrSpace mojo_space) const override;
 
  private:

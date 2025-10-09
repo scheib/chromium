@@ -80,8 +80,7 @@ class GlicProfileManagerUiTest
     // web client before we've initialized the embedded test server and can set
     // the correct URL.
     GlicProfileManager::ForceMemoryPressureForTesting(
-        base::MemoryPressureMonitor::MemoryPressureLevel::
-            MEMORY_PRESSURE_LEVEL_CRITICAL);
+        base::MEMORY_PRESSURE_LEVEL_CRITICAL);
     GlicProfileManager::ForceConnectionTypeForTesting(
         network::mojom::ConnectionType::CONNECTION_ETHERNET);
     fre_server_.ServeFilesFromDirectory(
@@ -153,7 +152,8 @@ class GlicProfileManagerUiTest
         if (!warmed) {
           return false;
         }
-        auto* contents = service->host().webui_contents();
+        auto* contents =
+            service->GetInstanceForActiveTab(nullptr)->host().webui_contents();
         if (!contents) {
           contents = service->fre_controller().GetWebContents();
         }
@@ -168,8 +168,7 @@ class GlicProfileManagerUiTest
   auto ResetMemoryPressure() {
     return Do([]() {
       GlicProfileManager::ForceMemoryPressureForTesting(
-          base::MemoryPressureMonitor::MemoryPressureLevel::
-              MEMORY_PRESSURE_LEVEL_NONE);
+          base::MEMORY_PRESSURE_LEVEL_NONE);
     });
   }
 
@@ -179,7 +178,7 @@ class GlicProfileManagerUiTest
       if (ShouldWarmFRE()) {
         web_client_contents_ = service->fre_controller().GetWebContents();
       } else {
-        web_client_contents_ = service->host().webui_contents();
+        web_client_contents_ = GetHost()->webui_contents();
       }
     });
   }
@@ -192,8 +191,8 @@ class GlicProfileManagerUiTest
                   service->fre_controller().GetWebContents());
         EXPECT_NE(nullptr, service->fre_controller().GetWebContents());
       } else {
-        EXPECT_EQ(web_client_contents_, service->host().webui_contents());
-        EXPECT_NE(nullptr, service->host().webui_contents());
+        EXPECT_EQ(web_client_contents_, GetHost()->webui_contents());
+        EXPECT_NE(nullptr, GetHost()->webui_contents());
       }
       web_client_contents_ = nullptr;
     });
@@ -208,11 +207,9 @@ class GlicProfileManagerUiTest
   auto SendMemoryPressureSignal(bool primary_profile) {
     return Do([this, primary_profile]() {
       GlicProfileManager::ForceMemoryPressureForTesting(
-          base::MemoryPressureMonitor::MemoryPressureLevel::
-              MEMORY_PRESSURE_LEVEL_CRITICAL);
+          base::MEMORY_PRESSURE_LEVEL_CRITICAL);
       GetService(primary_profile)
-          ->OnMemoryPressure(base::MemoryPressureListener::MemoryPressureLevel::
-                                 MEMORY_PRESSURE_LEVEL_CRITICAL);
+          ->OnMemoryPressure(base::MEMORY_PRESSURE_LEVEL_CRITICAL);
     });
   }
 

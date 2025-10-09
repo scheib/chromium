@@ -36,7 +36,6 @@ using base::test::RunClosure;
 using ::testing::_;
 
 #if BUILDFLAG(IS_LINUX)
-using testing::Invoke;
 using testing::InvokeWithoutArgs;
 #endif  // BUILDFLAG(IS_LINUX)
 
@@ -316,7 +315,8 @@ class MockV4l2GpuClient : public VideoCaptureDevice::Client {
 class MockCaptureHandleProvider
     : public VideoCaptureDevice::Client::Buffer::HandleProvider {
  public:
-  MockCaptureHandleProvider(const gfx::Size& size, gfx::BufferFormat format) {
+  MockCaptureHandleProvider(const gfx::Size& size,
+                            viz::SharedImageFormat format) {
     gmb_handle_ =
         gpu::TestSharedImageInterface::CreatePixmapHandle(size, format);
   }
@@ -453,16 +453,16 @@ TEST_P(V4l2CaptureDelegateGPUMemoryBufferTest, CameraCaptureOneCopy) {
       std::make_unique<MockV4l2GpuClient>();
   MockV4l2GpuClient* client_ptr = client.get();
   EXPECT_CALL(*client_ptr, ReserveOutputBuffer)
-      .WillRepeatedly(Invoke(
+      .WillRepeatedly(
           [](const gfx::Size& size, VideoPixelFormat format, int feedback_id,
              VideoCaptureDevice::Client::Buffer* capture_buffer,
              int* require_new_buffer_id, int* retire_old_buffer_id) {
             EXPECT_EQ(format, PIXEL_FORMAT_NV12);
             capture_buffer->handle_provider =
                 std::make_unique<MockCaptureHandleProvider>(
-                    size, gfx::BufferFormat::YUV_420_BIPLANAR);
+                    size, viz::MultiPlaneFormat::kNV12);
             return VideoCaptureDevice::Client::ReserveResult::kSucceeded;
-          }));
+          });
 
   base::RunLoop wait_loop;
   EXPECT_CALL(*client_ptr, OnIncomingCapturedBufferExt)

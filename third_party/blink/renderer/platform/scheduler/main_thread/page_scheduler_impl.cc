@@ -55,7 +55,7 @@ constexpr base::TimeDelta kThrottlingDelayAfterBackgrounding =
 // etc. after the renderer has been backgrounded. This is used only if
 // background suspension is enabled.
 constexpr base::TimeDelta kDefaultDelayForBackgroundTabFreezing =
-    base::Minutes(5);
+    base::Minutes(1);
 
 // Duration of a throttled wake up.
 constexpr base::TimeDelta kThrottledWakeUpDuration = base::Milliseconds(3);
@@ -378,10 +378,11 @@ void PageSchedulerImpl::RegisterFrameSchedulerImpl(
 
 std::unique_ptr<blink::FrameScheduler> PageSchedulerImpl::CreateFrameScheduler(
     FrameScheduler::Delegate* delegate,
+    const LocalFrameToken& frame_token,
     bool is_in_embedded_frame_tree,
     FrameScheduler::FrameType frame_type) {
   auto frame_scheduler = std::make_unique<FrameSchedulerImpl>(
-      this, delegate, is_in_embedded_frame_tree, frame_type);
+      this, delegate, frame_token, is_in_embedded_frame_tree, frame_type);
   RegisterFrameSchedulerImpl(frame_scheduler.get());
   return frame_scheduler;
 }

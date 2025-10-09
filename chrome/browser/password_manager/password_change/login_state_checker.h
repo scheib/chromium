@@ -7,11 +7,14 @@
 
 #include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/strong_alias.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
+#include "chrome/browser/password_manager/password_change/model_quality_logs_uploader.h"
 #include "components/optimization_guide/content/browser/page_content_proto_provider.h"
 #include "content/public/browser/web_contents_observer.h"
 
 class AnnotatedPageContentCapturer;
+class ModelQualityLogsUploader;
 class OptimizationGuideKeyedService;
 
 namespace content {
@@ -31,22 +34,37 @@ class LoginStateChecker : public content::WebContentsObserver {
  public:
   // Maximum amount of login state checks.
   static constexpr int kMaxLoginChecks = 5;
-  using LoginStateResultCallback = base::OnceCallback<void(bool)>;
+  using LoginStateResultCallback = base::RepeatingCallback<void(bool)>;
+  using QualityStatus = optimization_guide::proto::
+      PasswordChangeQuality_StepQuality_SubmissionStatus;
+  using IsLoggedIn = base::StrongAlias<class IsLoggedInTag, bool>;
 
   LoginStateChecker(content::WebContents* web_contents,
+                    ModelQualityLogsUploader* logs_uploader,
                     password_manager::PasswordManagerClient* client,
                     LoginStateResultCallback callback);
 
   ~LoginStateChecker() override;
 
+  bool ReachedAttemptsLimit() const;
+
 #if defined(UNIT_TEST)
   AnnotatedPageContentCapturer* capturer() { return capturer_.get(); }
-  void RespondWithLoginStatus(bool is_logged_in) {
-    std::move(callback_).Run(is_logged_in);
+  void RespondWithLoginStatus(IsLoggedIn is_logged_in) {
+    SetLoginCheckQuality(is_logged_in);
+    state_checks_count_++;
+    result_check_callback_.Run(is_logged_in.value());
   }
 #endif
 
  private:
+  // To be called when the login checks should be terminated due
+  // to max retries or an unexpected state.
+  void TerminateLoginChecks();
+
+  // Sets the quality log state based on the last check performed.
+  void SetLoginCheckQuality(IsLoggedIn is_logged_in);
+
   OptimizationGuideKeyedService* GetOptimizationService();
 
   // Checks if the user is fully signed in on the site.
@@ -70,9 +88,14 @@ class LoginStateChecker : public content::WebContentsObserver {
 
   std::unique_ptr<AnnotatedPageContentCapturer> capturer_;
 
+  // Whether a server request is ongoing.
+  bool is_request_in_flight_ = false;
+  std::optional<optimization_guide::AIPageContentResult> cached_page_content_;
+  const raw_ref<ModelQualityLogsUploader> logs_uploader_;
+
   raw_ptr<password_manager::PasswordManagerClient> client_ = nullptr;
 
-  LoginStateResultCallback callback_;
+  LoginStateResultCallback result_check_callback_;
 
   // The number of login state checks performed.
   int state_checks_count_ = 0;

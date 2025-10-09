@@ -49,6 +49,7 @@
 #include "content/public/browser/web_contents_user_data.h"
 #include "content/public/common/content_constants.h"
 #include "net/base/schemeful_site.h"
+#include "net/device_bound_sessions/session_access.h"
 #include "services/network/public/mojom/shared_dictionary_access_observer.mojom.h"
 #include "third_party/abseil-cpp/absl/functional/overload.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
@@ -1512,7 +1513,8 @@ std::vector<privacy_sandbox::CanonicalTopic>
 PageSpecificContentSettings::GetAccessedTopics() const {
   if (accessed_topics_.empty() &&
       privacy_sandbox::kPrivacySandboxSettings4ShowSampleDataForTesting.Get() &&
-      page().GetMainDocument().GetLastCommittedURL().host() == "example.com") {
+      page().GetMainDocument().GetLastCommittedURL().GetHost() ==
+          "example.com") {
     // TODO(crbug.com/40210776): Remove sample topic when API is ready.
     return {privacy_sandbox::CanonicalTopic(browsing_topics::Topic(3),
                                             kTopicsAPISampleDataTaxonomy),

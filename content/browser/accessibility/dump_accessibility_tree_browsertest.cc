@@ -63,9 +63,6 @@ void DumpAccessibilityTreeTest::SetUpCommandLine(
   // Enable aria-actions.
   command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
                                   "AriaActions");
-  // Enable CSSReadingFlow, used by AccessibilityCSSReadingFlow.
-  command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
-                                  "CSSReadingFlow");
   // Enable CSSInert, used by AccessibilityCSSInteractivityInert.
   command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures, "CSSInert");
   // Enable custom elements to have a default role of "none", removing them
@@ -80,15 +77,19 @@ void DumpAccessibilityTreeTest::SetUpCommandLine(
   // Enable AOMAriaRelationshipProperties
   command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
                                   "AOMAriaRelationshipProperties");
-  // Enable command/commandfor attributes
-  command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
-                                  "HTMLCommandAttributes");
   // Enable headingoffset/headingreset attributes
   command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
                                   "HeadingOffset");
   // Enable layout of canvas children with the layoutsubtree attribute.
   command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
                                   "CanvasDrawElement");
+  // Enable MenuElements so that the new menu elements are recognized.
+  command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
+                                  "MenuElements");
+  // Enable CSSScrollTargetGroupAriaCurrent, used by
+  // TargetCurrentHtmlAnchorRole.
+  command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
+                                  "CSSScrollTargetGroupAriaCurrent");
 }
 
 void DumpAccessibilityTreeTest::SetUpOnMainThread() {
@@ -182,46 +183,6 @@ class SummaryAsHeadingDumpAccessibilityTreeTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-class SelectReparentInputDumpAccessibilityTreeTest
-    : public DumpAccessibilityTreeTest {
- protected:
-  SelectReparentInputDumpAccessibilityTreeTest() {
-    feature_list_.InitWithFeatures(
-        {{blink::features::kSelectAccessibilityReparentInput}},
-        {/* disabled_features */});
-  }
-
-  ~SelectReparentInputDumpAccessibilityTreeTest() override {
-    // Ensure that the feature lists are destroyed in the same order they
-    // were created in.
-    scoped_feature_list_.Reset();
-    feature_list_.Reset();
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-class SelectNestedInputDumpAccessibilityTreeTest
-    : public DumpAccessibilityTreeTest {
- protected:
-  SelectNestedInputDumpAccessibilityTreeTest() {
-    feature_list_.InitWithFeatures(
-        {{blink::features::kSelectAccessibilityNestedInput}},
-        {/* disabled_features */});
-  }
-
-  ~SelectNestedInputDumpAccessibilityTreeTest() override {
-    // Ensure that the feature lists are destroyed in the same order they
-    // were created in.
-    scoped_feature_list_.Reset();
-    feature_list_.Reset();
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
 class OnScreenModeDumpAccessibilityTreeTest : public DumpAccessibilityTreeTest {
 };
 
@@ -256,18 +217,6 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     All,
     SummaryAsHeadingDumpAccessibilityTreeTest,
-    ::testing::ValuesIn(DumpAccessibilityTestBase::TreeTestPasses()),
-    DumpAccessibilityTreeTestPassToString());
-
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    SelectReparentInputDumpAccessibilityTreeTest,
-    ::testing::ValuesIn(DumpAccessibilityTestBase::TreeTestPasses()),
-    DumpAccessibilityTreeTestPassToString());
-
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    SelectNestedInputDumpAccessibilityTreeTest,
     ::testing::ValuesIn(DumpAccessibilityTestBase::TreeTestPasses()),
     DumpAccessibilityTreeTestPassToString());
 
@@ -994,17 +943,8 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
   RunAriaTest(FILE_PATH_LITERAL("aria-controls-reference-target.html"));
 }
 
-// TODO(crbug.com/405117678): Re-enable this test on Mac.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_AccessibilityAriaControlsManyParagraphsBetween \
-  DISABLED_AccessibilityAriaControlsManyParagraphsBetween
-#else
-#define MAYBE_AccessibilityAriaControlsManyParagraphsBetween \
-  AccessibilityAriaControlsManyParagraphsBetween
-#endif
-
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
-                       MAYBE_AccessibilityAriaControlsManyParagraphsBetween) {
+                       AccessibilityAriaControlsManyParagraphsBetween) {
   RunAriaTest(FILE_PATH_LITERAL("aria-controls-many-paragraphs-between.html"));
 }
 
@@ -1487,6 +1427,16 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityAriaMeter) {
   RunAriaTest(FILE_PATH_LITERAL("aria-meter.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilityMenuBarElementRoles) {
+  RunHtmlTest(FILE_PATH_LITERAL("menubar-element-roles.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilityMenuListPopover) {
+  RunHtmlTest(FILE_PATH_LITERAL("menulist-popover.html"));
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
@@ -2297,18 +2247,16 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilitySelectListboxActivateOptions) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      switches::kEnableBlinkFeatures,
+      blink::features::kSelectMobileDesktopParity.name);
+  RunHtmlTest(FILE_PATH_LITERAL("select-multiple-activate-options.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
                        AccessibilitySlowlyBuildSelect) {
   RunHtmlTest(FILE_PATH_LITERAL("select-slowly-build.html"));
-}
-
-IN_PROC_BROWSER_TEST_P(SelectReparentInputDumpAccessibilityTreeTest,
-                       AccessibilityCustomSelectWithInput) {
-  RunHtmlTest(FILE_PATH_LITERAL("select-with-input.html"));
-}
-
-IN_PROC_BROWSER_TEST_P(SelectNestedInputDumpAccessibilityTreeTest,
-                       AccessibilityCustomSelectWithInput) {
-  RunHtmlTest(FILE_PATH_LITERAL("select-with-input-2.html"));
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityDd) {
@@ -2662,6 +2610,11 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityHTML) {
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
                        AccessibilityHTMLAttributesAndTagNames) {
   RunHtmlTest(FILE_PATH_LITERAL("html-attributes-and-tag-names.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilityHtmlVsAriaAttributes) {
+  RunHtmlTest(FILE_PATH_LITERAL("html-vs-aria-attributes.html"));
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityI) {
@@ -3417,6 +3370,11 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
   RunHtmlTest(FILE_PATH_LITERAL("next-on-line-empty-list-item.html"));
 }
 
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilityListMarkerMultiline) {
+  RunHtmlTest(FILE_PATH_LITERAL("list-marker-multiline.html"));
+}
+
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityOl) {
   RunHtmlTest(FILE_PATH_LITERAL("ol.html"));
 }
@@ -3540,6 +3498,12 @@ INSTANTIATE_TEST_SUITE_P(
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeWithProhibitedNamesTest,
                        AccessibilityProhibitedName) {
   RunHtmlTest(FILE_PATH_LITERAL("prohibited-name.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilityNameFromPopovertargetAndInterestfor) {
+  RunPopoverHintTest(
+      FILE_PATH_LITERAL("name-from-popovertarget-and-interestfor.html"));
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilityPopoverApi) {
@@ -3720,6 +3684,14 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
                        AccessibilitySelectFollowsFocusMultiselect) {
   RunHtmlTest(FILE_PATH_LITERAL("select-follows-focus-multiselect.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       AccessibilitySelectListboxModes) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      switches::kEnableBlinkFeatures,
+      blink::features::kSelectMobileDesktopParity.name);
+  RunHtmlTest(FILE_PATH_LITERAL("select-listbox-modes.html"));
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, AccessibilitySpan) {
@@ -4315,6 +4287,10 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, CommandForApiPopover) {
   RunHtmlTest(FILE_PATH_LITERAL("commandfor-api-popover.html"));
 }
 
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, CommandForApiPopoverMenus) {
+  RunHtmlTest(FILE_PATH_LITERAL("commandfor-api-popover-menus.html"));
+}
+
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, CommandForApiDialog) {
   RunHtmlTest(FILE_PATH_LITERAL("commandfor-api-dialog.html"));
 }
@@ -4841,6 +4817,11 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeWithCarouselTest,
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeWithCarouselTest,
+                       CarouselWithTabsDynamic) {
+  RunCSSTest(FILE_PATH_LITERAL("carousel-with-tabs-dynamic.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeWithCarouselTest,
                        CarouselWithLinks) {
   RunCSSTest(FILE_PATH_LITERAL("carousel-with-links.html"));
 }
@@ -4865,12 +4846,28 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeWithCarouselTest,
   RunCSSTest(FILE_PATH_LITERAL("carousel-marker-names.html"));
 }
 
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, TargetCurrentHtmlAnchorRole) {
+  RunCSSTest(FILE_PATH_LITERAL("target-current-html-anchor-role.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest,
+                       TargetCurrentHtmlAnchorRoleDynamic) {
+  RunCSSTest(FILE_PATH_LITERAL("target-current-html-anchor-role-dynamic.html"));
+}
+
 //
 // These tests cover features of the testing infrastructure itself.
 //
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityTreeTest, DenyNode) {
   RunTestHarnessTest(FILE_PATH_LITERAL("deny-node.html"));
+}
+
+IN_PROC_BROWSER_TEST_P(
+    DumpAccessibilityTreeTest,
+    AccessibilityListWithMultiLineListItemInContentEditable) {
+  RunHtmlTest(FILE_PATH_LITERAL(
+      "list-with-multi-line-list-item-in-content-editable.html"));
 }
 
 }  // namespace content

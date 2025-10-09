@@ -19,6 +19,7 @@
 #include <memory>
 #include <tuple>
 
+#include "base/check.h"
 #include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -174,13 +175,13 @@ void ChannelPosix::LeakHandle() {
   leak_handle_ = true;
 }
 
-bool ChannelPosix::GetReadPlatformHandles(const void* payload,
-                                          size_t payload_size,
-                                          size_t num_handles,
-                                          const void* extra_header,
-                                          size_t extra_header_size,
-                                          std::vector<PlatformHandle>* handles,
-                                          bool* deferred) {
+bool ChannelPosix::GetReadPlatformHandles(
+    const void* payload,
+    size_t payload_size,
+    size_t num_handles,
+    const void* extra_header,
+    size_t extra_header_size,
+    std::vector<PlatformHandle>* handles) {
   if (num_handles > std::numeric_limits<uint16_t>::max())
     return false;
 
@@ -352,6 +353,9 @@ bool ChannelPosix::WriteNoLock(MessageView message_view) {
                    message_view.data_num_bytes()};
       size_t num_handles_to_send =
           std::min(num_handles - handles_written, kMaxSendmsgHandles);
+      // TODO(crbug.com/439305148): Sending a large number of handles without
+      // a payload causes the message to be dropped.
+      CHECK(num_handles_to_send && (message_view.data_num_bytes() > 0));
       std::vector<base::ScopedFD> fds(num_handles_to_send);
       for (size_t i = 0; i < num_handles_to_send; ++i)
         fds[i] = handles[i + handles_written].TakeHandle().TakeFD();
@@ -438,7 +442,7 @@ bool ChannelPosix::FlushOutgoingMessagesNoLock() {
   std::swap(outgoing_messages_, messages);
 
   if (!messages.empty()) {
-    UMA_HISTOGRAM_COUNTS_1000("Mojo.Channel.WriteQueuePendingMessages",
+    UMA_HISTOGRAM_COUNTS_1000("Mojo.Channel.WriteQueuePendingMessages2",
                               messages.size());
   }
 

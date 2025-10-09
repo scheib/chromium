@@ -54,16 +54,17 @@ SharedImageInterface* GLInProcessContext::GetSharedImageInterface() {
 }
 
 ContextResult GLInProcessContext::Initialize(
-    CommandBufferTaskExecutor* task_executor,
-    const ContextCreationAttribs& attribs,
-    const SharedMemoryLimits& mem_limits) {
+    CommandBufferTaskExecutor* task_executor) {
   DCHECK(base::SingleThreadTaskRunner::GetCurrentDefault());
 
   command_buffer_ = std::make_unique<InProcessCommandBuffer>(
       task_executor, GURL("chrome://gpu/GLInProcessContext::Initialize"));
 
+  auto attribs =
+      mojom::ContextCreationAttribs::NewGles(mojom::GLESCreationAttribs::New());
+
   auto result = command_buffer_->Initialize(
-      attribs, base::SingleThreadTaskRunner::GetCurrentDefault(),
+      std::move(attribs), base::SingleThreadTaskRunner::GetCurrentDefault(),
       /*gr_shader_cache=*/nullptr,
       /*use_shader_cache_shm_count=*/nullptr);
   if (result != ContextResult::kSuccess) {
@@ -71,6 +72,7 @@ ContextResult GLInProcessContext::Initialize(
     return result;
   }
 
+  const SharedMemoryLimits mem_limits;
   // Create the GLES2 helper, which writes the command buffer protocol.
   gles2_helper_ =
       std::make_unique<gles2::GLES2CmdHelper>(command_buffer_.get());
@@ -83,15 +85,11 @@ ContextResult GLInProcessContext::Initialize(
   // Create a transfer buffer.
   transfer_buffer_ = std::make_unique<TransferBuffer>(gles2_helper_.get());
 
-  const bool bind_generates_resource = false;
-  const bool support_client_side_arrays = false;
-
   // Create the object exposing the OpenGL API.
   gles2_implementation_ =
       std::make_unique<skia_bindings::GLES2ImplementationWithGrContextSupport>(
           gles2_helper_.get(), /*share_group=*/nullptr, transfer_buffer_.get(),
-          bind_generates_resource, attribs.lose_context_when_out_of_memory,
-          support_client_side_arrays, command_buffer_.get());
+          /*lose_context_when_out_of_memory=*/false, command_buffer_.get());
 
   result = gles2_implementation_->Initialize(mem_limits);
   return result;

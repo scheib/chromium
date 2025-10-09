@@ -14,6 +14,8 @@ import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
@@ -98,8 +100,8 @@ import org.mockito.junit.MockitoRule;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
-import org.chromium.base.BuildInfo;
 import org.chromium.base.ContextUtils;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.ObserverList;
 import org.chromium.base.ServiceLoaderUtil;
@@ -275,7 +277,7 @@ public class CustomTabActivityTest {
         private T mValue;
 
         public T getValue() {
-            assert getCallCount() > 0;
+            assertThat(getCallCount()).isGreaterThan(0);
             return mValue;
         }
 
@@ -519,8 +521,7 @@ public class CustomTabActivityTest {
                         .getLocationBarModelForTesting()
                         .shouldEmphasizeHttpsScheme());
         // Status bar color is constantly black on automotive. See b/285208454.
-        int expectedStatusBarColor =
-                BuildInfo.getInstance().isAutomotive ? Color.BLACK : expectedColor;
+        int expectedStatusBarColor = DeviceInfo.isAutomotive() ? Color.BLACK : expectedColor;
         assertEquals(
                 expectedStatusBarColor,
                 mCustomTabActivityTestRule.getActivity().getWindow().getStatusBarColor());
@@ -1348,7 +1349,6 @@ public class CustomTabActivityTest {
      */
     @Test
     @SmallTest
-    @EnableFeatures({ChromeFeatureList.CCT_EARLY_NAV})
     public void testPrecreatedRenderer() throws Exception {
         var histograms =
                 HistogramWatcher.newBuilder()
@@ -1390,7 +1390,6 @@ public class CustomTabActivityTest {
     /** Tests that we don't leak the tab when finishing early. */
     @Test
     @SmallTest
-    @EnableFeatures({ChromeFeatureList.CCT_EARLY_NAV})
     public void testEarlyFinish() throws Exception {
         CallbackHelper helper = new CallbackHelper();
         ThreadUtils.runOnUiThreadBlocking(
@@ -2294,8 +2293,9 @@ public class CustomTabActivityTest {
         WindowManager.LayoutParams attrs = getActivity().getWindow().getAttributes();
         assertNotEquals("The window should have non-full height", fullHeight, attrs.height);
 
-        assert (mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting()
-                instanceof BaseCustomTabRootUiCoordinator);
+        assertThat(mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting())
+                .isInstanceOf(BaseCustomTabRootUiCoordinator.class);
+
         BaseCustomTabRootUiCoordinator coordinator =
                 (BaseCustomTabRootUiCoordinator)
                         mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting();
@@ -2354,13 +2354,15 @@ public class CustomTabActivityTest {
         rotateCustomTabActivity(
                 mCustomTabActivityTestRule.getActivity(), Layout.Orientation.LANDSCAPE);
 
-        assert (mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting()
-                instanceof BaseCustomTabRootUiCoordinator);
+        assertThat(mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting())
+                .isInstanceOf(BaseCustomTabRootUiCoordinator.class);
+
         BaseCustomTabRootUiCoordinator coordinator =
                 (BaseCustomTabRootUiCoordinator)
                         mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting();
-        assert (coordinator.getCustomTabSizeStrategyForTesting()
-                instanceof PartialCustomTabDisplayManager);
+        assertThat(coordinator.getCustomTabSizeStrategyForTesting())
+                .isInstanceOf(PartialCustomTabDisplayManager.class);
+
         PartialCustomTabDisplayManager displayManager =
                 (PartialCustomTabDisplayManager) coordinator.getCustomTabSizeStrategyForTesting();
         if (displayManager.getActiveStrategyType()
@@ -2414,13 +2416,15 @@ public class CustomTabActivityTest {
         int devicePortraitWidthDp = (int) (displayMetrics.widthPixels / displayMetrics.density);
         int deviceLandscapeWidthDp = (int) (displayMetrics.heightPixels / displayMetrics.density);
 
-        assert (mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting()
-                instanceof BaseCustomTabRootUiCoordinator);
+        assertThat(mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting())
+                .isInstanceOf(BaseCustomTabRootUiCoordinator.class);
+
         BaseCustomTabRootUiCoordinator coordinator =
                 (BaseCustomTabRootUiCoordinator)
                         mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting();
-        assert (coordinator.getCustomTabSizeStrategyForTesting()
-                instanceof PartialCustomTabDisplayManager);
+        assertThat(coordinator.getCustomTabSizeStrategyForTesting())
+                .isInstanceOf(PartialCustomTabDisplayManager.class);
+
         PartialCustomTabDisplayManager displayManager =
                 (PartialCustomTabDisplayManager) coordinator.getCustomTabSizeStrategyForTesting();
 
@@ -2447,13 +2451,15 @@ public class CustomTabActivityTest {
         MultiWindowUtils.getInstance().setIsInMultiWindowModeForTesting(true);
         mCustomTabActivityTestRule.startCustomTabActivityWithIntent(intent);
 
-        assert (mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting()
-                instanceof BaseCustomTabRootUiCoordinator);
+        assertThat(mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting())
+                .isInstanceOf(BaseCustomTabRootUiCoordinator.class);
+
         BaseCustomTabRootUiCoordinator coordinator =
                 (BaseCustomTabRootUiCoordinator)
                         mCustomTabActivityTestRule.getActivity().getRootUiCoordinatorForTesting();
-        assert (coordinator.getCustomTabSizeStrategyForTesting()
-                instanceof PartialCustomTabDisplayManager);
+        assertThat(coordinator.getCustomTabSizeStrategyForTesting())
+                .isInstanceOf(PartialCustomTabDisplayManager.class);
+
         PartialCustomTabDisplayManager displayManager =
                 (PartialCustomTabDisplayManager) coordinator.getCustomTabSizeStrategyForTesting();
         int fullWidth = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -2498,12 +2504,14 @@ public class CustomTabActivityTest {
         DisplayMetrics displayMetrics = resultActivity.getResources().getDisplayMetrics();
         int devicePortraitWidthDp = (int) (displayMetrics.widthPixels / displayMetrics.density);
 
-        assert (resultActivity.getRootUiCoordinatorForTesting()
-                instanceof BaseCustomTabRootUiCoordinator);
+        assertThat(resultActivity.getRootUiCoordinatorForTesting())
+                .isInstanceOf(BaseCustomTabRootUiCoordinator.class);
+
         BaseCustomTabRootUiCoordinator coordinator =
                 (BaseCustomTabRootUiCoordinator) resultActivity.getRootUiCoordinatorForTesting();
-        assert (coordinator.getCustomTabSizeStrategyForTesting()
-                instanceof PartialCustomTabDisplayManager);
+        assertThat(coordinator.getCustomTabSizeStrategyForTesting())
+                .isInstanceOf(PartialCustomTabDisplayManager.class);
+
         PartialCustomTabDisplayManager displayManager =
                 (PartialCustomTabDisplayManager) coordinator.getCustomTabSizeStrategyForTesting();
 
@@ -2987,7 +2995,6 @@ public class CustomTabActivityTest {
 
     @Test
     @SmallTest
-    @Features.EnableFeatures({ChromeFeatureList.CCT_PREDICTIVE_BACK_GESTURE})
     public void
             testBackPressManagerAddsSystemNavigationObserver_WhenPredictiveBackGestureIsSupported() {
         CustomTabActivityNavigationController.enablePredictiveBackGestureForTesting();

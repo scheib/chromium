@@ -519,7 +519,7 @@ void PageContentAnnotationsService::OnPageContentAnnotated(
 
   MaybeRecordVisibilityUKM(visit, content_annotations);
   NotifyPageContentAnnotatedObservers(
-      AnnotationType::kContentVisibility, visit.url,
+      AnnotationType::kContentVisibility, visit,
       PageContentAnnotationsResult::CreateContentVisibilityScoreResult(
           content_annotations->visibility_score));
 
@@ -650,8 +650,8 @@ void PageContentAnnotationsService::QueryURL(
     const HistoryVisit& visit,
     PersistAnnotationsCallback callback,
     PageContentAnnotationsType annotation_type) {
-  history_service_->QueryURL(
-      visit.url, /*want_visits=*/true,
+  history_service_->QueryURLAndVisits(
+      visit.url, history::VisitQuery404sPolicy::kExclude404s,
       base::BindOnce(&PageContentAnnotationsService::OnURLQueried,
                      weak_ptr_factory_.GetWeakPtr(), visit, std::move(callback),
                      annotation_type),
@@ -662,7 +662,7 @@ void PageContentAnnotationsService::OnURLQueried(
     const HistoryVisit& visit,
     PersistAnnotationsCallback callback,
     PageContentAnnotationsType annotation_type,
-    history::QueryURLResult url_result) {
+    history::QueryURLAndVisitsResult url_result) {
   if (!url_result.success || url_result.visits.empty()) {
     LogPageContentAnnotationsStorageStatus(
         PageContentAnnotationsStorageStatus::kNoVisitsForUrl, annotation_type);
@@ -887,14 +887,14 @@ void PageContentAnnotationsService::PersistSalientImageMetadata(
 
 void PageContentAnnotationsService::NotifyPageContentAnnotatedObservers(
     AnnotationType annotation_type,
-    const GURL& url,
+    const HistoryVisit& visit,
     const PageContentAnnotationsResult& page_content_annotations_result) {
   if (page_content_annotations_observers_.find(annotation_type) ==
       page_content_annotations_observers_.end()) {
     return;
   }
   for (auto& observer : page_content_annotations_observers_[annotation_type]) {
-    observer.OnPageContentAnnotated(url, page_content_annotations_result);
+    observer.OnPageContentAnnotated(visit, page_content_annotations_result);
   }
 }
 

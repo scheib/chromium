@@ -15,15 +15,16 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/types/cxx23_to_underlying.h"
-#include "base/uuid.h"
 #include "base/values.h"
 #include "chrome/common/extensions/api/autofill_private.h"
+#include "components/autofill/core/browser/autofill_field.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_structured_address_component.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_instance.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_type.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_type_names.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/integrators/autofill_ai/autofill_ai_labels.h"
+#include "components/autofill/core/browser/proto/server.pb.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -36,6 +37,7 @@ namespace {
 using autofill::AttributeInstance;
 using autofill::AttributeType;
 using autofill::AttributeTypeName;
+using autofill::AutofillFormatString;
 using autofill::EntityInstance;
 using autofill::EntityType;
 using autofill::EntityTypeName;
@@ -61,8 +63,8 @@ void EntityInstanceToPrivateApiEntityInstanceWithLabels(
   // Step 1#, get all available labels for `entity_instances`.
   const std::vector<autofill::EntityLabel> labels_for_entities =
       autofill::GetLabelsForEntities(entity_instances,
-                                     /*allow_only_disambiguating_types=*/false,
-                                     /*allow_only_disambiguating_values=*/false,
+                                     /*attribute_types_to_ignore=*/{},
+                                     /*prioritize_disambiguating_types=*/false,
                                      app_locale);
 
   // Step 2#
@@ -81,12 +83,14 @@ void EntityInstanceToPrivateApiEntityInstanceWithLabels(
     const EntityInstance& entity_instance = *entity_instances[i];
     autofill_private::EntityInstanceWithLabels& entity_instance_with_labels =
         output.emplace_back();
-    entity_instance_with_labels.guid =
-        entity_instance.guid().AsLowercaseString();
+    entity_instance_with_labels.guid = *entity_instance.guid();
     entity_instance_with_labels.entity_instance_label =
         base::UTF16ToUTF8(entity_instance.type().GetNameForI18n());
     entity_instance_with_labels.entity_instance_sub_label = base::UTF16ToUTF8(
         base::JoinString(labels_for_entities[i], autofill::kLabelSeparator));
+    entity_instance_with_labels.stored_in_wallet =
+        entity_instance.record_type() ==
+        EntityInstance::RecordType::kServerWallet;
   }
 }
 
@@ -110,6 +114,9 @@ std::string GetAddEntityTypeStringForI18n(EntityType entity_type) {
           IDS_AUTOFILL_AI_ADD_REDRESS_NUMBER_ENTITY);
     case EntityTypeName::kVehicle:
       return l10n_util::GetStringUTF8(IDS_AUTOFILL_AI_ADD_VEHICLE_ENTITY);
+    case EntityTypeName::kFlightReservation:
+      // Flight reservations are read-only and do not use this string.
+      return "";
   }
   NOTREACHED();
 }
@@ -132,6 +139,9 @@ std::string GetEditEntityTypeStringForI18n(EntityType entity_type) {
           IDS_AUTOFILL_AI_EDIT_REDRESS_NUMBER_ENTITY);
     case EntityTypeName::kVehicle:
       return l10n_util::GetStringUTF8(IDS_AUTOFILL_AI_EDIT_VEHICLE_ENTITY);
+    case EntityTypeName::kFlightReservation:
+      // Flight reservations are read-only and do not use this string.
+      return "";
   }
   NOTREACHED();
 }
@@ -154,6 +164,9 @@ std::string GetDeleteEntityTypeStringForI18n(EntityType entity_type) {
           IDS_AUTOFILL_AI_DELETE_REDRESS_NUMBER_ENTITY);
     case EntityTypeName::kVehicle:
       return l10n_util::GetStringUTF8(IDS_AUTOFILL_AI_DELETE_VEHICLE_ENTITY);
+    case EntityTypeName::kFlightReservation:
+      // Flight reservations are read-only and do not use this string.
+      return "";
   }
   NOTREACHED();
 }
@@ -203,16 +216,21 @@ std::optional<EntityInstance> PrivateApiEntityInstanceToEntityInstance(
         return std::nullopt;
       }
 
-      attribute_instance.SetInfo(attribute_instance.type().field_type(),
-                                 base::UTF8ToUTF16(date->month), app_locale,
-                                 u"M",
-                                 autofill::VerificationStatus::kUserVerified);
-      attribute_instance.SetInfo(attribute_instance.type().field_type(),
-                                 base::UTF8ToUTF16(date->day), app_locale, u"D",
-                                 autofill::VerificationStatus::kUserVerified);
+      attribute_instance.SetInfo(
+          attribute_instance.type().field_type(),
+          base::UTF8ToUTF16(date->month), app_locale,
+          AutofillFormatString(u"M", autofill::FormatString_Type_DATE),
+          autofill::VerificationStatus::kUserVerified);
+      attribute_instance.SetInfo(
+          attribute_instance.type().field_type(), base::UTF8ToUTF16(date->day),
+          app_locale,
+          AutofillFormatString(u"D", autofill::FormatString_Type_DATE),
+          autofill::VerificationStatus::kUserVerified);
       attribute_instance.SetInfo(
           attribute_instance.type().field_type(), base::UTF8ToUTF16(date->year),
-          app_locale, u"YYYY", autofill::VerificationStatus::kUserVerified);
+          app_locale,
+          AutofillFormatString(u"YYYY", autofill::FormatString_Type_DATE),
+          autofill::VerificationStatus::kUserVerified);
     } else {
       if (!private_api_attribute_instance.value.as_string.has_value()) {
         return std::nullopt;
@@ -235,14 +253,14 @@ std::optional<EntityInstance> PrivateApiEntityInstanceToEntityInstance(
   }
   EntityType entity_type(entity_type_name.value());
   // Newly added entity instances need to have a guid generated for them.
-  base::Uuid guid =
+  EntityInstance::EntityId guid(
       private_api_entity_instance.guid.empty()
-          ? base::Uuid::GenerateRandomV4()
-          : base::Uuid::ParseLowercase(private_api_entity_instance.guid);
-  return EntityInstance(std::move(entity_type), attribute_instances,
-                        std::move(guid), private_api_entity_instance.nickname,
-                        base::Time::Now(), /*use_count=*/0,
-                        /*use_date=*/base::Time::Now());
+          ? base::Uuid::GenerateRandomV4().AsLowercaseString()
+          : private_api_entity_instance.guid);
+  return EntityInstance(
+      std::move(entity_type), attribute_instances, std::move(guid),
+      private_api_entity_instance.nickname, base::Time::Now(), /*use_count=*/0,
+      /*use_date=*/base::Time::Now(), EntityInstance::RecordType::kLocal);
 }
 
 autofill_private::EntityInstance EntityInstanceToPrivateApiEntityInstance(
@@ -266,14 +284,20 @@ autofill_private::EntityInstance EntityInstanceToPrivateApiEntityInstance(
       autofill::FieldType field_type = attribute_instance.type().field_type();
       base::DictValue date_value;
       date_value.SetByDottedPath(
-          "month", base::UTF16ToUTF8(attribute_instance.GetInfo(
-                       field_type, app_locale, std::u16string(u"M"))));
+          "month",
+          base::UTF16ToUTF8(attribute_instance.GetInfo(
+              field_type, app_locale,
+              AutofillFormatString(u"M", autofill::FormatString_Type_DATE))));
       date_value.SetByDottedPath(
-          "day", base::UTF16ToUTF8(attribute_instance.GetInfo(
-                     field_type, app_locale, std::u16string(u"D"))));
+          "day",
+          base::UTF16ToUTF8(attribute_instance.GetInfo(
+              field_type, app_locale,
+              AutofillFormatString(u"D", autofill::FormatString_Type_DATE))));
       date_value.SetByDottedPath(
           "year", base::UTF16ToUTF8(attribute_instance.GetInfo(
-                      field_type, app_locale, std::u16string(u"YYYY"))));
+                      field_type, app_locale,
+                      AutofillFormatString(u"YYYY",
+                                           autofill::FormatString_Type_DATE))));
       autofill_private::AttributeInstance::Value::Populate(
           base::Value(std::move(date_value)),
           private_api_attribute_instances.back().value);
@@ -298,7 +322,7 @@ autofill_private::EntityInstance EntityInstanceToPrivateApiEntityInstance(
       GetDeleteEntityTypeStringForI18n(entity_instance.type());
   private_api_entity_instance.attribute_instances =
       std::move(private_api_attribute_instances);
-  private_api_entity_instance.guid = entity_instance.guid().AsLowercaseString();
+  private_api_entity_instance.guid = *entity_instance.guid();
   private_api_entity_instance.nickname = entity_instance.nickname();
   return private_api_entity_instance;
 }

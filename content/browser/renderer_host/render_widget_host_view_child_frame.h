@@ -35,11 +35,15 @@
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom-forward.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "third_party/blink/public/mojom/webshare/webshare.mojom.h"
 #endif  // BUILDFLAG(IS_MAC)
+
+namespace viz {
+struct CopyOutputBitmapWithMetadata;
+}
 
 namespace content {
 class CrossProcessFrameConnector;
@@ -87,7 +91,8 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void CopyFromSurface(
       const gfx::Rect& src_rect,
       const gfx::Size& output_size,
-      base::OnceCallback<void(const SkBitmap&)> callback) override;
+      base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+          callback) override;
   void EnsureSurfaceSynchronizedForWebTest() override;
   void Hide() override;
   bool IsShowing() override;
@@ -197,6 +202,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void DisableAutoResize(const gfx::Size& new_size) override;
   viz::ScopedSurfaceIdAllocator DidUpdateVisualProperties(
       const cc::RenderFrameMetadata& metadata) override;
+  input::CursorManager* GetCursorManager() override;
 
   // RenderFrameMetadataProvider::Observer implementation.
   void OnRenderFrameMetadataChangedBeforeActivation(

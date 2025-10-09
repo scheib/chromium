@@ -33,28 +33,24 @@ const char kReaderModeDefaultBrowserNumDaysCriteriaStringName[] =
 
 }  // namespace
 
-BASE_FEATURE(kEnableReaderMode,
-             "EnableReaderMode",
+BASE_FEATURE(kEnableReaderMode, base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableReaderModeOmniboxEntryPoint,
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableReaderModeTranslation, base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableReaderModeTranslationWithInfobar,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableReaderModeTranslation,
-             "EnableReaderModeTranslation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kEnableReadabilityHeuristic,
-             "EnableReadabilityHeuristic",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableReadabilityHeuristic, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kEnableReaderModePageEligibilityForToolsMenu,
-             "EnableReaderModePageEligibilityForToolsMenu",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableReaderModeDebugInfo,
-             "EnableReaderModeDebugInfo",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableReaderModeDebugInfo, base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kEnableReaderModeDefaultBrowserPromo,
-             "EnableReaderModeDefaultBrowserPromo",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const char kReaderModeHeuristicPageLoadDelayDurationStringName[] =
@@ -84,6 +80,10 @@ bool IsReaderModeAvailable() {
   return base::FeatureList::IsEnabled(kEnableReaderMode);
 }
 
+bool IsReaderModeOmniboxEntryPointEnabled() {
+  return base::FeatureList::IsEnabled(kEnableReaderModeOmniboxEntryPoint);
+}
+
 bool IsReaderModeSnackbarEnabled() {
   return base::FeatureList::IsEnabled(kEnableReaderModeDebugInfo);
 }
@@ -100,4 +100,9 @@ int ReaderModeDefaultBrowserNumDaysCriteria() {
       kEnableReaderModeDefaultBrowserPromo,
       /*name=*/kReaderModeDefaultBrowserNumDaysCriteriaStringName,
       /*default_value=*/kReaderModeDefaultBrowserPromoNumDaysCriteria);
+}
+
+bool IsReaderModeTranslationAvailable() {
+  return base::FeatureList::IsEnabled(kEnableReaderModeTranslation) ||
+         base::FeatureList::IsEnabled(kEnableReaderModeTranslationWithInfobar);
 }

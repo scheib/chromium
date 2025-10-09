@@ -62,7 +62,7 @@ enum {
   // common_syncable_prefs_database.cc and
   // ios_chrome_syncable_prefs_database.cc.
   kAppLanguagePromptShown = 100000,
-  // kPrefExplicitLanguageAskShown = 100001,  // depreccated
+  // kPrefExplicitLanguageAskShown = 100001,  // deprecated
   kContextualSearchEnabled = 100002,
   kContextualSearchWasFullyPrivacyEnabled = 100003,
   kAccessibilityImageLabelsEnabledAndroid = 100004,
@@ -86,7 +86,7 @@ enum {
   kShowHomeButton = 100022,
   kPinnedExtensions = 100023,
   kSupervisedUserApprovedExtensions = 100024,
-  // kIsDefaultPageColorsOnHighContrast = 100025, (no longer synced)
+  // kIsDefaultPageColorsOnHighContrast = 100025, (deprecated)
   kShowFullscreenToolbar = 100026,
   kAllowJavascriptAppleEvents = 100027,
   kRestoreAppsAndPagesPrefName = 100028,
@@ -224,7 +224,7 @@ enum {
   kNetworkPredictionOptions = 100159,
   kNetworkQualities = 100160,
   // kNtpAppPageNames = 100161, (deprecated)
-  // kPageColors = 100162, (no longer synced)
+  // kPageColors = 100162, (deprecated)
   kPerformanceTracingEnabled = 100163,
   kPluginsAlwaysOpenPdfExternally = 100164,
   // kPrivacySandboxApisEnabled = 100165, (deprecated)
@@ -395,6 +395,13 @@ enum {
   kGlicRolloutEligibility = 100328,
   kShelfNotebookLmAppPinRolls = 100329,
   kVerticalTabsEnabled = 100330,
+  kSplitViewDragAndDropEnabled = 100331,
+  kDesktopToiOSEnhancedBrowsingPromoLastImpressionTimestamp = 100332,
+  kDesktopToiOSEnhancedBrowsingPromoImpressionsCounter = 100333,
+  kDesktopToiOSEnhancedBrowsingPromoOptOut = 100334,
+  kDesktopToiOSLensPromoLastImpressionTimestamp = 100335,
+  kDesktopToiOSLensPromoImpressionsCounter = 100336,
+  kDesktopToiOSLensPromoOptOut = 100337,
   // See components/sync_preferences/README.md about adding new entries here.
   // vvvvv IMPORTANT! vvvvv
   // Note to the reviewer: IT IS YOUR RESPONSIBILITY to ensure that new syncable
@@ -553,6 +560,10 @@ constexpr auto kChromeSyncablePrefsAllowlist = base::MakeFixedFlatMap<
       sync_preferences::MergeBehavior::kNone}},
     {prefs::kPinSplitTabButton,
      {syncable_prefs_ids::kPinSplitTabButton, syncer::PREFERENCES,
+      sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {prefs::kSplitViewDragAndDropEnabled,
+     {syncable_prefs_ids::kSplitViewDragAndDropEnabled, syncer::PREFERENCES,
       sync_preferences::PrefSensitivity::kNone,
       sync_preferences::MergeBehavior::kNone}},
     {prefs::kPinnedActions,
@@ -1675,6 +1686,31 @@ constexpr auto kChromeSyncablePrefsAllowlist = base::MakeFixedFlatMap<
       sync_preferences::MergeBehavior::kMergeableListWithRewriteOnUpdate}},
     {promos_prefs::kDesktopToiOSNtpPromoDismissed,
      {syncable_prefs_ids::kDesktopToiOSNtpPromoDismissed, syncer::PREFERENCES,
+      sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSEnhancedBrowsingPromoLastImpressionTimestamp,
+     {syncable_prefs_ids::
+          kDesktopToiOSEnhancedBrowsingPromoLastImpressionTimestamp,
+      syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSEnhancedBrowsingPromoImpressionsCounter,
+     {syncable_prefs_ids::kDesktopToiOSEnhancedBrowsingPromoImpressionsCounter,
+      syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSEnhancedBrowsingPromoOptOut,
+     {syncable_prefs_ids::kDesktopToiOSEnhancedBrowsingPromoOptOut,
+      syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSLensPromoLastImpressionTimestamp,
+     {syncable_prefs_ids::kDesktopToiOSLensPromoLastImpressionTimestamp,
+      syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSLensPromoImpressionsCounter,
+     {syncable_prefs_ids::kDesktopToiOSLensPromoImpressionsCounter,
+      syncer::PREFERENCES, sync_preferences::PrefSensitivity::kNone,
+      sync_preferences::MergeBehavior::kNone}},
+    {promos_prefs::kDesktopToiOSLensPromoOptOut,
+     {syncable_prefs_ids::kDesktopToiOSLensPromoOptOut, syncer::PREFERENCES,
       sync_preferences::PrefSensitivity::kNone,
       sync_preferences::MergeBehavior::kNone}},
 #if BUILDFLAG(ENABLE_GLIC)

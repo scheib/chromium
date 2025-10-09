@@ -155,7 +155,7 @@
 #include "ui/views/view_utils.h"
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 
 namespace {
 
@@ -2112,7 +2112,7 @@ void BookmarkBarView::UpdateAppearanceForTheme() {
   overflow_button_->SetImageModel(
       views::Button::STATE_DISABLED,
       ui::GetDefaultDisabledIconFromImageModel(overflow_button_icon,
-                                               GetColorProvider()));
+                                               color_provider));
 
   // Redraw the background.
   SchedulePaint();

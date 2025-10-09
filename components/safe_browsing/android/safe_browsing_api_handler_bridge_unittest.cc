@@ -4,6 +4,7 @@
 
 #include "components/safe_browsing/android/safe_browsing_api_handler_bridge.h"
 
+#include "base/command_line.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
@@ -728,6 +729,24 @@ TEST_F(SafeBrowsingApiHandlerBridgeTest, EnableVerifyApps) {
   SafeBrowsingApiHandlerBridge::GetInstance().StartEnableVerifyApps(
       result_future.GetCallback());
   EXPECT_EQ(result_future.Get(), VerifyAppsEnabledResult::TIMEOUT);
+}
+
+TEST_F(SafeBrowsingApiHandlerBridgeTest, HasPotentiallyHarmfulApps_Success) {
+  SetHarmfulAppsResult(HasHarmfulAppsResultStatus::SUCCESS, 2);
+  base::test::TestFuture<HasHarmfulAppsResultStatus, int> result_future;
+  SafeBrowsingApiHandlerBridge::GetInstance().StartHasPotentiallyHarmfulApps(
+      result_future.GetCallback());
+  EXPECT_EQ(result_future.Get<0>(), HasHarmfulAppsResultStatus::SUCCESS);
+  EXPECT_EQ(result_future.Get<1>(), 2);
+}
+
+TEST_F(SafeBrowsingApiHandlerBridgeTest, HasPotentiallyHarmfulApps_Failure) {
+  SetHarmfulAppsResult(HasHarmfulAppsResultStatus::FAILED, 0);
+  base::test::TestFuture<HasHarmfulAppsResultStatus, int> result_future;
+  SafeBrowsingApiHandlerBridge::GetInstance().StartHasPotentiallyHarmfulApps(
+      result_future.GetCallback());
+  EXPECT_EQ(result_future.Get<0>(), HasHarmfulAppsResultStatus::FAILED);
+  EXPECT_EQ(result_future.Get<1>(), 0);
 }
 
 TEST_F(SafeBrowsingApiHandlerBridgeTest, GetSafetyNetIdFailsIfNotInitialized) {

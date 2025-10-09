@@ -23,12 +23,12 @@
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/interaction/interactive_browser_test.h"
 #include "components/autofill/content/browser/content_autofill_client.h"
+#include "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
+#include "components/plus_addresses/core/browser/plus_address_test_utils.h"
 #include "components/plus_addresses/core/browser/plus_address_types.h"
+#include "components/plus_addresses/core/browser/settings/mock_plus_address_setting_service.h"
+#include "components/plus_addresses/core/browser/settings/plus_address_setting_service.h"
 #include "components/plus_addresses/core/common/features.h"
-#include "components/plus_addresses/grit/plus_addresses_strings.h"
-#include "components/plus_addresses/plus_address_test_utils.h"
-#include "components/plus_addresses/settings/mock_plus_address_setting_service.h"
-#include "components/plus_addresses/settings/plus_address_setting_service.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/sync/base/data_type.h"
@@ -197,13 +197,14 @@ class PlusAddressCreationDialogInteractiveTest : public InteractiveBrowserTest {
   std::unique_ptr<net::test_server::HttpResponse> HandleRequestWithSuccess(
       const net::test_server::HttpRequest& request) {
     // Ignore unrecognized path.
-    if (request.GetURL().path() != kReservePath &&
-        request.GetURL().path() != kConfirmPath) {
+    if (request.GetURL().GetPath() != kReservePath &&
+        request.GetURL().GetPath() != kConfirmPath) {
       return nullptr;
     }
 
     bool is_refresh = [&]() {
-      std::optional<base::Value> body = base::JSONReader::Read(request.content);
+      std::optional<base::Value> body = base::JSONReader::Read(
+          request.content, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
       if (!body || !body->is_dict()) {
         return false;
       }
@@ -216,7 +217,7 @@ class PlusAddressCreationDialogInteractiveTest : public InteractiveBrowserTest {
     http_response->set_code(net::HTTP_OK);
     http_response->set_content_type("application/json");
     http_response->set_content(PlusAddressResponseContent(
-        request.GetURL().path() == kConfirmPath,
+        request.GetURL().GetPath() == kConfirmPath,
         is_refresh ? kFakePlusAddressRefresh : kFakePlusAddress));
     return http_response;
   }
@@ -843,7 +844,7 @@ IN_PROC_BROWSER_TEST_P(PlusAddressCreationDialogUiVariationsOnboardingTest,
   embedded_test_server()->RegisterRequestHandler(base::BindLambdaForTesting(
       [&](const net::test_server::HttpRequest& request)
           -> std::unique_ptr<net::test_server::HttpResponse> {
-        if (request.GetURL().path() == kReservePath) {
+        if (request.GetURL().GetPath() == kReservePath) {
           std::unique_ptr<net::test_server::BasicHttpResponse> http_response(
               new net::test_server::BasicHttpResponse);
           http_response->set_code(net::HTTP_OK);

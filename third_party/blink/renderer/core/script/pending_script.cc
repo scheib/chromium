@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/loader/render_blocking_resource_manager.h"
+#include "third_party/blink/renderer/core/scheduler/task_attribution_util.h"
 #include "third_party/blink/renderer/core/script/ignore_destructive_write_count_incrementer.h"
 #include "third_party/blink/renderer/core/script/script_element_base.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
@@ -164,13 +165,8 @@ void PendingScript::ExecuteScriptBlock() {
   }
 
   std::optional<scheduler::TaskAttributionTracker::TaskScope>
-      task_attribution_scope;
-  if (auto* tracker =
-          scheduler::TaskAttributionTracker::From(context->GetIsolate())) {
-    task_attribution_scope = tracker->CreateTaskScope(
-        task_state_,
-        scheduler::TaskAttributionTracker::TaskScopeType::kScriptExecution);
-  }
+      task_attribution_scope(SetCurrentTaskStateIfTopLevel(
+          task_state_, context, TaskScopeType::kScriptExecution));
 
   Script* script = GetSource();
 
@@ -300,11 +296,11 @@ void PendingScript::ExecuteScriptBlockInternal(
     // Implemented as the scope out of IgnoreDestructiveWriteCountIncrementer.
   }
 
-  // NOTE: we do not check m_willBeParserExecuted here, since
-  // m_willBeParserExecuted is false for inline scripts, and we want to
-  // include inline script execution time as part of parser blocked script
-  // execution time.
-  if (!is_controlled_by_script_runner) {
+  // We want to record the time spent executing scripts which is blocking the
+  // parser. If the script is nested, we only want to count the outermost
+  // script execution time.
+  if (context_document->IsCurrentScriptStackEmpty() &&
+      !is_controlled_by_script_runner) {
     DocumentParserTiming::From(element_document)
         .RecordParserBlockedOnScriptExecutionDuration(
             base::TimeTicks::Now() - script_exec_start_time,

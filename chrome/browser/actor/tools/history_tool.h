@@ -36,13 +36,18 @@ class HistoryTool : public Tool, content::WebContentsObserver {
 
   // actor::Tool
   void Validate(ValidateCallback callback) override;
+  mojom::ActionResultPtr TimeOfUseValidation(
+      const optimization_guide::proto::AnnotatedPageContent* last_observation)
+      override;
   void Invoke(InvokeCallback callback) override;
   std::string DebugString() const override;
   std::string JournalEvent() const override;
-  std::unique_ptr<ObservationDelayController> GetObservationDelayer()
-      const override;
+  std::unique_ptr<ObservationDelayController> GetObservationDelayer(
+      std::optional<ObservationDelayController::PageStabilityConfig>
+          page_stability_config) override;
   void UpdateTaskBeforeInvoke(ActorTask& task,
                               InvokeCallback callback) const override;
+  tabs::TabHandle GetTargetTab() const override;
 
   // content::WebContentsObserver
   void DidStartNavigation(

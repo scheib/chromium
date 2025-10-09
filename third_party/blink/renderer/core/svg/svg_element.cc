@@ -795,9 +795,6 @@ void SVGElement::SynchronizeAllSVGAttributes() const {
 
 MutableCSSPropertyValueSet*
 SVGElement::GetPresentationAttributeStyleForDirectUpdate() {
-  if (!RuntimeEnabledFeatures::SvgEagerPresAttrStyleUpdateEnabled()) {
-    return nullptr;
-  }
   // If the element is not attached to the layout tree, then just mark dirty.
   if (!GetLayoutObject()) {
     return nullptr;
@@ -1227,13 +1224,9 @@ SMILTimeContainer* SVGElement::GetTimeContainer() const {
 void SVGElement::SynchronizeAttributeInShadowInstances(
     const QualifiedName& name,
     const AtomicString& value) {
-  if (RuntimeEnabledFeatures::SvgUseInstancesAttributeSyncEnabled()) {
-    const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
-    for (SVGElement* instance : set) {
-      instance->SetAttributeWithoutValidation(name, value);
-    }
-  } else {
-    InvalidateInstances();
+  const HeapHashSet<WeakMember<SVGElement>>& set = InstancesForElement();
+  for (SVGElement* instance : set) {
+    instance->SetAttributeWithoutValidation(name, value);
   }
 }
 

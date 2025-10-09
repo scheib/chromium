@@ -8,6 +8,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
+#include "chrome/browser/ui/webui/new_tab_page/composebox/base_composebox_handler.h"
 #include "chrome/browser/ui/webui/searchbox/searchbox_handler.h"
 #include "components/omnibox/browser/searchbox.mojom.h"
 #include "content/public/browser/web_contents.h"
@@ -25,30 +26,36 @@ namespace lens {
 class LensComposeboxController;
 
 class LensComposeboxHandler : public composebox::mojom::PageHandler,
-                              public SearchboxHandler {
+                              public SearchboxHandler,
+                              public composebox::BaseComposeboxHandler {
  public:
   explicit LensComposeboxHandler(
       lens::LensComposeboxController* parent_controller,
+      Profile* profile,
+      content::WebContents* web_contents,
       mojo::PendingReceiver<composebox::mojom::PageHandler> pending_handler,
       mojo::PendingRemote<composebox::mojom::Page> pending_page,
       mojo::PendingReceiver<searchbox::mojom::PageHandler>
           pending_searchbox_handler);
   ~LensComposeboxHandler() override;
 
+  // BaseComposeboxHandler:
+  void SubmitQuery(
+      const std::string& query_text,
+      WindowOpenDisposition disposition,
+      std::map<std::string, std::string> additional_params) override;
+
   // composebox::mojom::PageHandler:
-  void NotifySessionStarted() override;
-  void NotifySessionAbandoned() override;
   void SubmitQuery(const std::string& query_text,
                    uint8_t mouse_button,
                    bool alt_key,
                    bool ctrl_key,
                    bool meta_key,
                    bool shift_key) override;
-  void AddFile(composebox::mojom::SelectedFileInfoPtr file_info,
-               mojo_base::BigBuffer file_bytes,
-               AddFileCallback callback) override;
-  void DeleteFile(const base::UnguessableToken& file_token) override;
-  void ClearFiles() override;
+  void FocusChanged(bool focused) override;
+  void SetDeepSearchMode(bool enabled) override;
+  void SetCreateImageMode(bool enabled) override;
+  void HandleLensButtonClick() override;
 
   // searchbox::mojom::PageHandler:
   void DeleteAutocompleteMatch(uint8_t line, const GURL& url) override;
@@ -61,7 +68,6 @@ class LensComposeboxHandler : public composebox::mojom::PageHandler,
                      bool ctrl_key,
                      bool meta_key,
                      bool shift_key) override;
-  void PopupElementSizeChanged(const gfx::Size& size) override;
   void OnThumbnailRemoved() override;
 
  private:

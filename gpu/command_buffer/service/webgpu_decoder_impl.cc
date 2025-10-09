@@ -54,7 +54,7 @@
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_preferences.h"
-#include "gpu/config/webgpu_blocklist.h"
+#include "gpu/config/webgpu_blocklist_impl.h"
 #include "gpu/webgpu/callback.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/dawn/include/dawn/native/DawnNative.h"
@@ -1068,7 +1068,7 @@ constexpr WebGPUDecoderImpl::CommandInfo WebGPUDecoderImpl::command_info[] = {
 
 }  // namespace
 
-WebGPUDecoder* CreateWebGPUDecoderImpl(
+std::unique_ptr<WebGPUDecoder> CreateWebGPUDecoderImpl(
     DecoderClient* client,
     CommandBufferServiceBase* command_buffer_service,
     SharedImageManager* shared_image_manager,
@@ -1097,7 +1097,7 @@ WebGPUDecoder* CreateWebGPUDecoderImpl(
     }
   }
 
-  return new WebGPUDecoderImpl(
+  return std::make_unique<WebGPUDecoderImpl>(
       client, command_buffer_service, shared_image_manager,
       std::move(memory_tracker), outputter, gpu_preferences,
       std::move(shared_context_state), std::move(dawn_caching_interface),
@@ -1124,6 +1124,7 @@ WebGPUDecoderImpl::WebGPUDecoderImpl(
           base::FeatureList::IsEnabled(features::kWebGPUBlobCache)
               ? std::move(dawn_caching_interface)
               : nullptr,
+          /*progress_reporter=*/nullptr,
           /*uma_prefix=*/"GPU.WebGPU.",
           /*record_cache_count_uma=*/false)),
       memory_transfer_service_(new DawnServiceMemoryTransferService(this)),
@@ -1255,10 +1256,13 @@ ContextResult WebGPUDecoderImpl::Initialize(
     force_fallback_adapter_ = true;
   }
 
-  // Create a Chrome-side EGL context. This isn't actually used by Dawn,
-  // but it prevents rendering artifacts in Chrome. This workaround should
-  // be revisited once EGL context creation is reworked. See crbug.com/1465911
-  if (use_webgpu_adapter_ == WebGPUAdapterName::kOpenGLES) {
+  // Create a Chrome-side EGL context. Dawn actually creates its own
+  // EGL contexts per-device, but since Chrome is unaware of those
+  // contexts, this wrapper context keeps Chrome's virtual context
+  // bookkeeping up-to-date.
+  // This is only an issue for native EGL/GLES, not ANGLE (which is
+  // aware of the the EGL contexts created by Dawn).
+  if (gl::GetGLImplementation() == gl::kGLImplementationEGLGLES2) {
     scoped_refptr<gl::GLSurface> gl_surface(new gl::SurfacelessEGL(
         gl::GLSurfaceEGL::GetGLDisplayEGL(), gfx::Size(1, 1)));
     gl::GLContextAttribs attribs;
@@ -1267,7 +1271,6 @@ ContextResult WebGPUDecoderImpl::Initialize(
     gl_context_ = new gl::GLContextEGL(nullptr);
     gl_context_->Initialize(gl_surface.get(), attribs);
     DCHECK(gl_context_->default_surface());
-    gl_context_->MakeCurrentDefault();
   }
   return ContextResult::kSuccess;
 }
@@ -1276,12 +1279,9 @@ bool WebGPUDecoderImpl::IsFeatureExposed(wgpu::FeatureName feature) const {
   switch (feature) {
     case wgpu::FeatureName::ChromiumExperimentalTimestampQueryInsidePasses:
     case wgpu::FeatureName::MultiDrawIndirect:
-    case wgpu::FeatureName::Unorm16TextureFormats:
-    case wgpu::FeatureName::Snorm16TextureFormats:
     case wgpu::FeatureName::SharedBufferMemoryD3D12Resource:
     case wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix:
     case wgpu::FeatureName::TextureComponentSwizzle:
-    case wgpu::FeatureName::ChromiumExperimentalPrimitiveId:
       return safety_level_ == webgpu::SafetyLevel::kUnsafe;
     case wgpu::FeatureName::AdapterPropertiesD3D:
     case wgpu::FeatureName::AdapterPropertiesVk:
@@ -1307,7 +1307,10 @@ bool WebGPUDecoderImpl::IsFeatureExposed(wgpu::FeatureName feature) const {
     case wgpu::FeatureName::ClipDistances:
     case wgpu::FeatureName::DualSourceBlending:
     case wgpu::FeatureName::Subgroups:
-    case wgpu::FeatureName::DawnMultiPlanarFormats: {
+    case wgpu::FeatureName::DawnMultiPlanarFormats:
+    case wgpu::FeatureName::TextureFormatsTier1:
+    case wgpu::FeatureName::TextureFormatsTier2:
+    case wgpu::FeatureName::PrimitiveIndex: {
       // Likely case when no features are blocked.
       if (runtime_unsafe_features_.empty() ||
           safety_level_ == webgpu::SafetyLevel::kUnsafe) {
@@ -1491,8 +1494,8 @@ WGPUFuture WebGPUDecoderImpl::RequestDeviceImpl(
       // disallowed.
       wgpu::FeatureName::DawnMultiPlanarFormats,
 
-      // Require platform-specific SharedTextureMemory features for use by
-      // the relevant SharedImage backings. These features should always be
+      // Require platform-specific SharedTextureMemory features for use by the
+      // relevant SharedImage backings. These features should always be
       // supported when running on the corresponding backend.
       wgpu::FeatureName::SharedTextureMemoryIOSurface,
       wgpu::FeatureName::SharedFenceMTLSharedEvent,
@@ -1505,6 +1508,11 @@ WGPUFuture WebGPUDecoderImpl::RequestDeviceImpl(
       wgpu::FeatureName::SharedTextureMemoryD3D11Texture2D,
       wgpu::FeatureName::SharedTextureMemoryDXGISharedHandle,
       wgpu::FeatureName::SharedFenceDXGISharedHandle,
+
+      // Require SharedBufferMemoryD3D12Resource feature for use by the
+      // D3DImageBacking. This feature should always be supported when
+      // running on the D3D12 backend.
+      wgpu::FeatureName::SharedBufferMemoryD3D12Resource,
   };
   for (const wgpu::FeatureName& feature : kOptionalFeatures) {
     if (adapter_obj.HasFeature(feature)) {
@@ -2311,8 +2319,8 @@ WebGPUDecoderImpl::AssociateMailboxDawnBuffer(const Mailbox& mailbox,
                                               wgpu::BackendType backendType,
                                               wgpu::BufferUsage usage) {
   std::unique_ptr<DawnBufferRepresentation> shared_buffer =
-      shared_image_representation_factory_->ProduceDawnBuffer(mailbox, device,
-                                                              backendType);
+      shared_image_representation_factory_->ProduceDawnBuffer(
+          mailbox, device, backendType, shared_context_state_);
 
   if (!shared_buffer) {
     DLOG(ERROR) << "AssociateMailboxDawnBuffer: Couldn't produce shared image";

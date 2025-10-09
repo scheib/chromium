@@ -37,6 +37,7 @@
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
 #import "ios/chrome/browser/snapshots/model/fake_snapshot_generator_delegate.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_source_tab_helper.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/fullscreen/toolbars_size_browser_agent.h"
 #import "ios/chrome/browser/web/model/web_view_proxy/web_view_proxy_tab_helper.h"
@@ -151,6 +152,7 @@ class LensOverlayCoordinatorTest : public PlatformTest {
     web_state->SetBrowserState(profile_.get());
     LensOverlayTabHelper::CreateForWebState(web_state.get());
     SnapshotTabHelper::CreateForWebState(web_state.get());
+    SnapshotSourceTabHelper::CreateForWebState(web_state.get());
     WebViewProxyTabHelper::CreateForWebState(web_state.get());
     tab_helper_ = LensOverlayTabHelper::FromWebState(web_state.get());
 
@@ -195,6 +197,8 @@ class LensOverlayCoordinatorTest : public PlatformTest {
     }));
   }
 
+  ~LensOverlayCoordinatorTest() override { profile_state_.profile = nullptr; }
+
   void TearDown() override {
     if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_PHONE) {
       // Dismisses `base_view_controller_` and waits for the dismissal to
@@ -217,7 +221,7 @@ class LensOverlayCoordinatorTest : public PlatformTest {
  protected:
   web::WebTaskEnvironment task_environment_{
       web::WebTaskEnvironment::IOThreadType::REAL_THREAD};
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   base::RunLoop run_loop_;
   FakeSnapshotGeneratorDelegate* delegate_;

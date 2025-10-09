@@ -1093,11 +1093,6 @@ void ChromeClientImpl::RequestDecode(LocalFrame* frame,
   widget->RequestDecode(image, std::move(callback), speculative);
 }
 
-bool ChromeClientImpl::SpeculativeDecodeRequestInFlight(
-    LocalFrame* frame) const {
-  return frame->GetWidgetForLocalRoot()->SpeculativeDecodeRequestInFlight();
-}
-
 void ChromeClientImpl::NotifyPresentationTime(LocalFrame& frame,
                                               ReportTimeCallback callback) {
   FrameWidget* widget = frame.GetWidgetForLocalRoot();
@@ -1422,6 +1417,10 @@ gfx::Transform ChromeClientImpl::GetDeviceEmulationTransform() const {
 void ChromeClientImpl::DidUpdateBrowserControls() const {
   DCHECK(web_view_);
   web_view_->DidUpdateBrowserControls();
+}
+
+void ChromeClientImpl::DidUpdateLoadProgress(float progress) {
+  web_view_->DidUpdateLoadProgress(progress);
 }
 
 void ChromeClientImpl::DidUpdateMaxSafeAreaInsets(

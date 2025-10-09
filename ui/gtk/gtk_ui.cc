@@ -71,6 +71,7 @@
 #include "ui/gtk/input_method_context_impl_gtk.h"
 #include "ui/gtk/native_theme_gtk.h"
 #include "ui/gtk/nav_button_provider_gtk.h"
+#include "ui/gtk/os_settings_provider_gtk.h"
 #include "ui/gtk/printing/print_dialog_gtk.h"
 #include "ui/gtk/printing/printing_gtk_util.h"
 #include "ui/gtk/select_file_dialog_linux_gtk.h"
@@ -83,6 +84,7 @@
 #include "ui/linux/nav_button_provider.h"
 #include "ui/linux/window_button_order_observer.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/native_theme/os_settings_provider.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_policy.h"
@@ -340,6 +342,7 @@ bool GtkUi::Initialize() {
     return false;
   }
 
+  os_settings_provider_ = std::make_unique<OsSettingsProviderGtk>();
   ui::ColorProviderManager::Get().AppendColorProviderInitializer(
       base::BindRepeating(&GtkUi::AddGtkNativeColorMixer,
                           base::Unretained(this)));
@@ -507,25 +510,6 @@ void GtkUi::GetInactiveSelectionFgColor(SkColor* color) const {
   *color = inactive_selection_fg_color_;
 }
 
-base::TimeDelta GtkUi::GetCursorBlinkInterval() const {
-  // From http://library.gnome.org/devel/gtk/unstable/GtkSettings.html, this is
-  // the default value for gtk-cursor-blink-time.
-  static const gint kGtkDefaultCursorBlinkTime = 1200;
-
-  // Dividing GTK's cursor blink cycle time (in milliseconds) by this value
-  // yields an appropriate value for
-  // blink::RendererPreferences::caret_blink_interval.
-  static const double kGtkCursorBlinkCycleFactor = 2000.0;
-
-  gint cursor_blink_time = kGtkDefaultCursorBlinkTime;
-  gboolean cursor_blink = TRUE;
-  g_object_get(gtk_settings_get_default(), "gtk-cursor-blink-time",
-               &cursor_blink_time, "gtk-cursor-blink", &cursor_blink, nullptr);
-  return cursor_blink
-             ? base::Seconds(cursor_blink_time / kGtkCursorBlinkCycleFactor)
-             : base::TimeDelta();
-}
-
 gfx::Image GtkUi::GetIconForContentType(const std::string& content_type,
                                         int dip_size,
                                         float scale) const {
@@ -672,8 +656,7 @@ void GtkUi::SetDarkTheme(bool dark) {
   auto* settings = gtk_settings_get_default();
   g_object_set(settings, "gtk-application-prefer-dark-theme", dark, nullptr);
   // OnThemeChanged() will be called via the
-  // notify::gtk-application-prefer-dark-theme handler to update the native
-  // theme.
+  // notify::gtk-application-prefer-dark-theme handler to update the colors.
 }
 
 void GtkUi::SetAccentColor(std::optional<SkColor> accent_color) {
@@ -841,7 +824,6 @@ void GtkUi::OnThemeChanged(GtkSettings* settings, GtkParamSpec* param) {
   colors_.clear();
   custom_frame_colors_.clear();
   native_frame_colors_.clear();
-  native_theme_->OnThemeChanged(settings, param);
   LoadGtkValues();
   native_theme_->NotifyOnNativeThemeUpdated();
 }
@@ -920,10 +902,7 @@ void GtkUi::LoadGtkValues() {
   // we'd regress startup time. Figure out how to do that when we can't access
   // the prefs system from here.
   UpdateDeviceScaleFactor();
-  UpdateColors();
-}
 
-void GtkUi::UpdateColors() {
   // TODO(tluk): The below code sets various ThemeProvider colors for GTK. Some
   // of these definitions leverage colors that were previously defined by
   // NativeThemeGtk and are now defined as GTK ColorMixers. These ThemeProvider
@@ -932,19 +911,11 @@ void GtkUi::UpdateColors() {
   // use the ColorProvider instance from the ColorProviderManager corresponding
   // to the theme bits associated with the NativeThemeGtk instance to ensure
   // we do not regress existing behavior during the transition.
-  const auto color_scheme = native_theme_->GetDefaultSystemColorScheme();
   ui::ColorProviderKey key;
-  key.color_mode = (color_scheme == ui::NativeTheme::ColorScheme::kDark)
-                       ? ui::ColorProviderKey::ColorMode::kDark
-                       : ui::ColorProviderKey::ColorMode::kLight;
-  key.contrast_mode =
-      (color_scheme == ui::NativeTheme::ColorScheme::kPlatformHighContrast)
-          ? ui::ColorProviderKey::ContrastMode::kHigh
-          : ui::ColorProviderKey::ContrastMode::kNormal;
-  key.forced_colors =
-      (color_scheme == ui::NativeTheme::ColorScheme::kPlatformHighContrast)
-          ? ui::ColorProviderKey::ForcedColors::kActive
-          : ui::ColorProviderKey::ForcedColors::kNone;
+  if (ui::OsSettingsProvider::Get().PreferredColorScheme() ==
+      ui::NativeTheme::PreferredColorScheme::kDark) {
+    key.color_mode = ui::ColorProviderKey::ColorMode::kDark;
+  }
   // Some theme colors, e.g. COLOR_NTP_LINK, are derived from color provider
   // colors. We assume that those sources' colors won't change with frame type.
   key.system_theme = ui::SystemTheme::kGtk;

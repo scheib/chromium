@@ -16,7 +16,7 @@
 #include "ui/events/event_utils.h"
 #include "ui/gfx/geometry/dip_util.h"
 #include "ui/gfx/geometry/rect_conversions.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/gtk/gtk_compat.h"
 #include "ui/gtk/gtk_ui.h"
 #include "ui/gtk/gtk_ui_platform.h"
@@ -161,7 +161,7 @@ InputMethodContextImplGtk::InputMethodContextImplGtk(
   gtk_simple_context_ = TakeGObject(gtk_im_context_simple_new());
 
   auto connect = [&](const char* detailed_signal, auto receiver) {
-    for (auto context : {gtk_context_, gtk_simple_context_}) {
+    for (const auto& context : {gtk_context_, gtk_simple_context_}) {
       // Unretained() is safe since InputMethodContextImplGtk will own the
       // ScopedGSignal.
       signals_.emplace_back(

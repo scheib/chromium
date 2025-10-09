@@ -106,9 +106,9 @@ import org.chromium.chrome.test.util.ChromeRenderTestRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.desktop_windowing.AppHeaderState;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgePadAdjuster;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.edge_to_edge.EdgeToEdgePadAdjuster;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.test.util.DeviceRestriction;
 
@@ -324,7 +324,9 @@ public class SelectableTabListEditorTest {
                     }
                     // Don't notify to avoid snackbar appearing.
                     filter.mergeListOfTabsToGroup(
-                            tabs.subList(1, tabs.size()), tabs.get(0), /* notify= */ false);
+                            tabs.subList(1, tabs.size()),
+                            tabs.get(0),
+                            /* notify= */ TabGroupModelFilter.MergeNotificationType.DONT_NOTIFY);
                 });
     }
 

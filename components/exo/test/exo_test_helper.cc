@@ -133,8 +133,8 @@ void ClientControlledShellSurfaceDelegate::ApplyStateChange(
     case chromeos::WindowStateType::kPinned:
       shell_surface_->SetPinned(chromeos::WindowPinType::kPinned);
       break;
-    case chromeos::WindowStateType::kTrustedPinned:
-      shell_surface_->SetPinned(chromeos::WindowPinType::kTrustedPinned);
+    case chromeos::WindowStateType::kLockedFullscreen:
+      shell_surface_->SetPinned(chromeos::WindowPinType::kLockedFullscreen);
       break;
     default:
       NOTIMPLEMENTED();
@@ -158,7 +158,7 @@ void ClientControlledShellSurfaceDelegate::ApplyBoundsChange(
     return;
 
   display::Display target_display;
-  const display::Screen* screen = display::Screen::GetScreen();
+  const display::Screen* screen = display::Screen::Get();
 
   if (!screen->GetDisplayWithDisplayId(display_id, &target_display)) {
     return;

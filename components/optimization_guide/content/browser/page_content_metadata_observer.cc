@@ -5,6 +5,7 @@
 #include "components/optimization_guide/content/browser/page_content_metadata_observer.h"
 
 #include "components/optimization_guide/content/browser/page_content_proto_util.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -31,6 +32,10 @@ PageContentMetadataObserver::~PageContentMetadataObserver() = default;
 
 void PageContentMetadataObserver::RenderFrameCreated(
     content::RenderFrameHost* render_frame_host) {
+  if (&render_frame_host->GetPage() != &web_contents()->GetPrimaryPage()) {
+    return;
+  }
+
   if (frame_data_.contains(render_frame_host)) {
     return;
   }
@@ -77,14 +82,47 @@ void PageContentMetadataObserver::RenderFrameDeleted(
   }
 }
 
+void PageContentMetadataObserver::PrimaryPageChanged(content::Page& page) {
+  // The primary page has changed, so we need to reset all frame observers
+  // and re-initialize them for the new page's frame tree.
+  frame_data_.clear();
+  UpdateFrameObservers();
+  // The meta tags are guaranteed to be empty here but we dispatch an update
+  // for all frames to ensure that observers are notified that any
+  // previous tags are no longer found (because of the navigation).
+  DispatchMetadata();
+}
+
 void PageContentMetadataObserver::UpdateFrameObservers() {
-  web_contents()->ForEachRenderFrameHost([this](content::RenderFrameHost* rfh) {
-    if (rfh->IsRenderFrameLive()) {
-      // RenderFrameCreated has the logic to create the observer and add it
-      // to the map if it doesn't exist.
-      RenderFrameCreated(rfh);
+  auto* primary_main_frame = web_contents()->GetPrimaryMainFrame();
+  if (!primary_main_frame) {
+    return;
+  }
+  primary_main_frame->ForEachRenderFrameHost(
+      [this](content::RenderFrameHost* rfh) {
+        if (rfh->IsRenderFrameLive()) {
+          // RenderFrameCreated has the logic to create the observer and add it
+          // to the map if it doesn't exist.
+          RenderFrameCreated(rfh);
+        }
+      });
+}
+
+void PageContentMetadataObserver::DispatchMetadata() {
+  auto page_metadata = blink::mojom::PageMetadata::New();
+  for (const auto& [render_frame_host, frame_data] : frame_data_) {
+    if (frame_data.metadata) {
+      page_metadata->frame_metadata.push_back(frame_data.metadata->Clone());
+    } else {
+      // Create a representation for a frame with no matching meta tags.
+      auto frame_metadata = blink::mojom::FrameMetadata::New();
+      frame_metadata->url = GetURLForFrameMetadata(
+          render_frame_host->GetLastCommittedURL(),
+          render_frame_host->GetLastCommittedOrigin());
+      page_metadata->frame_metadata.push_back(std::move(frame_metadata));
     }
-  });
+  }
+  callback_.Run(std::move(page_metadata));
 }
 
 void PageContentMetadataObserver::OnMetaTagsChangedForFrame(
@@ -93,6 +131,7 @@ void PageContentMetadataObserver::OnMetaTagsChangedForFrame(
   // `render_frame_host` can be null when a frame is deleted, when this happens
   // do not update the frame data, but do notify the callback.
   if (render_frame_host) {
+    DCHECK(render_frame_host->GetPage().IsPrimary());
     auto it = frame_data_.find(render_frame_host);
     if (it != frame_data_.end()) {
       if (meta_tags.empty()) {
@@ -112,23 +151,7 @@ void PageContentMetadataObserver::OnMetaTagsChangedForFrame(
   // creation.
   DCHECK(callback_);
 
-  auto page_metadata = blink::mojom::PageMetadata::New();
-
-  for (const auto& [rfh, data] : frame_data_) {
-    if (!data.metadata) {
-      continue;
-    }
-
-    if (!rfh->GetParent()) {
-      // The metadata for the main frame should be the first entry.
-      page_metadata->frame_metadata.insert(
-          page_metadata->frame_metadata.begin(), data.metadata.Clone());
-    } else {
-      page_metadata->frame_metadata.push_back(data.metadata.Clone());
-    }
-  }
-
-  callback_.Run(*page_metadata);
+  DispatchMetadata();
 }
 
 PageContentMetadataObserver::FrameData::FrameData(

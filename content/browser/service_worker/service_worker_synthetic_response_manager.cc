@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <numeric>
+#include <string>
 
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
@@ -48,13 +49,12 @@ enum class SyntheticResponseReloadReason {
 // responses even if there is no opt-in header in its response. This is for
 // local development and testing.
 BASE_FEATURE(kServiceWorkerBypassSyntheticResponseHeaderCheck,
-             "ServiceWorkerBypassSyntheticResponseHeaderCheck",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string>
     kServiceWorkerBypassSyntheticResponseIgnoredHeaders{
-        &kServiceWorkerBypassSyntheticResponseHeaderCheck, "ignored_headers",
-        ""};
+        &kServiceWorkerBypassSyntheticResponseHeaderCheck,
+        "ignored_headers_for_bypass", ""};
 
 bool IsBypassSyntheticResponseHeaderCheckEnabled() {
   static const bool kIsEnabled = base::FeatureList::IsEnabled(
@@ -66,6 +66,22 @@ const std::string& GetIgnoredHeadersForBypass() {
   static const base::NoDestructor<std::string> ignored_headers(
       kServiceWorkerBypassSyntheticResponseIgnoredHeaders.Get());
   return *ignored_headers;
+}
+
+const base::flat_set<std::string>& GetIgnoredHeadersForSyntheticResponse() {
+  static const base::NoDestructor<base::flat_set<std::string>>
+      ignored_headers_set([]() {
+        const std::string ignored_headers_str(
+            blink::features::kServiceWorkerSyntheticResponseIgnoredHeaders
+                .Get());
+        const std::vector<std::string_view> ignored_headers_sv =
+            base::SplitStringPiece(ignored_headers_str, ",",
+                                   base::TRIM_WHITESPACE,
+                                   base::SPLIT_WANT_NONEMPTY);
+        return base::flat_set<std::string>(ignored_headers_sv.begin(),
+                                           ignored_headers_sv.end());
+      }());
+  return *ignored_headers_set;
 }
 
 void RecordReloadReason(SyntheticResponseReloadReason reason) {
@@ -247,21 +263,7 @@ void ServiceWorkerSyntheticResponseManager::StartRequest(
     OnCompleteCallback complete_callback) {
   TRACE_EVENT("ServiceWorker",
               "ServiceWorkerSyntheticResponseManager::StartRequest");
-  // Always decode on the network service side, since the renderer is not
-  // involved with processing the synthetic response.
-  //
-  // TODO(crbug.com/352578800): When the renderer side decoding is enabled, we
-  // need to plumb `client_side_content_decoding_types` in `URLResponseHead`
-  // from `response_head` in `OnReceiveResponse()` to `response_head_` in
-  // `ServiceWorkerMainResourceLoader`. To achieve that,
-  // `ServiceWorkerSyntheticResponseManager` should be updated not to use
-  // `blink::mojom::FetchAPIResponse` to handle the response, because
-  // `blink::mojom::FetchAPIResponse` doesn't have a corresponding field of
-  // `client_side_content_decoding_types`. The necessary field for decoding will
-  // be lost under the current implementation.
-  network::ResourceRequest request_for_synthetic_response(request);
-  request_for_synthetic_response.client_side_content_decoding_enabled = false;
-
+  CHECK(!request.client_side_content_decoding_enabled);
   response_callback_ = std::move(receive_response_callback);
   complete_callback_ = std::move(complete_callback);
   client_ = std::make_unique<SyntheticResponseURLLoaderClient>(
@@ -279,7 +281,7 @@ void ServiceWorkerSyntheticResponseManager::StartRequest(
   // TODO(crbug.com/352578800): Create and use own traffic_annotation tag.
   url_loader_factory_->CreateLoaderAndStart(
       url_loader_.InitWithNewPipeAndPassReceiver(), request_id, options,
-      request_for_synthetic_response, std::move(client_to_pass),
+      request, std::move(client_to_pass),
       net::MutableNetworkTrafficAnnotationTag(
           ServiceWorkerRaceNetworkRequestURLLoaderClient::
               NetworkTrafficAnnotationTag()));
@@ -396,8 +398,8 @@ bool ServiceWorkerSyntheticResponseManager::CheckHeaderConsistency(
     scoped_refptr<net::HttpResponseHeaders> headers) {
   const auto& response_head = version_->GetResponseHeadForSyntheticResponse();
   CHECK(response_head);
-  base::flat_set<std::string> ignored_headers = {"date", "alt-svc", "p3p",
-                                                 "strict-transport-security"};
+  base::flat_set<std::string> ignored_headers =
+      GetIgnoredHeadersForSyntheticResponse();
   if (IsBypassSyntheticResponseHeaderCheckEnabled()) {
     const std::string& ignored_headers_str = GetIgnoredHeadersForBypass();
     std::vector<std::string_view> testing_ignored_headers =
@@ -440,4 +442,13 @@ void ServiceWorkerSyntheticResponseManager::NotifyReloading() {
   }
   OnCloneCompleted();
 }
+
+bool ServiceWorkerSyntheticResponseManager::dry_run_mode_for_testing_ = false;
+void ServiceWorkerSyntheticResponseManager::SetDryRunMode(bool enabled) {
+  dry_run_mode_for_testing_ = enabled;
+}
+bool ServiceWorkerSyntheticResponseManager::IsDryRunModeEnabledForTesting() {
+  return dry_run_mode_for_testing_;
+}
+
 }  // namespace content

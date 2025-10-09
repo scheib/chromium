@@ -43,7 +43,7 @@ import java.util.Collection;
 @RunWith(ParameterizedRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class LocationProviderTest {
-    public static enum LocationProviderType {
+    public enum LocationProviderType {
         MOCK,
         ANDROID,
         GMS_CORE
@@ -120,7 +120,7 @@ public class LocationProviderTest {
         } else if (mApi == LocationProviderType.GMS_CORE) {
             setLocationProviderGmsCore();
         } else {
-            assert false;
+            throw new AssertionError();
         }
     }
 

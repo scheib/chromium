@@ -7,10 +7,13 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "chrome/common/chrome_switches.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extension_webkit_preferences {
 
@@ -20,7 +23,6 @@ namespace {
 // state of mediaDevices.devicechange event.
 // TODO(crbug.com/404106817): Remove the feature after Chrome Apps are gone.
 BASE_FEATURE(kIgnorePermissionForDeviceChangedEventForChromeApps,
-             "IgnorePermissionForDeviceChangedEventForChromeApps",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace

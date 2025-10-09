@@ -15,7 +15,6 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.CallbackUtils;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.jank_tracker.PlaceholderJankTracker;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplierImpl;
@@ -89,7 +88,6 @@ public class TabUmaTest {
                 cta.getActivityTabProvider(),
                 cta.getLifecycleDispatcher(),
                 cta.getWindowAndroid(),
-                new PlaceholderJankTracker(),
                 rootUiCoordinator.getToolbarManager()::getToolbar,
                 null,
                 null,
@@ -98,6 +96,7 @@ public class TabUmaTest {
                 new ObservableSupplierImpl<>(),
                 new ObservableSupplierImpl<>(),
                 cta.getStartupMetricsTracker(),
+                null,
                 null);
     }
 
@@ -198,8 +197,8 @@ public class TabUmaTest {
                                     .map(
                                             FileChannel.MapMode.READ_ONLY,
                                             fileInputStream.getChannel().position(),
-                                            file.length()));
-            state.contentsState.setVersion(2);
+                                            file.length()),
+                            WebContentsState.CONTENTS_STATE_CURRENT_VERSION);
             state.timestampMillis = 10L;
             state.parentId = 1;
             state.themeColor = 4;

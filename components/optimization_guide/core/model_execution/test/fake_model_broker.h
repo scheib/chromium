@@ -22,6 +22,29 @@
 
 namespace optimization_guide {
 
+// A ScopedFeatureList initialized with reasonable defaults for testing
+// ModelBroker related features.
+class ScopedModelBrokerFeatureList {
+ public:
+  ScopedModelBrokerFeatureList();
+  ~ScopedModelBrokerFeatureList();
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+// A TestingPrefServiceSimple with model broker prefs registered.
+class ModelBrokerPrefService {
+ public:
+  ModelBrokerPrefService();
+  ~ModelBrokerPrefService();
+
+  PrefService& local_state() { return local_state_; }
+
+ private:
+  TestingPrefServiceSimple local_state_;
+};
+
 class FakeModelBroker {
  public:
   explicit FakeModelBroker(const FakeAdaptationAsset& asset);
@@ -37,25 +60,31 @@ class FakeModelBroker {
 
   void UpdateModelAdaptation(const FakeAdaptationAsset& asset);
   void UpdateSafetyModel(const optimization_guide::ModelInfo& model_info) {
-    controller().MaybeUpdateSafetyModel(model_info);
+    auto safety_model_info = SafetyModelInfo::Load(
+        SafetyModelInfo::SafetyModelType::kTextSafetyModel, model_info);
+    if (safety_model_info) {
+      controller().MaybeUpdateSafetyModel(std::move(safety_model_info));
+    }
   }
 
   std::unique_ptr<OnDeviceAssetManager> CreateAssetManager(
       OptimizationGuideModelProvider* provider);
 
-  TestingPrefServiceSimple& local_state() { return local_state_; }
+  ModelBrokerState& broker_state() { return model_broker_state_; }
+  PrefService& local_state() { return local_state_.local_state(); }
   OnDeviceModelServiceController& controller() {
     return model_broker_state_.service_controller();
   }
+  TestComponentState& component_state() { return component_state_; }
 
  private:
-  base::test::ScopedFeatureList feature_list_;
-  TestingPrefServiceSimple local_state_;
+  ScopedModelBrokerFeatureList feature_list_;
+  ModelBrokerPrefService local_state_;
   FakeBaseModelAsset base_model_;
   on_device_model::FakeOnDeviceServiceSettings fake_settings_;
   on_device_model::FakeServiceLauncher fake_launcher_{&fake_settings_};
   TestComponentState component_state_;
-  ModelBrokerState model_broker_state_{&local_state_,
+  ModelBrokerState model_broker_state_{&local_state_.local_state(),
                                        component_state_.CreateDelegate(),
                                        fake_launcher_.LaunchFn()};
 };

@@ -20,7 +20,7 @@
 #import "ios/chrome/browser/settings/ui_bundled/password/password_manager_ui_features.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_settings/password_settings_view_controller.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_settings/scoped_password_settings_reauth_module_override.h"
-#import "ios/chrome/browser/settings/ui_bundled/password/reauthentication/reauthentication_view_controller.h"
+#import "ios/chrome/browser/settings/ui_bundled/password/reauthentication/local_reauthentication_view_controller.h"
 #import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
@@ -62,9 +62,8 @@ class PasswordSettingsCoordinatorTest : public PlatformTest {
     // Add test password store. Used by the mediator.
     builder.AddTestingFactory(
         IOSChromeProfilePasswordStoreFactory::GetInstance(),
-        base::BindRepeating(
-            &password_manager::BuildPasswordStore<
-                web::BrowserState, password_manager::TestPasswordStore>));
+        base::BindOnce(&password_manager::BuildPasswordStore<
+                       ProfileIOS, password_manager::TestPasswordStore>));
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
         AuthenticationServiceFactory::GetFactoryWithDelegate(

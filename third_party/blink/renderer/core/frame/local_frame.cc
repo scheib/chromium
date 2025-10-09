@@ -156,6 +156,7 @@
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/frame/web_frame_widget_impl.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
+#include "third_party/blink/renderer/core/frame/window_controls_overlay_changed_delegate.h"
 #include "third_party/blink/renderer/core/fullscreen/fullscreen.h"
 #include "third_party/blink/renderer/core/fullscreen/scoped_allow_fullscreen.h"
 #include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
@@ -250,10 +251,6 @@
 #include "third_party/blink/renderer/platform/fonts/mac/attributed_string_type_converter.h"
 #include "ui/base/mojom/attributed_string.mojom-blink.h"
 #include "ui/gfx/range/range.h"
-#endif
-
-#if !BUILDFLAG(IS_ANDROID)
-#include "third_party/blink/renderer/core/frame/window_controls_overlay_changed_delegate.h"
 #endif
 
 namespace blink {
@@ -385,6 +382,19 @@ HeapVector<Member<ScrollSnapshotClient>> CopyClients(
   return copy;
 }
 
+const char* DocumentReadyStateToString(
+    Document::DocumentReadyState ready_state) {
+  switch (ready_state) {
+    case Document::kLoading:
+      return "Loading";
+    case Document::kInteractive:
+      return "Interactive";
+    case Document::kComplete:
+      return "Complete";
+  }
+  NOTREACHED();
+}
+
 }  // namespace
 
 template class CORE_TEMPLATE_EXPORT Supplement<LocalFrame>;
@@ -407,7 +417,7 @@ void LocalFrame::Init(Frame* opener,
 
   CoreInitializer::GetInstance().InitLocalFrame(*this);
 
-  GetInterfaceRegistry()->AddInterface(WTF::BindRepeating(
+  GetInterfaceRegistry()->AddInterface(BindRepeating(
       &LocalFrame::BindTextFragmentReceiver, WrapWeakPersistent(this)));
   DCHECK(!mojo_handler_);
   mojo_handler_ = MakeGarbageCollected<LocalFrameMojoHandler>(*this);
@@ -518,9 +528,7 @@ void LocalFrame::Trace(Visitor* visitor) const {
   visitor->Trace(v8_local_compile_hints_producer_);
   visitor->Trace(browser_interface_broker_proxy_);
   visitor->Trace(frame_visibility_observers_);
-#if !BUILDFLAG(IS_ANDROID)
   visitor->Trace(window_controls_overlay_changed_delegate_);
-#endif
   Frame::Trace(visitor);
   Supplementable<LocalFrame>::Trace(visitor);
 }
@@ -963,7 +971,6 @@ void LocalFrame::DidAttachDocument() {
   notified_initial_network_almost_idle_ = false;
   notified_initial_network_idle_ = false;
 
-#if !BUILDFLAG(IS_ANDROID)
   // For PWAs with display_override "window-controls-overlay", titlebar area
   // rect bounds sent from the browser need to persist on navigation to keep the
   // UI consistent. The titlebar area rect values are set in |LocalFrame| before
@@ -978,7 +985,6 @@ void LocalFrame::DidAttachDocument() {
         {}, false /* record_metrics */));
     SetTitlebarAreaDocumentStyleEnvironmentVariables();
   }
-#endif
 }
 
 void LocalFrame::OnFirstPaint(bool text_painted, bool image_painted) {
@@ -1383,7 +1389,6 @@ int NumberOfSuddenTerminationEventListeners(const EventTarget& event_target,
 void LocalFrame::UpdateSuddenTerminationStatus(
     bool added_listener,
     mojom::blink::SuddenTerminationDisablerType disabler_type) {
-  Platform::Current()->SuddenTerminationChanged(!added_listener);
   if (features::IsUnloadBlocklisted()) {
     // Block BFCache for using the unload handler. Originally unload handler was
     // not a blocklisted feature, but we make them blocklisted so the source
@@ -1723,9 +1728,7 @@ void LocalFrame::SetZoomFactors(float layout_zoom_factor,
   }
 
   if (layout_zoom_changed) {
-#if !BUILDFLAG(IS_ANDROID)
     MaybeUpdateWindowControlsOverlayWithNewZoomLevel();
-#endif
     document->LayoutViewportWasResized();
     document->MediaQueryAffectingValueChanged(MediaValueChange::kOther);
   }
@@ -1877,7 +1880,7 @@ String LocalFrame::SelectedTextForClipboard() const {
   return Selection().SelectedTextForClipboard();
 }
 
-void LocalFrame::TextSelectionChanged(const WTF::String& selection_text,
+void LocalFrame::TextSelectionChanged(const String& selection_text,
                                       uint32_t offset,
                                       const gfx::Range& range) const {
   GetLocalFrameHostRemote().TextSelectionChanged(selection_text, offset, range);
@@ -1949,6 +1952,7 @@ LocalFrame::LocalFrame(
             inheriting_agent_factory),
       frame_scheduler_(page.GetPageScheduler()->CreateFrameScheduler(
           this,
+          frame_token,
           IsInFencedFrameTree(),
           IsMainFrame() ? FrameScheduler::FrameType::kMainFrame
                         : FrameScheduler::FrameType::kSubframe)),
@@ -2731,6 +2735,11 @@ void LocalFrame::SetAdEvidence(const FrameAdEvidence& ad_evidence) {
   UpdateAdHighlight();
   frame_scheduler_->SetIsAdFrame(is_ad_frame);
 
+  // TODO(yaoxia): Determine whether we can DCHECK(owner).
+  if (HTMLFrameOwnerElement* owner = DeprecatedLocalOwner()) {
+    owner->DidSetAdStatus();
+  }
+
   if (is_ad_frame) {
     UseCounter::Count(DomWindow(), WebFeature::kAdFrameDetected);
     InstanceCounters::IncrementCounter(InstanceCounters::kAdSubframeCounter);
@@ -3203,7 +3212,32 @@ void LocalFrame::RequestExecuteScript(
   script_sources.AppendSpan(sources);
 
   ScriptState* script_state = ToScriptState(this, *world);
-  CHECK(script_state);
+  // TODO(https://crbug.com/435149285): Remove this block and revert back to
+  // CHECK(script_state) once the crash associated with the crbug above is resolved.
+  if (!script_state) {
+    SCOPED_CRASH_KEY_STRING256(
+        "Blink", "request_execute_script_script",
+        sources.empty() ? "" : sources[0].code.Utf8().substr(0, 256));
+    SCOPED_CRASH_KEY_NUMBER("Blink", "request_execute_script_world_id",
+                            world->GetWorldId());
+    SCOPED_CRASH_KEY_STRING256("Blink", "request_execute_script_url",
+                               GetDocument()
+                                   ? GetDocument()->Url().GetString().Utf8()
+                                   : "no document");
+    SCOPED_CRASH_KEY_BOOL("Blink", "request_execute_script_detached",
+                          IsDetached());
+    SCOPED_CRASH_KEY_STRING32(
+        "Blink", "req_exec_script_doc_ready_state",
+        GetDocument()
+            ? DocumentReadyStateToString(GetDocument()->GetReadyState())
+            : "no document");
+
+    base::debug::DumpWithoutCrashing();
+    if (callback) {
+      std::move(callback).Run(std::nullopt, base::TimeTicks::Now());
+    }
+    return;
+  }
   PausableScriptExecutor::CreateAndRun(
       script_state, std::move(script_sources), execute_script_policy,
       user_gesture, evaluation_timing, blocking_option, want_result_option,
@@ -3441,9 +3475,9 @@ void LocalFrame::GetCharacterIndexAtPoint(const gfx::Point& point) {
 }
 #endif
 
-#if !BUILDFLAG(IS_ANDROID)
 void LocalFrame::UpdateWindowControlsOverlay(
     const gfx::Rect& bounding_rect_in_dips) {
+#if !BUILDFLAG(IS_ANDROID)
   // The rect passed to us from content is in DIP screen space, relative to the
   // main frame, and needs to move to CSS space. This doesn't take the page's
   // zoom factor into account so we must scale by the inverse of the page zoom
@@ -3489,13 +3523,13 @@ void LocalFrame::UpdateWindowControlsOverlay(
     window_controls_overlay_changed_delegate_->WindowControlsOverlayChanged(
         window_controls_overlay_rect_);
   }
+#endif
 }
 
 void LocalFrame::RegisterWindowControlsOverlayChangedDelegate(
     WindowControlsOverlayChangedDelegate* delegate) {
   window_controls_overlay_changed_delegate_ = delegate;
 }
-#endif
 
 HitTestResult LocalFrame::HitTestResultForVisualViewportPos(
     const gfx::Point& pos_in_viewport) {
@@ -4000,7 +4034,6 @@ LocalFrame::GetBlobUrlStorePendingRemote() {
   return pending_remote;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
 void LocalFrame::SetTitlebarAreaDocumentStyleEnvironmentVariables() const {
   DCHECK(is_window_controls_overlay_visible_);
   DocumentStyleEnvironmentVariables& vars =
@@ -4028,7 +4061,6 @@ void LocalFrame::MaybeUpdateWindowControlsOverlayWithNewZoomLevel() {
 
   UpdateWindowControlsOverlay(window_controls_overlay_rect_in_dips_);
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 void LocalFrame::SetNotRestoredReasons(
     mojom::blink::BackForwardCacheNotRestoredReasonsPtr not_restored_reasons) {
@@ -4190,9 +4222,9 @@ void LocalFrame::AllowStorageAccessAndNotify(
     base::OnceCallback<void(bool)> callback) {
   mojom::blink::StorageTypeAccessed mojo_storage_type =
       ToMojoStorageType(storage_type);
-  auto wrapped_callback = WTF::BindOnce(&LocalFrame::OnStorageAccessCallback,
-                                        WrapWeakPersistent(this),
-                                        std::move(callback), mojo_storage_type);
+  auto wrapped_callback = blink::BindOnce(
+      &LocalFrame::OnStorageAccessCallback, WrapWeakPersistent(this),
+      std::move(callback), mojo_storage_type);
   if (WebContentSettingsClient* content_settings_client =
           GetContentSettingsClient()) {
     content_settings_client->AllowStorageAccess(storage_type,

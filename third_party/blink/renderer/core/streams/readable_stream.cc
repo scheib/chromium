@@ -544,7 +544,7 @@ V8ReadableStreamReader* ReadableStream::getReader(
     ExceptionState& exception_state) {
   // https://streams.spec.whatwg.org/#rs-get-reader
   if (options->hasMode()) {
-    DCHECK_EQ(options->mode(), "byob");
+    DCHECK_EQ(options->mode(), V8ReadableStreamReaderMode::Enum::kByob);
 
     UseCounter::Count(ExecutionContext::From(script_state),
                       WebFeature::kReadableStreamBYOBReader);
@@ -572,7 +572,7 @@ ReadableStreamBYOBReader* ReadableStream::GetBYOBReaderForTesting(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   auto* options = ReadableStreamGetReaderOptions::Create();
-  options->setMode("byob");
+  options->setMode(V8ReadableStreamReaderMode::Enum::kByob);
   auto* result = getReader(script_state, options, exception_state);
   if (!result)
     return nullptr;

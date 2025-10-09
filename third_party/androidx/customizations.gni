@@ -15,6 +15,9 @@ template("_androidx_prebuilt") {
       # https://crbug.com/989505
       jar_excluded_patterns = [ "META-INF/proguard/*" ]
       proguard_configs = [ "androidx_annotations.flags" ]
+    } else if (target_name == "androidx_test_espresso_espresso_core_java") {
+      jar_excluded_patterns =
+          [ "androidx/test/espresso/base/ViewHierarchyExceptionHandler*" ]
     } else if (target_name == "androidx_benchmark_benchmark_common_java") {
       ignore_native_libraries = true
     } else if (target_name == "androidx_benchmark_benchmark_macro_java") {
@@ -41,6 +44,7 @@ template("_androidx_prebuilt") {
       jar_excluded_patterns = [
         "androidx/core/os/BuildCompat*",
         "androidx/core/content/res/TypedArrayUtils*",
+        "androidx/core/view/accessibility/AccessibilityNodeInfoCompat*",
       ]
       public_deps = [ "//third_party/androidx/local_modifications/buildcompat:buildcompat_java" ]
 
@@ -164,11 +168,6 @@ template("androidx_android_aar_prebuilt") {
         target_name == "androidx_pdf_pdf_document_service_java") {
       # Target has AIDL, which we do not need (and don't support).
       ignore_aidl = true
-    }
-
-    if (target_name == "androidx_pdf_pdf_viewer_fragment_java") {
-      jar_excluded_patterns =
-          [ "androidx/pdf/viewer/fragment/PdfViewerFragment*" ]
     }
   }
 }

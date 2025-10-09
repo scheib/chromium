@@ -13,16 +13,16 @@
   if ((self = [super initWithType:type])) {
     _useCustomSeparator = NO;
 
-    self.cellClass = [TableViewCell class];
+    self.cellClass = [LegacyTableViewCell class];
   }
   return self;
 }
 
-- (void)configureCell:(TableViewCell*)cell
+- (void)configureCell:(LegacyTableViewCell*)cell
            withStyler:(ChromeTableViewStyler*)styler {
   DCHECK(styler);
   DCHECK([cell class] == self.cellClass);
-  DCHECK([cell isKindOfClass:[TableViewCell class]]);
+  DCHECK([cell isKindOfClass:[LegacyTableViewCell class]]);
   cell.accessoryType = self.accessoryType;
   cell.editingAccessoryType = self.editingAccessoryType;
   cell.accessoryView = self.accessoryView;
@@ -46,6 +46,10 @@
     selectedBackgroundView.backgroundColor = styler.cellHighlightColor;
     cell.selectedBackgroundView = selectedBackgroundView;
   }
+}
+
+- (LegacyTableViewCell*)cellForTableView:(UITableView*)tableView {
+  return nil;
 }
 
 @end

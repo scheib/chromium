@@ -5,12 +5,18 @@
 import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {AnchorAlignment} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 
+import {TextSegmenter} from './read_aloud/text_segmenter.js';
+
 // Determined by experimentation - can be adjusted to fine tune for different
 // platforms.
 export const minOverflowLengthToScroll = 75;
 export const spinnerDebounceTimeout = 150;
 export const playFromSelectionTimeout = spinnerDebounceTimeout + 25;
 export const toastDurationMs = 10000;
+
+// How long to delay before logging the empty state. If it's only shown briefly,
+// no need to log.
+export const LOG_EMPTY_DELAY_MS = 500;
 
 // Events emitted from the toolbar to the app
 export enum ToolbarEvent {
@@ -51,10 +57,6 @@ const ACTIVE_CSS_CLASS = 'active';
 // for the purpose of determining what's likely being actually read in the
 // reading mode panel.
 export const MOSTLY_VISIBLE_PERCENT = 0.8;
-
-export function getCurrentSpeechRate(): number {
-  return parseFloat(chrome.readingMode.speechRate.toFixed(1));
-}
 
 // Propagates a custom event with the given name and any details.
 export function emitEvent(
@@ -101,17 +103,9 @@ export function openMenu(
   });
 }
 
-// Returns true is the given string can be considered whitespace.
-export function isWhitespace(s: string): boolean {
-  return /\s+/g.test(s);
-}
-
-// Estimate the word count of the given text by splitting it by whitespace
-// characters.
-// TODO(crbug.com/c/372890165): Handle scriptio continua languages
-// that don't use whitespace to separate words.
+// Estimate the word count of the given text using the TextSegmenter class.
 export function getWordCount(text: string): number {
-  return text.split(/\s+/).filter(word => word.length > 0).length;
+  return TextSegmenter.getInstance().getWordCount(text);
 }
 
 // Returns true if the given rect is mostly within the visible window.

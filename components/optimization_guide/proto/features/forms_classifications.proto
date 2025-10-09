@@ -104,12 +104,18 @@ message FormTypeQuality {
   AutofillAiFieldEvent field_event = 2 [features = { field_presence: EXPLICIT }];
 
   AutofillAiKeyMetrics key_metrics = 3 [features = { field_presence: EXPLICIT }];
+
+  AutofillAiUserPromptMetrics user_prompt_metrics = 4 [features = { field_presence: EXPLICIT }];
 }
 
 // See `AutofillAiUkmLogger::FieldEvent`.
 message AutofillAiFieldEvent {
   // The server AI type of the field as classified by autofill's ML model.
+  // TODO(crbug.com/432645177): Remove the non-`repeated` when almost all
+  // clients have migrated to the repeated field.
   int32 ai_field_type = 1 [features = { field_presence: EXPLICIT }];
+
+  repeated int32 ai_field_types = 16;
 
   // Type of the event being recorded.
   AutofillAiFieldEventType event_type = 2 [features = { field_presence: IMPLICIT }];
@@ -127,7 +133,11 @@ message AutofillAiFieldEvent {
   uint64 field_signature = 4 [features = { field_presence: IMPLICIT }];
 
   // The type of the field as classified by autofill.
+  // TODO(crbug.com/432645177): Remove the non-`repeated` when almost all
+  // clients have migrated to the repeated field.
   int32 field_type = 5 [features = { field_presence: EXPLICIT }];
+
+  repeated int32 field_types = 15;
 
   // The source of the format string of the field, see `FormatStringSource` in
   // components/autofill/core/browser/autofill_field.h for more info.
@@ -229,6 +239,31 @@ message AutofillAiKeyMetrics {
   // in forms that ask about multiple entity types (e.g. driver's license and
   // vehicle information).
   AutofillAiEntityType entity_type = 10 [features = { field_presence: IMPLICIT }];
+
+  // True for submitted and autofilled forms if the user didn't have to edit any
+  // field manually. Only recorded if an Autofill AI suggestion was filled.
+  bool perfect_filling = 11 [features = { field_presence: EXPLICIT }];
+}
+
+message AutofillAiUserPromptMetrics {
+  // A random variable assigned to a specific instance of a HTML form in a
+  // specific renderer. This should be globally unique and suitable for
+  // counting distinct forms. Two different users would have different values.
+  // A single user loading the same form in two different tabs would have two
+  // different values. This is used to link the fields to a form in
+  // AutofillAi.FieldInfo.
+  uint64 form_session_identifier = 1 [features = { field_presence: IMPLICIT }];
+
+  // The registered domain of the page that the form is on.
+  string domain = 2 [features = { field_presence: IMPLICIT }];
+
+  AutofillAiEntityStorageType storage_type = 3 [features = { field_presence: IMPLICIT }];
+
+  AutofillAiPromptType prompt_type = 4 [features = { field_presence: IMPLICIT }];
+
+  AutofillAiEntityType entity_type = 5 [features = { field_presence: IMPLICIT }];
+
+  AutofillAiPromptUserDecision result = 6 [features = { field_presence: IMPLICIT }];
 }
 
 enum AutofillAiFieldEventType {
@@ -269,4 +304,44 @@ enum AutofillAiEntityType {
   AUTOFILL_AI_ENTITY_TYPE_KNOWN_TRAVELER_NUMBER = 5;
 
   AUTOFILL_AI_ENTITY_TYPE_REDRESS_NUMBER = 6;
+
+  AUTOFILL_AI_ENTITY_TYPE_FLIGHT_RESERVATION = 7;
+}
+
+// Defines the different types of storage that can hold AutofillAi entities.
+enum AutofillAiEntityStorageType {
+  AUTOFILL_AI_ENTITY_STORAGE_TYPE_UNKNOWN = 0;
+
+  AUTOFILL_AI_ENTITY_STORAGE_TYPE_WALLET = 1;
+
+  AUTOFILL_AI_ENTITY_STORAGE_TYPE_LOCAL = 2;
+}
+
+// Defines different types of prompts that can be shown to the user. For example
+// whether the user would like to save or update an entity.
+enum AutofillAiPromptType {
+  AUTOFILL_AI_PROMPT_TYPE_UNKNOWN = 0;
+
+  AUTOFILL_AI_PROMPT_TYPE_SAVE_ENTITY = 1;
+
+  AUTOFILL_AI_PROMPT_TYPE_UPDATE_ENTITY = 2;
+
+  AUTOFILL_AI_PROMPT_TYPE_MIGRATE_ON_SAVE = 3;
+
+  AUTOFILL_AI_PROMPT_TYPE_MIGRATE_ON_UPDATE = 4;
+}
+
+// Specified the different decisions users can make when being shown a
+// prompt/dialog, for example to update or save an entity.
+enum AutofillAiPromptUserDecision {
+  AUTOFILL_AI_PROMPT_USER_DECISION_UNKNOWN = 0;
+
+  // The user accepted the save or update entities prompt.
+  AUTOFILL_AI_PROMPT_USER_DECISION_ACCEPTED = 1;
+
+  // The user explicitly declined the save or update entities prompt.
+  AUTOFILL_AI_PROMPT_USER_DECISION_DECLINED = 2;
+
+  // The user ignored the save or update entities prompt.
+  AUTOFILL_AI_PROMPT_USER_DECISION_IGNORED = 3;
 }

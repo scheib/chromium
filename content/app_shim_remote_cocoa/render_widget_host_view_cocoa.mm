@@ -56,7 +56,7 @@
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/platform/platform_event_source.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 using blink::WebGestureEvent;
 using blink::WebInputEvent;
@@ -1688,7 +1688,7 @@ void ExtractUnderlines(NSAttributedString* string,
   // properties change to propagate when it does not ensures that screen infos
   // are properly updated when running headless.
   // See // https://crbug.com/375425824.
-  auto* screen = display::Screen::GetScreen();
+  auto* screen = display::Screen::Get();
   const display::ScreenInfos newScreenInfos =
       screen->GetScreenInfosNearestDisplay(
           screen->GetDisplayNearestView(gfx::NativeView(self)).id());
@@ -2091,7 +2091,7 @@ extern NSString* NSTextInputReplacementRangeAttributeName;
 
   uint32_t index = UINT32_MAX;
   _host->SyncGetCharacterIndexAtPoint(rootPoint, &index);
-  // |index| could be WTF::notFound (-1) and its value is different from
+  // |index| could be blink::kNotFound (-1) and its value is different from
   // NSNotFound so we need to convert it.
   if (index == UINT32_MAX)
     return NSNotFound;

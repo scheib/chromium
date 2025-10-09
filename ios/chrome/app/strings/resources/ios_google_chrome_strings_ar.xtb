@@ -3,6 +3,7 @@
 <translationbundle lang="ar">
 <translation id="1076643793026027628">‏يفتح Chrome تلقائيًا روابط YouTube المخصصة للتصفُّح المتخفي في وضع التصفُّح المتخفي.</translation>
 <translation id="1086486568852410168">‏البحث باستخدام "عدسة Google"</translation>
+<translation id="1088490543924960890">‏بدء حفظ مفاتيح المرور باستخدام "مدير كلمات المرور في Google"</translation>
 <translation id="1143896152279775643">‏سيتم حفظ كلمة المرور في "مدير كلمات المرور" من Google لعنوان البريد الإلكتروني <ph name="EMAIL" />.</translation>
 <translation id="1146503048444965320">‏فتح علامة تبويب جديدة في Chrome</translation>
 <translation id="1158134713295836892">‏‫Gemini في Chrome</translation>
@@ -70,7 +71,6 @@
 <translation id="2576431527583832481">‏لقد أصبح Chrome أفضل من ذي قبل! يتوفر إصدار جديد.</translation>
 <translation id="257708665678654955">‏هل تريد أن يعرض Google Chrome ترجمة صفحات <ph name="LANGUAGE_NAME" /> من الموقع الإلكتروني هذا في المرة القادمة؟</translation>
 <translation id="2668242166988961773">‏يؤدي هذا الاختصار إلى البحث باستخدام الصوت في Chrome.</translation>
-<translation id="2689064829982324496">‏للخروج من حسابك على Google في جميع المواقع الإلكترونية، عليك <ph name="BEGIN_LINK" />تسجيل الخروج من Chrome<ph name="END_LINK" />.</translation>
 <translation id="2695886661449553974">‏تعذّر على Chrome البحث عن تحديثات. يُرجى إعادة المحاولة لاحقًا.</translation>
 <translation id="2703746758996815929">‏للحصول على نصائح مفيدة حول Chrome، يمكنك تفعيل الإشعارات في إعدادات أجهزة iOS.</translation>
 <translation id="2728851697704606655">‏الترجمة باستخدام "عدسة Google"</translation>
@@ -86,6 +86,9 @@
 <translation id="2940565985148833945">‏نصيحة من Chrome: البحث باستخدام "عدسة Google"</translation>
 <translation id="2957447865124070833">‏اختيار <ph name="BEGIN_BOLD" />Chrome<ph name="END_BOLD" /></translation>
 <translation id="2986402782150919988">‏إضافة الإشارات المرجعية إلى متصفِّح Chrome</translation>
+<translation id="3027236223714901838">‏للحفاظ على أمان مفاتيح المرور، عليك أولاً إنشاء رقم تعريف شخصي للاسترداد.
+
+        ويتم حفظ مفاتيح المرور في "مدير كلمات المرور في Google"، ما يتيح لك استخدامها في Chrome على أي جهاز.</translation>
 <translation id="3030414234702425231">‏نظرًا لتسجيل خروجك من حساب يديره <ph name="SIGNOUT_MANAGED_DOMAIN" />، ستُحذَف بيانات Chrome من هذا الجهاز، ولكن ستظل البيانات محفوظة في حسابك على Google.</translation>
 <translation id="3042447686908081308">‏الاستيراد إلى Chrome</translation>
 <translation id="3051521853355903257">‏إدارة كلمات المرور في Chrome</translation>
@@ -132,7 +135,7 @@
 <translation id="4636900170638246267">‏يُرجى تسجيل الدخول إلى هذا الموقع الإلكتروني وإلى Chrome.</translation>
 <translation id="4647910807533196601">‏يؤدي هذا الاختصار إلى فتح آخر علامة تبويب في Chrome.</translation>
 <translation id="4693084815234024320">‏أنت تستخدم وضع التصفُّح المتخفي في Chrome</translation>
-<translation id="4713740144985377441">‏يُرجى الرجوع إلى Chrome لتحميل الملف</translation>
+<translation id="4713740144985377441">‏ارجع إلى Chrome لتحميل الملف</translation>
 <translation id="4713907610796204963">‏مزيد من المعلومات عن أساسيات Chrome المفيدة لبدء استخدامه</translation>
 <translation id="4724297637870447613">‏استخدام Chrome في كل مكان</translation>
 <translation id="4738647308035481133">‏صفحة Google Chrome</translation>
@@ -193,6 +196,7 @@
 <translation id="6145223986912084844">chrome</translation>
 <translation id="6177442314419606057">‏البحث في Chrome</translation>
 <translation id="6181652351336379338">‏يؤدي هذا الاختصار إلى البحث عن العناصر المرئية في Chrome.</translation>
+<translation id="6187085551300363958">‏نصيحة من Chrome: حفظ كلمات المرور أولوية</translation>
 <translation id="6200694931081795166">‏لضبط Chrome كمتصفِّح تلقائي، اتّبِع الخطوات التالية:
   1. افتح الإعدادات (Settings)
   2. انقر على تطبيق المتصفِّح التلقائي (Default Browser App)
@@ -255,6 +259,7 @@
 <translation id="7371674917547846460">‏يمكنك متابعة نصائح Chrome المفيدة وغيرها.</translation>
 <translation id="7394108421562933108">‏"خرائط Google" في Chrome</translation>
 <translation id="7400722733683201933">‏لمحة عن Chrome</translation>
+<translation id="7444830584401232881">‏سيتم حفظ مفتاح المرور هذا في "مدير كلمات المرور في Google" ضمن الحساب <ph name="USER_EMAIL" /></translation>
 <translation id="7466693328838535498">‏أدخِل كلمة "Chrome" في مربّع "البحث في التطبيقات المصغّرة"</translation>
 <translation id="7477056987201678345">‏جارٍ حذف بيانات Chrome…</translation>
 <translation id="7492574581995589075">‏أوقفت مؤسستك إمكانية استخدام وحفظ بيانات Chrome في حسابك على Google. سيتم حفظ كلمات المرور والإشارات المرجعية الجديدة وغيرها على هذا الجهاز فقط.</translation>
@@ -264,6 +269,7 @@
 <translation id="7599894504325210080">‏عرض موسَّع لميزة "الملء التلقائي" في Chrome</translation>
 <translation id="7617512710641355143">‏متصفِّح Chrome مُدار</translation>
 <translation id="7626032353295482388">‏مرحبًا بك في Chrome‏</translation>
+<translation id="7641448682796883218">‏نصيحة من Chrome: حان وقت "الحماية المحسّنة للتصفّح الآمن"</translation>
 <translation id="7642373780953416937">‏يمكنك تلقّي تنبيهات بشأن أي مشاكل تتعلّق بالخصوصية أو الأمان يرصدها Chrome تلقائيًا.</translation>
 <translation id="7660356333829433649">‏يمكنك الرجوع إلى هذه الصفحة للحصول على المزيد من النصائح المفيدة للاستفادة إلى أقصى حدّ من Chrome.</translation>
 <translation id="7662994914830945754">‏للاطّلاع على علامات التبويب من أي جهاز تستخدم فيه Chrome، سجِّل الدخول وفعِّل المزامنة.</translation>
@@ -305,7 +311,6 @@
 <translation id="8413500425974960807">‏نصيحة من Chrome: انقُل Chrome إلى شريط التطبيقات</translation>
 <translation id="8413795581997394485">‏يوفر لك هذا الوضع حماية من المواقع الإلكترونية وعمليات التنزيل والإضافات التي تبيَّن أنها ضارة. عند زيارة موقع إلكتروني، يرسل متصفِّح Chrome جزءًا مشفّرًا من عنوان URL إلى Google من خلال خادم لحماية الخصوصية يخفي عنوان IP الخاص بجهازك. وفي حال رصد سلوك مريب على موقع إلكتروني، يتم أيضًا إرسال عناوين URL الكاملة وأجزاء من محتوى الصفحة.</translation>
 <translation id="84594714173170813">‏يمكنك مواصلة استخدام بيانات Chrome في حسابك على Google</translation>
-<translation id="8459495907675268833">‏تمت إزالة البيانات المُحددة من متصفح Chrome والأجهزة التي تمت مزامنتها. قد يحتوي حسابك في Google على نماذج أخرى من سجل التصفح، مثل عمليات البحث والأنشطة من خدمات Google الأخرى في history.google.com.</translation>
 <translation id="8491300088149538575">‏تم تسجيل الدخول باستخدام حساب "<ph name="EMAIL" />".
 
 تم تشفير بياناتك باستخدام عبارة المرور في ‎<ph name="TIME" />. عليك إدخال عبارة المرور لاستخدام بيانات Chrome وحفظها في حسابك على Google.</translation>

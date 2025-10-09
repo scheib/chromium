@@ -10,6 +10,7 @@ source_set("popup") {
   deps = [
     ":popup_ui_protocols",
     "//base",
+    "//ios/chrome/browser/omnibox/public",
     "//ios/chrome/browser/omnibox/public:features",
     "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/shared/ui/util",
@@ -21,7 +22,6 @@ source_set("popup") {
     "//ui/base",
     "//ui/gfx/ios:uikit_util",
   ]
-  public_deps = [ "//ios/third_party/material_components_ios" ]
 }
 
 source_set("popup_ui") {
@@ -38,6 +38,7 @@ source_set("popup_ui") {
     "//ios/chrome/browser/favicon/ui_bundled",
     "//ios/chrome/browser/net/model:crurl",
     "//ios/chrome/browser/omnibox/model/suggestions:ui_interface",
+    "//ios/chrome/browser/omnibox/public",
     "//ios/chrome/browser/omnibox/public:constants",
     "//ios/chrome/browser/omnibox/public:features",
     "//ios/chrome/browser/omnibox/ui:omnibox_popup_shared",
@@ -49,6 +50,7 @@ source_set("popup_ui") {
     "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/shared/ui/util:util_swift",
     "//ios/chrome/browser/toolbar/ui_bundled/buttons",
+    "//ios/chrome/browser/toolbar/ui_bundled/public",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
     "//ui/base",

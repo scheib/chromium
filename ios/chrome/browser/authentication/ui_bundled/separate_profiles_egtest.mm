@@ -7,16 +7,15 @@
 #import "base/test/ios/wait_util.h"
 #import "components/policy/core/browser/signin/profile_separation_policies.h"
 #import "components/signin/public/base/signin_pref_names.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/separate_profiles_util.h"
+#import "ios/chrome/browser/authentication/account_menu/public/account_menu_constants.h"
+#import "ios/chrome/browser/authentication/test/separate_profiles_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_feature.h"
 #import "ios/chrome/browser/settings/ui_bundled/google_services/manage_accounts/manage_accounts_table_view_controller_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
-#import "ios/chrome/browser/shared/ui/util/identity_snackbar/identity_snackbar_message_test_utils.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -89,7 +88,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
 
-  config.features_enabled.push_back(kIdentityDiscAccountMenu);
   config.features_enabled.push_back(kSeparateProfilesForManagedAccounts);
 
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
@@ -120,11 +118,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // existing browsing data is kept separate from the managed profile.
 // TODO(crbug.com/433320893): Re-enable this test.
 - (void)DISABLED_testSigninWithManagedAccountFromUnsignedStateSeparateData {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* originalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 managed account. No account is signed in.
@@ -222,11 +215,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // TODO(crbug.com/411035267): The test fails flakily on simulator.
 // TODO(crbug.com/433320893): And on device.
 - (void)DISABLED_testSigninWithManagedAccountFromUnsignedStateConvertsProfile {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* originalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 managed account. No account is signed in.
@@ -326,11 +314,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // TODO(crbug.com/433320893): Re-enable this test.
 - (void)
     DISABLED_testSigninWithManagedAccountFromUnsignedStateWithDataMigrationDisabled {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* originalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 managed account. No account is signed in.
@@ -410,10 +393,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // because it is disabled by policy.
 - (void)
     testSigninWithManagedAccountFromUnsignedStateWithDataMigrationDisabledOnAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
   // Setup: There's 1 managed account. No account is signed in.
   FakeSystemIdentity* const managedIdentity =
       [FakeSystemIdentity fakeManagedIdentity];
@@ -462,11 +441,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // TODO(crbug.com/433320893): And on device.
 - (void)
     DISABLED_testSigninWithManagedAccountFromUnsignedStateWithDataMergingSuggested {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* originalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 managed account. No account is signed in.
@@ -566,11 +540,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 // that value is not supported at account level.
 - (void)
     testSigninWithManagedAccountFromUnsignedStateWithDataMergingSuggestedOnAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Setup: There's 1 managed account. No account is signed in.
   FakeSystemIdentity* const managedIdentity =
       [FakeSystemIdentity fakeManagedIdentity];
@@ -637,11 +606,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
   testSwitchFromPersonalToManagedAndBack
 #endif
 - (void)MAYBE_testSwitchFromPersonalToManagedAndBack {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* personalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 personal and 1 managed account. The personal account is
@@ -724,11 +688,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 #endif
 - (void)
     MAYBE_testSwitchFromPersonalToManagedAndManagedAccountRemovedFromDevice {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* personalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 personal and 1 managed account. The personal account is
@@ -779,11 +738,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
   testRefuseToSwitchToManageAccount
 #endif
 - (void)MAYBE_testRefuseToSwitchToManageAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   NSString* personalProfileName = [ChromeEarlGrey currentProfileName];
 
   // Setup: There's 1 personal and 1 managed account. The personal account is
@@ -823,11 +777,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
       @"Profile should not have been switched");
 }
 - (void)testProfileNotDeletedOnRemovePersonalAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Setup: There's 1 personal and 1 managed account. The personal account is
   // signed in.
   FakeSystemIdentity* const personalIdentity =
@@ -862,20 +811,8 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
       @"Profile should be personal");
 }
 
-// TODO(crbug.com/433320893): Re-enable this test on device.
-#if !TARGET_OS_SIMULATOR
-#define MAYBE_testProfileDeletedOnRemoveManagedAccount \
-  DISABLED_testProfileDeletedOnRemoveManagedAccount
-#else
-#define MAYBE_testProfileDeletedOnRemoveManagedAccount \
-  testProfileDeletedOnRemoveManagedAccount
-#endif
-- (void)MAYBE_testProfileDeletedOnRemoveManagedAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
+// TODO(crbug.com/411035267): Re-enable this test.
+- (void)DISABLED_testProfileDeletedOnRemoveManagedAccount {
   // Setup: There's 1 personal and 1 managed account. The personal account is
   // signed in.
   FakeSystemIdentity* const personalIdentity =
@@ -910,8 +847,9 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
                                           PromoScreenSecondaryButtonMatcher()]
       performAction:grey_tap()];
 
-  //  Dismiss signed in snackbar.
-  signin::assertSnackbarShownAndDismissItWithIdentity(managedIdentity);
+  // Dismiss signed in snackbar.
+  [SigninEarlGreyUI dismissSigninConfirmationSnackbarForIdentity:managedIdentity
+                                                   assertVisible:YES];
 
   // Confirm profile switched.
   GREYAssert([[ChromeEarlGrey currentProfileName]
@@ -941,12 +879,9 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
       @"Profile should have been switched");
 }
 
-- (void)testProfileDeletedOnForgetManagedAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
+// TODO(crbug.com/411035267): Re-enable this test, it fails on asan and
+// fieldtrial.
+- (void)DISABLED_testProfileDeletedOnForgetManagedAccount {
   // Setup: There's 1 personal and 1 managed account. The personal account is
   // signed in.
   FakeSystemIdentity* const personalIdentity =
@@ -997,11 +932,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
   testProfileDeletedOnManagedAccountGone
 #endif
 - (void)MAYBE_testProfileDeletedOnManagedAccountGone {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Setup: There's 1 personal and 1 managed account. The personal account is
   // signed in.
   FakeSystemIdentity* const personalIdentity =
@@ -1035,8 +965,7 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
   // Relaunch the browser without the managed account. This simulates the
   // situation where the managed account was removed in another Google app.
   [self relaunchWithIdentities:@[ personalIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the profile was switched back to personal.
@@ -1060,7 +989,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
 
-  config.features_enabled.push_back(kIdentityDiscAccountMenu);
   config.features_enabled.push_back(kSeparateProfilesForManagedAccounts);
   // Note: Can't use the actual feature definition, because its build target
   // depends on a bunch of stuff that mustn't make it into the EG test target.
@@ -1132,11 +1060,6 @@ id<GREYMatcher> ManagedProfileCreationDataMigrationDisabledSubtitleMatcher() {
 #define MAYBE_testSignInWithManagedAccount testSignInWithManagedAccount
 #endif
 - (void)MAYBE_testSignInWithManagedAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   FakeSystemIdentity* const managedIdentity =
       [FakeSystemIdentity fakeManagedIdentity];
   [SigninEarlGrey addFakeIdentity:managedIdentity];

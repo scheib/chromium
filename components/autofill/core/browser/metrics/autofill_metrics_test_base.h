@@ -18,6 +18,7 @@
 #include "components/autofill/core/browser/foundations/test_autofill_client.h"
 #include "components/autofill/core/browser/foundations/test_autofill_driver.h"
 #include "components/autofill/core/browser/foundations/test_browser_autofill_manager.h"
+#include "components/autofill/core/browser/foundations/with_test_autofill_client_driver_manager.h"
 #include "components/autofill/core/browser/integrators/touch_to_fill/touch_to_fill_delegate.h"
 #include "components/autofill/core/browser/payments/payments_autofill_client.h"
 #include "components/autofill/core/browser/payments/test_credit_card_save_manager.h"
@@ -67,16 +68,39 @@ class MockCreditCardAccessManager : public CreditCardAccessManager {
               (override));
 };
 
+class MockAutofillDriver : public TestAutofillDriver {
+ public:
+  explicit MockAutofillDriver(TestAutofillClient* client);
+  MockAutofillDriver(const MockAutofillDriver&) = delete;
+  MockAutofillDriver& operator=(const MockAutofillDriver&) = delete;
+  ~MockAutofillDriver() override;
+
+  MOCK_METHOD((base::flat_set<FieldGlobalId>),
+              ApplyFormAction,
+              (mojom::FormActionType action_type,
+               mojom::ActionPersistence action_persistence,
+               base::span<const FormFieldData> data,
+               const url::Origin& triggered_origin,
+               (const base::flat_map<FieldGlobalId, FieldType>&),
+               (const Section&)),
+              (override));
+};
+
 class TestBrowserAutofillManager : public autofill::TestBrowserAutofillManager {
  public:
   explicit TestBrowserAutofillManager(AutofillDriver* driver);
   void Reset() override;
 };
 
-class AutofillMetricsBaseTest {
+class AutofillMetricsBaseTest : public WithTestAutofillClientDriverManager<
+                                    TestAutofillClient,
+                                    ::testing::NiceMock<MockAutofillDriver>,
+                                    TestBrowserAutofillManager> {
  public:
   AutofillMetricsBaseTest();
   virtual ~AutofillMetricsBaseTest();
+
+  void InitAutofillClient() override;
 
  protected:
   void SetUpHelper();
@@ -133,7 +157,9 @@ class AutofillMetricsBaseTest {
   // Purge recorded UKM metrics for running more tests.
   void PurgeUKM();
 
-  void ResetDriverToCommitMetrics() { autofill_driver_.reset(); }
+  void DeleteDriverToCommitMetrics() {
+    DeleteAutofillDriver(autofill_driver());
+  }
 
   // Convenience wrapper for `EmulateUserChangedTextFieldTo` that appends
   // '_changed' to the fields value.
@@ -176,9 +202,8 @@ class AutofillMetricsBaseTest {
     }
   }
 
-  void FillAutofillFormData(const FormData& form,
-                            base::TimeTicks timestamp = {}) {
-    autofill_manager().OnDidFillAutofillFormData(form, timestamp);
+  void AutofillForm(const FormData& form, base::TimeTicks timestamp = {}) {
+    autofill_manager().OnDidAutofillForm(form, timestamp);
   }
 
   void SeeForm(const FormData& form) {
@@ -256,12 +281,12 @@ class AutofillMetricsBaseTest {
 
   [[nodiscard]] FormData CreateEmptyForm() {
     FormData form;
-    form.set_host_frame(autofill_driver_->GetFrameToken());
+    form.set_host_frame(autofill_driver().GetFrameToken());
     form.set_renderer_id(test::MakeFormRendererId());
     form.set_name(u"TestForm");
     form.set_url(GURL("https://example.com/form.html"));
     form.set_action(GURL("https://example.com/submit.html"));
-    form.set_main_frame_origin(url::Origin::Create(autofill_driver_->url()));
+    form.set_main_frame_origin(url::Origin::Create(autofill_driver().url()));
     return form;
   }
 
@@ -269,15 +294,6 @@ class AutofillMetricsBaseTest {
     FormData form = CreateEmptyForm();
     form.set_fields(std::move(fields));
     return form;
-  }
-
-  TestAutofillClient& autofill_client() { return *autofill_client_; }
-
-  TestAutofillDriver& autofill_driver() { return *autofill_driver_; }
-
-  TestBrowserAutofillManager& autofill_manager() {
-    return static_cast<TestBrowserAutofillManager&>(
-        autofill_driver_->GetAutofillManager());
   }
 
   TestAutofillExternalDelegate& external_delegate() {
@@ -291,7 +307,7 @@ class AutofillMetricsBaseTest {
   }
 
   TestPersonalDataManager& personal_data() {
-    return autofill_client_->GetPersonalDataManager();
+    return autofill_client().GetPersonalDataManager();
   }
 
   TestPaymentsDataManager& test_paydm() {
@@ -303,24 +319,22 @@ class AutofillMetricsBaseTest {
   }
 
   ValuablesDataManager& valuables_data_manager() {
-    return *autofill_client_->GetValuablesDataManager();
+    return *autofill_client().GetValuablesDataManager();
   }
 
   ukm::TestUkmRecorder& test_ukm_recorder() {
-    return *autofill_client_->GetUkmRecorder();
+    return *autofill_client().GetUkmRecorder();
   }
 
   MockPaymentsAutofillClient& payments_autofill_client() {
     return static_cast<MockPaymentsAutofillClient&>(
-        *autofill_client_->GetPaymentsAutofillClient());
+        *autofill_client().GetPaymentsAutofillClient());
   }
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   test::AutofillUnitTestEnvironment autofill_test_environment_;
-  std::unique_ptr<TestAutofillClient> autofill_client_;
   syncer::TestSyncService sync_service_;
-  std::unique_ptr<TestAutofillDriver> autofill_driver_;
   base::test::ScopedFeatureList scoped_features_;
 
  private:

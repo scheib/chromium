@@ -10,10 +10,11 @@
 #import "components/dom_distiller/core/pref_names.h"
 #import "components/signin/internal/identity_manager/account_capabilities_constants.h"
 #import "components/translate/core/browser/translate_pref_names.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
 #import "ios/chrome/browser/badges/ui_bundled/badge_constants.h"
 #import "ios/chrome/browser/intelligence/features/features.h"
 #import "ios/chrome/browser/intelligence/page_action_menu/utils/ai_hub_constants.h"
+#import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/popup_menu/ui_bundled/popup_menu_constants.h"
 #import "ios/chrome/browser/reader_mode/model/constants.h"
 #import "ios/chrome/browser/reader_mode/model/features.h"
@@ -112,6 +113,9 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
   net::test_server::RegisterDefaultHandlers(self.testServer);
   GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
 
+  chrome_test_util::GREYAssertErrorNil(
+      [MetricsAppInterface setupHistogramTester]);
+
   self.fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGrey addFakeIdentity:self.fakeIdentity
                  withCapabilities:@{
@@ -121,6 +125,8 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
 }
 
 - (void)tearDownHelper {
+  chrome_test_util::GREYAssertErrorNil(
+      [MetricsAppInterface releaseHistogramTester]);
   [ChromeEarlGrey
       clearUserPrefWithName:translate::prefs::kOfferTranslateEnabled];
   [ChromeEarlGrey clearUserPrefWithName:prefs::kIOSBwgConsent];
@@ -157,6 +163,12 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
         {kLensOverlayEnableIPadCompatibility, {}});
   } else {
     config.features_disabled.push_back(kPageActionMenu);
+  }
+  if ([self isRunningTest:@selector(testOmniboxEntryPointDisabled)]) {
+    config.features_disabled.push_back(kEnableReaderModeOmniboxEntryPoint);
+  } else {
+    config.features_enabled_and_params.push_back(
+        {kEnableReaderModeOmniboxEntryPoint, {}});
   }
   return config;
 }
@@ -505,15 +517,6 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
                  grey_accessibilityID(
                      kReaderModeOptionsFontFamilyButtonAccessibilityIdentifier)]
       performAction:grey_tap()];
-
-  if (@available(iOS 26, *)) {
-    // TODO(crbug.com/428928323): Investigate why the keyboard appears. Remove
-    // this workaround when it's not needed anymore.
-    // On iOS 26, the keyboard appears when the change font family button is
-    // tapped and it hides the elements behind. Close the keyboard by typing a
-    // return key.
-    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-  }
 
   [[EarlGrey selectElementWithMatcher:
                  VisibleContextMenuItem(
@@ -916,9 +919,9 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
   // A snackbar should be displayed with a failure message.
   NSString* failureMessage =
       l10n_util::GetNSString(IDS_IOS_READER_MODE_SNACKBAR_FAILURE_MESSAGE);
-  id<GREYMatcher> snackbarMatcher = grey_allOf(
-      grey_accessibilityID(@"MDCSnackbarMessageTitleAutomationIdentifier"),
-      grey_accessibilityLabel(failureMessage), nil);
+  id<GREYMatcher> snackbarMatcher =
+      grey_allOf(chrome_test_util::SnackbarViewMatcher(),
+                 grey_descendant(grey_accessibilityLabel(failureMessage)), nil);
   [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:snackbarMatcher];
 }
 
@@ -942,9 +945,9 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
   // A snackbar should be displayed with a failure message.
   NSString* failureMessage =
       l10n_util::GetNSString(IDS_IOS_READER_MODE_SNACKBAR_FAILURE_MESSAGE);
-  id<GREYMatcher> snackbarMatcher = grey_allOf(
-      grey_accessibilityID(@"MDCSnackbarMessageTitleAutomationIdentifier"),
-      grey_accessibilityLabel(failureMessage), nil);
+  id<GREYMatcher> snackbarMatcher =
+      grey_allOf(chrome_test_util::SnackbarViewMatcher(),
+                 grey_descendant(grey_accessibilityLabel(failureMessage)), nil);
   [ChromeEarlGrey waitForSufficientlyVisibleElementWithMatcher:snackbarMatcher];
 }
 
@@ -1062,9 +1065,9 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
           grey_accessibilityID(kReaderModeOptionsViewAccessibilityIdentifier)];
 
   // Tap the hide button.
-  [[EarlGrey selectElementWithMatcher:
-                 chrome_test_util::ButtonWithAccessibilityLabelId(
-                     IDS_IOS_READER_MODE_OPTIONS_HIDE_BUTTON_LABEL)]
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
+                                   IDS_IOS_AI_HUB_HIDE_BUTTON_LABEL)]
       performAction:grey_tap()];
 
   // The Reader Mode UI is not visible.
@@ -1166,7 +1169,8 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
 }
 
 // Tests that overscroll actions can be used to refresh dismisses Reader mode.
-- (void)testOverscrollToRefresh {
+// TODO(crbug.com/446692216): Re-enable this test.
+- (void)DISABLED_testOverscrollToRefresh {
   if ([ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Overscroll Actions are only on iPhone.");
   }
@@ -1199,6 +1203,108 @@ id<GREYMatcher> VisibleContextMenuItem(int message_id) {
       selectElementWithMatcher:grey_accessibilityID(
                                    kReaderModeChipViewAccessibilityIdentifier)]
       assertWithMatcher:grey_hidden(YES)];
+}
+
+// Tests that Reader Mode can be toggled on and off for a URL with an empty
+// fragment.
+- (void)testToggleReaderModeWithEmptyRef {
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/article.html#")];
+  [ChromeEarlGrey waitForPageToFinishLoading];
+
+  // Turn on Reader Mode.
+  GREYAssertTrue(
+      [ChromeEarlGrey showReaderModeAndWaitUntilReaderModeWebStateIsReady],
+      @"Reader mode content could not be loaded");
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeChipViewAccessibilityIdentifier)];
+
+  // Turn off Reader Mode.
+  [ChromeEarlGrey hideReaderMode];
+  [ChromeEarlGrey
+      waitForUIElementToDisappearWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kReaderModeChipViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_hidden(YES)];
+
+  // Turn on Reader Mode again.
+  GREYAssertTrue(
+      [ChromeEarlGrey showReaderModeAndWaitUntilReaderModeWebStateIsReady],
+      @"Reader mode content could not be loaded");
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeViewAccessibilityIdentifier)];
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeChipViewAccessibilityIdentifier)];
+}
+
+// Tests that the killswitch to disable the omnibox entrypoint does not
+// interfere with other Reading Mode entrypoints.
+- (void)testOmniboxEntryPointDisabled {
+  // TODO(crbug.com/445861550): Re-enable the test on device.
+#if !TARGET_OS_SIMULATOR
+  EARL_GREY_TEST_DISABLED(@"Test disabled on device.");
+#endif
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/article.html")];
+  [ChromeEarlGrey waitForPageToFinishLoading];
+
+  // Verify that the omnibox entrypoint is disabled and the tools menu
+  // entrypoint is still available.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kReaderModeChipViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_hidden(YES)];
+  [self assertReaderModeInToolsMenuWithMatcher:
+            grey_not(grey_accessibilityTrait(UIAccessibilityTraitNotEnabled))];
+}
+
+// Tests that the share menu is accessible via Reader Mode and records the
+// expected metrics.
+- (void)testShareMenuInReaderMode {
+#if !TARGET_OS_SIMULATOR
+  EARL_GREY_TEST_DISABLED(@"Test disabled on device.");
+#endif
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/article.html")];
+  [ChromeEarlGrey waitForPageToFinishLoading];
+
+  // Open Reader Mode UI.
+  GREYAssertTrue(
+      [ChromeEarlGrey showReaderModeAndWaitUntilReaderModeWebStateIsReady],
+      @"Reader mode content could not be loaded");
+  [ChromeEarlGrey
+      waitForSufficientlyVisibleElementWithMatcher:
+          grey_accessibilityID(kReaderModeChipViewAccessibilityIdentifier)];
+
+  [ChromeEarlGreyUI openShareMenu];
+
+  // Verify that the share menu is up and select the Copy action.
+  [ChromeEarlGrey verifyActivitySheetVisible];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
+  [ChromeEarlGrey verifyActivitySheetNotVisible];
+
+  // Ensure that UMA was logged correctly.
+  NSError* error =
+      [MetricsAppInterface expectCount:1
+                             forBucket:14  // Number refering to
+                                           // SharingScenario::ShareInReaderMode
+                          forHistogram:@"Mobile.Share.EntryPoints"];
+  if (error) {
+    GREYFail([error description]);
+  }
+
+  error = [MetricsAppInterface
+       expectCount:1
+         forBucket:3  // Number refering to ShareActionType::Copy
+      forHistogram:@"Mobile.Share.ShareInReaderMode.Actions"];
+  if (error) {
+    GREYFail([error description]);
+  }
 }
 
 @end

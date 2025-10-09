@@ -59,6 +59,7 @@ void GlicFreController::WebUiStateChanged(mojom::FreWebUiState new_state) {
 
   if (new_state == mojom::FreWebUiState::kReady) {
     base::RecordAction(base::UserMetricsAction("Glic.Fre.LoadSuccess"));
+    interaction_timer_.emplace();
   }
 
   // UI State has changed
@@ -122,6 +123,7 @@ void GlicFreController::ShowFreDialog(Browser* browser,
   CHECK(CanShowFreDialog(browser));
 
   presentation_timer_.emplace();
+  open_timer_.emplace();
   profile_->GetPrefs()->SetInteger(
       prefs::kGlicCompletedFre,
       static_cast<int>(prefs::FreStatus::kIncomplete));
@@ -210,6 +212,18 @@ void GlicFreController::DismissFreIfOpenOnActiveTab(Browser* browser) {
 }
 
 void GlicFreController::AcceptFre() {
+  accepted_ = true;
+  if (open_timer_) {
+    base::UmaHistogramMediumTimes("Glic.Fre.TotalTime.Accepted",
+                                  open_timer_->Elapsed());
+    open_timer_.reset();
+  }
+
+  if (interaction_timer_) {
+    base::UmaHistogramTimes("Glic.Fre.InteractionTime.Accepted",
+                            interaction_timer_->Elapsed());
+    interaction_timer_.reset();
+  }
   base::RecordAction(base::UserMetricsAction("Glic.Fre.Accept"));
   // Update FRE related preferences.
   profile_->GetPrefs()->SetInteger(
@@ -239,6 +253,21 @@ void GlicFreController::AcceptFre() {
   }
 }
 
+void GlicFreController::RejectFre() {
+  base::RecordAction(base::UserMetricsAction("Glic.Fre.NoThanks"));
+  if (open_timer_) {
+    base::UmaHistogramMediumTimes("Glic.Fre.TotalTime.NoThanks",
+                                  open_timer_->Elapsed());
+    open_timer_.reset();
+  }
+  if (interaction_timer_) {
+    base::UmaHistogramTimes("Glic.Fre.InteractionTime.NoThanks",
+                            interaction_timer_->Elapsed());
+    interaction_timer_.reset();
+  }
+  DismissFre(webui_state_);
+}
+
 void GlicFreController::CloseWithReason(views::Widget::ClosedReason reason) {
   base::UmaHistogramEnumeration("Glic.Fre.WidgetClosedReason", reason);
   switch (reason) {
@@ -259,28 +288,47 @@ void GlicFreController::CloseWithReason(views::Widget::ClosedReason reason) {
 }
 
 void GlicFreController::DismissFre(mojom::FreWebUiState panel) {
-  switch (panel) {
-    case mojom::FreWebUiState::kError:
-      base::RecordAction(base::UserMetricsAction("Glic.Fre.ErrorPanelClosed"));
-      break;
-    case mojom::FreWebUiState::kOffline:
-      base::RecordAction(
-          base::UserMetricsAction("Glic.Fre.OfflinePanelClosed"));
-      break;
-    case mojom::FreWebUiState::kBeginLoading:
-    case mojom::FreWebUiState::kShowLoading:
-    case mojom::FreWebUiState::kHoldLoading:
-    case mojom::FreWebUiState::kFinishLoading:
-      base::RecordAction(
-          base::UserMetricsAction("Glic.Fre.LoadingPanelClosed"));
-      break;
-    case mojom::FreWebUiState::kReady:
-      base::RecordAction(base::UserMetricsAction("Glic.Fre.ReadyPanelClosed"));
-      break;
-    case mojom::FreWebUiState::kUninitialized:
-      base::RecordAction(
-          base::UserMetricsAction("Glic.Fre.UninitializedPanelClosed"));
-      break;
+  if (open_timer_ && !accepted_) {
+    base::UmaHistogramMediumTimes("Glic.Fre.TotalTime.Dismissed",
+                                  open_timer_->Elapsed());
+    open_timer_.reset();
+  }
+
+  if (interaction_timer_ && !accepted_) {
+    base::UmaHistogramTimes("Glic.Fre.InteractionTime.Dismissed",
+                            interaction_timer_->Elapsed());
+    interaction_timer_.reset();
+  }
+  if (IsShowingDialog()) {
+    switch (panel) {
+      case mojom::FreWebUiState::kError:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.ErrorPanelClosed"));
+        break;
+      case mojom::FreWebUiState::kDisabledByAdmin:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.DisabledByAdminPanelClosed"));
+        break;
+      case mojom::FreWebUiState::kOffline:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.OfflinePanelClosed"));
+        break;
+      case mojom::FreWebUiState::kBeginLoading:
+      case mojom::FreWebUiState::kShowLoading:
+      case mojom::FreWebUiState::kHoldLoading:
+      case mojom::FreWebUiState::kFinishLoading:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.LoadingPanelClosed"));
+        break;
+      case mojom::FreWebUiState::kReady:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.ReadyPanelClosed"));
+        break;
+      case mojom::FreWebUiState::kUninitialized:
+        base::RecordAction(
+            base::UserMetricsAction("Glic.Fre.UninitializedPanelClosed"));
+        break;
+    }
   }
   web_contents_ = nullptr;
   source_browser_ = nullptr;
@@ -333,7 +381,7 @@ void GlicFreController::ExceededTimeoutError() {
 
 void GlicFreController::OnLinkClicked(const GURL& url) {
   if (url.DomainIs("support.google.com")) {
-    if (url.path().find("13594961") != std::string::npos) {
+    if (url.GetPath().find("13594961") != std::string::npos) {
       base::RecordAction(
           base::UserMetricsAction("Glic.Fre.PrivacyNoticeLinkOpened"));
     } else {
@@ -429,9 +477,7 @@ constexpr net::NetworkTrafficAnnotationTag kGlicFrePreconnectTrafficAnnotation =
       "limits the scope of these requests."
 )");
 
-BASE_FEATURE(kGlicFrePreconnect,
-             "GlicFrePreconnect",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kGlicFrePreconnect, base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE_PARAM(bool,
                    kGlicFrePreconnectToSubresourceDomains,
@@ -542,6 +588,9 @@ void GlicFreController::LogWebUiLoadComplete() {
 }
 
 bool GlicFreController::IsShowingDialog() const {
+  if (is_showing_dialog_for_testing_.has_value()) {
+    return is_showing_dialog_for_testing_.value();
+  }
   return !!fre_widget_;
 }
 

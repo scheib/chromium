@@ -46,6 +46,9 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/application_locale_storage/application_locale_storage.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/ntp_tiles/features.h"
+#include "components/ntp_tiles/pref_names.h"
+#include "components/ntp_tiles/tile_type.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/search/ntp_features.h"
 #include "components/search_engines/template_url_service.h"
@@ -66,6 +69,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider.h"
+#include "ui/native_theme/mock_os_settings_provider.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 #include "ui/shell_dialogs/selected_file_info.h"
@@ -85,7 +89,7 @@ namespace {
 using testing::_;
 using testing::An;
 using testing::DoAll;
-using testing::Invoke;
+using testing::Mock;
 using testing::Return;
 using testing::ReturnRef;
 using testing::SaveArg;
@@ -170,12 +174,12 @@ class MockPage : public side_panel::mojom::CustomizeChromePage {
            bool visible));
   MOCK_METHOD(void,
               SetMostVisitedSettings,
-              (bool custom_links_enabled, bool visible));
+              (ntp_tiles::TileType type,
+               bool visible,
+               const std::vector<ntp_tiles::TileType>& disabled_shortcuts));
   MOCK_METHOD(void, SetTheme, (side_panel::mojom::ThemePtr));
   MOCK_METHOD(void, SetThemeEditable, (bool));
-  MOCK_METHOD(void,
-              ScrollToSection,
-              (side_panel::mojom::CustomizeChromeSection));
+  MOCK_METHOD(void, ScrollToSection, (CustomizeChromeSection));
   MOCK_METHOD(void,
               AttachedTabStateUpdated,
               (side_panel::mojom::NewTabPageType));
@@ -372,31 +376,114 @@ class CustomizeChromePageHandlerTest : public testing::Test {
 };
 
 TEST_F(CustomizeChromePageHandlerTest, SetMostVisitedSettings) {
-  bool custom_links_enabled;
+  ntp_tiles::TileType type;
   bool visible;
+  std::vector<ntp_tiles::TileType> disabled_shortcuts;
   EXPECT_CALL(mock_page_, SetMostVisitedSettings)
       .Times(4)
-      .WillRepeatedly(
-          DoAll(SaveArg<0>(&custom_links_enabled), SaveArg<1>(&visible)));
+      .WillRepeatedly(DoAll(SaveArg<0>(&type), SaveArg<1>(&visible),
+                            SaveArg<2>(&disabled_shortcuts)));
 
-  profile().GetPrefs()->SetBoolean(ntp_prefs::kNtpUseMostVisitedTiles, false);
+  profile().GetPrefs()->SetInteger(
+      ntp_prefs::kNtpShortcutsType,
+      static_cast<int>(ntp_tiles::TileType::kCustomLinks));
   profile().GetPrefs()->SetBoolean(ntp_prefs::kNtpShortcutsVisible, false);
 
   histogram_tester().ExpectTotalCount("NewTabPage.CustomizeShortcutAction", 0);
-  EXPECT_FALSE(
-      profile().GetPrefs()->GetBoolean(ntp_prefs::kNtpUseMostVisitedTiles));
+  EXPECT_EQ(static_cast<int>(ntp_tiles::TileType::kCustomLinks),
+            profile().GetPrefs()->GetInteger(ntp_prefs::kNtpShortcutsType));
   EXPECT_FALSE(
       profile().GetPrefs()->GetBoolean(ntp_prefs::kNtpShortcutsVisible));
 
-  handler().SetMostVisitedSettings(/*custom_links_enabled=*/false,
-                                   /*visible=*/true);
+  handler().SetMostVisitedSettings(
+      /*type=*/ntp_tiles::TileType::kTopSites,
+      /*visible=*/true);
   mock_page_.FlushForTesting();
 
-  EXPECT_TRUE(
-      profile().GetPrefs()->GetBoolean(ntp_prefs::kNtpUseMostVisitedTiles));
+  EXPECT_EQ(static_cast<int>(ntp_tiles::TileType::kTopSites),
+            profile().GetPrefs()->GetInteger(ntp_prefs::kNtpShortcutsType));
   EXPECT_TRUE(
       profile().GetPrefs()->GetBoolean(ntp_prefs::kNtpShortcutsVisible));
   histogram_tester().ExpectTotalCount("NewTabPage.CustomizeShortcutAction", 2);
+}
+
+TEST_F(CustomizeChromePageHandlerTest,
+       UpdateMostVisitedSettings_EnterpriseFeatureDisabled) {
+  base::test::ScopedFeatureList features;
+  features.InitAndDisableFeature(ntp_tiles::kNtpEnterpriseShortcuts);
+
+  ntp_tiles::TileType type;
+  bool visible;
+  std::vector<ntp_tiles::TileType> disabled_shortcuts;
+  EXPECT_CALL(mock_page_, SetMostVisitedSettings)
+      .WillRepeatedly(DoAll(SaveArg<0>(&type), SaveArg<1>(&visible),
+                            SaveArg<2>(&disabled_shortcuts)));
+
+  // Set enterprise shortcuts policy.
+  base::Value::List enterprise_shortcuts;
+  enterprise_shortcuts.Append(
+      base::Value::Dict().Set("title", "test").Set("url", "https://test.com"));
+  profile().GetPrefs()->SetList(
+      ntp_tiles::prefs::kEnterpriseShortcutsPolicyList,
+      std::move(enterprise_shortcuts));
+  profile().GetPrefs()->SetInteger(
+      ntp_prefs::kNtpShortcutsType,
+      static_cast<int>(ntp_tiles::TileType::kEnterpriseShortcuts));
+  mock_page_.FlushForTesting();
+
+  // The enterprise shortcuts option should be disabled. The type should remain
+  // Enterprise Shortcuts.
+  EXPECT_EQ(ntp_tiles::TileType::kEnterpriseShortcuts, type);
+  EXPECT_THAT(disabled_shortcuts,
+              testing::ElementsAre(ntp_tiles::TileType::kEnterpriseShortcuts));
+}
+
+TEST_F(CustomizeChromePageHandlerTest,
+       UpdateMostVisitedSettingsOnPolicyChange) {
+  ntp_tiles::TileType type;
+  bool visible;
+  std::vector<ntp_tiles::TileType> disabled_shortcuts;
+  EXPECT_CALL(mock_page_, SetMostVisitedSettings)
+      .WillRepeatedly(DoAll(SaveArg<0>(&type), SaveArg<1>(&visible),
+                            SaveArg<2>(&disabled_shortcuts)));
+
+  // Enable enterprise shortcuts policy.
+  base::test::ScopedFeatureList features;
+  features.InitAndEnableFeature(ntp_tiles::kNtpEnterpriseShortcuts);
+
+  base::Value::List enterprise_shortcuts;
+  enterprise_shortcuts.Append(
+      base::Value::Dict().Set("title", "test").Set("url", "https://test.com"));
+  profile().GetPrefs()->SetList(
+      ntp_tiles::prefs::kEnterpriseShortcutsPolicyList,
+      std::move(enterprise_shortcuts));
+  mock_page_.FlushForTesting();
+
+  // The enterprise shortcuts option should be visible.
+  EXPECT_EQ(0u, disabled_shortcuts.size());
+
+  // Set shortcut type to enterprise.
+  handler().SetMostVisitedSettings(
+      /*type=*/ntp_tiles::TileType::kEnterpriseShortcuts, /*visible=*/true);
+  mock_page_.FlushForTesting();
+
+  // Verify state.
+  EXPECT_EQ(ntp_tiles::TileType::kEnterpriseShortcuts, type);
+  EXPECT_TRUE(visible);
+  EXPECT_EQ(0u, disabled_shortcuts.size());
+
+  // Disable enterprise shortcuts policy.
+  profile().GetPrefs()->SetList(
+      ntp_tiles::prefs::kEnterpriseShortcutsPolicyList, base::Value::List());
+  mock_page_.FlushForTesting();
+
+  // Verify state is updated. The type should be reset to Custom Links.
+  EXPECT_EQ(ntp_tiles::TileType::kCustomLinks, type);
+  EXPECT_TRUE(visible);
+  EXPECT_EQ(1u, disabled_shortcuts.size());
+  EXPECT_TRUE(std::find(disabled_shortcuts.begin(), disabled_shortcuts.end(),
+                        ntp_tiles::TileType::kEnterpriseShortcuts) !=
+              disabled_shortcuts.end());
 }
 
 enum class ThemeUpdateSource {
@@ -410,7 +497,15 @@ class CustomizeChromePageHandlerSetThemeTest
     : public CustomizeChromePageHandlerTest,
       public ::testing::WithParamInterface<ThemeUpdateSource> {
  public:
-  void UpdateTheme() {
+  side_panel::mojom::ThemePtr UpdateTheme() {
+    // Flush any existing updates so the flush below only sees what results from
+    // the update below.
+    mock_page_.FlushForTesting();
+
+    side_panel::mojom::ThemePtr theme;
+    EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg(&theme));
+
+    // Update.
     switch (GetParam()) {
       case ThemeUpdateSource::kMojo:
         handler().UpdateTheme();
@@ -426,12 +521,16 @@ class CustomizeChromePageHandlerSetThemeTest
             .OnCustomBackgroundImageUpdated();
         break;
     }
+    mock_page_.FlushForTesting();
+
+    // Should have seen exactly one attempt to set the theme.
+    Mock::VerifyAndClearExpectations(&mock_page_);
+    return theme;
   }
 };
 
 TEST_P(CustomizeChromePageHandlerSetThemeTest, SetTheme) {
-  side_panel::mojom::ThemePtr theme;
-  EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg<0>(&theme));
+  ui::MockOsSettingsProvider os_settings_provider;
   CustomBackground custom_background;
   custom_background.custom_background_url = GURL("https://foo.com/img.png");
   custom_background.custom_background_attribution_line_1 = "foo line";
@@ -451,11 +550,10 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetTheme) {
   ON_CALL(mock_ntp_custom_background_service_,
           IsCustomBackgroundDisabledByPolicy())
       .WillByDefault(Return(true));
-  ui::NativeTheme::GetInstanceForNativeUi()->set_use_dark_colors(true);
+  os_settings_provider.SetPreferredColorScheme(
+      ui::NativeTheme::PreferredColorScheme::kDark);
 
-  UpdateTheme();
-  mock_page_.FlushForTesting();
-
+  side_panel::mojom::ThemePtr theme = UpdateTheme();
   ASSERT_TRUE(theme);
   ASSERT_TRUE(theme->background_image);
   EXPECT_EQ("https://foo.com/img.png", theme->background_image->url);
@@ -473,8 +571,6 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetTheme) {
 }
 
 TEST_P(CustomizeChromePageHandlerSetThemeTest, SetThemeWithDailyRefresh) {
-  side_panel::mojom::ThemePtr theme;
-  EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg(&theme));
   CustomBackground custom_background;
   custom_background.custom_background_url = GURL("https://foo.com/img.png");
   custom_background.daily_refresh_enabled = true;
@@ -482,9 +578,7 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetThemeWithDailyRefresh) {
   ON_CALL(mock_ntp_custom_background_service_, GetCustomBackground())
       .WillByDefault(Return(std::make_optional(custom_background)));
 
-  UpdateTheme();
-  mock_page_.FlushForTesting();
-
+  side_panel::mojom::ThemePtr theme = UpdateTheme();
   ASSERT_TRUE(theme);
   ASSERT_TRUE(theme->background_image);
   EXPECT_TRUE(theme->background_image->daily_refresh_enabled);
@@ -492,8 +586,6 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetThemeWithDailyRefresh) {
 }
 
 TEST_P(CustomizeChromePageHandlerSetThemeTest, SetUploadedImage) {
-  side_panel::mojom::ThemePtr theme;
-  EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg<0>(&theme));
   CustomBackground custom_background;
   custom_background.custom_background_url = GURL("https://foo.com/img.png");
   custom_background.is_uploaded_image = true;
@@ -504,9 +596,7 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetUploadedImage) {
   ON_CALL(mock_theme_service(), UsingSystemTheme())
       .WillByDefault(Return(false));
 
-  UpdateTheme();
-  mock_page_.FlushForTesting();
-
+  side_panel::mojom::ThemePtr theme = UpdateTheme();
   ASSERT_TRUE(theme);
   ASSERT_TRUE(theme->background_image);
   EXPECT_EQ("https://foo.com/img.png", theme->background_image->url);
@@ -514,8 +604,6 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetUploadedImage) {
 }
 
 TEST_P(CustomizeChromePageHandlerSetThemeTest, SetWallpaperSearchImage) {
-  side_panel::mojom::ThemePtr theme;
-  EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg<0>(&theme));
   CustomBackground custom_background;
   base::Token token = base::Token::CreateRandom();
   custom_background.custom_background_url = GURL("https://foo.com/img.png");
@@ -528,9 +616,7 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetWallpaperSearchImage) {
   ON_CALL(mock_theme_service(), UsingSystemTheme())
       .WillByDefault(Return(false));
 
-  UpdateTheme();
-  mock_page_.FlushForTesting();
-
+  side_panel::mojom::ThemePtr theme = UpdateTheme();
   ASSERT_TRUE(theme);
   ASSERT_TRUE(theme->background_image);
   EXPECT_TRUE(theme->background_image->is_uploaded_image);
@@ -539,8 +625,6 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetWallpaperSearchImage) {
 }
 
 TEST_P(CustomizeChromePageHandlerSetThemeTest, SetThirdPartyTheme) {
-  side_panel::mojom::ThemePtr theme;
-  EXPECT_CALL(mock_page_, SetTheme).Times(1).WillOnce(MoveArg<0>(&theme));
   CustomBackground custom_background;
   custom_background.custom_background_url = GURL("https://foo.com/img.png");
 
@@ -565,9 +649,7 @@ TEST_P(CustomizeChromePageHandlerSetThemeTest, SetThirdPartyTheme) {
       .WillByDefault(Return(false));
   ON_CALL(mock_theme_service(), GetThemeID()).WillByDefault(Return("foo"));
 
-  UpdateTheme();
-  mock_page_.FlushForTesting();
-
+  side_panel::mojom::ThemePtr theme = UpdateTheme();
   ASSERT_TRUE(theme);
   ASSERT_TRUE(theme->background_image);
   EXPECT_EQ("https://foo.com/img.png", theme->background_image->url);
@@ -625,7 +707,7 @@ TEST_F(CustomizeChromePageHandlerTest, GetBackgroundImages) {
   std::vector<side_panel::mojom::CollectionImagePtr> images;
   base::MockCallback<CustomizeChromePageHandler::GetBackgroundImagesCallback>
       callback;
-  EXPECT_CALL(callback, Run(_)).Times(1).WillOnce(MoveArg<0>(&images));
+  EXPECT_CALL(callback, Run(_)).Times(1).WillOnce(MoveArg(&images));
   EXPECT_CALL(mock_ntp_background_service(), FetchCollectionImageInfo).Times(1);
   handler().GetBackgroundImages("test_id", callback.Get());
   ntp_background_service_observer().OnCollectionImagesAvailable();
@@ -814,7 +896,7 @@ TEST_F(CustomizeChromePageHandlerTest, SetUseDeviceTheme_Off) {
 }
 
 TEST_F(CustomizeChromePageHandlerTest, ScrollToSection) {
-  side_panel::mojom::CustomizeChromeSection section;
+  CustomizeChromeSection section;
   EXPECT_CALL(mock_page_, ScrollToSection)
       .Times(1)
       .WillOnce(SaveArg<0>(&section));
@@ -822,7 +904,7 @@ TEST_F(CustomizeChromePageHandlerTest, ScrollToSection) {
   handler().ScrollToSection(CustomizeChromeSection::kAppearance);
   mock_page_.FlushForTesting();
 
-  EXPECT_EQ(side_panel::mojom::CustomizeChromeSection::kAppearance, section);
+  EXPECT_EQ(CustomizeChromeSection::kAppearance, section);
 }
 
 // Ensures that url's are correctly mapped to their NewTabPage type.
@@ -867,7 +949,7 @@ TEST_F(CustomizeChromePageHandlerTest, ScrollToUnspecifiedSection) {
 }
 
 TEST_F(CustomizeChromePageHandlerTest, UpdateScrollToSection) {
-  side_panel::mojom::CustomizeChromeSection section;
+  CustomizeChromeSection section;
   EXPECT_CALL(mock_page_, ScrollToSection)
       .Times(2)
       .WillRepeatedly(SaveArg<0>(&section));
@@ -876,7 +958,7 @@ TEST_F(CustomizeChromePageHandlerTest, UpdateScrollToSection) {
   handler().UpdateScrollToSection();
   mock_page_.FlushForTesting();
 
-  EXPECT_EQ(side_panel::mojom::CustomizeChromeSection::kAppearance, section);
+  EXPECT_EQ(CustomizeChromeSection::kAppearance, section);
 }
 
 class CustomizeChromePageHandlerWallpaperSearchTest
@@ -939,14 +1021,13 @@ TEST_F(CustomizeChromePageHandlerWithModulesTest, SetModulesSettings) {
   bool managed;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(
-          Invoke([&modules_settings, &managed](
-                     std::vector<side_panel::mojom::ModuleSettingsPtr>
-                         modules_settings_arg,
-                     bool managed_arg, bool visible_arg) {
-            modules_settings = std::move(modules_settings_arg);
-            managed = managed_arg;
-          }));
+      .WillRepeatedly([&modules_settings, &managed](
+                          std::vector<side_panel::mojom::ModuleSettingsPtr>
+                              modules_settings_arg,
+                          bool managed_arg, bool visible_arg) {
+        modules_settings = std::move(modules_settings_arg);
+        managed = managed_arg;
+      });
 
   profile().GetPrefs()->SetBoolean(prefs::kNtpModulesVisible, true);
   mock_page_.FlushForTesting();
@@ -978,14 +1059,13 @@ TEST_F(CustomizeChromePageHandlerWithModulesTest, SetModulesVisible_True) {
   bool visible;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(
-          Invoke([&modules_settings, &visible](
-                     std::vector<side_panel::mojom::ModuleSettingsPtr>
-                         modules_settings_arg,
-                     bool managed_arg, bool visible_arg) {
-            modules_settings = std::move(modules_settings_arg);
-            visible = visible_arg;
-          }));
+      .WillRepeatedly([&modules_settings, &visible](
+                          std::vector<side_panel::mojom::ModuleSettingsPtr>
+                              modules_settings_arg,
+                          bool managed_arg, bool visible_arg) {
+        modules_settings = std::move(modules_settings_arg);
+        visible = visible_arg;
+      });
 
   handler().SetModulesVisible(true);
   mock_page_.FlushForTesting();
@@ -998,14 +1078,13 @@ TEST_F(CustomizeChromePageHandlerWithModulesTest, SetModulesVisible_False) {
   bool visible;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(
-          Invoke([&modules_settings, &visible](
-                     std::vector<side_panel::mojom::ModuleSettingsPtr>
-                         modules_settings_arg,
-                     bool managed_arg, bool visible_arg) {
-            modules_settings = std::move(modules_settings_arg);
-            visible = visible_arg;
-          }));
+      .WillRepeatedly([&modules_settings, &visible](
+                          std::vector<side_panel::mojom::ModuleSettingsPtr>
+                              modules_settings_arg,
+                          bool managed_arg, bool visible_arg) {
+        modules_settings = std::move(modules_settings_arg);
+        visible = visible_arg;
+      });
 
   handler().SetModulesVisible(false);
   mock_page_.FlushForTesting();
@@ -1017,12 +1096,12 @@ TEST_F(CustomizeChromePageHandlerWithModulesTest, SetModuleDisabled) {
   std::vector<side_panel::mojom::ModuleSettingsPtr> modules_settings;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(Invoke(
+      .WillRepeatedly(
           [&modules_settings](std::vector<side_panel::mojom::ModuleSettingsPtr>
                                   modules_settings_arg,
                               bool managed_arg, bool visible_arg) {
             modules_settings = std::move(modules_settings_arg);
-          }));
+          });
 
   const std::string kTabResumptionId(
       ntp_modules::kMostRelevantTabResumptionModuleId);
@@ -1047,12 +1126,12 @@ TEST_F(CustomizeChromePageHandlerWithModulesTest,
   std::vector<side_panel::mojom::ModuleSettingsPtr> modules_settings;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(Invoke(
+      .WillRepeatedly(
           [&modules_settings](std::vector<side_panel::mojom::ModuleSettingsPtr>
                                   modules_settings_arg,
                               bool managed_arg, bool visible_arg) {
             modules_settings = std::move(modules_settings_arg);
-          }));
+          });
 
   base::Value::List hidden_modules_list;
   hidden_modules_list.Append(ntp_modules::kMostRelevantTabResumptionModuleId);
@@ -1080,14 +1159,13 @@ TEST_P(CustomizeChromePageHandlerWithModulesVisibilityTest, SetModulesVisible) {
   bool visible;
   EXPECT_CALL(mock_page_, SetModulesSettings)
       .Times(1)
-      .WillRepeatedly(
-          Invoke([&modules_settings, &visible](
-                     std::vector<side_panel::mojom::ModuleSettingsPtr>
-                         modules_settings_arg,
-                     bool managed_arg, bool visible_arg) {
-            modules_settings = std::move(modules_settings_arg);
-            visible = visible_arg;
-          }));
+      .WillRepeatedly([&modules_settings, &visible](
+                          std::vector<side_panel::mojom::ModuleSettingsPtr>
+                              modules_settings_arg,
+                          bool managed_arg, bool visible_arg) {
+        modules_settings = std::move(modules_settings_arg);
+        visible = visible_arg;
+      });
 
   handler().SetModulesVisible(ModulesVisible());
   mock_page_.FlushForTesting();

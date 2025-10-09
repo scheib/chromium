@@ -7,6 +7,7 @@
 
 #include "base/component_export.h"
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 
 namespace page_content_annotations::features {
@@ -27,6 +28,14 @@ BASE_DECLARE_FEATURE(kExtractRelatedSearchesFromPrefetchedZPSResponse);
 // Enables extraction of AnnotatedPageContent for every page load.
 COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
 BASE_DECLARE_FEATURE(kAnnotatedPageContentExtraction);
+
+// Enables the PageContentCache to store AnnotatedPageContent.
+COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
+BASE_DECLARE_FEATURE(kPageContentCache);
+
+// The maximum number of days to keep page content in the cache.
+COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
+extern const base::FeatureParam<int> kPageContentCacheMaxCacheAgeInDays;
 
 // The maximum number of "related searches" entries allowed to be maintained in
 // a least-recently-used cache for "related searches" data obtained via ZPS
@@ -135,6 +144,21 @@ base::TimeDelta GetAnnotatedPageContentCaptureDelay();
 // comparison.
 COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
 bool ShouldAnnotatedPageContentStudyIncludeInnerText();
+
+// The mode for extracting AnnotatedPageContent in the extraction service.
+COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
+std::string AnnotatedPageContentMode();
+
+// The triggering mode for page content extraction.
+enum class PageContentExtractionTriggeringMode {
+  kOnLoad,
+  kOnHidden,
+  kOnLoadAndHidden,
+};
+
+// Returns the triggering mode for page content extraction.
+COMPONENT_EXPORT(PAGE_CONTENT_ANNOTATIONS_FEATURES)
+PageContentExtractionTriggeringMode GetPageContentExtractionTriggeringMode();
 
 }  // namespace page_content_annotations::features
 

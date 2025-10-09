@@ -8,9 +8,13 @@
 
 #import "base/apple/foundation_util.h"
 #import "base/strings/string_number_conversions.h"
+#import "components/cbor/reader.h"
 #import "components/sync/protocol/webauthn_credential_specifics.pb.h"
 #import "components/webauthn/core/browser/passkey_model_utils.h"
+#import "device/fido/attestation_object.h"
+#import "device/fido/authenticator_data.h"
 #import "ios/chrome/common/credential_provider/archivable_credential+passkey.h"
+#import "ios/chrome/credential_provider_extension/passkey_util_swift.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 
@@ -110,7 +114,8 @@ TEST_F(PasskeyUtilTest, AssertionAuthenticatorDataIsValid) {
 
   PasskeyAssertionOutput passkeyAssertionOutput =
       PerformPasskeyAssertion(credential, clientDataHash, allowedCredentials,
-                              SecurityDomainSecrets(), /*prf_inputs=*/nil);
+                              SecurityDomainSecrets(), /*prf_inputs=*/nil,
+                              /*did_complete_uv=*/true);
 
   EXPECT_NSEQ(clientDataHash, passkeyAssertionOutput.credential.clientDataHash);
   EXPECT_NSEQ(credential.credentialId,
@@ -125,6 +130,28 @@ TEST_F(PasskeyUtilTest, AssertionAuthenticatorDataIsValid) {
               rpIdSha);
 }
 
+// Tests that values passed as the `did_complete_uv` param for
+// PerformPasskeyAssertion are correctly represented in the authenticator data.
+TEST_F(PasskeyUtilTest, PerformPasskeyAssertionPropagatesUVBit) {
+  for (bool did_complete_uv : std::vector<bool>{true, false}) {
+    PasskeyAssertionOutput passkeyAssertionOutput = PerformPasskeyAssertion(
+        TestPasskeyCredential(), ClientDataHash(), /*allowed_credentials=*/@[],
+        SecurityDomainSecrets(), /*prf_inputs=*/nil, did_complete_uv);
+
+    std::optional<device::AuthenticatorData> auth_data =
+        device::AuthenticatorData::DecodeAuthenticatorData(
+            base::apple::NSDataToSpan(
+                passkeyAssertionOutput.credential.authenticatorData));
+    ASSERT_TRUE(auth_data.has_value());
+
+    bool uv_flag_value =
+        auth_data->flags() &
+        static_cast<uint8_t>(
+            device::AuthenticatorData::Flag::kTestOfUserVerification);
+    EXPECT_EQ(did_complete_uv, uv_flag_value);
+  }
+}
+
 // Tests assertion fails if the credential is not allowed.
 TEST_F(PasskeyUtilTest, AssertionFailsOnCredentialId) {
   NSData* clientDataHash = ClientDataHash();
@@ -132,9 +159,9 @@ TEST_F(PasskeyUtilTest, AssertionFailsOnCredentialId) {
 
   NSArray<NSData*>* allowedCredentials =
       [NSArray arrayWithObject:StringToData("otherCredentialId")];
-  PasskeyAssertionOutput passkeyAssertionOutput =
-      PerformPasskeyAssertion(credential, clientDataHash, allowedCredentials,
-                              SecurityDomainSecrets(), /*prf_inputs=*/nil);
+  PasskeyAssertionOutput passkeyAssertionOutput = PerformPasskeyAssertion(
+      credential, clientDataHash, allowedCredentials, SecurityDomainSecrets(),
+      /*prf_inputs=*/nil, /*did_complete_uv=*/true);
   EXPECT_NSEQ(passkeyAssertionOutput.credential, nil);
 }
 
@@ -145,9 +172,9 @@ TEST_F(PasskeyUtilTest, AssertionSucceedsOnCredentialId) {
 
   NSArray<NSData*>* allowedCredentials =
       [NSArray arrayWithObject:credential.credentialId];
-  PasskeyAssertionOutput passkeyAssertionOutput =
-      PerformPasskeyAssertion(credential, clientDataHash, allowedCredentials,
-                              SecurityDomainSecrets(), /*prf_inputs=*/nil);
+  PasskeyAssertionOutput passkeyAssertionOutput = PerformPasskeyAssertion(
+      credential, clientDataHash, allowedCredentials, SecurityDomainSecrets(),
+      /*prf_inputs=*/nil, /*did_complete_uv=*/true);
   EXPECT_NSNE(passkeyAssertionOutput.credential, nil);
 }
 
@@ -158,12 +185,45 @@ TEST_F(PasskeyUtilTest, CreationSucceeds) {
 
   PasskeyCreationOutput passkeyCreationOutput = PerformPasskeyCreation(
       clientDataHash, credential.rpId, credential.username, credential.userId,
-      /*gaia=*/nil, SecurityDomainSecrets(), /*prf_inputs=*/nil);
+      /*gaia=*/nil, SecurityDomainSecrets(), /*prf_inputs=*/nil,
+      /*did_complete_uv=*/true);
 
   EXPECT_NSEQ(clientDataHash, passkeyCreationOutput.credential.clientDataHash);
   EXPECT_EQ(passkeyCreationOutput.credential.credentialID.length, 16u);
   EXPECT_NSEQ(credential.rpId, passkeyCreationOutput.credential.relyingParty);
   EXPECT_NSNE(passkeyCreationOutput.credential.attestationObject, nil);
+}
+
+// Tests that values passed as the `did_complete_uv` param for
+// PerformPasskeyCreation are correctly represented in the authenticator data.
+TEST_F(PasskeyUtilTest, PerformPasskeyCreationPropagatesUVBit) {
+  id<Credential> credential = TestPasskeyCredential();
+
+  for (bool did_complete_uv : std::vector<bool>{true, false}) {
+    PasskeyCreationOutput passkeyCreationOutput = PerformPasskeyCreation(
+        ClientDataHash(), credential.rpId, credential.username,
+        credential.userId,
+        /*gaia=*/nil, SecurityDomainSecrets(), /*prf_inputs=*/nil,
+        /*did_complete_uv=*/did_complete_uv);
+
+    NSData* attestationObjectData =
+        passkeyCreationOutput.credential.attestationObject;
+    std::optional<cbor::Value> attestation_cbor =
+        cbor::Reader::Read(base::apple::NSDataToSpan(attestationObjectData));
+    ASSERT_TRUE(attestation_cbor.has_value());
+
+    std::optional<device::AttestationObject> attestation_object =
+        device::AttestationObject::Parse(std::move(*attestation_cbor));
+    ASSERT_TRUE(attestation_object.has_value());
+
+    const device::AuthenticatorData& auth_data =
+        attestation_object->authenticator_data();
+    bool uv_flag_value =
+        auth_data.flags() &
+        static_cast<uint8_t>(
+            device::AuthenticatorData::Flag::kTestOfUserVerification);
+    EXPECT_EQ(did_complete_uv, uv_flag_value);
+  }
 }
 
 // Tests assertion succeeds with PRF data.
@@ -174,7 +234,8 @@ TEST_F(PasskeyUtilTest, AssertionSucceedsWithPRF) {
 
     PasskeyAssertionOutput passkeyAssertionOutput = PerformPasskeyAssertion(
         credential, clientDataHash, /*allowedCredentials=*/nil,
-        SecurityDomainSecrets(), PRFInputs());
+        SecurityDomainSecrets(), PRFInputs(),
+        /*did_complete_uv=*/true);
     EXPECT_NSNE(passkeyAssertionOutput.credential, nil);
     ASSERT_EQ(passkeyAssertionOutput.prf_outputs.count, 2u);
     EXPECT_EQ(passkeyAssertionOutput.prf_outputs[0].length, 32u);
@@ -190,7 +251,8 @@ TEST_F(PasskeyUtilTest, CreationSucceedsWithPRF) {
 
     PasskeyCreationOutput passkeyCreationOutput = PerformPasskeyCreation(
         clientDataHash, credential.rpId, credential.username, credential.userId,
-        /*gaia=*/nil, SecurityDomainSecrets(), PRFInputs());
+        /*gaia=*/nil, SecurityDomainSecrets(), PRFInputs(),
+        /*did_complete_uv=*/true);
 
     EXPECT_NSEQ(clientDataHash,
                 passkeyCreationOutput.credential.clientDataHash);
@@ -242,4 +304,36 @@ TEST_F(PasskeyUtilTest,
       /*is_biometric_authentication_enabled=*/NO));
 }
 
+// Tests that the 'setLargeBlobIsSupported' setter works to mark Large Blob
+// support in iOS 18.0+.
+TEST_F(PasskeyUtilTest, LargeBlobRegistrationIsSupportedWorks) {
+  if (@available(iOS 18.0, *)) {
+    NSData* clientDataHash = ClientDataHash();
+    id<Credential> seed = TestPasskeyCredential();
+
+    PasskeyCreationOutput passkeyCreationOutput = PerformPasskeyCreation(
+        clientDataHash, seed.rpId, seed.username, seed.userId,
+        /*gaia=*/nil, SecurityDomainSecrets(), /*prf_inputs=*/nil,
+        /*did_complete_uv=*/true);
+    ASSERT_NSNE(passkeyCreationOutput.credential, nil);
+    // By default there should be no Large Blob support marked.
+    ASPasskeyRegistrationCredentialExtensionOutput* ext0 =
+        passkeyCreationOutput.credential.extensionOutput;
+    if ([ext0 respondsToSelector:@selector(largeBlobRegistrationOutput)]) {
+      EXPECT_TRUE([ext0 largeBlobRegistrationOutput] == nil ||
+                  ![[ext0 largeBlobRegistrationOutput] isSupported]);
+    }
+    // Mark support and verify it propagates into the extension output.
+    [passkeyCreationOutput.credential setLargeBlobIsSupported];
+    ASPasskeyRegistrationCredentialExtensionOutput* ext =
+        passkeyCreationOutput.credential.extensionOutput;
+    ASSERT_NSNE(ext, nil);
+    ASAuthorizationPublicKeyCredentialLargeBlobRegistrationOutput*
+        large_blob_output = [ext largeBlobRegistrationOutput];
+    ASSERT_NSNE(large_blob_output, nil);
+    EXPECT_TRUE([large_blob_output isSupported]);
+  } else {
+    GTEST_SKIP() << "Large Blob requires iOS 18.0+.";
+  }
+}
 }  // namespace credential_provider_extension

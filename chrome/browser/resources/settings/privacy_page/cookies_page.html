@@ -84,7 +84,7 @@
       page-title="$i18n{thirdPartyCookiesPageTitle}"
       learn-more-url="$i18n{cookiesSettingsHelpCenterURL}"
       search-label="$i18n{siteSettingsAllSitesSearch}"
-      search-term="{{searchTerm}}">
+      search-term="{{searchTerm}}" route-path$="[[routePath]]">
     <template is="dom-if" if="[[!is3pcdRedesignEnabled_]]">
       <div id="explanationText" class="secondary">
         $i18n{thirdPartyCookiesPageDescription}
@@ -205,7 +205,7 @@
     </template>
     <settings-do-not-track-toggle id="doNotTrack" prefs="{{prefs}}">
     </settings-do-not-track-toggle>
-    <cr-link-row id="site-data-trigger" class="hr"
+    <cr-link-row id="siteDataTrigger" class="hr"
         on-click="onSiteDataClick_" label="$i18n{cookiePageAllSitesLink}"
         role-description="$i18n{subpageArrowRoleDescription}">
     </cr-link-row>

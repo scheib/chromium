@@ -6,15 +6,14 @@
 #define CONTENT_BROWSER_PRELOADING_PREFETCH_PREFETCH_PARAMS_H_
 
 #include <optional>
-#include <string_view>
 
 #include "base/time/time.h"
-#include "content/browser/preloading/prefetch/prefetch_type.h"
 #include "content/common/content_export.h"
-#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom.h"
 #include "url/gurl.h"
 
 namespace content {
+
+class PrefetchType;
 
 // The url of the tunnel proxy.
 CONTENT_EXPORT GURL PrefetchProxyHost(const GURL& default_proxy_url);
@@ -47,9 +46,6 @@ base::TimeDelta PrefetchTimeoutDuration();
 // The maximum body length allowed to be prefetched for mainframe responses in
 // bytes.
 size_t PrefetchMainframeBodyLengthLimit();
-
-// Whether idle sockets should be closed after every prefetch.
-bool PrefetchCloseIdleSockets();
 
 // Whether a spare renderer should be started after prefetching.
 bool PrefetchStartsSpareRenderer();

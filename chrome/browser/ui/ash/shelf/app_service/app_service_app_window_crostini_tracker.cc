@@ -4,9 +4,10 @@
 
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_crostini_tracker.h"
 
-#include "ash/public/cpp/multi_user_window_manager.h"
+#include "ash/multi_user/multi_user_window_manager.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/window_properties.h"
+#include "ash/shell.h"
 #include "ash/wm/window_state.h"
 #include "base/containers/flat_tree.h"
 #include "base/time/time.h"
@@ -22,7 +23,6 @@
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_item_controller.h"
 #include "chrome/browser/ui/ash/shelf/app_window_base.h"
@@ -152,7 +152,7 @@ void AppServiceAppWindowCrostiniTracker::OnWindowVisibilityChanged(
   }
 
   // Prevent Crostini window from showing up after user switch.
-  MultiUserWindowManagerHelper::GetWindowManager()->SetWindowOwner(
+  ash::Shell::Get()->multi_user_window_manager()->SetWindowOwner(
       window, primary_account_id);
 
   // Move the Crostini app window to the right display if necessary.
@@ -162,13 +162,13 @@ void AppServiceAppWindowCrostiniTracker::OnWindowVisibilityChanged(
   }
 
   display::Display registered_display;
-  if (!display::Screen::GetScreen()->GetDisplayWithDisplayId(
-          display_id, &registered_display)) {
+  if (!display::Screen::Get()->GetDisplayWithDisplayId(display_id,
+                                                       &registered_display)) {
     return;
   }
 
   display::Display current_display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(window);
+      display::Screen::Get()->GetDisplayNearestWindow(window);
 
   if (registered_display != current_display) {
     auto* state = ash::WindowState::Get(window);

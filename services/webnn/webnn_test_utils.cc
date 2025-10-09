@@ -575,12 +575,12 @@ ContextProperties GetContextPropertiesForTesting() {
       InputOperandLayout::kNchw, Resample2DAxes::kAny,
       BatchNormalizationAxis::kAny,
       /*tensor_byte_length_limit=*/INT_MAX,
-      {/*input=*/SupportedDataTypes::All(),
-       /*constant=*/SupportedDataTypes::All(),
+      {/*input=*/{SupportedDataTypes::All(), kMaxRank},
+       /*constant=*/{SupportedDataTypes::All(), kMaxRank},
        /*arg_min_max_input=*/
        {SupportedDataTypes::All(), kMaxRank},
        /*arg_min_max_output=*/
-       {OperandDataType::kInt32, OperandDataType::kInt64},
+       {{OperandDataType::kInt32, OperandDataType::kInt64}, kMaxRank},
        /*batch_normalization_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*batch_normalization_mean=*/{SupportedDataTypes::All(), kMaxRank},
        /*cast_input=*/{SupportedDataTypes::All(), kMaxRank},
@@ -611,6 +611,8 @@ ContextProperties GetContextPropertiesForTesting() {
        /*logical_or_input=*/{DataTypeConstraint::kUint8, kMaxRank},
        /*logical_xor_input=*/{DataTypeConstraint::kUint8, kMaxRank},
        /*logical_not_input=*/{SupportedDataTypes::All(), kMaxRank},
+       /*is_nan_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
+       /*is_infinite_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*logical_output=*/SupportedDataTypes::All(),
        /*abs_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*ceil_input=*/{SupportedDataTypes::All(), kMaxRank},
@@ -623,6 +625,7 @@ ContextProperties GetContextPropertiesForTesting() {
        /*neg_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*reciprocal_input=*/
        {SupportedDataTypes::All(), kMaxRank},
+       /*round_even_input*/ {DataTypeConstraint::kFloat16To32, kMaxRank},
        /*sign_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*sin_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*sqrt_input=*/{SupportedDataTypes::All(), kMaxRank},
@@ -640,6 +643,7 @@ ContextProperties GetContextPropertiesForTesting() {
        /*gemm_c=*/{SupportedDataTypes::All(), kMaxRank},
        /*gru_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*gru_bias=*/{SupportedDataTypes::All(), kMaxRank},
+       /*gru_output_sequence=*/{SupportedDataTypes::All(), kMaxRank},
        /*gru_cell_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*gru_cell_bias=*/{SupportedDataTypes::All(), kMaxRank},
        /*hard_sigmoid_input=*/
@@ -654,6 +658,7 @@ ContextProperties GetContextPropertiesForTesting() {
        /*linear_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*lstm_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*lstm_bias=*/{SupportedDataTypes::All(), kMaxRank},
+       /*lstm_output_sequence=*/{SupportedDataTypes::All(), kMaxRank},
        /*lstm_cell_input=*/{SupportedDataTypes::All(), kMaxRank},
        /*lstm_cell_bias=*/{SupportedDataTypes::All(), kMaxRank},
        /*matmul_input=*/{SupportedDataTypes::All(), kMaxRank},

@@ -35,6 +35,7 @@ namespace blink {
 
 class MockWebRtcVideoTrack;
 class MediaStreamVideoTrack;
+class ThermalResource;
 
 template <>
 struct CrossThreadCopier<std::optional<base::UnguessableToken>>
@@ -127,6 +128,13 @@ struct CrossThreadCopier<
 };
 
 template <>
+struct CrossThreadCopier<webrtc::scoped_refptr<ThermalResource>>
+    : public CrossThreadCopierPassThrough<
+          webrtc::scoped_refptr<ThermalResource>> {
+  STATIC_ONLY(CrossThreadCopier);
+};
+
+template <>
 struct CrossThreadCopier<MockWebRtcVideoTrack>
     : public CrossThreadCopierPassThrough<MockWebRtcVideoTrack> {
   STATIC_ONLY(CrossThreadCopier);
@@ -160,6 +168,12 @@ struct CrossThreadCopier<webrtc::TransportPacketsFeedback>
 template <>
 struct CrossThreadCopier<webrtc::SentPacket>
     : public CrossThreadCopierPassThrough<webrtc::SentPacket> {
+  STATIC_ONLY(CrossThreadCopier);
+};
+
+template <>
+struct CrossThreadCopier<webrtc::Environment>
+    : public CrossThreadCopierPassThrough<webrtc::Environment> {
   STATIC_ONLY(CrossThreadCopier);
 };
 

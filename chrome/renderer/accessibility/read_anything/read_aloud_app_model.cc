@@ -87,6 +87,10 @@ void ReadAloudAppModel::ResetGranularityIndex() {
 void ReadAloudAppModel::InitAXPositionWithNode(
     ui::AXNode* ax_node,
     const ui::AXTreeID& active_tree_id) {
+  if (IsTsTextSegmentationEnabled()) {
+    return;
+  }
+
   // If instance is Null or Empty, create the next AxPosition. Don't create a
   // new position if the node's manager is missing, as that means we've
   // received incorrect data somewhere.
@@ -111,10 +115,13 @@ void ReadAloudAppModel::MovePositionToPreviousGranularity() {
   }
 }
 
-std::vector<ui::AXNodeID> ReadAloudAppModel::GetCurrentText(
+a11y::ReadAloudCurrentGranularity ReadAloudAppModel::GetCurrentText(
     bool is_pdf,
     bool is_docs,
     const std::set<ui::AXNodeID>* current_nodes) {
+  if (IsTsTextSegmentationEnabled()) {
+    return a11y::ReadAloudCurrentGranularity();
+  }
   while (processed_granularities_on_current_page_.size() <=
          processed_granularity_index_) {
     a11y::ReadAloudCurrentGranularity next_granularity =
@@ -123,7 +130,7 @@ std::vector<ui::AXNodeID> ReadAloudAppModel::GetCurrentText(
     if (next_granularity.node_ids.size() == 0) {
       // TODO(crbug.com/40927698) think about behavior when increment happened
       // out of the content- should we reset the state?
-      return next_granularity.node_ids;
+      return next_granularity;
     }
     if (features::IsReadAnythingReadAloudPhraseHighlightingEnabled()) {
       // TODO(crbug.com/330749762): initiate phrase calculation here, with some
@@ -132,14 +139,16 @@ std::vector<ui::AXNodeID> ReadAloudAppModel::GetCurrentText(
     processed_granularities_on_current_page_.push_back(next_granularity);
   }
 
-  return processed_granularities_on_current_page_[processed_granularity_index_]
-      .node_ids;
+  return processed_granularities_on_current_page_[processed_granularity_index_];
 }
 
 void ReadAloudAppModel::PreprocessTextForSpeech(
     bool is_pdf,
     bool is_docs,
     const std::set<ui::AXNodeID>* current_nodes) {
+  if (IsTsTextSegmentationEnabled()) {
+    return;
+  }
   a11y::ReadAloudCurrentGranularity current_granularity =
       GetNextNodes(is_pdf, is_docs, current_nodes);
 
@@ -591,7 +600,8 @@ ReadAloudAppModel::GetNextValidPositionFromCurrentPosition(
 }
 
 int ReadAloudAppModel::GetCurrentTextStartIndex(const ui::AXNodeID& node_id) {
-  if (processed_granularities_on_current_page_.size() < 1 ||
+  if (IsTsTextSegmentationEnabled() ||
+      processed_granularities_on_current_page_.size() < 1 ||
       processed_granularity_index_ >=
           processed_granularities_on_current_page_.size()) {
     return -1;
@@ -608,7 +618,8 @@ int ReadAloudAppModel::GetCurrentTextStartIndex(const ui::AXNodeID& node_id) {
 }
 
 int ReadAloudAppModel::GetCurrentTextEndIndex(const ui::AXNodeID& node_id) {
-  if (processed_granularities_on_current_page_.size() < 1 ||
+  if (IsTsTextSegmentationEnabled() ||
+      processed_granularities_on_current_page_.size() < 1 ||
       processed_granularity_index_ >=
           processed_granularities_on_current_page_.size()) {
     return -1;
@@ -640,6 +651,10 @@ bool ReadAloudAppModel::NodeBeenOrWillBeSpoken(
 }
 
 void ReadAloudAppModel::ResetReadAloudState() {
+  if (IsTsTextSegmentationEnabled()) {
+    return;
+  }
+
   ax_position_ = ui::AXNodePosition::AXPosition::CreateNullPosition();
   current_text_index_ = 0;
   processed_granularity_index_ = 0;
@@ -669,6 +684,21 @@ bool ReadAloudAppModel::IsValidAXPosition(
 
   return !is_ignored && !was_previously_spoken && is_text_node &&
          contains_node && on_active_tree;
+}
+
+std::vector<ReadAloudTextSegment> ReadAloudAppModel::GetCurrentTextSegments(
+    bool is_pdf,
+    bool is_docs,
+    const std::set<ui::AXNodeID>* current_nodes) {
+  a11y::ReadAloudCurrentGranularity current_granularity =
+      GetCurrentText(is_pdf, is_docs, current_nodes);
+
+  if (current_granularity.node_ids.empty()) {
+    return {};
+  }
+
+  return current_granularity.GetSegmentsForRange(
+      0, current_granularity.text.length());
 }
 
 std::vector<ReadAloudTextSegment>
@@ -765,4 +795,8 @@ void ReadAloudAppModel::LogAudioDelay(bool success) {
   } else {
     base::UmaHistogramLongTimes(kAudioStartTimeFailureHistogramName, delay);
   }
+}
+
+bool ReadAloudAppModel::IsTsTextSegmentationEnabled() const {
+  return features::IsReadAnythingReadAloudTSTextSegmentationEnabled();
 }

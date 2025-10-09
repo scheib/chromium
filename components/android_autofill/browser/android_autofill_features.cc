@@ -24,7 +24,8 @@ const base::Feature* const kFeaturesExposedToJava[] = {
     &kAndroidAutofillLazyFrameworkWrapper,
     &kAutofillVirtualViewStructureAndroidPasskeyLongPress,
     &kAndroidAutofillForwardIframeOrigin,
-    &kAndroidAutofillUpdateContextForWebContents};
+    &kAndroidAutofillUpdateContextForWebContents,
+    &kAndroidAutofillImprovedVisibilityDetection};
 
 }  // namespace
 
@@ -32,7 +33,6 @@ const base::Feature* const kFeaturesExposedToJava[] = {
 // to the Android Credential Manager. Users can then always (re-)trigger the
 // passkey request with a long-press action on webauthn-annotated fields.
 BASE_FEATURE(kAutofillVirtualViewStructureAndroidPasskeyLongPress,
-             "AutofillVirtualViewStructureAndroidPasskeyLongPress",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // If enabled, the AutofillManagerWrapper class will not be initialized when the
@@ -41,20 +41,27 @@ BASE_FEATURE(kAutofillVirtualViewStructureAndroidPasskeyLongPress,
 // experiment tests whether lazily initializing the wrapper will cause any
 // issues.
 BASE_FEATURE(kAndroidAutofillLazyFrameworkWrapper,
-             "AndroidAutofillLazyFrameworkWrapper",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // If enabled, the origin of a field is forwarded to the Autofill framework if
 // it differs from the origin of the main frame.
 BASE_FEATURE(kAndroidAutofillForwardIframeOrigin,
-             "AndroidAutofillForwardIframeOrigin",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, an additional custom "visible" attribute in each node's HtmlInfo
+// is set and sent to the framework.
+BASE_FEATURE(kAndroidAutofillImprovedVisibilityDetection,
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // If enabled, the native autofill provider is updated when the web contents
 // change.
 BASE_FEATURE(kAndroidAutofillUpdateContextForWebContents,
-             "AndroidAutofillUpdateContextForWebContents",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, the URL of the current page is passed to the HttpAuth dialog for
+// autofill purposes. Functions as a kill switch. Remove in or after M146.
+BASE_FEATURE(kAndroidAutofillSupportForHttpAuth,
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 static jlong JNI_AndroidAutofillFeatures_GetFeature(JNIEnv* env, jint ordinal) {
   return reinterpret_cast<jlong>(kFeaturesExposedToJava[ordinal]);

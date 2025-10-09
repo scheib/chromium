@@ -20,9 +20,11 @@ import static org.chromium.chrome.browser.multiwindow.MultiWindowUtils.HISTOGRAM
 import static org.chromium.chrome.browser.multiwindow.MultiWindowUtils.HISTOGRAM_DESKTOP_WINDOW_COUNT_NEW_INSTANCE_SUFFIX;
 import static org.chromium.chrome.browser.multiwindow.MultiWindowUtils.HISTOGRAM_NUM_ACTIVITIES_DESKTOP_WINDOW;
 import static org.chromium.chrome.browser.multiwindow.MultiWindowUtils.HISTOGRAM_NUM_INSTANCES_DESKTOP_WINDOW;
+import static org.chromium.chrome.browser.multiwindow.MultiWindowUtils.INVALID_TASK_ID;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.os.Build.VERSION_CODES;
 import android.util.SparseIntArray;
@@ -43,6 +45,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.FeatureOverrides;
 import org.chromium.base.SysUtils;
 import org.chromium.base.supplier.ObservableSupplier;
@@ -52,6 +55,7 @@ import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.homepage.HomepageManager;
 import org.chromium.chrome.browser.multiwindow.MultiWindowUtils.InstanceAllocationType;
@@ -73,11 +77,12 @@ import org.chromium.components.messages.MessageBannerProperties;
 import org.chromium.components.messages.MessageDispatcher;
 import org.chromium.components.messages.MessageIdentifier;
 import org.chromium.ui.modelutil.PropertyModel;
-import org.chromium.ui.util.XrUtils;
 import org.chromium.url.GURL;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -242,6 +247,68 @@ public class MultiWindowUtilsUnitTest {
         mOverrideOpenInNewWindowSupported = false;
         ChromeSharedPreferences.getInstance()
                 .removeKey(ChromePreferenceKeys.MULTI_INSTANCE_RESTORATION_MESSAGE_SHOWN);
+    }
+
+    @Test
+    public void testGetExtraPreferNewFromIntent_IntentExtraValue() {
+        // EXTRA_PREFER_NEW is present and true.
+        Intent intent = new Intent();
+        intent.putExtra(IntentHandler.EXTRA_PREFER_NEW, true);
+        assertTrue(
+                "Should be true when EXTRA_PREFER_NEW is true.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+
+        // EXTRA_PREFER_NEW is present and false.
+        intent.putExtra(IntentHandler.EXTRA_PREFER_NEW, false);
+        assertFalse(
+                "Should be false when EXTRA_PREFER_NEW is false.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+    }
+
+    @Test
+    @Config(sdk = 35)
+    public void testGetExtraPreferNewFromIntent_DefaultValue_BelowThresholdSDK() {
+        // EXTRA_PREFER_NEW is not present, conditions for preferNew are met but SDK is too low.
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        assertFalse(
+                "Should be false when SDK is not high enough.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+    }
+
+    @Test
+    @Config(sdk = 37)
+    @DisabledTest(message = "crbug.com/440643534: Enable when SDK support is available.")
+    public void testGetExtraPreferNewFromIntent_UpdatedDefaultValue() {
+        // EXTRA_PREFER_NEW is not present, conditions for preferNew are met.
+        Intent intent = new Intent();
+        intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        assertTrue(
+                "Should be true when conditions are met.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+
+        // Test with different conditions not being met.
+        // Wrong action.
+        intent = new Intent(Intent.ACTION_VIEW);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        assertFalse(
+                "Should be false for wrong action.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+
+        // No NEW_TASK flag.
+        intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        assertFalse(
+                "Should be false without NEW_TASK.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
+
+        // No MULTIPLE_TASK flag.
+        intent = new Intent(Intent.ACTION_MAIN);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        assertFalse(
+                "Should be false without MULTIPLE_TASK.",
+                MultiWindowUtils.getExtraPreferNewFromIntent(intent));
     }
 
     @Test
@@ -465,6 +532,42 @@ public class MultiWindowUtilsUnitTest {
                 /* incognitoTabCount= */ 2,
                 MultiWindowUtils.INVALID_TASK_ID);
         assertEquals(2, MultiWindowUtils.getInstanceCount());
+    }
+
+    @Test
+    public void testGetActiveInstanceCount() {
+        when(mTabModelSelector.getModel(false)).thenReturn(mNormalTabModel);
+        when(mTabModelSelector.getModel(true)).thenReturn(mIncognitoTabModel);
+        when(mTabModelSelector.isTabStateInitialized()).thenReturn(true);
+
+        // Create 2 active instances.
+        writeInstanceInfo(
+                INSTANCE_ID_0, URL_1, /* tabCount= */ 3, /* incognitoTabCount= */ 2, TASK_ID_5);
+        writeInstanceInfo(
+                INSTANCE_ID_1, URL_2, /* tabCount= */ 1, /* incognitoTabCount= */ 0, TASK_ID_6);
+
+        // Create 1 inactive instance. This instance is restorable because it has tabs, but it is
+        // not active because it does not have a valid task ID.
+        writeInstanceInfo(
+                INSTANCE_ID_2,
+                URL_3,
+                /* tabCount= */ 5,
+                /* incognitoTabCount= */ 0,
+                MultiWindowUtils.INVALID_TASK_ID);
+
+        // Mock that the tasks for the 2 active instances are running.
+        MultiInstanceManagerApi31.setAppTaskIdsForTesting(
+                new HashSet<>(Arrays.asList(TASK_ID_5, TASK_ID_6)));
+
+        assertEquals(
+                "getActiveInstanceCount should only count active instances.",
+                2,
+                MultiWindowUtils.getActiveInstanceCount());
+
+        assertEquals(
+                "getInstanceCount should count all instances.",
+                3,
+                MultiWindowUtils.getInstanceCount());
     }
 
     @Test
@@ -786,6 +889,24 @@ public class MultiWindowUtilsUnitTest {
     }
 
     @Test
+    public void testGetLastAccessedWindowId() {
+        MultiWindowTestUtils.enableMultiInstance();
+
+        final int oldestId = 10;
+        final int midId = 20;
+        final int newestId = 30;
+
+        writeInstanceInfo(oldestId, URL_1, 3, 0, TASK_ID_5);
+        writeInstanceInfo(midId, URL_3, 1, 0, TASK_ID_6);
+        writeInstanceInfo(newestId, null, 0, 0, INVALID_TASK_ID);
+
+        Assert.assertEquals(
+                "The last accessed window ID should be returned.",
+                newestId,
+                MultiWindowUtils.getLastAccessedWindowId());
+    }
+
+    @Test
     public void testInstanceRestorationMessage() {
         MultiWindowUtils.setInstanceCountForTesting(5);
         MultiWindowUtils.setMaxInstancesForTesting(3);
@@ -823,7 +944,7 @@ public class MultiWindowUtilsUnitTest {
                 message.getValue().get(MessageBannerProperties.DESCRIPTION));
         Assert.assertEquals(
                 "Message primary button text should match.",
-                resources.getString(R.string.multi_instance_restoration_message_button),
+                resources.getString(R.string.multi_instance_message_button),
                 message.getValue().get(MessageBannerProperties.PRIMARY_BUTTON_TEXT));
         Assert.assertEquals(
                 "Message icon resource ID should match.",
@@ -831,7 +952,7 @@ public class MultiWindowUtilsUnitTest {
                 message.getValue().get(MessageBannerProperties.ICON_RESOURCE_ID));
 
         // Simulate and verify primary button click.
-        message.getValue().get(MessageBannerProperties.ON_PRIMARY_ACTION).get();
+        var unused = message.getValue().get(MessageBannerProperties.ON_PRIMARY_ACTION).get();
         assertEquals(
                 "Primary action callback was not called.",
                 primaryActionClickCount + 1,
@@ -885,6 +1006,50 @@ public class MultiWindowUtilsUnitTest {
         assertFalse("Message should not be enqueued.", shown);
 
         verify(messageDispatcher, times(1)).enqueueWindowScopedMessage(any(), anyBoolean());
+    }
+
+    @Test
+    public void testInstanceCreationLimitMessage() {
+        MultiWindowUtils.setMaxInstancesForTesting(3);
+        MessageDispatcher messageDispatcher = mock(MessageDispatcher.class);
+        Context context = ApplicationProvider.getApplicationContext();
+        CallbackHelper primaryActionCallbackHelper = new CallbackHelper();
+        int primaryActionClickCount = primaryActionCallbackHelper.getCallCount();
+
+        MultiWindowUtils.showInstanceCreationLimitMessage(
+                messageDispatcher, context, primaryActionCallbackHelper::notifyCalled);
+
+        ArgumentCaptor<PropertyModel> message = ArgumentCaptor.forClass(PropertyModel.class);
+        verify(messageDispatcher).enqueueWindowScopedMessage(message.capture(), eq(false));
+
+        Resources resources = context.getResources();
+        Assert.assertEquals(
+                "Message identifier should match.",
+                MessageIdentifier.MULTI_INSTANCE_CREATION_LIMIT,
+                message.getValue().get(MessageBannerProperties.MESSAGE_IDENTIFIER));
+        Assert.assertEquals(
+                "Message title should match.",
+                resources.getString(R.string.multi_instance_creation_limit_message_title, 3),
+                message.getValue().get(MessageBannerProperties.TITLE));
+        Assert.assertEquals(
+                "Message description should match.",
+                resources.getString(R.string.multi_instance_creation_limit_message_description),
+                message.getValue().get(MessageBannerProperties.DESCRIPTION));
+        Assert.assertEquals(
+                "Message primary button text should match.",
+                resources.getString(R.string.multi_instance_message_button),
+                message.getValue().get(MessageBannerProperties.PRIMARY_BUTTON_TEXT));
+        Assert.assertEquals(
+                "Message icon resource ID should match.",
+                R.drawable.ic_chrome,
+                message.getValue().get(MessageBannerProperties.ICON_RESOURCE_ID));
+
+        // Simulate and verify primary button click.
+        var unused = message.getValue().get(MessageBannerProperties.ON_PRIMARY_ACTION).get();
+        assertEquals(
+                "Primary action callback was not called.",
+                primaryActionClickCount + 1,
+                primaryActionCallbackHelper.getCallCount());
     }
 
     @Test
@@ -1019,7 +1184,7 @@ public class MultiWindowUtilsUnitTest {
     @Test
     @EnableFeatures(ChromeFeatureList.DISABLE_INSTANCE_LIMIT)
     public void testMaxInstances_XrDevice() {
-        XrUtils.setXrDeviceForTesting(true);
+        DeviceInfo.setIsXrForTesting(true);
         MultiWindowUtils.setMultiInstanceApi31EnabledForTesting(true);
         assertEquals(
                 "Instance limit on XR device is incorrect.",
@@ -1052,6 +1217,7 @@ public class MultiWindowUtilsUnitTest {
         List<TabModel> models = Arrays.asList(mNormalTabModel, mIncognitoTabModel);
         when(mTabModelSelector.getModels()).thenReturn(models);
         when(mIncognitoTabModel.getCount()).thenReturn(0);
+        when(mIncognitoTabModel.iterator()).thenAnswer(inv -> Collections.emptyList().iterator());
 
         // Test if recordTabCountForRelaunchWhenActivityPaused() returns the correct value for
         // standard tabs.
@@ -1062,6 +1228,7 @@ public class MultiWindowUtilsUnitTest {
         when(mTab1.getUrl()).thenReturn(TEST_GURL);
         when(mTab2.isNativePage()).thenReturn(false);
         when(mTab2.getUrl()).thenReturn(TEST_GURL);
+        when(mNormalTabModel.iterator()).thenAnswer(inv -> List.of(mTab1, mTab2).iterator());
         MultiWindowUtils.recordTabCountForRelaunchWhenActivityPaused(mTabModelSelector, windowId);
         Assert.assertEquals(
                 /* expected= */ 2,
@@ -1069,6 +1236,7 @@ public class MultiWindowUtilsUnitTest {
 
         // Test the case of adding a non-NTP tab to the tab model.
         when(mNormalTabModel.getCount()).thenReturn(3);
+        when(mNormalTabModel.iterator()).thenAnswer(inv -> List.of(mTab1, mTab2, mTab3).iterator());
         when(mNormalTabModel.getTabAtChecked(2)).thenReturn(mTab3);
         when(mTab3.isNativePage()).thenReturn(false);
         when(mTab3.getUrl()).thenReturn(TEST_GURL);

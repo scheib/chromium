@@ -60,7 +60,7 @@ void GetEligibilityAndRunCallback(
       content &&
       (!page_context_eligibility ||
        optimization_guide::IsPageContextEligible(
-           url.host(), url.path(),
+           url.GetHost(), url.GetPath(),
            optimization_guide::GetFrameMetadataFromPageContent(*content),
            page_context_eligibility));
   std::move(callback).Run(is_eligible ? std::make_optional(content->proto)
@@ -205,9 +205,8 @@ void ZeroStateSuggestionsPageData::InitiatePageContentExtraction() {
     // Otherwise, extract fresh APC.
     if (should_extract_apc) {
       blink::mojom::AIPageContentOptionsPtr ai_page_content_options;
-      ai_page_content_options =
-          optimization_guide::DefaultAIPageContentOptions();
-      ai_page_content_options->on_critical_path = true;
+      ai_page_content_options = optimization_guide::DefaultAIPageContentOptions(
+          /*on_critical_path =*/true);
 
       optimization_guide::GetAIPageContent(
           web_contents, std::move(ai_page_content_options),
@@ -277,6 +276,10 @@ void ZeroStateSuggestionsPageData::GetPageContext(
 
 void ZeroStateSuggestionsPageData::OnReceivedAnnotatedPageContent(
     std::optional<optimization_guide::proto::AnnotatedPageContent> content) {
+  if (annotated_page_content_done_) {
+    return;
+  }
+
   if (content) {
     base::UmaHistogramTimes(
         "ContextualCueing.GlicSuggestions.PageContextFetchlatency."
@@ -290,6 +293,9 @@ void ZeroStateSuggestionsPageData::OnReceivedAnnotatedPageContent(
 
 void ZeroStateSuggestionsPageData::OnReceivedInnerText(
     std::unique_ptr<content_extraction::InnerTextResult> result) {
+  if (inner_text_done_) {
+    return;
+  }
   inner_text_result_ = std::move(result);
   inner_text_done_ = true;
   if (inner_text_result_) {
@@ -319,6 +325,10 @@ void ZeroStateSuggestionsPageData::OnReceivedOptimizationMetadataOnDemand(
 void ZeroStateSuggestionsPageData::OnReceivedOptimizationMetadata(
     optimization_guide::OptimizationGuideDecision decision,
     const optimization_guide::OptimizationMetadata& metadata) {
+  if (optimization_metadata_done_) {
+    return;
+  }
+
   optimization_metadata_done_ = true;
   optimization_decision_ = decision;
   optimization_metadata_ = metadata;
@@ -327,6 +337,10 @@ void ZeroStateSuggestionsPageData::OnReceivedOptimizationMetadata(
 }
 
 void ZeroStateSuggestionsPageData::GiveUp() {
+  if (work_done()) {
+    return;
+  }
+
   MODEL_EXECUTION_LOG(
       base::StringPrintf("ZeroStateSuggestionsPageData: Timed out or page "
                          "destroyed while waiting for "

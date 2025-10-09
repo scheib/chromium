@@ -383,7 +383,7 @@ impl OnePassEngine {
             // that we either have at least one explicit capturing group or
             // there's a Unicode word boundary somewhere. If we don't have
             // either of these things, then the lazy DFA will almost certainly
-            // be useable and be much faster. The only case where it might
+            // be usable and be much faster. The only case where it might
             // not is if the lazy DFA isn't utilizing its cache effectively,
             // but in those cases, the underlying regex is almost certainly
             // not one-pass or is too big to fit within the current one-pass
@@ -408,7 +408,7 @@ impl OnePassEngine {
             let engine = match result {
                 Ok(engine) => engine,
                 Err(_err) => {
-                    debug!("OnePass failed to build: {}", _err);
+                    debug!("OnePass failed to build: {_err}");
                     return None;
                 }
             };
@@ -606,7 +606,7 @@ impl HybridEngine {
             let fwd = match result {
                 Ok(fwd) => fwd,
                 Err(_err) => {
-                    debug!("forward lazy DFA failed to build: {}", _err);
+                    debug!("forward lazy DFA failed to build: {_err}");
                     return None;
                 }
             };
@@ -622,7 +622,7 @@ impl HybridEngine {
             let rev = match result {
                 Ok(rev) => rev,
                 Err(_err) => {
-                    debug!("reverse lazy DFA failed to build: {}", _err);
+                    debug!("reverse lazy DFA failed to build: {_err}");
                     return None;
                 }
             };
@@ -886,7 +886,7 @@ impl DFAEngine {
                 // Enabling this is necessary for ensuring we can service any
                 // kind of 'Input' search without error. For the full DFA, this
                 // can be quite costly. But since we have such a small bound
-                // on the size of the DFA, in practice, any multl-regexes are
+                // on the size of the DFA, in practice, any multi-regexes are
                 // probably going to blow the limit anyway.
                 .starts_for_each_pattern(true)
                 .byte_classes(info.config().get_byte_classes())
@@ -900,7 +900,7 @@ impl DFAEngine {
             let fwd = match result {
                 Ok(fwd) => fwd,
                 Err(_err) => {
-                    debug!("forward full DFA failed to build: {}", _err);
+                    debug!("forward full DFA failed to build: {_err}");
                     return None;
                 }
             };
@@ -924,7 +924,7 @@ impl DFAEngine {
             let rev = match result {
                 Ok(rev) => rev,
                 Err(_err) => {
-                    debug!("reverse full DFA failed to build: {}", _err);
+                    debug!("reverse full DFA failed to build: {_err}");
                     return None;
                 }
             };
@@ -1132,7 +1132,7 @@ impl ReverseHybridEngine {
             let rev = match result {
                 Ok(rev) => rev,
                 Err(_err) => {
-                    debug!("lazy reverse DFA failed to build: {}", _err);
+                    debug!("lazy reverse DFA failed to build: {_err}");
                     return None;
                 }
             };
@@ -1299,7 +1299,7 @@ impl ReverseDFAEngine {
             let rev = match result {
                 Ok(rev) => rev,
                 Err(_err) => {
-                    debug!("full reverse DFA failed to build: {}", _err);
+                    debug!("full reverse DFA failed to build: {_err}");
                     return None;
                 }
             };

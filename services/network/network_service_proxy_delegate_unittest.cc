@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/bind.h"
@@ -304,7 +305,7 @@ TEST_F(NetworkServiceProxyDelegateTest,
        OnResolveProxyBypassForWebSocketScheme) {
   auto config = mojom::CustomProxyConfig::New();
   config->rules.ParseFromString("http=foo");
-  config->rules.bypass_rules.AddRuleFromString(GURL(kWebsocketUrl).scheme() +
+  config->rules.bypass_rules.AddRuleFromString(GURL(kWebsocketUrl).GetScheme() +
                                                "://*");
   auto delegate = CreateDelegate(std::move(config));
 
@@ -400,7 +401,6 @@ TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxyDeprioritizesBadProxies) {
   net::ProxyRetryInfoMap retry_map;
   net::ProxyRetryInfo& info =
       retry_map[ProxyUriToProxyChain("foo:80", net::ProxyServer::SCHEME_HTTP)];
-  info.try_while_bad = false;
   info.bad_until = base::TimeTicks::Now() + base::Days(2);
   delegate->OnResolveProxy(GURL(kHttpUrl), net::NetworkAnonymizationKey(),
                            "GET", retry_map, &result);
@@ -408,6 +408,8 @@ TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxyDeprioritizesBadProxies) {
   net::ProxyList expected_proxy_list;
   expected_proxy_list.AddProxyServer(
       net::PacResultElementToProxyServer("PROXY bar"));
+  expected_proxy_list.AddProxyServer(
+      net::PacResultElementToProxyServer("PROXY foo"));
   EXPECT_TRUE(result.proxy_list().Equals(expected_proxy_list));
   EXPECT_FALSE(result.is_for_ip_protection());
 }
@@ -422,12 +424,16 @@ TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxyAllProxiesBad) {
   net::ProxyRetryInfoMap retry_map;
   net::ProxyRetryInfo& info =
       retry_map[ProxyUriToProxyChain("foo:80", net::ProxyServer::SCHEME_HTTP)];
-  info.try_while_bad = false;
   info.bad_until = base::TimeTicks::Now() + base::Days(2);
   delegate->OnResolveProxy(GURL(kHttpUrl), net::NetworkAnonymizationKey(),
                            "GET", retry_map, &result);
 
-  EXPECT_TRUE(result.is_direct());
+  // By default, when proxy chains are deprioritized, bad chains are not
+  // removed. So even though `foo:80` is marked as bad, it's still in `result`.
+  net::ProxyList expected_proxy_list;
+  expected_proxy_list.AddProxyServer(
+      net::PacResultElementToProxyServer("PROXY foo"));
+  EXPECT_TRUE(result.proxy_list().Equals(expected_proxy_list));
   EXPECT_FALSE(result.is_for_ip_protection());
 }
 
@@ -499,8 +505,9 @@ TEST_F(NetworkServiceProxyDelegateTest, OnTunnelHeadersReceivedObserved) {
   auto delegate = CreateDelegate(std::move(config));
 
   EXPECT_FALSE(TestObserver()->HeadersReceivedArgs());
-  EXPECT_EQ(net::OK, delegate->OnTunnelHeadersReceived(
-                         proxy_chain, /*chain_index=*/2, *headers));
+  EXPECT_EQ(net::OK,
+            delegate->OnTunnelHeadersReceived(proxy_chain, /*chain_index=*/2,
+                                              *headers, base::DoNothing()));
   RunUntilIdle();
   ASSERT_TRUE(TestObserver()->HeadersReceivedArgs());
   EXPECT_EQ(TestObserver()->HeadersReceivedArgs()->proxy_chain, proxy_chain);

@@ -23,6 +23,7 @@
 #import "components/optimization_guide/optimization_guide_buildflags.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "ios/chrome/browser/download/model/background_service/background_download_service_factory.h"
+#import "ios/chrome/browser/optimization_guide/model/optimization_guide_global_state.h"
 #include "url/gurl.h"
 
 namespace leveldb_proto {
@@ -39,6 +40,7 @@ class ModelExecutionManager;
 #if BUILDFLAG(BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE)
 class OnDeviceModelAvailabilityObserver;
 class OnDeviceModelComponentStateManager;
+class OnDeviceAssetManager;
 #endif  // BUILDFLAG(BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE)
 class OptimizationGuideStore;
 class OptimizationTargetModelObserver;
@@ -68,9 +70,6 @@ class OptimizationGuideService
     : public KeyedService,
       public optimization_guide::OptimizationGuideDecider,
       public optimization_guide::OptimizationGuideModelExecutor,
-#if BUILDFLAG(BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE)
-      public optimization_guide::OptimizationGuideOnDeviceCapabilityProvider,
-#endif
       public optimization_guide::OptimizationGuideModelProvider {
  public:
   OptimizationGuideService(
@@ -120,6 +119,12 @@ class OptimizationGuideService
   optimization_guide::OnDeviceModelEligibilityReason
   GetOnDeviceModelEligibility(
       optimization_guide::ModelBasedCapabilityKey feature) override;
+  void GetOnDeviceModelEligibilityAsync(
+      optimization_guide::ModelBasedCapabilityKey feature,
+      const on_device_model::Capabilities& capabilities,
+      base::OnceCallback<
+          void(optimization_guide::OnDeviceModelEligibilityReason)> callback)
+      override;
   std::optional<optimization_guide::SamplingParamsConfig>
   GetSamplingParamsConfig(
       optimization_guide::ModelBasedCapabilityKey feature) override;
@@ -143,6 +148,7 @@ class OptimizationGuideService
   void AddObserverForOptimizationTargetModel(
       optimization_guide::proto::OptimizationTarget optimization_target,
       const std::optional<optimization_guide::proto::Any>& model_metadata,
+      scoped_refptr<base::SequencedTaskRunner> model_task_runner,
       optimization_guide::OptimizationTargetModelObserver* observer) override;
   void RemoveObserverForOptimizationTargetModel(
       optimization_guide::proto::OptimizationTarget optimization_target,
@@ -222,21 +228,6 @@ class OptimizationGuideService
   std::unique_ptr<optimization_guide::TabUrlProvider> tab_url_provider_;
 
   raw_ptr<OptimizationGuideLogger> optimization_guide_logger_;
-
-  // Manages the storing, loading, and evaluating of optimization target
-  // prediction models.
-  std::unique_ptr<optimization_guide::PredictionManager> prediction_manager_;
-
-#if BUILDFLAG(BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE)
-  // Manages the state of the on-device model.
-  scoped_refptr<optimization_guide::OnDeviceModelComponentStateManager>
-      on_device_model_state_manager_;
-
-  // Downloads other model assets for on-device execution.
-  std::unique_ptr<optimization_guide::OnDeviceAssetManager>
-      on_device_asset_manager_;
-
-#endif
 
   // Manages the model execution. Not created for off the record profiles.
   std::unique_ptr<optimization_guide::ModelExecutionManager>

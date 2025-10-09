@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
+import("//build/config/avx512.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/features.gni")
 import("//build/config/freetype/freetype.gni")
@@ -44,9 +45,9 @@ rust_static_library("bridge_rust_side") {
   cxx_bindings = [ skia_fontations_bridge_root ]
   deps = [
     ":path_bridge",
-    "//third_party/rust/font_types/v0_9:lib",
-    "//third_party/rust/read_fonts/v0_31:lib",
-    "//third_party/rust/skrifa/v0_33:lib",
+    "//third_party/rust/font_types/v0_10:lib",
+    "//third_party/rust/read_fonts/v0_35:lib",
+    "//third_party/rust/skrifa/v0_37:lib",
   ]
   configs -= [ "//build/config/compiler:chromium_code" ]
   configs += [
@@ -62,7 +63,6 @@ config("skia_config") {
     "SK_UNTIL_CRBUG_1187654_IS_FIXED",
     "SK_USER_CONFIG_HEADER=\"../../skia/config/SkUserConfig.h\"",
     "SK_WIN_FONTMGR_NO_SIMULATIONS",
-    "SK_DISABLE_LEGACY_INIT_DECODERS",
   ]
 
   include_dirs = [
@@ -162,6 +162,9 @@ config("skia_library_config") {
     "IS_SKIA_IMPL=1",
     "SKIA_IMPLEMENTATION=1",
   ]
+  if (!allow_avx512) {
+    defines += [ "SKCMS_DISABLE_SKX=1" ]
+  }
 
   # Let Skia know whether to use `libpng`-based or Rust-based PNG decoder and
   # encoder in internal Skia code (e.g. in implementation of Fontations).
@@ -173,12 +176,17 @@ config("skia_library_config") {
   # using `SK_CODEC_DECODES_PNG_WITH_RUST` and `SK_CODEC_ENCODES_PNG_WITH_RUST`
   # defines from Skia's `png_encode_rust` and `png_decode_rust` targets.
   defines += [
-    "SK_CODEC_DECODES_ICO",
     "SK_CODEC_DECODES_PNG",
     "SK_CODEC_DECODES_PNG_WITH_LIBPNG",
     "SK_CODEC_ENCODES_PNG",
     "SK_CODEC_ENCODES_PNG_WITH_LIBPNG",
+
+    # https://crbug.com/443057959
+    #"SK_DISABLE_LEGACY_INIT_DECODERS",
   ]
+  if (use_blink) {
+    defines += [ "SK_CODEC_DECODES_ICO" ]
+  }
 
   if (use_blink) {
     defines += [ "SK_TYPEFACE_FACTORY_FONTATIONS" ]
@@ -253,12 +261,12 @@ component("skia") {
     "ext/pmcolor_utils.h",
     "ext/recursive_gaussian_convolution.h",
     "ext/rgba_to_yuva.h",
+    "ext/skcms_ext.h",
     "ext/skcolorspace_primaries.h",
     "ext/skcolorspace_trfn.h",
     "ext/skia_memory_dump_provider.h",
     "ext/skia_trace_memory_dump_impl.h",
     "ext/skia_utils_base.h",
-    "rusty_png_feature.h",
   ]
   sources = [
     # Chrome sources.
@@ -282,6 +290,7 @@ component("skia") {
     "ext/opacity_filter_canvas.cc",
     "ext/recursive_gaussian_convolution.cc",
     "ext/rgba_to_yuva.cc",
+    "ext/skcms_ext.cc",
     "ext/skcolorspace_primaries.cc",
     "ext/skcolorspace_trfn.cc",
     "ext/skia_histogram.cc",
@@ -289,7 +298,6 @@ component("skia") {
     "ext/skia_memory_dump_provider.cc",
     "ext/skia_trace_memory_dump_impl.cc",
     "ext/skia_utils_base.cc",
-    "rusty_png_feature.cc",
   ]
   if (is_ios) {
     public += [ "ext/skia_utils_ios.h" ]

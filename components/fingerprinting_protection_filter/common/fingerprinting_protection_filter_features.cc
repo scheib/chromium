@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/rand_util.h"
+#include "build/buildflag.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
 #include "components/subresource_filter/core/mojom/subresource_filter.mojom.h"
 #include "fingerprinting_protection_filter_features.h"
@@ -17,14 +18,24 @@ namespace fingerprinting_protection_filter::features {
 // resource requests on certain pages against the Fingerprinting Protection
 // blocklist, possibly blocks via a subresource filter.
 BASE_FEATURE(kEnableFingerprintingProtectionFilter,
-             "EnableFingerprintingProtectionFilter",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kEnableFingerprintingProtectionFilterInIncognito,
-             "EnableFingerprintingProtectionFilterInIncognito",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableFingerprintingProtectionFilteriOSDryRun,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsFingerprintingProtectionFeatureEnabled() {
+#if BUILDFLAG(IS_IOS)
+  // TODO(crbug.com/436881800): Clean up the dry-run feature flag after the
+  // experiment.
+  if (base::FeatureList::IsEnabled(
+          kEnableFingerprintingProtectionFilteriOSDryRun)) {
+    return true;
+  }
+#endif
+
   return base::FeatureList::IsEnabled(kEnableFingerprintingProtectionFilter) ||
          base::FeatureList::IsEnabled(
              kEnableFingerprintingProtectionFilterInIncognito) ||
@@ -33,6 +44,14 @@ bool IsFingerprintingProtectionFeatureEnabled() {
 }
 
 bool IsFingerprintingProtectionEnabledForIncognitoState(bool is_incognito) {
+#if BUILDFLAG(IS_IOS)
+  // TODO(crbug.com/436881800): Clean up the dry-run feature flag after the
+  // experiment.
+  if (base::FeatureList::IsEnabled(
+          kEnableFingerprintingProtectionFilteriOSDryRun)) {
+    return true;
+  }
+#endif
   if (is_incognito) {
     return base::FeatureList::IsEnabled(
                kEnableFingerprintingProtectionFilterInIncognito) ||
@@ -125,6 +144,5 @@ const base::FeatureParam<double> kPerformanceMeasurementRateIncognito{
     kPerformanceMeasurementRateParam, 0.0};
 
 BASE_FEATURE(kUseCnameAliasesForFingerprintingProtectionFilter,
-             "UseCnameAliasesForFingerprintingProtectionFilter",
              base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace fingerprinting_protection_filter::features

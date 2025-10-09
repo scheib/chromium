@@ -44,6 +44,7 @@
 #include "components/autofill/core/browser/filling/filling_product.h"
 #include "components/autofill/core/browser/foundations/autofill_client.h"
 #include "components/autofill/core/browser/suggestions/suggestion.h"
+#include "components/autofill/core/browser/suggestions/suggestion_hiding_reason.h"
 #include "components/autofill/core/common/aliases.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/compose/core/browser/compose_features.h"
@@ -104,14 +105,16 @@ ChromeComposeClient::FieldChangeObserver::FieldChangeObserver(
     content::WebContents* web_contents)
     : web_contents_(web_contents) {
   autofill_managers_observation_.Observe(
-      web_contents, autofill::ScopedAutofillManagersObservation::
-                        InitializationPolicy::kObservePreexistingManagers);
+      autofill::ContentAutofillClient::FromWebContents(web_contents),
+      autofill::ScopedAutofillManagersObservation::InitializationPolicy::
+          kObservePreexistingManagers);
 }
 
 ChromeComposeClient::FieldChangeObserver::~FieldChangeObserver() = default;
 
 void ChromeComposeClient::FieldChangeObserver::OnSuggestionsShown(
-    autofill::AutofillManager& manager) {
+    autofill::AutofillManager& manager,
+    base::span<const autofill::Suggestion> suggestions) {
   text_field_value_change_event_count_ = 0;
 }
 
@@ -181,8 +184,9 @@ ChromeComposeClient::ChromeComposeClient(content::WebContents* web_contents)
   }
 
   autofill_managers_observation_.Observe(
-      web_contents, autofill::ScopedAutofillManagersObservation::
-                        InitializationPolicy::kObservePreexistingManagers);
+      autofill::ContentAutofillDriverFactory::FromWebContents(web_contents),
+      autofill::ScopedAutofillManagersObservation::InitializationPolicy::
+          kObservePreexistingManagers);
   nudge_tracker_.StartObserving(web_contents);
 }
 
@@ -973,7 +977,7 @@ void ChromeComposeClient::DidGetUserInteraction(
   }
 }
 void ChromeComposeClient::OnFocusChangedInPage(
-    content::FocusedNodeDetails* details) {
+    const content::FocusedNodeDetails& details) {
   // TODO(crbug/337690061): Use Autofill events to track focus change.
   return nudge_tracker_.FocusChangedInPage();
 }

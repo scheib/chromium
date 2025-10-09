@@ -4,6 +4,8 @@
 
 package org.chromium.components.embedder_support.delegate;
 
+import static android.view.Display.INVALID_DISPLAY;
+
 import android.graphics.Bitmap;
 import android.view.KeyEvent;
 
@@ -16,6 +18,7 @@ import org.chromium.blink.mojom.DisplayMode;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.content_public.browser.navigation_controller.UserAgentOverrideOption;
 import org.chromium.content_public.common.ResourceRequestBody;
 import org.chromium.url.GURL;
 
@@ -69,15 +72,6 @@ public class WebContentsDelegateAndroid {
     public void rendererResponsive() {}
 
     @CalledByNative
-    public void webContentsCreated(
-            WebContents sourceWebContents,
-            long openerRenderProcessId,
-            long openerRenderFrameId,
-            String frameName,
-            GURL targetUrl,
-            WebContents newWebContents) {}
-
-    @CalledByNative
     public boolean shouldCreateWebContents(GURL targetUrl) {
         return true;
     }
@@ -125,11 +119,17 @@ public class WebContentsDelegateAndroid {
 
     @CalledByNative
     public void enterFullscreenModeForTab(
-            long requestingFrame, boolean prefersNavigationBar, boolean prefersStatusBar) {}
+            long requestingFrame,
+            boolean prefersNavigationBar,
+            boolean prefersStatusBar,
+            long displayId) {}
 
     @CalledByNative
     public void fullscreenStateChangedForTab(
-            boolean prefersNavigationBar, boolean prefersStatusBar) {}
+            long requestingFrame,
+            boolean prefersNavigationBar,
+            boolean prefersStatusBar,
+            long displayId) {}
 
     @CalledByNative
     public void exitFullscreenModeForTab() {}
@@ -137,6 +137,11 @@ public class WebContentsDelegateAndroid {
     @CalledByNative
     public boolean isFullscreenForTabOrPending() {
         return false;
+    }
+
+    @CalledByNative
+    public long getFullscreenTargetDisplay() {
+        return INVALID_DISPLAY;
     }
 
     @CalledByNative
@@ -259,6 +264,17 @@ public class WebContentsDelegateAndroid {
      */
     @CalledByNative
     public void contentsZoomChange(boolean zoomIn) {}
+
+    /**
+     * Returns whether to override user agent for prerendering navigation.
+     *
+     * @param url The target URL of the prerendering navigation.
+     */
+    @CalledByNative
+    public @UserAgentOverrideOption int shouldOverrideUserAgentForPreloading(GURL url) {
+        // Inherit UA override of the last committed navigation regardless of URL as fallback.
+        return UserAgentOverrideOption.INHERIT;
+    }
 
     /**
      * Capture current visible native view as a bitmap.

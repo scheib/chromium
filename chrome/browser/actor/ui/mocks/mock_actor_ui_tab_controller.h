@@ -6,28 +6,32 @@
 #define CHROME_BROWSER_ACTOR_UI_MOCKS_MOCK_ACTOR_UI_TAB_CONTROLLER_H_
 
 #include "chrome/browser/actor/ui/actor_ui_tab_controller_interface.h"
+#include "chrome/browser/ui/browser_window/test/mock_browser_window_interface.h"
+#include "components/tabs/public/mock_tab_interface.h"
+#include "components/tabs/public/tab_interface.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "ui/base/unowned_user_data/unowned_user_data_host.h"
 
 namespace actor::ui {
 
 class MockActorUiTabController : public ActorUiTabControllerInterface {
  public:
-  MockActorUiTabController();
+  explicit MockActorUiTabController(tabs::MockTabInterface& mock_tab);
   ~MockActorUiTabController() override;
+
+  // Sets up the default mock expectations to connect a mock tab to a mock
+  // browser window and UnownedUserDataHost.
+  static void SetupDefaultBrowserWindow(
+      tabs::MockTabInterface& mock_tab,
+      MockBrowserWindowInterface& mock_browser_window_interface,
+      ::ui::UnownedUserDataHost& user_data_host);
 
   MOCK_METHOD(void,
               OnUiTabStateChange,
               (const UiTabState& ui_tab_state, UiResultCallback callback),
               (override));
 
-  MOCK_METHOD(void,
-              OnTabActiveStatusChanged,
-              (bool tab_active_status, tabs::TabInterface* tab),
-              (override));
-
-  MOCK_METHOD(void, SetActiveTaskId, (TaskId task_id), (override));
-
-  MOCK_METHOD(void, ClearActiveTaskId, (), (override));
+  MOCK_METHOD(void, OnWebContentsAttached, (), (override));
 
   MOCK_METHOD(base::WeakPtr<ActorUiTabControllerInterface>,
               GetWeakPtr,
@@ -38,28 +42,28 @@ class MockActorUiTabController : public ActorUiTabControllerInterface {
 
   MOCK_METHOD(void, SetActorTaskResume, (), (override));
 
-  MOCK_METHOD(void, SetOverlayHoverStatus, (bool is_hovering), (override));
-
   MOCK_METHOD(void,
-              SetHandoffButtonHoverStatus,
+              OnOverlayHoverStatusChanged,
               (bool is_hovering),
               (override));
 
-  MOCK_METHOD(void,
-              BindActorOverlay,
-              (mojo::PendingReceiver<mojom::ActorOverlayPageHandler> receiver),
-              (override));
+  MOCK_METHOD(void, OnHandoffButtonHoverStatusChanged, (), (override));
 
-  MOCK_METHOD(void,
-              SetCallbackForTesting,
-              (base::OnceClosure callback),
-              (override));
   MOCK_METHOD(bool, ShouldShowActorTabIndicator, (), (override));
   using ActorTabIndicatorStateChangedCallback =
       base::RepeatingCallback<void(bool)>;
   MOCK_METHOD(base::CallbackListSubscription,
               RegisterActorTabIndicatorStateChangedCallback,
               (ActorTabIndicatorStateChangedCallback callback),
+              (override));
+  MOCK_METHOD(UiTabState, GetCurrentUiTabState, (), (const, override));
+  MOCK_METHOD(base::CallbackListSubscription,
+              RegisterActorOverlayStateChange,
+              (ActorOverlayStateChangeCallback callback),
+              (override));
+  MOCK_METHOD(base::CallbackListSubscription,
+              RegisterActorOverlayBackgroundChange,
+              (ActorOverlayBackgroundChangeCallback callback),
               (override));
 
  private:

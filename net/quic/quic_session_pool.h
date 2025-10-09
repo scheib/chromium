@@ -471,8 +471,7 @@ class NET_EXPORT_PRIVATE QuicSessionPool
   // Until the servers support roaming, close all connections when the local
   // IP address changes.
   void OnIPAddressChanged(
-      NetworkChangeNotifier::IPAddressChangeType change_type =
-          NetworkChangeNotifier::IP_ADDRESS_CHANGE_NORMAL) override;
+      NetworkChangeNotifier::IPAddressChangeType change_type) override;
 
   // NetworkChangeNotifier::NetworkObserver methods:
   void OnNetworkConnected(handles::NetworkHandle network) override;
@@ -953,8 +952,7 @@ class QuicSessionPool::QuicCryptoClientConfigOwner {
 
   QuicSessionPool* quic_session_pool() { return quic_session_pool_; }
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
  private:
   friend class CryptoClientConfigHandle;
@@ -974,7 +972,8 @@ class QuicSessionPool::QuicCryptoClientConfigOwner {
   int num_refs_ = 0;
   quic::QuicCryptoClientConfig config_;
   raw_ptr<base::Clock> clock_;
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::AsyncMemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
   const raw_ptr<QuicSessionPool> quic_session_pool_;
 };
 

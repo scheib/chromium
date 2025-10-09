@@ -70,7 +70,6 @@
 #include "third_party/blink/renderer/core/html/forms/html_data_list_options_collection.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_option_element.h"
-#include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/core/html/forms/input_type.h"
 #include "third_party/blink/renderer/core/html/forms/radio_button_group_scope.h"
 #include "third_party/blink/renderer/core/html/forms/search_input_type.h"
@@ -163,7 +162,6 @@ void HTMLInputElement::Trace(Visitor* visitor) const {
   visitor->Trace(input_type_view_);
   visitor->Trace(list_attribute_target_observer_);
   visitor->Trace(image_loader_);
-  visitor->Trace(first_ancestor_select_);
   TextControlElement::Trace(visitor);
 }
 
@@ -860,13 +858,41 @@ void HTMLInputElement::ParseAttribute(
     // We only need to setChanged if the form is looking at the default value
     // right now.
     if (!HasDirtyValue()) {
-      if (input_type_->GetValueMode() == ValueMode::kValue)
-        non_attribute_value_ = SanitizeValue(value);
-      UpdatePlaceholderVisibility();
-      SetNeedsStyleRecalc(
-          kSubtreeStyleChange,
-          StyleChangeReasonForTracing::FromAttribute(html_names::kValueAttr));
-      needs_to_update_view_value_ = true;
+      if (RuntimeEnabledFeatures::SanitizeIDNEmailFormInputEnabled()) {
+        bool needs_to_update = true;
+        if (input_type_->GetValueMode() == ValueMode::kValue) {
+          // Update the view with the non-converted value first, before
+          // setting the value to the converted version.
+          String non_converted = SanitizeValue(value);
+          non_attribute_value_ = non_converted;
+          needs_to_update_view_value_ = true;
+          if (parsing_in_progress_) {
+            pending_non_converted_value_ = non_converted;
+            input_type_view_->set_needs_update_view_in_create_shadow_subtree(
+                true);
+          } else {
+            input_type_view_->UpdateView();
+          }
+          non_attribute_value_ =
+              input_type_->ConvertFromVisibleValue(non_converted);
+          // Don't update the view again, to preserve pasted values.
+          needs_to_update = false;
+        }
+        UpdatePlaceholderVisibility();
+        SetNeedsStyleRecalc(
+            kSubtreeStyleChange,
+            StyleChangeReasonForTracing::FromAttribute(html_names::kValueAttr));
+        needs_to_update_view_value_ = needs_to_update;
+      } else {
+        if (input_type_->GetValueMode() == ValueMode::kValue) {
+          non_attribute_value_ = SanitizeValue(value);
+        }
+        UpdatePlaceholderVisibility();
+        SetNeedsStyleRecalc(
+            kSubtreeStyleChange,
+            StyleChangeReasonForTracing::FromAttribute(html_names::kValueAttr));
+        needs_to_update_view_value_ = true;
+      }
     }
     SetNeedsValidityCheck();
     input_type_->WarnIfValueIsInvalidAndElementIsVisible(value);
@@ -968,6 +994,21 @@ void HTMLInputElement::ParserDidSetAttributes() {
   TextControlElement::ParserDidSetAttributes();
 }
 
+void HTMLInputElement::UpdateViewWithPendingNonConvertedValue() {
+  if (pending_non_converted_value_.empty()) {
+    UpdateView();
+  } else {
+    String saved_value = non_attribute_value_;
+    bool did_need_update = needs_to_update_view_value_;
+    non_attribute_value_ = pending_non_converted_value_;
+    needs_to_update_view_value_ = true;
+    input_type_view_->UpdateView();
+    non_attribute_value_ = saved_value;
+    needs_to_update_view_value_ = did_need_update;
+    pending_non_converted_value_ = String();
+  }
+}
+
 void HTMLInputElement::FinishParsingChildren() {
   parsing_in_progress_ = false;
   DCHECK(input_type_);
@@ -1057,6 +1098,10 @@ void HTMLInputElement::ResetImpl() {
 
 bool HTMLInputElement::IsTextField() const {
   return input_type_->IsTextFieldInputType();
+}
+
+bool HTMLInputElement::InputSupportsSelectionAPI() const {
+  return input_type_->SupportsSelectionAPI();
 }
 
 bool HTMLInputElement::IsTelephone() const {
@@ -1235,6 +1280,14 @@ void HTMLInputElement::SetSuggestedValue(const String& value) {
   }
   needs_to_update_view_value_ = true;
   String sanitized_value = SanitizeValue(value);
+
+  if (RuntimeEnabledFeatures::CanvasDrawElementEnabled() &&
+      IsInCanvasSubtree()) {
+    // Hide suggested values when under canvas, to prevent leaking this
+    // information to javascript.
+    sanitized_value = String();
+  }
+
   SetAutofillState(sanitized_value.empty() ? WebAutofillState::kNotFilled
                                            : WebAutofillState::kPreviewed);
   TextControlElement::SetSuggestedValue(sanitized_value);
@@ -1253,6 +1306,15 @@ void HTMLInputElement::SetSuggestedValue(const String& value) {
       kSubtreeStyleChange,
       StyleChangeReasonForTracing::Create(style_change_reason::kControlValue));
   input_type_view_->UpdateView();
+}
+
+void HTMLInputElement::DidChangeIsCanvasOrInCanvasSubtree() {
+  if (RuntimeEnabledFeatures::CanvasDrawElementEnabled() &&
+      IsInCanvasSubtree()) {
+    // Hide suggested values when under canvas, to prevent leaking this
+    // information to javascript.
+    SetSuggestedValue(String());
+  }
 }
 
 void HTMLInputElement::SetInnerEditorValue(const String& value) {
@@ -1527,8 +1589,8 @@ void HTMLInputElement::DefaultEventHandler(Event& evt) {
     if (FormControlType() == FormControlType::kInputSearch) {
       GetDocument()
           .GetTaskRunner(TaskType::kUserInteraction)
-          ->PostTask(FROM_HERE, WTF::BindOnce(&HTMLInputElement::OnSearch,
-                                              WrapPersistent(this)));
+          ->PostTask(FROM_HERE, BindOnce(&HTMLInputElement::OnSearch,
+                                         WrapPersistent(this)));
     }
     // Form submission finishes editing, just as loss of focus does.
     // If there was a change, send the event now.
@@ -1909,8 +1971,7 @@ HTMLInputElement::FilteredDataListOptions() const {
   filtered.reserve(options->length());
   editor_value = editor_value.FoldCase();
 
-  TextBreakIterator* iter =
-      WordBreakIterator(editor_value, 0, editor_value.length());
+  TextBreakIterator* iter = WordBreakIterator(editor_value);
 
   Vector<bool> filtering_flag(options->length(), true);
   if (iter) {
@@ -2479,23 +2540,6 @@ void HTMLInputElement::SetFocused(bool is_focused,
       scope->UpdateLastFocusedState(this);
     }
   }
-}
-
-bool HTMLInputElement::IsFirstTextInputInAncestorSelect() const {
-  if ((!RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled() &&
-       !RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled()) ||
-      !first_ancestor_select_) {
-    return false;
-  }
-  return first_ancestor_select_->FirstDescendantTextInput() == this;
-}
-
-HTMLSelectElement* HTMLInputElement::FirstAncestorSelectElement() const {
-  if (!RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled() &&
-      !RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled()) {
-    return nullptr;
-  }
-  return first_ancestor_select_;
 }
 
 }  // namespace blink

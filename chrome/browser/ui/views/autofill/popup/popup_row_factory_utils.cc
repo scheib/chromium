@@ -46,7 +46,7 @@
 #include "components/compose/core/browser/compose_features.h"
 #include "components/favicon_base/favicon_types.h"
 #include "components/password_manager/core/common/password_manager_constants.h"
-#include "components/plus_addresses/grit/plus_addresses_strings.h"
+#include "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_education/common/new_badge/new_badge_controller.h"
 #include "components/user_education/views/new_badge_label.h"
@@ -91,8 +91,8 @@ constexpr auto kPopupItemTypesUsingLeadingIcons = DenseSet<SuggestionType>(
      SuggestionType::kManageAutofillAi, SuggestionType::kManageCreditCard,
      SuggestionType::kManageIban, SuggestionType::kManageLoyaltyCard,
      SuggestionType::kManagePlusAddress, SuggestionType::kUndoOrClear,
-     SuggestionType::kViewPasswordDetails,
-     SuggestionType::kPendingStateSignin});
+     SuggestionType::kViewPasswordDetails, SuggestionType::kPendingStateSignin,
+     SuggestionType::kWebauthnSignInWithAnotherDevice});
 
 // Max width for the username and masked password.
 constexpr int kAutofillPopupUsernameMaxWidth = 272;
@@ -124,9 +124,25 @@ base::RepeatingClosure CreateExecuteSoonWrapper(base::RepeatingClosure task) {
 }
 
 bool IsDeactivatedPasswordOrPasskey(const Suggestion& suggestion) {
-  return suggestion.HasDeactivatedStyle() &&
-         GetFillingProductFromSuggestionType(suggestion.type) ==
-             FillingProduct::kPassword;
+  switch (GetFillingProductFromSuggestionType(suggestion.type)) {
+    case FillingProduct::kPassword:
+    case FillingProduct::kPasskey:
+      return suggestion.HasDeactivatedStyle();
+    case FillingProduct::kAddress:
+    case FillingProduct::kPlusAddresses:
+    case FillingProduct::kCreditCard:
+    case FillingProduct::kIban:
+    case FillingProduct::kAutocomplete:
+    case FillingProduct::kMerchantPromoCode:
+    case FillingProduct::kCompose:
+    case FillingProduct::kAutofillAi:
+    case FillingProduct::kLoyaltyCard:
+    case FillingProduct::kIdentityCredential:
+    case FillingProduct::kDataList:
+    case FillingProduct::kOneTimePassword:
+    case FillingProduct::kNone:
+      return false;
+  }
 }
 
 std::unique_ptr<views::BoxLayoutView> GetBadgeView(std::u16string_view label) {
@@ -165,6 +181,7 @@ void FormatLabel(views::Label& label,
     case FillingProduct::kCompose:
     case FillingProduct::kIban:
     case FillingProduct::kMerchantPromoCode:
+    case FillingProduct::kPasskey:
     case FillingProduct::kPassword:
     case FillingProduct::kDataList:
     case FillingProduct::kNone:

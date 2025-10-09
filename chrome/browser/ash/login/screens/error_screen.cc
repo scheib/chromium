@@ -46,7 +46,7 @@
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 namespace ash {
 
@@ -409,8 +409,11 @@ void ErrorScreen::LaunchHelpApp(int help_topic_id) {
       static_cast<HelpAppLauncher::HelpTopic>(help_topic_id));
 }
 
-void ErrorScreen::ConnectToNetworkRequested(const std::string& service_path) {
+ConnectToNetworkRequestVerdict ErrorScreen::ConnectToNetworkRequested(
+    const std::string& service_path) {
   connect_request_callbacks_.Notify();
+
+  return ConnectToNetworkRequestVerdict::kProceed;
 }
 
 void ErrorScreen::StartGuestSessionAfterOwnershipCheck(

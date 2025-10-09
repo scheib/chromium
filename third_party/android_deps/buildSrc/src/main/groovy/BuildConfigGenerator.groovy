@@ -238,10 +238,12 @@ wnwen@chromium.org
         boolean securityCritical = dependency.supportsAndroid && dependency.isShipped
         String cpePrefix = dependency.cpePrefix ? dependency.cpePrefix : 'unknown'
 
+        // Useing fileUrl as URL is required for vulnerability scanning.
+        // https://crbug.com/446990546
         return """\
 Name: ${dependency.displayName}
 Short Name: ${dependency.name}
-URL: ${dependency.url}
+URL: ${dependency.fileUrl}
 Version: ${dependency.version}
 Update Mechanism: ${(dependency.isAutorolled || dependency.isAndroidx) ? 'Autoroll' : 'Manual'}
 License: ${licenseString}
@@ -819,7 +821,10 @@ No modifications.
                 // and android_aar_prebuilt template will fail if it's not set explictly.
                 sb.append('  extract_native_libraries = true\n')
                 break
-            case 'com_google_auto_service_auto_service_annotations_java':
+            case 'com_google_errorprone_error_prone_annotations':
+                sb.append('  preferred_dep = true\n')
+                break
+            case 'com_google_auto_service_auto_service_annotations':
                 sb.append('  preferred_dep = true\n')
                 break
             case 'com_google_guava_guava':

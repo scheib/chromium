@@ -16,6 +16,7 @@
 #include "chrome/browser/preloading/prerender/prerender_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/layout_constants.h"
+#include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_button_util.h"
@@ -40,9 +41,12 @@ enum class PreloadBookmarkMetricsEvent {
 };
 
 // These are used as control the behavior of kBookmarkTriggerForPrerender2.
-const base::FeatureParam<int> kPreconnectStartDelayOnMouseHoverByMiliseconds{
+const base::FeatureParam<int> kPreconnectStartDelayOnMouseHoverByMilliseconds{
     &features::kBookmarkTriggerForPreconnect,
     "preconnect_start_delay_on_mouse_hover_ms", 100};
+const base::FeatureParam<int> kPrefetchStartDelayOnMouseHoverByMilliseconds{
+    &features::kBookmarkTriggerForPrefetch,
+    "prefetch_start_delay_on_mouse_hover_ms", 300};
 
 // BookmarkButtonBase -----------------------------------------------
 
@@ -169,9 +173,18 @@ void BookmarkButton::OnMouseEntered(const ui::MouseEvent& event) {
     preconnect_timer_.Start(
         FROM_HERE,
         base::Milliseconds(
-            kPreconnectStartDelayOnMouseHoverByMiliseconds.Get()),
+            kPreconnectStartDelayOnMouseHoverByMilliseconds.Get()),
         base::BindRepeating(&BookmarkButton::StartPreconnecting,
                             base::Unretained(this), *url_));
+  }
+
+  if (base::FeatureList::IsEnabled(features::kBookmarkTriggerForPrefetch)) {
+    prefetch_timer_.Start(
+        FROM_HERE,
+        base::Milliseconds(kPrefetchStartDelayOnMouseHoverByMilliseconds.Get()),
+        base::BindRepeating(&BookmarkButton::StartPreloading,
+                            base::Unretained(this), *url_,
+                            content::PreloadingType::kPrefetch));
   }
 
   // Now we should register the callback function that will be used to
@@ -193,17 +206,25 @@ void BookmarkButton::OnMouseEntered(const ui::MouseEvent& event) {
   }
 }
 
+void BookmarkButton::StopPreloadingTimers() {
+  if (base::FeatureList::IsEnabled(features::kBookmarkTriggerForPreconnect)) {
+    preconnect_timer_.Stop();
+  }
+
+  if (base::FeatureList::IsEnabled(features::kBookmarkTriggerForPrefetch)) {
+    prefetch_timer_.Stop();
+  }
+}
+
 void BookmarkButton::OnMouseExited(const ui::MouseEvent& event) {
   BookmarkButtonBase::OnMouseExited(event);
-  preconnect_timer_.Stop();
-  auto* active_web_contents =
-      browser_->tab_strip_model()->GetActiveWebContents();
-  if (!active_web_contents) {
+  StopPreloadingTimers();
+
+  if (!GetBookmarkBarPreloadPipelineManager()) {
     return;
   }
-  BookmarkBarPreloadPipelineManager::GetOrCreateForWebContents(
-      active_web_contents)
-      ->ResetPrerender();
+
+  GetBookmarkBarPreloadPipelineManager()->ResetPrerender();
 }
 
 bool BookmarkButton::OnMousePressed(const ui::MouseEvent& event) {
@@ -212,8 +233,21 @@ bool BookmarkButton::OnMousePressed(const ui::MouseEvent& event) {
     base::UmaHistogramEnumeration("Prerender.Experimental.BookmarkMetrics",
                                   PreloadBookmarkMetricsEvent::kMouseDown);
   }
+
   if (event.IsOnlyLeftMouseButton()) {
-    StartPrerendering(*url_);
+    // Stopping preloading timers to avoid starting preconnect/prefetch after
+    // prerender has been started.
+    StopPreloadingTimers();
+    // Starting prefetch before prerender. With
+    // `UsePrefetchPrerenderIntegration()` being true, preloading can fall back
+    // to prefetch if prerender fails. If a prefetch has been started, this
+    // function call will do nothing.
+    if (base::FeatureList::IsEnabled(features::kBookmarkTriggerForPrefetch)) {
+      StartPreloading(*url_, content::PreloadingType::kPrefetch);
+    }
+    // Starting prerender. If a prerender has been started, this function call
+    // will do nothing.
+    StartPreloading(*url_, content::PreloadingType::kPrerender);
   }
   return result;
 }
@@ -231,12 +265,8 @@ void BookmarkButton::StartPreconnecting(GURL url) {
   CHECK(base::FeatureList::IsEnabled(features::kBookmarkTriggerForPreconnect));
   // TODO(crbug.com/413259638): Introduce preconnect related tests once the
   // related infrastructure is completed.
-  auto* active_web_contents =
-      browser_->tab_strip_model()->GetActiveWebContents();
-  if (active_web_contents &&
-      BookmarkBarPreloadPipelineManager::GetOrCreateForWebContents(
-          active_web_contents)
-          ->IsPreloadingStarted()) {
+  if (!GetBookmarkBarPreloadPipelineManager() ||
+      GetBookmarkBarPreloadPipelineManager()->IsPreloadingStarted()) {
     return;
   }
 
@@ -249,16 +279,26 @@ void BookmarkButton::StartPreconnecting(GURL url) {
   }
 }
 
-void BookmarkButton::StartPrerendering(GURL url) {
-  auto* active_web_contents =
-      browser_->tab_strip_model()->GetActiveWebContents();
-  if (!active_web_contents) {
+void BookmarkButton::StartPreloading(const GURL& url,
+                                     content::PreloadingType preloadingType) {
+  if (!GetBookmarkBarPreloadPipelineManager()) {
     return;
   }
 
-  BookmarkBarPreloadPipelineManager::GetOrCreateForWebContents(
-      active_web_contents)
-      ->StartPrerender(url);
+  switch (preloadingType) {
+    case content::PreloadingType::kPrerender:
+      GetBookmarkBarPreloadPipelineManager()->StartPrerender(url);
+      break;
+    case content::PreloadingType::kPrefetch:
+      GetBookmarkBarPreloadPipelineManager()->StartPrefetch(url);
+      break;
+    case content::PreloadingType::kUnspecified:
+    case content::PreloadingType::kPreconnect:
+    case content::PreloadingType::kNoStatePrefetch:
+    case content::PreloadingType::kLinkPreview:
+    case content::PreloadingType::kPrerenderUntilScript:
+      NOTREACHED();
+  }
 }
 
 void BookmarkButton::UpdateMaxTooltipWidth() {
@@ -275,6 +315,18 @@ void BookmarkButton::UpdateMaxTooltipWidth() {
     max_tooltip_width_ = max_tooltip_width;
     UpdateTooltipText();
   }
+}
+
+BookmarkBarPreloadPipelineManager*
+BookmarkButton::GetBookmarkBarPreloadPipelineManager() {
+  tabs::TabInterface* active_tab = browser_->tab_strip_model()->GetActiveTab();
+  // TODO(crbug.com/413259638): active_tab is only expected to be null if the
+  // tab_strip is being initialized or destroyed, but putting a CHECK had caused
+  // crbug.com/448228076.
+  if (!active_tab) {
+    return nullptr;
+  }
+  return active_tab->GetTabFeatures()->bookmarkbar_preload_pipeline_manager();
 }
 
 BEGIN_METADATA(BookmarkButton)

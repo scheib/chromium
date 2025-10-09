@@ -12,6 +12,7 @@
 #include <optional>
 #include <sstream>
 
+#include "base/callback_list.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
@@ -28,6 +29,7 @@
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
 #include "components/device_event_log/device_event_log.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "ui/display/display.h"
 #include "ui/display/display_features.h"
 #include "ui/display/display_layout.h"
@@ -45,6 +47,8 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/icc_profile.h"
+#include "ui/gfx/switches.h"
+#include "ui/gfx/win/singleton_hwnd.h"
 
 namespace display::win {
 
@@ -187,8 +191,8 @@ gfx::DisplayColorSpaces CreateDisplayColorSpaces(
     const gfx::ColorSpace& color_space,
     float sdr_white_level) {
   gfx::DisplayColorSpaces display_color_spaces(color_space);
-  display_color_spaces.SetOutputBufferFormats(gfx::BufferFormat::BGRA_8888,
-                                              gfx::BufferFormat::BGRA_8888);
+  display_color_spaces.SetOutputFormats(viz::SinglePlaneFormat::kBGRA_8888,
+                                        viz::SinglePlaneFormat::kBGRA_8888);
   display_color_spaces.SetSDRMaxLuminanceNits(sdr_white_level);
   return display_color_spaces;
 }
@@ -230,15 +234,15 @@ gfx::DisplayColorSpaces GetDisplayColorSpacesForHdr(
     // Windows RS3, but RGB10A2 with HDR10 color space works fine (see
     // https://crbug.com/937108#c92).
     if (base::win::GetVersion() > base::win::Version::WIN10_RS3) {
-      color_spaces.SetOutputColorSpaceAndBufferFormat(
-          usage, !kNeedsAlpha, scrgb_linear, gfx::BufferFormat::RGBA_F16);
+      color_spaces.SetOutputColorSpaceAndFormat(
+          usage, !kNeedsAlpha, scrgb_linear, viz::SinglePlaneFormat::kRGBA_F16);
     } else {
-      color_spaces.SetOutputColorSpaceAndBufferFormat(
-          usage, !kNeedsAlpha, hdr10, gfx::BufferFormat::RGBA_1010102);
+      color_spaces.SetOutputColorSpaceAndFormat(
+          usage, !kNeedsAlpha, hdr10, viz::SinglePlaneFormat::kRGBA_1010102);
     }
     // Use RGBA F16 backbuffers for HDR if alpha channel is required.
-    color_spaces.SetOutputColorSpaceAndBufferFormat(
-        usage, kNeedsAlpha, scrgb_linear, gfx::BufferFormat::RGBA_F16);
+    color_spaces.SetOutputColorSpaceAndFormat(
+        usage, kNeedsAlpha, scrgb_linear, viz::SinglePlaneFormat::kRGBA_F16);
   }
   return color_spaces;
 }
@@ -253,11 +257,12 @@ gfx::DisplayColorSpaces GetForcedDisplayColorSpaces() {
       color_space, gfx::ColorSpace::kDefaultSDRWhiteLevel);
   // Use the forced color profile's buffer format for all content usages.
   if (color_space.GetTransferID() == gfx::ColorSpace::TransferID::PQ) {
-    display_color_spaces.SetOutputBufferFormats(
-        gfx::BufferFormat::RGBA_1010102, gfx::BufferFormat::RGBA_1010102);
+    display_color_spaces.SetOutputFormats(
+        viz::SinglePlaneFormat::kRGBA_1010102,
+        viz::SinglePlaneFormat::kRGBA_1010102);
   } else if (color_space.IsHDR()) {
-    display_color_spaces.SetOutputBufferFormats(gfx::BufferFormat::RGBA_F16,
-                                                gfx::BufferFormat::RGBA_F16);
+    display_color_spaces.SetOutputFormats(viz::SinglePlaneFormat::kRGBA_F16,
+                                          viz::SinglePlaneFormat::kRGBA_F16);
   }
   return display_color_spaces;
 }
@@ -575,10 +580,25 @@ gfx::PointF ScreenToDIPPoint(const gfx::PointF& screen_point,
 gfx::Point DIPToScreenPoint(const gfx::Point& dip_point,
                             const ScreenWinDisplay& screen_win_display) {
   const Display display = screen_win_display.display();
-  return gfx::ToFlooredPoint(
+  const gfx::PointF scaled_point =
       ScalePointRelative(gfx::PointF(dip_point), display.bounds().origin(),
                          screen_win_display.pixel_bounds().origin(),
-                         display.device_scale_factor()));
+                         display.device_scale_factor());
+  if (base::FeatureList::IsEnabled(::features::kUseRoundedPointConversion)) {
+    // Using `round()` instead of `floor()` prevents the systematic downward
+    // bias that causes layout drift.
+    //
+    // Assume we have value d in DIP and scale factor p > 1.
+    // Let d' = screen_to_dip(dip_to_screen(d)), then
+    //     d' == screen_to_dip(round(d*p))
+    //        == screen_to_dip(d*p + eps), where |eps| <= 0.5. Then,
+    //     d' == round( (d*p+eps) / p)
+    //        == round(d + eps/p).
+    // Since |eps / p| < 0.5 and d is an integer, round(d + eps/p) == d,
+    // therefore d' == d. QED.
+    return ToRoundedPoint(scaled_point);
+  }
+  return ToFlooredPoint(scaled_point);
 }
 
 // Create a fake FHD display used in case no displays are ever conneceted.
@@ -697,10 +717,17 @@ gfx::Rect ScreenWin::ScreenToDIPRect(HWND hwnd,
       ? GetScreenWinDisplayVia(&ScreenWin::GetScreenWinDisplayNearestHWND, hwnd)
       : GetScreenWinDisplayVia(
             &ScreenWin::GetScreenWinDisplayNearestScreenRect, pixel_bounds);
-  const gfx::Point origin = gfx::ToFlooredPoint(display::win::ScreenToDIPPoint(
-      gfx::PointF(pixel_bounds.origin()), screen_win_display));
   const float scale_factor =
       1.0f / screen_win_display.display().device_scale_factor();
+  const gfx::Point origin =
+      // Using `round()` instead of `floor()` prevents the systematic downward
+      // bias that causes layout drift.
+      // See comment in `DIPToScreenPoint()` for proof.
+      base::FeatureList::IsEnabled(::features::kUseRoundedPointConversion)
+          ? ToRoundedPoint(display::win::ScreenToDIPPoint(
+                gfx::PointF(pixel_bounds.origin()), screen_win_display))
+          : ToFlooredPoint(display::win::ScreenToDIPPoint(
+                gfx::PointF(pixel_bounds.origin()), screen_win_display));
   return {origin, ScaleToEnclosingRect(pixel_bounds, scale_factor).size()};
 }
 
@@ -946,6 +973,8 @@ gfx::Rect ScreenWin::DIPToScreenRectInWindow(gfx::NativeWindow window,
 
 void ScreenWin::UpdateFromDisplayInfos(
     const std::vector<internal::DisplayInfo>& display_infos) {
+  std::vector<Display> old_displays = std::move(displays_);
+
   // Retrieve the primary monitor info here, instead of later below. This is a
   // speculative workaround for the issue observed on older version of Windows
   // 10.  See crbug.com/394622418 for more detail.
@@ -1019,11 +1048,16 @@ void ScreenWin::UpdateFromDisplayInfos(
     }
   }
   SetInternalDisplayIds(internal_display_ids);
+
+  // It's possible notifying of display changes may trigger reentrancy. Copy
+  // `displays_` to ensure there are no problems if reentrancy happens.
+  std::vector<Display> displays_copy = displays_;
+  change_notifier_.NotifyDisplaysChanged(old_displays, displays_copy);
 }
 
 void ScreenWin::Initialize() {
   color_profile_reader_->UpdateIfNeeded();
-  singleton_hwnd_observer_ = std::make_unique<gfx::SingletonHwndObserver>(
+  hwnd_subscription_ = gfx::SingletonHwnd::GetInstance()->RegisterCallback(
       base::BindRepeating(&ScreenWin::OnWndProc, base::Unretained(this)));
   UpdateFromDisplayInfos(GetDisplayInfosFromSystem());
 
@@ -1114,12 +1148,7 @@ void ScreenWin::OnColorProfilesChanged() {
 void ScreenWin::UpdateAllDisplaysAndNotify() {
   TRACE_EVENT0("ui", "ScreenWin::UpdateAllDisplaysAndNotify");
 
-  std::vector<Display> old_displays = std::move(displays_);
   UpdateFromDisplayInfos(GetDisplayInfosFromSystem());
-  // It's possible notifying of display changes may trigger reentrancy. Copy
-  // `displays_` to ensure there are no problems if reentrancy happens.
-  std::vector<Display> displays_copy = displays_;
-  change_notifier_.NotifyDisplaysChanged(old_displays, displays_copy);
 }
 
 void ScreenWin::UpdateAllDisplaysIfPrimaryMonitorChanged() {

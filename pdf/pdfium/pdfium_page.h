@@ -5,6 +5,8 @@
 #ifndef PDF_PDFIUM_PDFIUM_PAGE_H_
 #define PDF_PDFIUM_PDFIUM_PAGE_H_
 
+#include <stdint.h>
+
 #include <map>
 #include <optional>
 #include <set>
@@ -64,7 +66,7 @@ class PDFiumPage {
     raw_ptr<PDFiumPage> page_;
   };
 
-  PDFiumPage(PDFiumEngine* engine, int i);
+  PDFiumPage(PDFiumEngine* engine, uint32_t i);
   PDFiumPage(const PDFiumPage&) = delete;
   PDFiumPage& operator=(const PDFiumPage&) = delete;
   PDFiumPage(PDFiumPage&& that);
@@ -85,16 +87,18 @@ class PDFiumPage {
   // Resets loaded text and loads it again.
   void ReloadTextPage();
 
-  // Get all the chars, text runs and images from the page.
-  void GetTextAndImageInfo(std::vector<AccessibilityTextRunInfo>& text_runs,
-                           std::vector<AccessibilityCharInfo>& chars,
-                           std::vector<AccessibilityImageInfo>& images);
+  // Get all the chars from the page.
+  std::vector<AccessibilityCharInfo> GetCharInfo();
+
+  // Gets all the text runs from the page.
+  std::vector<AccessibilityTextRunInfo> GetTextRunInfo();
 
   // Given a start char index, find the longest continuous run of text that's
   // in a single direction and with the same text style. Return a filled out
   // AccessibilityTextRunInfo on success or std::nullopt on failure. e.g. When
   // `start_char_index` is out of bounds.
-  std::optional<AccessibilityTextRunInfo> GetTextRunInfo(int start_char_index);
+  std::optional<AccessibilityTextRunInfo> GetTextRunInfoAt(
+      int start_char_index);
 
   // Get a unicode character from the page.
   uint32_t GetCharUnicode(int char_index);
@@ -116,15 +120,14 @@ class PDFiumPage {
 
   // For all the links on the page, get their urls, underlying text ranges and
   // bounding boxes.
-  std::vector<AccessibilityLinkInfo> GetLinkInfo(
-      base::span<const AccessibilityTextRunInfo> text_runs);
+  std::vector<AccessibilityLinkInfo> GetLinkInfo();
 
   // For all the images on the page, get their alt texts and bounding boxes. If
   // the alt text is empty or unavailable, and if the user has requested that
   // the OCR service tag the PDF so that it is made accessible, transfer the raw
   // image pixels in the `image_data` field. Otherwise do not populate the
   // `image_data` field.
-  std::vector<AccessibilityImageInfo> GetImageInfo(uint32_t text_run_count);
+  std::vector<AccessibilityImageInfo> GetImageInfo();
 
   // Returns the indices of image objects.
   std::vector<int> GetImageObjectIndices();
@@ -152,13 +155,17 @@ class PDFiumPage {
 
   // For all the highlights on the page, get their underlying text ranges and
   // bounding boxes.
-  std::vector<AccessibilityHighlightInfo> GetHighlightInfo(
-      base::span<const AccessibilityTextRunInfo> text_runs);
+  std::vector<AccessibilityHighlightInfo> GetHighlightInfo();
 
   // For all the text fields on the page, get their properties like name,
   // value, bounding boxes, etc.
-  std::vector<AccessibilityTextFieldInfo> GetTextFieldInfo(
-      uint32_t text_run_count);
+  std::vector<AccessibilityTextFieldInfo> GetTextFieldInfo();
+
+  // Traverses the entire struct tree of the page recursively and extracts the
+  // text run type or the alt text from struct tree elements corresponding to
+  // the marked content IDs present in `marked_content_id_to_text_runs_map_` or
+  // `marked_content_id_to_images_map_` respectively.
+  void PopulateTextRunTypeAndImageAltText();
 
   enum Area {
     NONSELECTABLE_AREA,
@@ -197,37 +204,41 @@ class PDFiumPage {
   // NONSELECTABLE_AREA if link detection failed.
   Area GetLinkTarget(FPDF_LINK link, LinkTarget* target);
 
-  // Fills the output params with the in-page coordinates and the zoom value of
-  // the destination.
+  // Fills the output params with the PDF coordinates and the zoom value of the
+  // destination.
   void GetPageDestinationTarget(FPDF_DEST destination,
                                 std::optional<float>* dest_x,
                                 std::optional<float>* dest_y,
                                 std::optional<float>* zoom_value);
 
-  // For a named destination with "XYZ" view fit type, pre-processes the in-page
+  // For a named destination with "XYZ" view fit type, pre-processes the PDF
   // x/y coordinate in case it's out of the range of the page dimension. Then
   // transform it to a screen coordinate.
   float PreProcessAndTransformInPageCoordX(float x);
   float PreProcessAndTransformInPageCoordY(float y);
 
-  // Transforms an (x, y) position in page coordinates to screen coordinates.
+  // Transforms an (x, y) position in PDF coordinates to screen coordinates.
   gfx::PointF TransformPageToScreenXY(const gfx::PointF& xy);
 
-  // Transforms an in-page x coordinate to its value in screen coordinates.
+  // Transforms an PDF x coordinate to its value in screen coordinates.
   float TransformPageToScreenX(float x);
 
-  // Transforms an in-page y coordinate to its value in screen coordinates.
+  // Transforms an PDF y coordinate to its value in screen coordinates.
   float TransformPageToScreenY(float y);
 
-  // Given a point in the document that's in this page, returns its character
-  // index if it's near a character, and also the type of text.
-  // Target is optional. It will be filled in for WEBLINK_AREA or
-  // DOCLINK_AREA only.
-  Area GetCharIndex(const gfx::Point& point,
-                    PageOrientation orientation,
-                    int* char_index,
-                    int* form_type,
-                    LinkTarget* target);
+  // Given a point in this page in PDF coordinates, returns the area type, or
+  // `NONSELECTABLE_AREA` if the area type cannot be determined.
+  //
+  // Also writes to the following non-optional out-parameters:
+  // - `char_index`, if `point` is near a character.
+  // - `char_bounds`, if `char_index` is valid.
+  // - `form_type, if `point` is over a form.
+  // - `target`, if the area is `WEBLINK_AREA` or `DOCLINK_AREA`.
+  Area GetCharInfo(const gfx::PointF& point,
+                   int* char_index,
+                   PdfRect* char_bounds,
+                   int* form_type,
+                   LinkTarget* target);
 
   // Converts a form type to its corresponding Area.
   static Area FormTypeToArea(int form_type);
@@ -236,14 +247,14 @@ class PDFiumPage {
   // of the page.
   bool IsCharIndexInBounds(int char_index);
 
-  // Given a rectangle in page coordinates, computes the range of continuous
+  // Given a rectangle in PDF coordinates, computes the range of continuous
   // characters which lie inside that rectangle. Returns false without
   // modifying the out parameters if no character lies inside the rectangle.
   bool GetUnderlyingTextRangeForRect(const gfx::RectF& rect,
                                      int* start_index,
                                      int* char_len);
 
-  // Converts from page coordinates to screen coordinates.
+  // Converts from PDF coordinates to screen coordinates.
   gfx::Rect PageToScreen(const gfx::Point& page_point,
                          double zoom,
                          const PdfRect& rect,
@@ -267,7 +278,7 @@ class PDFiumPage {
   gfx::Size GetThumbnailSize(float device_pixel_ratio);
 #endif
 
-  int index() const { return index_; }
+  uint32_t index() const { return index_; }
 
   const gfx::Rect& rect() const { return rect_; }
   void set_rect(const gfx::Rect& r) { rect_ = r; }
@@ -295,8 +306,8 @@ class PDFiumPage {
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageForOcrTest, HighResolutionImage);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageForOcrTest, RotatedPage);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageForOcrTest, NonImage);
-  FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageTest, PopulateImageAltText);
-  FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageTest, ImageAltText);
+  FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageTest, ImagesWithAltText);
+  FRIEND_TEST_ALL_PREFIXES(PDFiumPageImageTest, TextAndImagesWithAltText);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageLinkTest, AnnotLinkGeneration);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageLinkTest, GetLinkTarget);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageLinkTest, GetUTF8LinkTarget);
@@ -304,6 +315,16 @@ class PDFiumPage {
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageOverlappingTest, CountCompleteOverlaps);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageOverlappingTest, CountPartialOverlaps);
   FRIEND_TEST_ALL_PREFIXES(PDFiumPageTextFieldTest, PopulateTextFields);
+
+  // Key: Marked content id for the text element as specified in the struct
+  //      tree.
+  // Value: A list of indices in the `text_runs_` vector.
+  using MarkedContentIdToTextRunInfoMap = std::map<int, std::vector<size_t>>;
+
+  // Key: Marked content id for the image element as specified in the struct
+  //      tree.
+  // Value: Index of the image in the `images_` vector.
+  using MarkedContentIdToImageMap = std::map<int, size_t>;
 
   struct Link {
     Link();
@@ -449,34 +470,17 @@ class PDFiumPage {
   // Calculates the set of character indices on which text runs need to be
   // broken for page objects such as links and images.
   void CalculatePageObjectTextRunBreaks();
-
-  // Key    :  Marked content id for the text element as specified in the struct
-  //           tree.
-  // Value:    A list of pointers to the associated text runs.
-  using MarkedContentIdToTextRunInfoMap =
-      std::map<int, std::vector<raw_ptr<AccessibilityTextRunInfo>>>;
-
-  // Key    :  Marked content id for the image element as specified in the
-  // struct tree.
-  // Value  :  Index of the image in the `images_` vector.
-  using MarkedContentIdToImageMap = std::map<int, size_t>;
-
-  // Traverses the entire struct tree of the page recursively and extracts the
-  // text run type or the alt text from struct tree elements corresponding to
-  // the marked content IDs associated with `text_runs` or present in
-  // `marked_content_id_image_map_` respectively.
-  void PopulateTextRunTypeAndImageAltText(
-      std::vector<AccessibilityTextRunInfo>& text_runs);
+  // Calculate and caches all text runs and character information on the page.
+  void CalculateTextRuns();
 
   // Traverses a struct element and its sub-tree recursively and extracts the
   // text run type or the alt text from struct elements corresponding to the
-  // marked content IDs present in `marked_content_id_text_run_info_map` or
-  // `marked_content_id_image_map_` respectively. Uses `visited_elements` to
+  // marked content IDs present in `marked_content_id_to_text_runs_map_` or
+  // `marked_content_id_to_images_map_` respectively. Uses `visited_elements` to
   // guard against malformed struct trees.
   void PopulateTextRunTypeAndImageAltTextForStructElement(
       FPDF_STRUCTELEMENT current_element,
-      std::set<FPDF_STRUCTELEMENT>& visited_elements,
-      MarkedContentIdToTextRunInfoMap& marked_content_id_text_run_info_map);
+      std::set<FPDF_STRUCTELEMENT>& visited_elements);
 
   bool PopulateFormFieldProperties(FPDF_ANNOTATION annot,
                                    FormField* form_field);
@@ -488,13 +492,16 @@ class PDFiumPage {
   raw_ptr<PDFiumEngine> engine_;
   ScopedFPDFPage page_;
   ScopedFPDFTextPage text_page_;
-  int index_;
+  uint32_t index_;
   int preventing_unload_count_ = 0;
   gfx::Rect rect_;
+  bool calculated_text_runs_ = false;
+  MarkedContentIdToTextRunInfoMap marked_content_id_to_text_runs_map_;
+  std::vector<AccessibilityTextRunInfo> text_runs_;
   bool calculated_links_ = false;
   std::vector<Link> links_;
   bool calculated_images_ = false;
-  MarkedContentIdToImageMap marked_content_id_image_map_;
+  MarkedContentIdToImageMap marked_content_id_to_images_map_;
   std::vector<Image> images_;
   bool calculated_annotations_ = false;
   std::vector<Highlight> highlights_;

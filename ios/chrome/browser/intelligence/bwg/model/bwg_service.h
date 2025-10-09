@@ -13,6 +13,7 @@ class AuthenticationService;
 namespace signin {
 class IdentityManager;
 }  // namespace signin
+class OptimizationGuideService;
 class PrefService;
 class ProfileIOS;
 namespace web {
@@ -26,7 +27,8 @@ class BwgService : public KeyedService,
   BwgService(ProfileIOS* profile,
              AuthenticationService* auth_service,
              signin::IdentityManager* identity_manager,
-             PrefService* pref_service);
+             PrefService* pref_service,
+             OptimizationGuideService* optimization_guide);
   ~BwgService() override;
   void Shutdown() override;
 
@@ -53,7 +55,10 @@ class BwgService : public KeyedService,
   raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
 
   // The PrefService associated with the Profile.
-  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
+
+  // The optimization guide service for model execution and page metadata.
+  raw_ptr<OptimizationGuideService> optimization_guide_ = nullptr;
 
   // Whether the user is ineligible by the Gemini Enterprise policy (not Chrome
   // Enterprise).
@@ -62,6 +67,15 @@ class BwgService : public KeyedService,
   // Checks if the account is eligible for Gemini Enterprise and populates
   // `is_disabled_by_gemini_policy_`.
   void CheckGeminiEnterpriseEligibility();
+
+  // Clears the Gemini consent profile pref.
+  void ClearConsentPref();
+
+  // Invoked when the eligibility check is done.
+  void OnGeminiEligibilityResult(bool eligible);
+
+  // Weak pointer factory.
+  base::WeakPtrFactory<BwgService> weak_ptr_factory_{this};
 };
 
 #endif  // IOS_CHROME_BROWSER_INTELLIGENCE_BWG_MODEL_BWG_SERVICE_H_

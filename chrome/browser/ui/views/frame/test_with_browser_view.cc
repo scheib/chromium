@@ -11,6 +11,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/extensions/extension_action_test_util.h"
 #include "chrome/browser/extensions/load_error_reporter.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -22,6 +23,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
@@ -62,32 +64,16 @@ void TestWithBrowserView::SetUp() {
 void TestWithBrowserView::TearDown() {
   // Destroy Browsers directly managed by TestWithBrowserView.
   for (std::unique_ptr<Browser>& browser : additional_browsers_) {
-    // For Browsers created with a corresponding BrowserView, the Browser is
-    // ultimately deleted by its owning NativeWidget. To avoid a double-free
-    // situation we must release the Browser's unique_ptr and request the
-    // NativeWidget close via its BrowserView.
-    // TODO(crbug.com/413168662): Eliminate this once Browser ownership changes
-    // have landed.
-    BrowserView* browser_view = static_cast<BrowserView*>(browser->window());
-    browser.release()->tab_strip_model()->CloseAllTabs();
-    browser_view->GetWidget()->CloseNow();
+    browser->tab_strip_model()->CloseAllTabs();
+    browser.reset();
   }
 
   // Because CreateBrowserWindow() is overridden to return null, a real
-  // BrowserView is created, and BrowserView has a unique_ptr that owns the
-  // Browser for which it is the view. This is a problem because
-  // BrowserWithTestWindowTest also has a unique_ptr to the Browser. Therefore,
-  // steal the BrowserWithTestWindowTest ownership and release it to fix the
-  // double-ownership problem.
-  ASSERT_TRUE(release_browser().release());
-
-  // Then trigger the close of the browser window via the view. It's critical
-  // that the Browser is gone before BrowserWithTestWindowTest::TearDown() is
-  // called so that the dependencies aren't closed out from underneath the
-  // browser.
+  // BrowserView is created. Nullify the BrowserView pointer before destroying
+  // the Browser to avoid dangling pointers.
   browser_view_->browser()->tab_strip_model()->CloseAllTabs();
-  browser_view_.ExtractAsDangling()->GetWidget()->CloseNow();
-  content::RunAllTasksUntilIdle();
+  browser_view_ = nullptr;
+  ASSERT_TRUE(release_browser());
 
   BrowserWithTestWindowTest::TearDown();
 #if BUILDFLAG(IS_CHROMEOS)
@@ -108,6 +94,14 @@ TestingProfile* TestWithBrowserView::CreateProfile(
   // location bar.
   AutocompleteClassifierFactory::GetInstance()->SetTestingFactory(
       profile, base::BindRepeating(&CreateAutocompleteClassifier));
+  // ProtocolHandlerRegistryFactory is normally null during testing. Instant
+  // extended needs this service so set a custom factory function.
+  ProtocolHandlerRegistryFactory::GetInstance()->SetTestingFactory(
+      profile, custom_handlers::SimpleProtocolHandlerRegistryFactory::
+                   GetDefaultFactory());
+  TemplateURLServiceFactory::GetInstance()->SetTestingFactory(
+      profile,
+      TemplateURLServiceTestUtil::GetTemplateURLServiceTestingFactory());
   // ToolbarActionsModel must exist before the toolbar initializes the
   // extensions area.
   extensions::LoadErrorReporter::Init(/*enable_noisy_errors=*/false);
@@ -120,7 +114,7 @@ TestingProfile* TestWithBrowserView::CreateProfile(
 
 std::unique_ptr<BrowserWindow> TestWithBrowserView::CreateBrowserWindow() {
   // Allow BrowserWithTestWindowTest to use Browser to create the default
-  // BrowserView and BrowserFrame.
+  // BrowserView and BrowserWidget.
   return nullptr;
 }
 

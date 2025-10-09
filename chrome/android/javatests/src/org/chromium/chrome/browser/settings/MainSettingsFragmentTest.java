@@ -67,7 +67,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import org.chromium.base.BuildInfo;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.DeviceInfo;
 import org.chromium.base.PackageManagerUtils;
@@ -80,6 +79,7 @@ import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
+import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.about_settings.AboutChromeSettings;
 import org.chromium.chrome.browser.appearance.settings.AppearanceSettingsFragment;
 import org.chromium.chrome.browser.autofill.settings.AutofillPaymentMethodsFragment;
@@ -139,6 +139,7 @@ import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.test.util.AccountCapabilitiesBuilder;
 import org.chromium.components.signin.test.util.TestAccounts;
 import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.test.util.GmsCoreVersionRestriction;
 import org.chromium.ui.test.util.ViewUtils;
 import org.chromium.ui.text.SpanApplier;
 import org.chromium.ui.text.SpanApplier.SpanInfo;
@@ -305,7 +306,7 @@ public class MainSettingsFragmentTest {
 
         // Assert for advanced section
         assertSettingsExists("privacy", PrivacySettings.class);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             Assert.assertNull(
                     "Safety check should not be shown on automotive",
                     mMainSettings.findPreference(MainSettings.PREF_SAFETY_HUB));
@@ -430,6 +431,10 @@ public class MainSettingsFragmentTest {
     // Tests that no alert icon is visible if there are no identity errors.
     @Test
     @SmallTest
+    // Specifies the test to run only with the GMS Core version greater than or equal to 24w15 which
+    // is the min version that supports split stores UPM backend, to avoid
+    // UserActionableError.NEEDS_UPM_BACKEND_UPGRADE.
+    @Restriction(GmsCoreVersionRestriction.RESTRICTION_TYPE_VERSION_GE_24W15)
     public void testSigninRowShowsNoAlertWhenNoIdentityErrors() {
         // Sign-in and open settings.
         mSyncTestRule.setUpAccountAndSignInForTesting();
@@ -590,7 +595,6 @@ public class MainSettingsFragmentTest {
 
     @Test
     @SmallTest
-    @DisabledTest(message = "crbug.com/362211398")
     public void
             testAccountManagementRowForChildAccountWithNonDisplayableAccountEmailWithEmptyDisplayName()
                     throws InterruptedException {
@@ -599,8 +603,10 @@ public class MainSettingsFragmentTest {
         // Account set up.
         // If both fullName and givenName are empty, accountCapabilities is ignored.
         final SigninTestRule signinTestRule = mSyncTestRule.getSigninTestRule();
-        signinTestRule.addAccountThenSignin(
-                TestAccounts.TEST_ACCOUNT_NON_DISPLAYABLE_EMAIL_AND_NO_NAME);
+        AccountInfo accountInfo = TestAccounts.TEST_ACCOUNT_NON_DISPLAYABLE_EMAIL_AND_NO_NAME;
+        signinTestRule.addAccount(accountInfo);
+        // Child accounts are signed-in automatically in the background.
+        signinTestRule.waitForSignin(accountInfo);
 
         SignInPreference signInPreference = mMainSettings.findPreference(MainSettings.PREF_SIGN_IN);
         CriteriaHelper.pollUiThread(
@@ -640,17 +646,18 @@ public class MainSettingsFragmentTest {
         @Policies.Item(key = "PasswordManagerEnabled", string = "false"),
         @Policies.Item(key = "BrowserSignin", string = "0")
     })
+    @DisabledTest(message = "Proabably never worked. crbug.com/446200399")
     public void testPasswordsItemClickableWhenManaged() {
         startSettings();
+        var managedStrMatcher =
+                allOf(withText(R.string.managed_by_your_organization), isDisplayed());
         onData(withKey(MainSettings.PREF_PASSWORDS))
                 .inAdapterView(
                         allOf(
-                                isDisplayed(),
                                 hasDescendant(withText(R.string.password_manager_settings_title)),
-                                hasDescendant(
-                                        allOf(
-                                                withText(R.string.managed_by_your_organization),
-                                                isDisplayed()))));
+                                hasDescendant(managedStrMatcher)))
+                .check(matches(isDisplayed()));
+        ;
         Assert.assertTrue(mMainSettings.findPreference(MainSettings.PREF_PASSWORDS).isEnabled());
         Assert.assertNotNull(
                 mMainSettings
@@ -664,17 +671,17 @@ public class MainSettingsFragmentTest {
     // Setting BrowserSignin suppresses the sync promo so the password settings preference
     // is visible without scrolling.
     @Policies.Add(@Policies.Item(key = "BrowserSignin", string = "0"))
+    @DisabledTest(message = "Proabably never worked. crbug.com/446200399")
     public void testPasswordsItemEnabledWhenNotManaged() throws InterruptedException {
         startSettings();
+        var managedStrMatcher =
+                allOf(withText(R.string.managed_by_your_organization), not(isDisplayed()));
         onData(withKey(MainSettings.PREF_PASSWORDS))
                 .inAdapterView(
                         allOf(
-                                isDisplayed(),
                                 hasDescendant(withText(R.string.password_manager_settings_title)),
-                                hasDescendant(
-                                        allOf(
-                                                withText(R.string.managed_by_your_organization),
-                                                not(isDisplayed())))));
+                                hasDescendant(managedStrMatcher)))
+                .check(matches(isDisplayed()));
         Assert.assertTrue(mMainSettings.findPreference(MainSettings.PREF_PASSWORDS).isEnabled());
         Assert.assertNotNull(
                 mMainSettings
@@ -775,7 +782,7 @@ public class MainSettingsFragmentTest {
         // characteristics, so we just fork the test's behavior based on the eligibility state.
         boolean showSetting =
                 !DeviceInfo.isAutomotive()
-                        && (BuildInfo.getInstance().isFoldable
+                        && (DeviceInfo.isFoldable()
                                 || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(
                                         mSettingsActivityTestRule.getActivity()));
         if (!showSetting) {

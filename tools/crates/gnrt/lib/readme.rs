@@ -20,12 +20,6 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 #[derive(Clone, Debug, Serialize)]
-pub enum UpdateMechanism {
-    Autoroll,
-    Manual,
-}
-
-#[derive(Clone, Debug, Serialize)]
 pub struct ReadmeFile {
     name: String,
     url: String,
@@ -36,7 +30,7 @@ pub struct ReadmeFile {
     license: String,
     license_files: Vec<String>,
     revision: Option<String>,
-    update_mechanism: UpdateMechanism,
+    update_mechanism: String,
 }
 
 /// Returns a map keyed by the directory where the README file should be
@@ -201,9 +195,10 @@ fn readme_file_from_package<'a>(
         license,
         license_files,
         revision,
-        // TODO(crbug.com/427084604): Currently all packages are rolled manually.
-        // Set to `UpdateMechanism::Autoroll` when automatic rolls are supported.
-        update_mechanism: UpdateMechanism::Manual,
+        // All Rust dependencies are granted a shared temporary exemption for
+        // autorolling, because while they are manually rolled, they are
+        // well managed.
+        update_mechanism: "Manual (https://crbug.com/449898466)".to_string(),
     };
 
     Ok((crate_build_dir, readme))
@@ -335,7 +330,9 @@ static LICENSE_KIND_TO_LICENSE_FILES: LazyLock<HashMap<LicenseKind, Vec<String>>
 
         // Special cases for specific license types. If your license has a case
         // that is not covered already in the map generated above, add it here.
-        map.get_mut(&LicenseKind::Apache2).unwrap().insert(0, "license-apache-2.0".to_string());
+        let apache = map.get_mut(&LicenseKind::Apache2).unwrap();
+        apache.insert(0, "license-apache-2.0".to_string());
+        apache.insert(0, "LICENSE-Apache".to_string());
         map
     });
 

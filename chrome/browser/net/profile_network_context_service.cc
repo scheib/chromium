@@ -78,6 +78,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/first_party_sets_handler.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/browser/reduce_accept_language_utils.h"
 #include "content/public/browser/shared_cors_origin_access_list.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/url_constants.h"
@@ -133,11 +134,16 @@
 #include "net/ssl/client_cert_store_mac.h"
 #endif  // BUILDFLAG(IS_MAC)
 
+#if BUILDFLAG(IS_ANDROID)
+#include "net/ssl/client_cert_store_empty.h"
+#endif  // BUILDFLAG(IS_ANDROID)
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/common/constants.h"
 #endif
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/enterprise/client_certificates/certificate_provisioning_service_factory.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
@@ -286,7 +292,8 @@ void UpdateCookieSettings(Profile* profile, ContentSettingsType type) {
       });
 }
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_ANDROID)
 std::unique_ptr<net::ClientCertStore> GetWrappedCertStore(
     Profile* profile,
     std::unique_ptr<net::ClientCertStore> platform_store) {
@@ -315,7 +322,8 @@ std::unique_ptr<net::ClientCertStore> GetWrappedCertStore(
       profile_provisioning_service, browser_provisioning_service,
       std::move(platform_store));
 }
-#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_ANDROID)
 
 bool IsValidDNSConstraint(std::string_view possible_dns_constraint) {
   return base::IsStringASCII(possible_dns_constraint) &&
@@ -411,37 +419,6 @@ bool NeedsIpProtection(const IpProtectionCoreHost* ipp_core_host,
 
 constexpr std::string_view kDiskCacheExperimentNameSeparator = " ";
 constexpr std::string_view kDiskCacheExperimentNameNone = "None";
-// The date and prefix for the disk cache backend experiment.
-#define DISK_CACHE_EXPERIMENT_DATE_PREFIX "20250725-DiskCache-"
-constexpr std::string_view kDiskCacheExperimentNameDefault =
-    DISK_CACHE_EXPERIMENT_DATE_PREFIX "Default";
-constexpr std::string_view kDiskCacheExperimentNameSimple =
-    DISK_CACHE_EXPERIMENT_DATE_PREFIX "Simple";
-constexpr std::string_view kDiskCacheExperimentNameBlockfile =
-    DISK_CACHE_EXPERIMENT_DATE_PREFIX "Blockfile";
-#if BUILDFLAG(ENABLE_DISK_CACHE_SQL_BACKEND)
-constexpr std::string_view kDiskCacheExperimentNameSql =
-    DISK_CACHE_EXPERIMENT_DATE_PREFIX "Sql";
-#endif  // ENABLE_DISK_CACHE_SQL_BACKEND
-
-std::string_view GetDiskCacheBackendExperimentString() {
-  if (!disk_cache::InBackendExperiment()) {
-    return "";
-  }
-  switch (net::features::kDiskCacheBackendParam.Get()) {
-    case net::features::DiskCacheBackend::kDefault:
-      return kDiskCacheExperimentNameDefault;
-    case net::features::DiskCacheBackend::kSimple:
-      return kDiskCacheExperimentNameSimple;
-    case net::features::DiskCacheBackend::kBlockfile:
-      return kDiskCacheExperimentNameBlockfile;
-#if BUILDFLAG(ENABLE_DISK_CACHE_SQL_BACKEND)
-    case net::features::DiskCacheBackend::kSql:
-      return kDiskCacheExperimentNameSql;
-#endif  // ENABLE_DISK_CACHE_SQL_BACKEND
-  }
-  NOTREACHED();
-}
 
 bool GetHttpCacheBackendResetParam(PrefService* local_state) {
   // Get the field trial groups.  If the server cannot be reached, then
@@ -451,6 +428,8 @@ bool GetHttpCacheBackendResetParam(PrefService* local_state) {
           net::features::kSplitCacheByNetworkIsolationKey);
   base::FieldTrial* credentials_field_trial = base::FeatureList::GetFieldTrial(
       net::features::kSplitCacheByIncludeCredentials);
+  base::FieldTrial* backend_field_trial = base::FeatureList::GetFieldTrial(
+      net::features::kDiskCacheBackendExperiment);
 
   std::vector<std::string_view> experiment_parts;
   // SplitCacheByNetworkIsolationKey experiment:
@@ -471,9 +450,8 @@ bool GetHttpCacheBackendResetParam(PrefService* local_state) {
                                  : kDiskCacheExperimentNameNone);
 
   // Add the disk cache backend experiment group if active.
-  std::string_view backend_experiment = GetDiskCacheBackendExperimentString();
-  if (!backend_experiment.empty()) {
-    experiment_parts.push_back(backend_experiment);
+  if (backend_field_trial) {
+    experiment_parts.push_back(backend_field_trial->group_name());
   }
 
   const std::string current_field_trial_status =
@@ -710,7 +688,9 @@ std::string ProfileNetworkContextService::ComputeAcceptLanguage() const {
     return ComputeAcceptLanguageFromPref(
         language::GetFirstLanguage(pref_accept_language_.GetValue()));
   }
-  return ComputeAcceptLanguageFromPref(pref_accept_language_.GetValue());
+  return ComputeAcceptLanguageFromPref(
+      content::ReduceAcceptLanguageUtils::GetLanguagesWithMaxCount(
+          pref_accept_language_.GetValue()));
 }
 
 void ProfileNetworkContextService::UpdateReferrersEnabled() {
@@ -1301,10 +1281,14 @@ ProfileNetworkContextService::CreateClientCertStore() {
   return GetWrappedCertStore(profile_,
                              std::make_unique<net::ClientCertStoreMac>());
 #elif BUILDFLAG(IS_ANDROID)
-  // Android does not use the ClientCertStore infrastructure. On Android client
-  // cert matching is done by the OS as part of the call to show the cert
-  // selection dialog.
-  return nullptr;
+  // On Android client we don't use a platform client cert store, but we still
+  // need to use Chrome profile and browser level stores, so we wrap the empty
+  // store to use it as a platform cert store.
+  // The certificate matching for android will first try to find a matching cert
+  // in the profile/browser stores, and if none is found, it will proceed with
+  // the OS as part of the call to show the cert selection dialog.
+  return GetWrappedCertStore(profile_,
+                             std::make_unique<net::ClientCertStoreEmpty>());
 #else
 #error Unknown platform.
 #endif
@@ -1572,11 +1556,22 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
         ipp_core_host->IsIpProtectionEnabled();
     network_context_params->ip_protection_incognito =
         profile_->IsIncognitoProfile();
+    if (profile_->IsIncognitoProfile()) {
+      network_context_params->initial_ip_protection_tokens =
+          ipp_core_host->TakeRecycledTokens();
+    }
     if (base::CommandLine::ForCurrentProcess()->HasSwitch(
             network::switches::kStoreProbabilisticRevealTokens)) {
       network_context_params->ip_protection_data_directory =
           profile_->GetPath();
     }
+
+    ContentSettingsForOneType tracking_protection_content_settings =
+        HostContentSettingsMapFactory::GetForProfile(profile_)
+            ->GetSettingsForOneType(ContentSettingsType::TRACKING_PROTECTION);
+
+    network_context_params->tracking_protection_content_settings =
+        std::move(tracking_protection_content_settings);
   }
 
   network_context_params->device_bound_sessions_enabled =

@@ -263,6 +263,9 @@
   <message name="IDS_SETTINGS_SHOW_BOOKMARKS_BAR" desc="Label for the checkbox which enables or disables showing the bookmarks bar in the toolbar.">
     Show bookmarks bar
   </message>
+  <message name="IDS_SETTINGS_ALLOW_SPLIT_VIEW_DRAG_AND_DROP" desc="Label for the checkbox which enables or disables drag and drop for split view.">
+    Allow split view drag-and-drop on left or right edge of window
+  </message>
   <message name="IDS_SETTINGS_SHOW_TAB_GROUPS_IN_BOOKMARKS_BAR" desc="Label for the checkbox which enables or disables showing saved tab groups in bookmarks bar.">
     Show tab groups in bookmarks bar
   </message>
@@ -405,6 +408,15 @@
   <message name="IDS_SETTINGS_AUTOFILL_AND_PASSWORDS" desc="Name of the settings page which allows managing passwords, payment methods and addresses settings.">
     Autofill and passwords
   </message>
+  <message name="IDS_SETTINGS_YOUR_SAVED_INFO" desc="Name of the settings page which allows managing data saved by users in chrome.">
+    Your saved info
+  </message>
+  <message name="IDS_SETTINGS_YOUR_SAVED_INFO_DESCRIPTION" desc="Description of the 'Your saved info' page.">
+    Manage your autofill info for faster browsing &#x2014; info like passwords, payment methods, addresses, and ID cards
+  </message>
+  <message name="IDS_SETTINGS_RELATED_SERVICES_TITLE" desc="Title of the section allowing the user to access any related google services from the 'Your saved info' page.">
+    Related Google services
+  </message>
   <message name="IDS_PASSWORDS_PAGE_IMPORT_AUTHENTICATION_PROMPT_BIOMETRIC_SUFFIX" desc="Shown after 'Google Chrome is trying to ' (or in some languages, 'Google Chrome wants to ') in a dialog message. Text for the dialog box that prompts the user for the biometric authentication before replacing passwords during Import.">
     replace existing passwords
   </message>
@@ -498,8 +510,14 @@
   <message name="IDS_SETTINGS_PAYMENTS_MANAGE_CREDIT_CARDS" desc="Shown in the payments section of settings. Descriptive text to inform the user that credit cards can be accessed online. Has a link.">
    To add or manage Google Pay payment methods, visit your <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>Google Account<ph name="END_LINK">&lt;/a&gt;</ph>
   </message>
+  <message name="IDS_SETTINGS_GOOGLE_WALLET" desc="Label used to differentiate when an Autofill AI entity (such as vehicle information) is stored in Google Wallet.">
+    Google Wallet
+  </message>
   <message name="IDS_SETTINGS_PAYMENTS_MANAGE_LOYALTY_CARDS_AND_PAYMENT_METHODS" desc="Shown in the payments section of settings. Descriptive text to inform the user that payment methods and loyalty cards can be accessed via link. Google Wallet should not be translated because it is the product name. Has two links that opens different pages on Google Wallet.">
    Visit Google Wallet to add or manage <ph name="BEGIN_LINK_LOYALTY_CARDS">&lt;a href="$1" target="_blank"&gt;</ph>loyalty cards<ph name="END_LINK_LOYALTY_CARDS">&lt;/a&gt;</ph> or Google Pay <ph name="BEGIN_LINK_PAYMENT_METHODS">&lt;a href="$2" target="_blank"&gt;</ph>payment methods<ph name="END_LINK_PAYMENT_METHODS">&lt;/a&gt;</ph>
+  </message>
+  <message name="IDS_SETTINGS_REMOTE_WALLET_PASSES_LINK_LABEL" desc="The title and ARIA (accessibility) label for a link in Chrome settings that opens the payment methods settings on https://wallet.google.com/wallet/passes. Note that the ARIA role and the link icon already convey that this is a link that will be opened when you click on it. Therefore, the message does not contain a verb.">
+    Your Google Wallet passes
   </message>
   <message name="IDS_SETTINGS_PAYMENTS_SAVED_TO_THIS_DEVICE_ONLY" desc="Shown in the payments section of settings. Descriptive text to inform the user that this credit card will be saved to local device only.">
    This card will be saved to this device only
@@ -750,17 +768,26 @@
   <message name="IDS_SETTINGS_WORK_ADDRESS_REMOVE_CONFIRMATION_DIALOG_TITLE" desc="Title for the dialog that asks for confirmation to remove the selected work address from Chrome.">
     Remove your work address from Chrome autofill?
   </message>
+  <message name="IDS_SETTINGS_NAME_EMAIL_ADDRESS_REMOVE_CONFIRMATION_DIALOG_TITLE" desc="Title for the dialog that asks for confirmation to remove the selected name and email address from Chrome.">
+    Remove this info from Chrome autofill?
+  </message>
   <message name="IDS_SETTINGS_HOME_ADDRESS_REMOVE_CONFIRMATION_DIALOG_NOTICE" desc="Body for the dialog that asks for confirmation to remove the selected home address from Chrome.">
     Your home address can help you get things done across Google services, like more relevant Search results and directions in Google Maps. You can edit or delete your address in your <ph name="BEGIN_LINK">&lt;a href="$1" target=&quot;_blank&quot;&gt;</ph>Google Account <ph name="USERNAME">$2<ex>example@gmail.com</ex></ph><ph name="END_LINK">&lt;/a&gt;</ph>.
   </message>
   <message name="IDS_SETTINGS_WORK_ADDRESS_REMOVE_CONFIRMATION_DIALOG_NOTICE" desc="Body for the dialog that asks for confirmation to remove the selected work address from Chrome.">
     Your work address can help you get things done across Google services, like more relevant Search results and directions in Google Maps. You can edit or delete your address in your <ph name="BEGIN_LINK">&lt;a href="$1" target=&quot;_blank&quot;&gt;</ph>Google Account <ph name="USERNAME">$2<ex>example@gmail.com</ex></ph><ph name="END_LINK">&lt;/a&gt;</ph>.
   </message>
+  <message name="IDS_SETTINGS_NAME_EMAIL_ADDRESS_REMOVE_CONFIRMATION_DIALOG_NOTICE" desc="Body for the dialog that asks for confirmation to remove the selected name and email address from Chrome.">
+    You can edit your name <ph name="BEGIN_LINK">&lt;a href="$1" target=&quot;_blank&quot;&gt;</ph>in your Google Account <ph name="USERNAME">$2<ex>example@gmail.com</ex></ph><ph name="END_LINK">&lt;/a&gt;</ph>.
+  </message>
   <message name="IDS_SETTINGS_HOME_AND_WORK_ADDRESS_REMOVE_CONFIRMATION_DIALOG_ACTION_OK" desc="Okay action for the dialog that asks for confirmation to remove the selected home and work address from Chrome.">
     Remove
   </message>
   <message name="IDS_SETTINGS_HOME_AND_WORK_ADDRESS_REMOVED_MESSAGE" desc="Hidden text that is read to screen readers to confirm that a home and work address was removed.">
     Address removed
+  </message>
+  <message name="IDS_SETTINGS_NAME_EMAIL_ADDRESS_REMOVED_MESSAGE" desc="Hidden text that is read to screen readers to confirm that a name email address was removed.">
+    Info removed
   </message>
 
   <!-- Default Browser Page -->
@@ -882,7 +909,6 @@
 <message name="IDS_SETTINGS_GEMINI_APPS_ACTIVITY" desc="Title for the Gemini Apps Activity section in Other Data.">
     Gemini Apps activity
 </message>
-
   <message name="IDS_SETTINGS_PASSWORDS_AND_PASSKEYS" desc="Label for the 'Passwords and Passkeys' linkout in the 'Other Google Data' subpage inside the 'Delete browsing data' dialog, where the user can see and manage data that is stored outside of Chrome. This linkout is specifically for passwords and passkeys stored in Google password manager.">
     Passwords and passkeys
   </message>
@@ -1909,6 +1935,29 @@
     Provides Google’s strongest account security for people at risk of targeted attacks
   </message>
 
+  <!-- Bundled Security Settings (chrome://settings/security) -->
+  <message name="IDS_SETTINGS_SECURITY_TITLE" desc="Name of security page header">
+    Browsing protection
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_STANDARD_BUNDLE_TITLE" desc="Name of standard bundle">
+    Standard
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_ENHANCED_BUNDLE_TITLE" desc="Name of enhanced bundle">
+    Enhanced
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_SAFE_BROWSING_TITLE" desc="Name of Safe Browsing security setting">
+    Google Safe Browsing
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_SAFE_BROWSING_DESCRIPTION" desc="Description of the Safe Browsing security setting">
+    Protects you from dangerous sites, downloads, and extensions
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_SAFE_BROWSING_STANDARD_TITLE" desc="Name of Safe Browsing standard protection">
+    Standard Protection
+  </message>
+  <message name="IDS_SETTINGS_SECURITY_SAFE_BROWSING_ENHANCED_TITLE" desc="Name of Safe Browsing enhanced protection">
+    Enhanced Protection
+  </message>
+
   <!-- Secure Connections -->
   <message name="IDS_SETTINGS_SECURE_CONNECTIONS_SECTION_TITLE" desc="Title of the Secure Connections section in Security settings">
     Secure connections
@@ -2549,17 +2598,17 @@
   <message name="IDS_SITE_SETTINGS_SMART_CARD_READERS" desc="Main heading for the Smart Card Readers section in settings.">
     Smart card readers
   </message>
-  <message name="IDS_SITE_SETTINGS_SMART_CARD_READERS_DESCRIPTION" desc="Description of how Isolated Web Apps interact with smart card readers.">
-    Isolated Web Apps control smart card readers to gain access to smart cards that are inserted or presented to them. Smart cards usually contain identities that are used to authenticate or authorize operations, log into services, etc.
+  <message name="IDS_SITE_SETTINGS_SMART_CARD_READERS_DESCRIPTION" desc="Description of how isolated web apps interact with smart card readers.">
+    Isolated web apps control authentication devices and smart cards accessible to them. Smart cards usually contain identifiers used to authenticate you.
   </message>
   <message name="IDS_SITE_SETTINGS_SMART_CARDS_DEFAULT_DESCRIPTION" desc="Label indicating the default behavior for smart card access.">
-    Isolated Web Apps automatically follow this setting
+    Isolated web apps automatically follow this setting
   </message>
-  <message name="IDS_SITE_SETTINGS_SMART_CARDS_ALLOWED" desc="Option to allow Isolated Web Apps to control smart card readers.">
-    Isolated Web Apps can ask to control smart card readers. Apps will gain access to smart cards presented to readers under their control.
+  <message name="IDS_SITE_SETTINGS_SMART_CARDS_ALLOWED" desc="Option to allow isolated web apps to control smart card readers.">
+    Isolated web apps can ask to control smart card readers
   </message>
-  <message name="IDS_SITE_SETTINGS_SMART_CARDS_BLOCKED" desc="Option to block Isolated Web Apps from controlling smart card readers.">
-    Isolated Web Apps cannot control smart card readers. Apps won't gain access to any smart card.
+  <message name="IDS_SITE_SETTINGS_SMART_CARDS_BLOCKED" desc="Option to block isolated web apps from controlling smart card readers.">
+    Isolated web apps can’t control smart card readers
   </message>
   <message name="IDS_SITE_SETTINGS_NO_SMART_CARD_READERS_FOUND" desc="No smart card readers were found.">
     No smart card readers found
@@ -2614,6 +2663,15 @@
   </message>
   <message name="IDS_SETTINGS_SITE_SETTINGS_JAVASCRIPT_OPTIMIZER_BLOCKED" desc="Label for the disabled option of the JavaScript optimizer content setting.">
     Don’t allow sites to use JavaScript optimization
+  </message>
+  <message name="IDS_SETTINGS_SITE_SETTINGS_JAVASCRIPT_OPTIMIZER_BLOCKED_UNFAMILIAR_SITES" desc="Label for option where JavaScript optimizer is disabled for sites which are unfamiliar to the user. Familiarity is determined using a heuristic based on the user's Chrome history.">
+    Automatically disable JavaScript optimizers on unfamiliar sites
+  </message>
+  <message name="IDS_SETTINGS_SITE_SETTINGS_JAVASCRIPT_OPTIMIZER_BLOCKED_UNFAMILIAR_SITES_SUB_LABEL" desc="Sublabel for option where JavaScript optimizer is disabled for sites which are unfamiliar to the user.">
+    Block access to the JavaScript optimizer on newly visited sites
+  </message>
+  <message name="IDS_SETTINGS_SITE_SETTINGS_JAVASCRIPT_OPTIMIZER_BLOCKED_UNFAMILIAR_SITES_SAFE_BROWSING_OFF_SUB_LABEL" desc="Sublabel for option where JavaScript optimizer is disabled for sites which are unfamiliar to the user.">
+    Block access to the JavaScript optimizer on newly visited sites. Requires Safe Browsing
   </message>
   <message name="IDS_SETTINGS_SITE_SETTINGS_JAVASCRIPT_OPTIMIZER_ALLOWED_EXCEPTIONS" desc="Label for the allowed exceptions site list of the JavaScript optimizer content setting.">
     Always allowed to use JavaScript optimization
@@ -3587,7 +3645,7 @@
       When on, data is saved in your Google Account and can be used on all your devices. When off, data is saved only to this device.
     </message>
     <message name="IDS_SETTINGS_ACCOUNT_SYNC_DISABLED"  desc="Section in the account settings page informing the user when the toggles to save a specific data type to the user's Google Account are disabled as per an Enterprise policy.">
-      Managed by your administrator
+      Managed by your organization
     </message>
     <message name="IDS_SETTINGS_ACCOUNT_HISTORY_TOGGLE"  desc="Title of the merged toggle in the account settings page combining the data types history, tabs, and saved tab groups. Shown on next to the toggle that controls whether these data types should be saved in the Google Account and synced across devices.">
       History and tabs
@@ -3657,7 +3715,9 @@
   <message name="IDS_SETTINGS_SIGNIN_CHROME_SIGNIN_OPTION_ALWAYS_ASK" desc="One of three options for the setting is called 'Sign in to Chrome when you sign in to other Google services'. When the user chooses this option, the user will be asked whether they want to sign in to Chrome after they sign in to a Google service (like Gmail) using Chrome. The verb tense should be descriptive, not imperative.">
     Ask every time
   </message>
-
+  <message name="IDS_SETTINGS_GOOGLE_ACCOUNT" desc="Label for the section that takes the user to the Google Account website from Related Google services.">
+    Google Account
+  </message>
   <if expr="not use_titlecase">
     <message name="IDS_SETTINGS_MANAGE_GOOGLE_ACCOUNT" desc="Label for the button that takes the user to the Google Account website.">
       Manage your Google Account
@@ -3844,40 +3904,6 @@
     </message>
     <message name="IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_POLICY_LABEL" desc="Non-interactive label that describes when Chrome's proxy settings are overwritten by policy. This is used in place of IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_LABEL above.">
       <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Chrome</ex></ph> is using proxy settings from your administrator
-    </message>
-  </if>
-
-  <!-- Incompatible Applications Page -->
-  <if expr="is_win and _google_chrome">
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_RESET_CARD_TITLE" desc="The title of the Incompatible Applications section of the settings.">
-      Update or remove incompatible applications
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_SUBPAGE_SUBTITLE" desc="The subtitle shown in the subpage for incompatible applications.">
-      {NUM_APPLICATIONS, plural,
-        =1 {This application could prevent Chrome from working properly.}
-        other {These applications could prevent Chrome from working properly.}}
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_SUBPAGE_SUBTITLE_NO_ADMIN_RIGHTS" desc="The subtitle shown in the subpage for incompatible applications, when the user does not have administrator rights. This means that these users are incapable of updating or removing incompatible applications by themselves.">
-      {NUM_APPLICATIONS, plural,
-        =1 {To ensure that you can keep browsing the web, ask your administrator to remove this application.}
-        other {To ensure that you can keep browsing the web, ask your administrator to remove these applications.}}
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_SUBPAGE_LEARN_HOW" desc="Following the subtitle, this is a link to a help center article that explains how to update any program.">
-      <ph name="BEGIN_LINK">&lt;a target="_blank" href="$1"&gt;</ph>Learn how to update applications<ph name="END_LINK">&lt;/a&gt;</ph>
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_LIST_TITLE" desc="This is the title for the list of incompatible applications.">
-      {NUM_APLLICATIONS, plural,
-        =1 {Application}
-        other {Applications}}
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_REMOVE_BUTTON" desc="The label of the button if the recommended action for this application is to uninstall it.">
-      Remove...
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_UPDATE_BUTTON" desc="The label of the button if the recommended action for this application is to update it.">
-      Update
-    </message>
-    <message name="IDS_SETTINGS_INCOMPATIBLE_APPLICATIONS_DONE" desc="This message is displayed when the Incompatible Applications section is empty. This is possible when the user starts interacting with the section and update/remove the applications in the list.">
-      Done! No incompatible applications found.
     </message>
   </if>
 

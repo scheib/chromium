@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 """Shared utilities for orderfile generation."""
 
+from typing import Optional
+import android_profile_tool
 import cluster
 import process_profiles
 
@@ -46,19 +48,20 @@ def ProcessProfiles(profile_files, lib_chrome_so_path):
   return ordered_symbols, symbols_size
 
 
-def CollectProfiles(profiler,
-                    profile_webview,
-                    arch,
-                    apk_path_or_browser_name,
-                    out_dir_str=None,
-                    webview_installer_path=None):
+def CollectProfiles(profiler: android_profile_tool.AndroidProfileTool,
+                    profile_webview: bool,
+                    arch: str,
+                    apk_path_or_browser_name: str,
+                    out_dir_str: Optional[str] = None,
+                    webview_installer_path: Optional[str] = None):
   """Collects profiles from the device."""
   if profile_webview:
     if not webview_installer_path:
       raise ValueError(
           'webview_installer_path must be provided for webview profiling')
     profiler.InstallAndSetWebViewProvider(webview_installer_path)
-    return profiler.CollectWebViewStartupProfile(apk_path_or_browser_name)
+    return profiler.CollectWebViewStartupProfile(apk_path_or_browser_name,
+                                                 arch, out_dir_str)
 
   if arch == 'arm64':
     return profiler.CollectSpeedometerProfile(apk_path_or_browser_name,
@@ -67,14 +70,16 @@ def CollectProfiles(profiler,
                                              out_dir_str)
 
 
-def GetLibchromeSoPath(out_dir, arch):
+def GetLibchromeSoPath(out_dir, arch, profile_webview=False):
   """Returns the path to the unstripped libmonochrome.so."""
-  libchrome_target = GetLibchromeTarget(arch)
+  libchrome_target = GetLibchromeTarget(arch, profile_webview)
   return str(out_dir / f'lib.unstripped/{libchrome_target}.so')
 
 
-def GetLibchromeTarget(arch):
+def GetLibchromeTarget(arch, profile_webview=False):
   """Returns the libmonochrome target name."""
+  if profile_webview:
+    return 'libwebviewchromium'
   target = 'libmonochrome'
   if '64' in arch:
     # Trichrome has a _64 suffix for arm64 and x64 builds.

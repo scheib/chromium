@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/core/html/forms/html_data_list_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_opt_group_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
+#include "third_party/blink/renderer/core/html/html_hr_element.h"
 #include "third_party/blink/renderer/core/html/html_slot_element.h"
 #include "third_party/blink/renderer/core/html/html_span_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
@@ -205,27 +206,15 @@ bool HTMLOptionElement::MatchesEnabledPseudoClass() const {
 // content should be kept in sync with the ::-internal-option-label-container
 // rules in the UA stylesheet.
 String HTMLOptionElement::DisplayLabel() const {
-  if (RuntimeEnabledFeatures::OptionLabelAttributeWhitespaceEnabled()) {
-    // If the label attribute is set and is not an empty string, then use its
-    // value. Otherwise, use inner text.
-    String label_attr = String(FastGetAttribute(html_names::kLabelAttr));
-    if (!label_attr.empty()) {
-      return label_attr;
-    }
-    return CollectOptionInnerText()
-        .StripWhiteSpace(IsHTMLSpace<UChar>)
-        .SimplifyWhiteSpace(IsHTMLSpace<UChar>);
+  // If the label attribute is set and is not an empty string, then use its
+  // value. Otherwise, use inner text.
+  String label_attr = String(FastGetAttribute(html_names::kLabelAttr));
+  if (!label_attr.empty()) {
+    return label_attr;
   }
-
-  String label_attr = String(FastGetAttribute(html_names::kLabelAttr))
-    .StripWhiteSpace(IsHTMLSpace<UChar>).SimplifyWhiteSpace(IsHTMLSpace<UChar>);
-  String inner_text = CollectOptionInnerText()
-    .StripWhiteSpace(IsHTMLSpace<UChar>).SimplifyWhiteSpace(IsHTMLSpace<UChar>);
-  // FIXME: The following treats an element with the label attribute set to
-  // the empty string the same as an element with no label attribute at all.
-  // Is that correct? If it is, then should the label function work the same
-  // way?
-  return label_attr.empty() ? inner_text : label_attr;
+  return CollectOptionInnerText()
+      .StripWhiteSpace(IsHTMLSpace<UChar>)
+      .SimplifyWhiteSpace(IsHTMLSpace<UChar>);
 }
 
 String HTMLOptionElement::text() const {
@@ -456,8 +445,15 @@ bool HTMLOptionElement::OwnElementDisabled() const {
 bool HTMLOptionElement::IsDisabledFormControl() const {
   if (OwnElementDisabled())
     return true;
-  if (Element* parent = parentElement())
-    return IsA<HTMLOptGroupElement>(*parent) && parent->IsDisabledFormControl();
+  for (Node& ancestor : NodeTraversal::AncestorsOf(*this)) {
+    if (IsA<HTMLSelectElement>(ancestor) || IsA<HTMLOptionElement>(ancestor) ||
+        IsA<HTMLHRElement>(ancestor)) {
+      return false;
+    }
+    if (auto* optgroup = DynamicTo<HTMLOptGroupElement>(ancestor)) {
+      return optgroup->IsDisabledFormControl();
+    }
+  }
   return false;
 }
 
@@ -647,12 +643,6 @@ void HTMLOptionElement::DefaultEventHandlerInternal(Event& event) {
       if (key == keywords::kArrowUp) {
         if (auto* previous_option = options.PreviousFocusableOption(*this)) {
           previous_option->Focus(focus_params);
-        } else if ((RuntimeEnabledFeatures::
-                        SelectAccessibilityReparentInputEnabled() ||
-                    RuntimeEnabledFeatures::
-                        SelectAccessibilityNestedInputEnabled()) &&
-                   select->FirstDescendantTextInput()) {
-          select->FirstDescendantTextInput()->Focus(focus_params);
         }
         event.SetDefaultHandled();
         return;
@@ -689,8 +679,10 @@ void HTMLOptionElement::DefaultEventHandlerInternal(Event& event) {
             // bottom one.
             ScrollIntoViewOptions* scroll_into_view_options =
                 ScrollIntoViewOptions::Create();
-            scroll_into_view_options->setBlock("start");
-            scroll_into_view_options->setInlinePosition("nearest");
+            scroll_into_view_options->setBlock(
+                V8ScrollLogicalPosition::Enum::kStart);
+            scroll_into_view_options->setInlinePosition(
+                V8ScrollLogicalPosition::Enum::kNearest);
             scrollIntoViewWithOptions(scroll_into_view_options);
           }
           // Then find the last option that is still in the view.
@@ -715,8 +707,10 @@ void HTMLOptionElement::DefaultEventHandlerInternal(Event& event) {
             // the top one.
             ScrollIntoViewOptions* scroll_into_view_options =
                 ScrollIntoViewOptions::Create();
-            scroll_into_view_options->setBlock("end");
-            scroll_into_view_options->setInlinePosition("nearest");
+            scroll_into_view_options->setBlock(
+                V8ScrollLogicalPosition::Enum::kEnd);
+            scroll_into_view_options->setInlinePosition(
+                V8ScrollLogicalPosition::Enum::kNearest);
             scrollIntoViewWithOptions(scroll_into_view_options);
           }
           // Then find the first option that is in the view.

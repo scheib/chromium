@@ -106,9 +106,10 @@ class OnDeviceModelServiceController final {
   void SetLanguageDetectionModel(
       base::optional_ref<const ModelInfo> model_info);
 
-  // Updates safety model if the model path provided by `model_info` differs
-  // from what is already loaded. Virtual for testing.
-  void MaybeUpdateSafetyModel(base::optional_ref<const ModelInfo> model_info);
+  // Updates safety model if the model path provided by `safety_model_info`
+  // differs from what is already loaded. Virtual for testing.
+  void MaybeUpdateSafetyModel(
+      std::unique_ptr<SafetyModelInfo> safety_model_info);
 
   // Updates the main execution model.
   void UpdateModel(std::unique_ptr<OnDeviceModelMetadata> model_metadata);
@@ -134,6 +135,9 @@ class OnDeviceModelServiceController final {
 
   // Retrieves the object storing the adaptation metadata for 'feature'.
   MaybeAdaptationMetadata& GetFeatureMetadata(ModelBasedCapabilityKey feature);
+
+  // Returns the selected performance hint.
+  proto::OnDeviceModelPerformanceHint GetPerformanceHint();
 
   void BindBroker(mojo::PendingReceiver<mojom::ModelBroker> receiver) {
     model_broker_impl_.BindBroker(std::move(receiver));

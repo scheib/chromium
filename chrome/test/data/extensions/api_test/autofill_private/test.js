@@ -213,6 +213,7 @@ function entityInstaceToEntityInstanceWithLabels(entityInstance, sublabel) {
     guid: entityInstance.guid,
     entityInstanceLabel: entityInstance.type.typeNameAsString,
     entityInstanceSubLabel: sublabel,
+    stored_in_wallet: false,
   });
 };
 
@@ -441,6 +442,10 @@ var availableTests = [
                 type: chrome.autofillPrivate.FieldType.ALTERNATIVE_FULL_NAME,
                 value: ALTERNATIVE_FULL_NAME
               },
+              {
+                type: chrome.autofillPrivate.FieldType.ADDRESS_HOME_COUNTRY,
+                value: "JP"
+              }
             ],
           });
           // Alternative name set with a separator. Metric is emitted.
@@ -451,6 +456,10 @@ var availableTests = [
                 type: chrome.autofillPrivate.FieldType.ALTERNATIVE_FULL_NAME,
                 value: ALTERNATIVE_FULL_NAME_SEPARATOR
               },
+              {
+                type: chrome.autofillPrivate.FieldType.ADDRESS_HOME_COUNTRY,
+                value: "JP"
+              }
             ],
           });
         }));

@@ -9,10 +9,9 @@
 #include <set>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/metrics/login_unlock_throughput_recorder.h"
-#include "ash/public/cpp/multi_user_window_manager.h"
+#include "ash/multi_user/multi_user_window_manager.h"
 #include "ash/public/cpp/shelf_item.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_prefs.h"
@@ -60,7 +59,6 @@
 #include "chrome/browser/ui/ash/app_icon_color_cache/app_icon_color_cache.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/session/session_controller_client_impl.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_arc_tracker.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
@@ -81,6 +79,8 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
@@ -272,7 +272,6 @@ void ChromeShelfControllerUserSwitchObserver::OnUserProfileReadyToSwitch(
 void ChromeShelfControllerUserSwitchObserver::AddUser(
     const AccountId& account_id,
     Profile* profile) {
-  MultiUserWindowManagerHelper::GetInstance()->AddUser(account_id);
   controller_->AdditionalUserAddedToSession(profile->GetOriginalProfile());
 }
 
@@ -316,23 +315,6 @@ ChromeShelfController::ChromeShelfController(Profile* profile,
 
   shelf_spinner_controller_ = std::make_unique<ShelfSpinnerController>(this);
 
-  // Create either the real window manager or a stub.
-  if (ash::Shell::HasInstance() && MultiUserWindowManagerHelper::IsEnabled()) {
-    MultiUserWindowManagerHelper::CreateInstance();
-    auto active_account_id =
-        user_manager::UserManager::Get()->GetActiveUser()->GetAccountId();
-    LOG(ERROR) << "Active Account Id: " << active_account_id;
-    MultiUserWindowManagerHelper::GetWindowManager()->SetPrimaryUser(
-        active_account_id);
-    MultiUserWindowManagerHelper::GetInstance()->AddUser(active_account_id);
-  } else {
-    // In some unit tests, ash::Shell is not initialized because they are
-    // not related to window management.
-    // This is short-term workaround for the transition period,
-    // because MultiUserWindowManager is going to be moved out.
-    CHECK_IS_TEST();
-  }
-
   // On Chrome OS using multi profile we want to switch the content of the shelf
   // with a user change. Note that for unit tests the instance can be nullptr.
   if (SessionControllerClientImpl::IsMultiProfileAvailable()) {
@@ -365,11 +347,6 @@ ChromeShelfController::~ChromeShelfController() {
   model_->DestroyItemDelegates();
 
   model_->RemoveObserver(this);
-
-  // Get rid of the multi user window manager instance.
-  if (MultiUserWindowManagerHelper::GetInstance()) {
-    MultiUserWindowManagerHelper::DeleteInstance();
-  }
 
   g_instance = nullptr;
 }
@@ -609,10 +586,12 @@ ash::ShelfAction ChromeShelfController::ActivateWindowOrMinimizeIfActive(
   aura::Window* native_window = window->GetNativeWindow();
   const AccountId& current_account_id =
       multi_user_util::GetAccountIdFromProfile(profile());
-  if (!MultiUserWindowManagerHelper::GetInstance()->IsWindowOnDesktopOfUser(
-          native_window, current_account_id)) {
-    MultiUserWindowManagerHelper::GetWindowManager()->ShowWindowForUser(
-        native_window, current_account_id);
+  auto* multi_user_window_manager =
+      ash::Shell::Get()->multi_user_window_manager();
+  if (!multi_user_window_manager->IsWindowOnDesktopOfUser(native_window,
+                                                          current_account_id)) {
+    multi_user_window_manager->ShowWindowForUser(native_window,
+                                                 current_account_id);
     window->Activate();
     return ash::SHELF_ACTION_WINDOW_ACTIVATED;
   }
@@ -1641,16 +1620,21 @@ void ChromeShelfController::CloseWindowedAppsFromRemovedExtension(
     const Profile* profile) {
   // This function cannot rely on the controller's enumeration functionality
   // since the extension has already been unloaded.
-  std::vector<Browser*> browser_to_close;
-  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
-    if ((browser->is_type_app() || browser->is_type_app_popup()) &&
-        app_id == web_app::GetAppIdFromApplicationName(browser->app_name()) &&
-        profile == browser->profile()) {
-      browser_to_close.push_back(browser);
-    }
-  }
+  std::vector<BrowserWindowInterface*> browser_to_close;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&](BrowserWindowInterface* browser) {
+        if ((browser->GetType() == BrowserWindowInterface::TYPE_APP ||
+             browser->GetType() == BrowserWindowInterface::TYPE_APP_POPUP) &&
+            app_id == web_app::GetAppIdFromApplicationName(
+                          browser->GetBrowserForMigrationOnly()->app_name()) &&
+            profile == browser->GetProfile()) {
+          browser_to_close.push_back(browser);
+        }
+        return true;  // continue iterating
+      });
   while (!browser_to_close.empty()) {
-    TabStripModel* tab_strip = browser_to_close.back()->tab_strip_model();
+    TabStripModel* tab_strip =
+        browser_to_close.back()->GetFeatures().tab_strip_model();
     if (!tab_strip->empty()) {
       tab_strip->CloseWebContentsAt(0, TabCloseTypes::CLOSE_NONE);
     }
@@ -1690,10 +1674,8 @@ void ChromeShelfController::AddAppUpdaterAndIconLoader(Profile* profile) {
         std::make_unique<ShelfExtensionAppUpdater>(this, profile,
                                                    /*extensions_only=*/true));
 
-    if (ash::features::ArePromiseIconsEnabled()) {
-      app_updaters_for_profile.emplace_back(
-          std::make_unique<ShelfPromiseAppUpdater>(this, profile));
-    }
+    app_updaters_for_profile.emplace_back(
+        std::make_unique<ShelfPromiseAppUpdater>(this, profile));
   }
 
   if (!base::Contains(app_icon_loaders_, profile)) {
@@ -1702,12 +1684,9 @@ void ChromeShelfController::AddAppUpdaterAndIconLoader(Profile* profile) {
     app_icon_loaders_for_profile.push_back(
         std::make_unique<AppServiceAppIconLoader>(
             profile, extension_misc::EXTENSION_ICON_MEDIUM, this));
-
-    if (ash::features::ArePromiseIconsEnabled()) {
-      app_icon_loaders_[profile].emplace_back(
-          std::make_unique<AppServicePromiseAppIconLoader>(
-              profile, extension_misc::EXTENSION_ICON_MEDIUM, this));
-    }
+    app_icon_loaders_for_profile.emplace_back(
+        std::make_unique<AppServicePromiseAppIconLoader>(
+            profile, extension_misc::EXTENSION_ICON_MEDIUM, this));
 
     // Some special extensions open new windows, and on Chrome OS, those windows
     // should show the extension icon in the shelf. Extensions are not present
@@ -1799,31 +1778,29 @@ void ChromeShelfController::ShelfItemAdded(int index) {
       item.app_status = app_status;
     }
 
-    if (ash::features::ArePromiseIconsEnabled()) {
-      float progress = ShelfControllerHelper::GetPromiseAppProgress(
-          latest_active_profile_, id.app_id);
-      // If the item is set to the default progress value despite the promise
-      // app having real progress, we need to update this.
-      if (item.progress < 0 && progress >= 0) {
-        needs_update = true;
-        item.progress = progress;
-      }
+    float progress = ShelfControllerHelper::GetPromiseAppProgress(
+        latest_active_profile_, id.app_id);
+    // If the item is set to the default progress value despite the promise
+    // app having real progress, we need to update this.
+    if (item.progress < 0 && progress >= 0) {
+      needs_update = true;
+      item.progress = progress;
+    }
 
-      bool is_promise_app = ShelfControllerHelper::IsPromiseApp(
-          latest_active_profile_, id.app_id);
-      MaybeRecordPromiseAppShelfItemCreated(is_promise_app);
-      if (is_promise_app != item.is_promise_app) {
-        needs_update = true;
-        item.is_promise_app = is_promise_app;
-      }
+    bool is_promise_app =
+        ShelfControllerHelper::IsPromiseApp(latest_active_profile_, id.app_id);
+    MaybeRecordPromiseAppShelfItemCreated(is_promise_app);
+    if (is_promise_app != item.is_promise_app) {
+      needs_update = true;
+      item.is_promise_app = is_promise_app;
+    }
 
-      std::u16string accessible_name =
-          ShelfControllerHelper::GetPromiseAppAccessibleName(
-              latest_active_profile_, id.app_id);
-      if (is_promise_app && accessible_name != item.accessible_name) {
-        needs_update = true;
-        item.accessible_name = accessible_name;
-      }
+    std::u16string accessible_name =
+        ShelfControllerHelper::GetPromiseAppAccessibleName(
+            latest_active_profile_, id.app_id);
+    if (is_promise_app && accessible_name != item.accessible_name) {
+      needs_update = true;
+      item.accessible_name = accessible_name;
     }
 
     if (needs_update) {

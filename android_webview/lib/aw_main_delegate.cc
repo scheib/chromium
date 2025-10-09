@@ -7,6 +7,7 @@
 #include <memory>
 #include <variant>
 
+#include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/aw_content_browser_client.h"
 #include "android_webview/browser/gfx/aw_draw_fn_impl.h"
 #include "android_webview/browser/gfx/browser_view_renderer.h"
@@ -220,7 +221,7 @@ std::optional<int> AwMainDelegate::BasicStartupComplete() {
       base::BindRepeating(&IsTraceEventArgsAllowlisted));
   base::trace_event::TraceLog::GetInstance()->SetMetadataFilterPredicate(
       base::BindRepeating(&IsTraceMetadataAllowlisted));
-  tracing::TrackNameRecorder::GetInstance()->SetRecordHostAppPackageName(true);
+  tracing::TrackNameRecorder::SetRecordHostAppPackageName(true);
 
   // The TLS slot used by the memlog allocator shim needs to be initialized
   // early to ensure that it gets assigned a low slot number. If it gets
@@ -302,7 +303,7 @@ bool AwMainDelegate::ShouldInitializeMojo(InvokedIn invoked_in) {
 
 variations::VariationsIdsProvider*
 AwMainDelegate::CreateVariationsIdsProvider() {
-  return variations::VariationsIdsProvider::Create(
+  return variations::VariationsIdsProvider::CreateInstance(
       variations::VariationsIdsProvider::Mode::kDontSendSignedInVariations);
 }
 
@@ -395,4 +396,14 @@ void AwMainDelegate::InitializeMemorySystem(const bool is_browser_process) {
                                process_type)
       .Initialize(memory_system_);
 }
+
+bool AwMainDelegate::ShouldInitializePerfetto(InvokedIn invoked_in) {
+  const bool is_browser_process =
+      std::holds_alternative<InvokedInBrowserProcess>(invoked_in);
+  if (!is_browser_process) {
+    return true;
+  }
+  return !AwBrowserProcess::DidEarlyPerfettoInitialization();
+}
+
 }  // namespace android_webview

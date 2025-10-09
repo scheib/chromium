@@ -90,21 +90,19 @@ class PasswordManagerViewControllerTest
     TestProfileIOS::Builder builder;
     builder.AddTestingFactory(
         IOSChromeProfilePasswordStoreFactory::GetInstance(),
-        base::BindRepeating(
-            &password_manager::BuildPasswordStore<web::BrowserState,
+        base::BindOnce(
+            &password_manager::BuildPasswordStore<ProfileIOS,
                                                   TestPasswordStore>));
     builder.AddTestingFactory(
         IOSChromeBulkLeakCheckServiceFactory::GetInstance(),
-        base::BindRepeating(base::BindLambdaForTesting([](web::BrowserState*) {
-          return std::unique_ptr<KeyedService>(
-              std::make_unique<MockBulkLeakCheckService>());
-        })));
+        base::BindOnce([](ProfileIOS*) -> std::unique_ptr<KeyedService> {
+          return std::make_unique<MockBulkLeakCheckService>();
+        }));
     builder.AddTestingFactory(
         IOSChromeAffiliationServiceFactory::GetInstance(),
-        base::BindRepeating(base::BindLambdaForTesting([](web::BrowserState*) {
-          return std::unique_ptr<KeyedService>(
-              std::make_unique<affiliations::FakeAffiliationService>());
-        })));
+        base::BindOnce([](ProfileIOS*) -> std::unique_ptr<KeyedService> {
+          return std::make_unique<affiliations::FakeAffiliationService>();
+        }));
 
     profile_ = std::move(builder).Build();
     browser_ = std::make_unique<TestBrowser>(profile_.get());
@@ -637,11 +635,15 @@ TEST_F(PasswordManagerViewControllerTest,
 
 // Tests that opening the PasswordManagerViewController in search mode shows the
 // expected content.
-TEST_F(PasswordManagerViewControllerTest, TestOpenInSearchMode) {
-  // TODO(crbug.com/437314312): Re-enable the test on iOS26.
+// TODO(crbug.com/437314312): Deflake the test.
+TEST_F(PasswordManagerViewControllerTest, FLAKY_TestOpenInSearchMode) {
+  // TODO(crbug.com/437314312): Re-enable on device.
+#if !TARGET_OS_SIMULATOR
   if (base::ios::IsRunningOnIOS26OrLater()) {
     return;
   }
+#endif
+
   // Call `settingsWillBeDismissed` on the initial view controller so that its
   // observers are reset.
   [GetPasswordManagerViewController() settingsWillBeDismissed];
@@ -1310,29 +1312,6 @@ TEST_F(PasswordManagerViewControllerTest, WidgetPromoMoreInfoButtonMetric) {
   histogram_tester.ExpectBucketCount(
       kPasswordManagerWidgetPromoActionHistogram,
       PasswordManagerWidgetPromoAction::kOpenInstructions, 1);
-
-  [GetPasswordManagerViewController() settingsWillBeDismissed];
-}
-
-// Test verifies that the Trusted Vault widget promo cell is not displayed when
-// the flag
-// `password_manager::features::kIOSEnablePasswordManagerTrustedVaultWidget` is
-// disabled.
-TEST_F(PasswordManagerViewControllerTest,
-       TrustedVaultWidgetPromoWhenFlagIsDisabled) {
-  base::HistogramTester histogram_tester;
-  AddSavedForm1();
-
-  GetPasswordManagerViewController().shouldShowTrustedVaultWidgetPromo = YES;
-  [GetPasswordManagerViewController() reloadData];
-
-  EXPECT_FALSE([GetPasswordManagerViewController().tableViewModel
-      hasSectionForSectionIdentifier:SectionIdentifierTrustedVaultWidgetPromo]);
-
-  // Bucket count should be zero.
-  histogram_tester.ExpectBucketCount(
-      kPasswordManagerPromoWithTrustedVaultKeyRetrievalActionHistogram,
-      PasswordManagerPromoWithTrustedVaultKeyRetrievalAction::kDisplayed, 0);
 
   [GetPasswordManagerViewController() settingsWillBeDismissed];
 }

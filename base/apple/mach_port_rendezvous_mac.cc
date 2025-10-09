@@ -31,12 +31,12 @@
 namespace base {
 
 // Whether any peer process requirements should be validated.
-BASE_FEATURE(MachPortRendezvousValidatePeerRequirements,
+BASE_FEATURE(kMachPortRendezvousValidatePeerRequirements,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Whether a failure to validate a peer process against a requirement
 // should result in aborting the rendezvous.
-BASE_FEATURE(MachPortRendezvousEnforcePeerRequirements,
+BASE_FEATURE(kMachPortRendezvousEnforcePeerRequirements,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 namespace {

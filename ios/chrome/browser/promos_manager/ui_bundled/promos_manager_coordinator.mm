@@ -23,7 +23,7 @@
 #import "ios/chrome/browser/app_store_rating/ui_bundled/app_store_rating_display_handler.h"
 #import "ios/chrome/browser/app_store_rating/ui_bundled/features.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/features.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin/promo/signin_fullscreen_promo_display_handler.h"
+#import "ios/chrome/browser/authentication/ui_bundled/signin/promo/fullscreen_signin_promo_display_handler.h"
 #import "ios/chrome/browser/credential_provider_promo/ui_bundled/credential_provider_promo_display_handler.h"
 #import "ios/chrome/browser/default_browser/model/utils.h"
 #import "ios/chrome/browser/default_promo/ui_bundled/all_tabs_default_browser_promo_view_provider.h"
@@ -39,7 +39,6 @@
 #import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
 #import "ios/chrome/browser/first_run/ui_bundled/features.h"
 #import "ios/chrome/browser/first_run/ui_bundled/welcome_back/ui/welcome_back_display_handler.h"
-#import "ios/chrome/browser/passwords/model/features.h"
 #import "ios/chrome/browser/post_restore_signin/ui_bundled/post_restore_signin_provider.h"
 #import "ios/chrome/browser/promos_manager/model/features.h"
 #import "ios/chrome/browser/promos_manager/model/promo_config.h"
@@ -53,6 +52,7 @@
 #import "ios/chrome/browser/promos_manager/ui_bundled/standard_promo_view_provider.h"
 #import "ios/chrome/browser/promos_manager/ui_bundled/utils.h"
 #import "ios/chrome/browser/safari_data_import/coordinator/safari_data_import_reminder_promo_display_handler.h"
+#import "ios/chrome/browser/safari_data_import/public/safari_data_import_entry_point.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
@@ -634,8 +634,8 @@
 
   // Sign-in fullscreen promo handler.
   if (IsFullscreenSigninPromoManagerMigrationEnabled()) {
-    _displayHandlerPromos[promos_manager::Promo::SigninFullscreen] =
-        [[SigninFullscreenPromoDisplayHandler alloc] init];
+    _displayHandlerPromos[promos_manager::Promo::FullscreenSignin] =
+        [[FullscreenSigninPromoDisplayHandler alloc] init];
   }
 
   // Welcome Back promo handler.
@@ -645,7 +645,7 @@
   }
 
   // Safari Import remind me later handler.
-  if (ShouldShowSafariImportWorkflow()) {
+  if (ShouldShowSafariDataImportEntryPoint(self.profile)) {
     _displayHandlerPromos[promos_manager::Promo::SafariImportRemindMeLater] =
         [[SafariDataImportReminderPromoDisplayHandler alloc]
             initWithApplicationCommandsHandler:_applicationCommandHandler

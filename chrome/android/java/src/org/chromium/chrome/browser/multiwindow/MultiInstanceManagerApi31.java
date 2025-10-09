@@ -27,16 +27,17 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
+import org.chromium.base.Callback;
 import org.chromium.base.CallbackUtils;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.TimeUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.BuildConfig;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -94,6 +95,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -128,6 +130,9 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
 
     private final Supplier<DesktopWindowStateManager> mDesktopWindowStateManagerSupplier;
     private final MultiInstanceStateObserver mOnMultiInstanceStateChanged;
+    private final Callback<Pair<Integer, String>> mRenameCallback;
+
+    private static @Nullable Set<Integer> sAppTaskIdsForTesting;
 
     MultiInstanceManagerApi31(
             Activity activity,
@@ -147,6 +152,10 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         mModalDialogManagerSupplier = modalDialogManagerSupplier;
         mDesktopWindowStateManagerSupplier = desktopWindowStateManagerSupplier;
         mOnMultiInstanceStateChanged = this::onMultiInstanceStateChanged;
+        mRenameCallback =
+                (pair) -> {
+                    writeCustomTitle(pair.first, pair.second);
+                };
 
         // Check if instance limit has changed and update SharedPrefs.
         SharedPreferencesManager prefs = ChromeSharedPreferences.getInstance();
@@ -204,10 +213,14 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
                         cleanupSyncedTabGroupsIfLastInstance();
                     }
                 },
-                (pair) -> writeTitle(pair.first, pair.second),
+                mRenameCallback,
                 () -> openNewWindow("Android.WindowManager.NewWindow", /* incognito= */ false),
                 MultiWindowUtils.getMaxInstances(),
                 info);
+    }
+
+    Callback<Pair<Integer, String>> getRenameCallbackForTesting() {
+        return mRenameCallback;
     }
 
     @Override
@@ -284,7 +297,7 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
     @Override
     public void moveTabsToWindowAndMergeToDest(InstanceInfo info, List<Tab> tabs, int destTabId) {
         Activity targetActivity = getActivityById(info.instanceId);
-        if (BuildConfig.ENABLE_ASSERTS){
+        if (BuildConfig.ENABLE_ASSERTS) {
             for (Tab tab : tabs) {
                 assert tab.getTabGroupId() == null : "Tab should not be part of a group.";
             }
@@ -325,7 +338,8 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         Intent intent =
                 MultiWindowUtils.createNewWindowIntent(
                         mActivity, instanceId, preferNew, openAdjacently, addTrustedIntentExtras);
-        beginReparentingTabs(tabs, intent, /* startActivityOptions= */ null, /* finalizeCallback= */ null);
+        beginReparentingTabs(
+                tabs, intent, /* startActivityOptions= */ null, /* finalizeCallback= */ null);
     }
 
     @VisibleForTesting
@@ -447,6 +461,13 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
                 || mMultiWindowModeStateDispatcher.isInMultiDisplayMode()) {
             intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
         }
+
+        // Remove LAUNCH_ADJACENT flag if shouldOpenInAdjacentWindow() is false and if the Activity
+        // is in a full screen window.
+        if (!mActivity.isInMultiWindowMode() && !MultiWindowUtils.shouldOpenInAdjacentWindow()) {
+            intent.setFlags(intent.getFlags() & ~Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
+        }
+
         mActivity.startActivity(intent);
         Log.i(TAG_MULTI_INSTANCE, "Opening new window from action: " + umaAction);
         RecordUserAction.record(umaAction);
@@ -500,6 +521,7 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
                             type,
                             assumeNonNull(readUrl(i)),
                             assumeNonNull(readTitle(i)),
+                            readCustomTitle(i),
                             readTabCount(i),
                             readIncognitoTabCount(i),
                             readIncognitoSelected(i),
@@ -559,10 +581,17 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
 
         // If asked to always create a fresh new instance, not from persistent state, do it here.
         if (preferNew) {
-            for (int i = 0; i < mMaxInstances; ++i) {
-                if (!instanceEntryExists(i)) {
-                    logNewInstanceId(i);
-                    return Pair.create(i, InstanceAllocationType.PREFER_NEW_INSTANCE_NEW_TASK);
+            // It is possible in a downgraded instance limit scenario that some or all ids of
+            // persisted instances are outside the range bounded by the current |mMaxInstances|. In
+            // this case, we want to avoid allocating an available id in the new range if we are at
+            // or over instance limit, so that we avoid allowing successful creation of the current
+            // activity in this scenario.
+            if (MultiWindowUtils.getInstanceCount() < mMaxInstances) {
+                for (int i = 0; i < mMaxInstances; ++i) {
+                    if (!instanceEntryExists(i)) {
+                        logNewInstanceId(i);
+                        return Pair.create(i, InstanceAllocationType.PREFER_NEW_INSTANCE_NEW_TASK);
+                    }
                 }
             }
             return Pair.create(
@@ -793,6 +822,9 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
     }
 
     static Set<Integer> getPersistedInstanceIds(@PersistedInstanceType int type) {
+        Context context = ContextUtils.getApplicationContext();
+        Set<Integer> activeTaskIds = getAllAppTaskIds(context);
+
         Set<Integer> ids = new HashSet<>();
         Map<String, Long> lastAccessedTimeMap =
                 ChromeSharedPreferences.getInstance()
@@ -808,9 +840,9 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
             boolean includeId =
                     type == PersistedInstanceType.ANY
                             || (type == PersistedInstanceType.ACTIVE
-                                    && taskIdFromMap != INVALID_TASK_ID)
+                                    && activeTaskIds.contains(taskIdFromMap))
                             || (type == PersistedInstanceType.INACTIVE
-                                    && taskIdFromMap == INVALID_TASK_ID);
+                                    && !activeTaskIds.contains(taskIdFromMap));
             if (includeId) {
                 ids.add(id);
             }
@@ -823,20 +855,14 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
     }
 
     private void removeInvalidInstanceData(boolean cleanupApplicationStatus) {
-        // Remove tasks that do not exist any more from the task map
-        ActivityManager activityManager =
-                (ActivityManager) mActivity.getSystemService(Context.ACTIVITY_SERVICE);
-        List<AppTask> appTasks = activityManager.getAppTasks();
-        Set<Integer> appTaskIds = getAllAppTaskIds(appTasks);
+        // Remove tasks that do not exist any more from the task map.
+        Set<Integer> appTaskIds = getAllAppTaskIds(mActivity);
         Map<String, Integer> taskMap =
                 ChromeSharedPreferences.getInstance()
                         .readIntsWithPrefix(ChromePreferenceKeys.MULTI_INSTANCE_TASK_MAP);
         List<String> tasksRemoved = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : taskMap.entrySet()) {
             if (!appTaskIds.contains(entry.getValue())) {
-                // TODO (crbug/327054706): Remove this check once we have verified that crash
-                // reports have reduced.
-                checkInvalidTaskNotInAllTasks(appTasks, entry.getValue());
                 tasksRemoved.add(entry.getKey() + " - " + entry.getValue());
                 ChromeSharedPreferences.getInstance().removeKey(entry.getKey());
                 if (ChromeFeatureList.sMultiInstanceApplicationStatusCleanup.isEnabled()
@@ -879,36 +905,25 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         return ApplicationStatus.getRunningActivities();
     }
 
-    @VisibleForTesting
-    protected Set<Integer> getAllAppTaskIds(List<AppTask> allTasks) {
+    private static Set<Integer> getAllAppTaskIds(Context context) {
+        if (sAppTaskIdsForTesting != null) {
+            return sAppTaskIdsForTesting;
+        }
+
+        ActivityManager activityManager =
+                (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        List<AppTask> appTasks = activityManager.getAppTasks();
         Set<Integer> results = new HashSet<>();
-        for (AppTask task : allTasks) {
+        for (AppTask task : appTasks) {
             ActivityManager.RecentTaskInfo info = AndroidTaskUtils.getTaskInfoFromTask(task);
             if (info != null) results.add(info.taskId);
         }
         return results;
     }
 
-    private void checkInvalidTaskNotInAllTasks(List<AppTask> allTasks, int removedTaskId) {
-        if (!BuildConfig.ENABLE_ASSERTS) return;
-
-        for (AppTask task : allTasks) {
-            ActivityManager.RecentTaskInfo info = AndroidTaskUtils.getTaskInfoFromTask(task);
-            if (info != null && (info.id == removedTaskId || info.taskId == removedTaskId)) {
-                String message =
-                        "Removed instance data for Task still available in all app tasks. " + info;
-                Log.i(TAG_MULTI_INSTANCE, message);
-                if (info != null && info.isRunning) {
-                    String crashMessage =
-                            "This is not a crash. Removed instance data for running Task still"
-                                    + " available in all app tasks. "
-                                    + info;
-                    ChromePureJavaExceptionReporter.reportJavaException(
-                            new Throwable(crashMessage));
-                }
-                break;
-            }
-        }
+    static void setAppTaskIdsForTesting(Set<Integer> appTaskIds) {
+        sAppTaskIdsForTesting = appTaskIds;
+        ResettersForTesting.register(() -> sAppTaskIdsForTesting = null);
     }
 
     @VisibleForTesting
@@ -1004,8 +1019,18 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
     }
 
     @VisibleForTesting
+    static String customTitleKey(int index) {
+        return ChromePreferenceKeys.MULTI_INSTANCE_CUSTOM_TITLE.createKey(String.valueOf(index));
+    }
+
+    @VisibleForTesting
     static @Nullable String readTitle(int index) {
         return ChromeSharedPreferences.getInstance().readString(titleKey(index), null);
+    }
+
+    @VisibleForTesting
+    static @Nullable String readCustomTitle(int index) {
+        return ChromeSharedPreferences.getInstance().readString(customTitleKey(index), null);
     }
 
     private static void writeTitle(int index, Tab tab) {
@@ -1015,6 +1040,10 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
 
     private static void writeTitle(int index, String title) {
         ChromeSharedPreferences.getInstance().writeString(titleKey(index), title);
+    }
+
+    private static void writeCustomTitle(int index, String customTitle) {
+        ChromeSharedPreferences.getInstance().writeString(customTitleKey(index), customTitle);
     }
 
     @VisibleForTesting
@@ -1074,6 +1103,11 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         MultiWindowUtils.writeLastAccessedTime(index);
     }
 
+    @VisibleForTesting
+    static String profileTypeKey(int index) {
+        return ChromePreferenceKeys.MULTI_INSTANCE_PROFILE_TYPE.createKey(String.valueOf(index));
+    }
+
     /**
      * @return The window IDs of the currently running ChromeTabbedActivity's. It is possible to
      *     have more number of saved instances than the number of currently running activities (for
@@ -1119,7 +1153,9 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         }
         onMultiInstanceModeStarted();
         // TODO: Pass this flag from UI to control the window to open.
-        boolean openAdjacently = true;
+        // If not in multi-window mode, this will be determined by shouldOpenInAdjacentWindow().
+        boolean openAdjacently =
+                !mActivity.isInMultiWindowMode() && MultiWindowUtils.shouldOpenInAdjacentWindow();
         Intent intent =
                 MultiWindowUtils.createNewWindowIntent(
                         mActivity,
@@ -1228,11 +1264,7 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
             @Nullable Bundle startActivityOptions,
             @Nullable Runnable finalizeCallback) {
         ReparentingTabsTask.from(tabs)
-                .begin(
-                        mActivity,
-                        intent,
-                        startActivityOptions,
-                        finalizeCallback);
+                .begin(mActivity, intent, startActivityOptions, finalizeCallback);
     }
 
     @VisibleForTesting
@@ -1297,6 +1329,8 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
         prefs.removeKey(incognitoTabCountKey(index));
         prefs.removeKey(incognitoSelectedKey(index));
         prefs.removeKey(lastAccessedTimeKey(index));
+        prefs.removeKey(profileTypeKey(index));
+        prefs.removeKey(customTitleKey(index));
     }
 
     @Override
@@ -1358,25 +1392,29 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
 
     @Override
     public void moveTabsToNewWindow(List<Tab> tabs) {
+        boolean openAdjacently =
+                !mActivity.isInMultiWindowMode() && MultiWindowUtils.shouldOpenInAdjacentWindow();
         moveToNewWindowIfPossible(
                 () ->
                         moveAndReparentTabsToNewWindow(
                                 tabs,
                                 INVALID_WINDOW_ID,
                                 /* preferNew= */ true,
-                                /* openAdjacently= */ false,
+                                openAdjacently,
                                 /* addTrustedIntentExtras= */ true));
     }
 
     @Override
     public void moveTabGroupToNewWindow(TabGroupMetadata tabGroupMetadata) {
+        boolean openAdjacently =
+                !mActivity.isInMultiWindowMode() && MultiWindowUtils.shouldOpenInAdjacentWindow();
         moveToNewWindowIfPossible(
                 () ->
                         moveAndReparentTabGroupToNewWindow(
                                 tabGroupMetadata,
                                 INVALID_WINDOW_ID,
                                 /* preferNew= */ true,
-                                /* openAdjacently= */ false,
+                                openAdjacently,
                                 /* addTrustedIntentExtras= */ true));
     }
 
@@ -1534,6 +1572,12 @@ class MultiInstanceManagerApi31 extends MultiInstanceManagerImpl implements Acti
     @Override
     public boolean showInstanceRestorationMessage(@Nullable MessageDispatcher messageDispatcher) {
         return MultiWindowUtils.maybeShowInstanceRestorationMessage(
+                messageDispatcher, mActivity, this::showInstanceSwitcherDialog);
+    }
+
+    @Override
+    public void showInstanceCreationLimitMessage(@Nullable MessageDispatcher messageDispatcher) {
+        MultiWindowUtils.showInstanceCreationLimitMessage(
                 messageDispatcher, mActivity, this::showInstanceSwitcherDialog);
     }
 }

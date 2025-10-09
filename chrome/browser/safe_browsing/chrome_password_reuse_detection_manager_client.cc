@@ -28,6 +28,7 @@
 #include "components/sync/base/data_type.h"
 #include "components/sync/service/sync_service.h"
 #include "components/url_formatter/url_formatter.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/buildflags/buildflags.h"
 #include "ui/base/clipboard/clipboard.h"
@@ -305,7 +306,7 @@ void ChromePasswordReuseDetectionManagerClient::CheckProtectedPasswordEntry(
 
   // Extract the host part of an extension domain, which will be the extension
   // ID.
-  std::string host = domain_gurl.host();
+  std::string host = domain_gurl.GetHost();
   auto password_reuse_signal =
       std::make_unique<safe_browsing::PasswordReuseSignal>(host,
                                                            password_reuse_info);

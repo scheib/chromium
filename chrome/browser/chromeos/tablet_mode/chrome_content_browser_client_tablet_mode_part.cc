@@ -55,8 +55,8 @@ void OverrideWebPreferencesForTabletMode(
     content::WebContents* contents,
     blink::web_pref::WebPreferences* web_prefs) {
   // Enable some mobile-like behaviors when in tablet mode on Chrome OS.
-  if (!display::Screen::GetScreen()->HasScreen() ||
-      !display::Screen::GetScreen()->InTabletMode()) {
+  if (!display::Screen::Get()->HasScreen() ||
+      !display::Screen::Get()->InTabletMode()) {
     return;
   }
 
@@ -86,10 +86,10 @@ bool UseDefaultFontSize(const GURL& url) {
     return true;
 
   if (url.SchemeIs(content::kChromeUIScheme))
-    return chrome::IsSystemWebUIHost(url.host_piece());
+    return chrome::IsSystemWebUIHost(url.host());
 
   if (url.SchemeIs(extensions::kExtensionScheme)) {
-    std::string_view extension_id = url.host_piece();
+    std::string_view extension_id = url.host();
     return extension_misc::IsSystemUIApp(extension_id);
   }
   return false;

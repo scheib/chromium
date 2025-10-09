@@ -12,9 +12,27 @@
 
 namespace actor {
 
+// The result of each action with latency information.
+struct ActionResultWithLatencyInfo {
+  base::TimeTicks start_time;
+  base::TimeTicks end_time;
+  mojom::ActionResultPtr result;
+
+  ActionResultWithLatencyInfo(base::TimeTicks start_time,
+                              base::TimeTicks end_time,
+                              mojom::ActionResultPtr result);
+  ActionResultWithLatencyInfo(ActionResultWithLatencyInfo&&);
+  ActionResultWithLatencyInfo(const ActionResultWithLatencyInfo&);
+  ActionResultWithLatencyInfo& operator=(const ActionResultWithLatencyInfo&) =
+      delete;
+  ~ActionResultWithLatencyInfo();
+};
+
 bool IsOk(const mojom::ActionResult& result);
 
 bool IsOk(mojom::ActionResultCode code);
+
+bool RequiresPageStabilization(const mojom::ActionResult& result);
 
 mojom::ActionResultPtr MakeOkResult();
 
@@ -23,6 +41,7 @@ mojom::ActionResultPtr MakeOkResult();
 mojom::ActionResultPtr MakeErrorResult();
 
 mojom::ActionResultPtr MakeResult(mojom::ActionResultCode code,
+                                  bool requires_page_stabilization = false,
                                   std::string_view msg = std::string_view());
 
 std::string ToDebugString(const mojom::ActionResult& result);

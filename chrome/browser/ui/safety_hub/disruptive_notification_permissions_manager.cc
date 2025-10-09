@@ -9,6 +9,7 @@
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -24,6 +25,7 @@
 #include "components/content_settings/core/common/content_settings_utils.h"
 #include "components/content_settings/core/common/features.h"
 #include "components/permissions/notifications_engagement_service.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "url/gurl.h"
@@ -570,6 +572,10 @@ void DisruptiveNotificationPermissionsManager::RevokeNotifications(
       "Settings.SafetyHub.DisruptiveNotificationRevocations."
       "HasReportedMetricsBeforeRevocation",
       revocation_entry.has_reported_proposal);
+  safe_browsing::SafeBrowsingMetricsCollector::
+      LogSafeBrowsingNotificationRevocationSourceHistogram(
+          safe_browsing::NotificationRevocationSource::
+              kDisruptiveAutoRevocation);
 }
 
 void DisruptiveNotificationPermissionsManager::DisplayNotification() {
@@ -924,6 +930,22 @@ bool DisruptiveNotificationPermissionsManager::
       ContentSettingHelper(*hcsm).GetRevocationEntry(url);
   return revocation_entry &&
          revocation_entry->revocation_state == RevocationState::kRevoked;
+}
+
+// static
+bool DisruptiveNotificationPermissionsManager::
+    IsUrlIgnoredForRevokedDisruptiveNotification(HostContentSettingsMap* hcsm,
+                                                 const GURL& url) {
+  std::optional<RevocationEntry> revocation_entry =
+      ContentSettingHelper(*hcsm).GetRevocationEntry(url);
+
+  if (!revocation_entry) {
+    return false;
+  }
+  return revocation_entry->revocation_state ==
+             RevocationState::kIgnoreInsideSH ||
+         revocation_entry->revocation_state ==
+             RevocationState::kIgnoreOutsideSH;
 }
 
 void DisruptiveNotificationPermissionsManager::UpdateNotificationPermission(

@@ -4,12 +4,13 @@
 
 package org.chromium.chrome.browser.tasks.tab_management;
 
-import static org.junit.Assert.assertFalse;
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,7 +38,6 @@ import org.robolectric.shadows.ShadowLooper;
 import org.chromium.base.Holder;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.build.annotations.Nullable;
-import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter.ViewHolder;
 
 import java.util.List;
@@ -49,19 +49,40 @@ public class TabListMergeAnimationManagerUnitTest {
     private static final int FULL_HEIGHT = 100;
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock private TabListRecyclerView mRecyclerView;
     @Mock private Runnable mOnAnimationEndRunnable;
     @Mock private View mTargetView;
     @Mock private View mOtherView;
 
+    private TabListRecyclerView mRecyclerView;
+    private RecyclerView.LayoutManager mLayoutManager;
     private ViewHolder mTargetViewHolder;
     private ViewHolder mOtherViewHolder;
     private TabListMergeAnimationManager mAnimationManager;
 
     @Before
     public void setUp() {
+        mLayoutManager =
+                spy(
+                        new RecyclerView.LayoutManager() {
+                            @Override
+                            public RecyclerView.LayoutParams generateDefaultLayoutParams() {
+                                return null;
+                            }
+
+                            @Override
+                            public void startSmoothScroll(
+                                    RecyclerView.SmoothScroller smoothScroller) {
+                                super.startSmoothScroll(smoothScroller);
+                                // Setting a new smooth scroller when another scroller is running
+                                // forces
+                                // the earlier scroller to complete.
+                                super.startSmoothScroll(mock());
+                            }
+                        });
+
         Context context = ApplicationProvider.getApplicationContext();
-        when(mRecyclerView.getContext()).thenReturn(context);
+        mRecyclerView = spy(new TabListRecyclerView(context, null));
+        mRecyclerView.setLayoutManager(mLayoutManager);
 
         mTargetViewHolder = new ViewHolder(mTargetView, (a, b, c) -> {});
         mOtherViewHolder = new ViewHolder(mOtherView, (a, b, c) -> {});
@@ -69,7 +90,7 @@ public class TabListMergeAnimationManagerUnitTest {
         doCallback(
                         0,
                         runnable -> {
-                            assert runnable instanceof Runnable;
+                            assertThat(runnable).isInstanceOf(Runnable.class);
                             ((Runnable) runnable).run();
                         })
                 .when(mRecyclerView)
@@ -84,7 +105,7 @@ public class TabListMergeAnimationManagerUnitTest {
         doCallback(
                         0,
                         item -> {
-                            assert item instanceof Rect;
+                            assertThat(item).isInstanceOf(Rect.class);
                             Rect rect = (Rect) item;
                             if (isVisible) {
                                 rect.set(0, 0, 50, FULL_HEIGHT);
@@ -100,13 +121,14 @@ public class TabListMergeAnimationManagerUnitTest {
     public void testPlayAnimation_whenTargetIsVisible() {
         mockTargetVisibility(true);
         when(mRecyclerView.findViewHolderForAdapterPosition(1)).thenReturn(mOtherViewHolder);
+        when(mRecyclerView.getLayoutManager()).thenReturn(mLayoutManager);
 
         mAnimationManager.playAnimation(0, List.of(0, 1), mOnAnimationEndRunnable);
         ShadowLooper.runUiThreadTasks();
 
         verify(mRecyclerView).setBlockTouchInput(true);
         verify(mRecyclerView).setSmoothScrolling(true);
-        verify(mRecyclerView, never()).smoothScrollToPosition(anyInt());
+        verify(mLayoutManager, never()).startSmoothScroll(any());
 
         verify(mRecyclerView).setBlockTouchInput(false);
         verify(mRecyclerView).setSmoothScrolling(false);
@@ -125,7 +147,7 @@ public class TabListMergeAnimationManagerUnitTest {
 
         verify(mRecyclerView).setBlockTouchInput(true);
         verify(mRecyclerView).setSmoothScrolling(true);
-        verify(mRecyclerView).smoothScrollToPosition(0);
+        verify(mRecyclerView).addOnScrollListener(any());
 
         mockTargetVisibility(true);
         listener.get().onScrollStateChanged(mRecyclerView, RecyclerView.SCROLL_STATE_IDLE);
@@ -153,16 +175,11 @@ public class TabListMergeAnimationManagerUnitTest {
         mockTargetVisibility(true);
         when(mRecyclerView.findViewHolderForAdapterPosition(1)).thenReturn(mOtherViewHolder);
 
-        PropertyModel otherModel = new PropertyModel(TabProperties.IS_HIGHLIGHTED);
-        otherModel.set(TabProperties.IS_HIGHLIGHTED, true);
-        mOtherViewHolder.model = otherModel;
-
         mAnimationManager.playAnimation(0, List.of(1), mOnAnimationEndRunnable);
         ShadowLooper.runUiThreadTasks();
 
         verify(mOtherView, atLeast(1)).setTranslationX(0f);
         verify(mOtherView, atLeast(1)).setTranslationY(0f);
-        assertFalse(otherModel.get(TabProperties.IS_HIGHLIGHTED));
 
         verify(mRecyclerView).setBlockTouchInput(false);
         verify(mRecyclerView).setSmoothScrolling(false);

@@ -96,23 +96,15 @@ static void CreateContextProviderOnMainThread(
     base::WaitableEvent* waitable_event) {
   DCHECK(IsMainThread());
 
-  Platform::ContextAttributes context_attributes;
-  context_attributes.enable_raster_interface = true;
-
-  // The shared GPU context should not trigger a switch to the high-performance
-  // GPU.
-  context_attributes.prefer_low_power_gpu = true;
-
   *gpu_compositing_disabled = Platform::Current()->IsGpuCompositingDisabled();
   if (*gpu_compositing_disabled && only_if_gpu_compositing) {
     waitable_event->Signal();
     return;
   }
 
-  Platform::GraphicsInfo graphics_info;
   auto context_provider =
-      Platform::Current()->CreateOffscreenGraphicsContext3DProvider(
-          context_attributes, WebURL(), &graphics_info);
+      Platform::Current()->CreateRasterGraphicsContextProvider(
+          WebURL(), Platform::RasterContextType::kSharedGpuContextWorker);
   if (context_provider) {
     *wrapper = std::make_unique<WebGraphicsContext3DProviderWrapper>(
         std::move(context_provider));
@@ -217,18 +209,9 @@ void SharedGpuContext::CreateSharedImageInterfaceProviderIfNeeded() {
     waitable_event.Wait();
   }
 
-  if (!gpu_channel) {
-    return;
-  }
-
-  auto shared_image_interface = gpu_channel->CreateClientSharedImageInterface();
-  if (!shared_image_interface) {
-    return;
-  }
-
   shared_image_interface_provider_ =
-      std::make_unique<WebGraphicsSharedImageInterfaceProviderImpl>(
-          std::move(shared_image_interface));
+      WebGraphicsSharedImageInterfaceProviderImpl::TryCreate(
+          std::move(gpu_channel));
 }
 
 // static
@@ -250,13 +233,21 @@ void SharedGpuContext::Reset() {
   this_ptr->context_provider_factory_.Reset();
 }
 
-bool SharedGpuContext::IsValidWithoutRestoring() {
+bool SharedGpuContext::IsValidWithoutRestoringForTesting() {
   SharedGpuContext* this_ptr = GetInstanceForCurrentThread();
   if (!this_ptr->context_provider_wrapper_)
     return false;
-  return this_ptr->context_provider_wrapper_->ContextProvider()
-             .ContextGL()
-             ->GetGraphicsResetStatusKHR() == GL_NO_ERROR;
+  auto* gl_context =
+      this_ptr->context_provider_wrapper_->ContextProvider().ContextGL();
+
+  if (gl_context) {
+    return gl_context->GetGraphicsResetStatusKHR() == GL_NO_ERROR;
+  }
+
+  auto* raster_interface =
+      this_ptr->context_provider_wrapper_->ContextProvider().RasterInterface();
+  CHECK(raster_interface);
+  return raster_interface->GetGraphicsResetStatusKHR() == GL_NO_ERROR;
 }
 
 bool SharedGpuContext::AllowSoftwareToAcceleratedCanvasUpgrade() {
@@ -282,4 +273,4 @@ bool SharedGpuContext::MaySupportImageChromium() {
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
-}  // blink
+}  // namespace blink

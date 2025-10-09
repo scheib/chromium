@@ -90,6 +90,8 @@ class CONTENT_EXPORT SpareRenderProcessHostManagerImpl
   const std::vector<RenderProcessHost*>& GetSpares() override;
   std::vector<ChildProcessId> GetSpareIds() override;
   void CleanupSparesForTesting() override;
+  const std::optional<LastSpareRendererCreationInfo>&
+  GetLastSpareRendererCreationInfo() const override;
 
   // Start a spare renderer immediately, only if there is none.
   // If the timeout is given, the spare render process will not be created
@@ -187,8 +189,7 @@ class CONTENT_EXPORT SpareRenderProcessHostManagerImpl
 
   bool DestroyTimerWillFireBefore(base::TimeDelta timeout);
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
   // When the system is under memory pressure, this function is called every 5
   // minutes to determine when it ends.
@@ -206,7 +207,13 @@ class CONTENT_EXPORT SpareRenderProcessHostManagerImpl
   void OnMetricsHeartbeatTimerFired();
 
 #if BUILDFLAG(IS_ANDROID)
+  FRIEND_TEST_ALL_PREFIXES(
+      SpareRenderProcessHostManagerMemoryThresholdBrowserTest,
+      CorrectThresholdLogic);
   void OnApplicationStateChange(base::android::ApplicationState state);
+
+  bool ShouldCreateSpareRendererWithAvailableMemory(
+      int available_memory_mb) const;
 #endif
 
   // Checks various conditions that could prevent an embedder from using the
@@ -215,7 +222,8 @@ class CONTENT_EXPORT SpareRenderProcessHostManagerImpl
   DoesEmbedderAllowSpareUsage(BrowserContext* browser_context,
                               SiteInstanceImpl* site_instance);
 
-  base::MemoryPressureListener memory_pressure_listener_;
+  base::MemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   // If this timer is running, then the system is under memory pressure.
   // TODO(380805024): Remove the polling timer when possible.
@@ -255,6 +263,9 @@ class CONTENT_EXPORT SpareRenderProcessHostManagerImpl
   bool is_browser_idle_ = true;
 
   base::RepeatingTimer metrics_heartbeat_timer_;
+
+  std::optional<LastSpareRendererCreationInfo>
+      last_spare_renderer_creation_info_;
 
 #if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<base::android::ApplicationStatusListener>

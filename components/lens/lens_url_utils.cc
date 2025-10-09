@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 
+#include "base/base64url.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
@@ -97,17 +98,6 @@ void AppendLogsQueryParam(
   }
 }
 
-GURL AppendOrReplaceQueryParametersForLensRequest(const GURL& url,
-                                                  lens::EntryPoint ep) {
-  GURL modified_url(url);
-  for (auto const& param : GetLensQueryParametersMap(ep)) {
-    modified_url = net::AppendOrReplaceQueryParameter(modified_url, param.first,
-                                                      param.second);
-  }
-
-  return modified_url;
-}
-
 std::string GetQueryParametersForLensRequest(lens::EntryPoint ep) {
   std::string query_string;
   for (auto const& param : GetLensQueryParametersMap(ep)) {
@@ -116,25 +106,66 @@ std::string GetQueryParametersForLensRequest(lens::EntryPoint ep) {
   return query_string;
 }
 
-bool IsValidLensResultUrl(const GURL& url) {
-  if (url.is_empty()) {
-    return false;
-  }
-
-  std::string payload;
-  // Make sure the payload is present
-  return net::GetValueForKeyInQuery(url, kPayloadQueryParameter, &payload);
-}
-
 bool IsLensMWebResult(const GURL& url) {
   std::string request_id;
   std::string surface;
   GURL result_url = GURL(lens::features::GetLensOverlayResultsSearchURL());
-  return !url.is_empty() && url.host() == result_url.host() &&
-         url.path() == result_url.path() &&
+  return !url.is_empty() && url.GetHost() == result_url.GetHost() &&
+         url.GetPath() == result_url.GetPath() &&
          net::GetValueForKeyInQuery(url, kLensRequestQueryParameter,
                                     &request_id) &&
          !net::GetValueForKeyInQuery(url, kLensSurfaceQueryParameter, &surface);
+}
+
+std::string Base64EncodeRequestId(lens::LensOverlayRequestId request_id) {
+  std::string serialized_request_id;
+  CHECK(request_id.SerializeToString(&serialized_request_id));
+  std::string encoded_request_id;
+  base::Base64UrlEncode(serialized_request_id,
+                        base::Base64UrlEncodePolicy::OMIT_PADDING,
+                        &encoded_request_id);
+  return encoded_request_id;
+}
+
+std::string VitQueryParamValueForMimeType(MimeType mime_type) {
+  // Default contextual visual input type.
+  std::string vitValue = kContextualVisualInputTypeQueryParameterValue;
+  switch (mime_type) {
+    case lens::MimeType::kPdf:
+      vitValue = kPdfVisualInputTypeQueryParameterValue;
+      break;
+    case lens::MimeType::kHtml:
+    case lens::MimeType::kPlainText:
+    case lens::MimeType::kAnnotatedPageContent:
+      vitValue = kWebpageVisualInputTypeQueryParameterValue;
+      break;
+    case lens::MimeType::kUnknown:
+      break;
+    case lens::MimeType::kImage:
+      vitValue = kImageVisualInputTypeQueryParameterValue;
+      break;
+    case lens::MimeType::kVideo:
+    case lens::MimeType::kAudio:
+    case lens::MimeType::kJson:
+      // These content types are not supported for the page content upload flow.
+      NOTREACHED() << "Unsupported option in page content upload";
+  }
+  return vitValue;
+}
+
+std::map<std::string, std::string> GetParametersMapWithoutQuery(
+    const GURL& url) {
+  std::map<std::string, std::string> additional_query_parameters;
+  net::QueryIterator query_iterator(url);
+  while (!query_iterator.IsAtEnd()) {
+    std::string_view key = query_iterator.GetKey();
+    if (kTextQueryParameterKey != key) {
+      additional_query_parameters.insert(std::make_pair(
+          query_iterator.GetKey(), query_iterator.GetUnescapedValue()));
+    }
+    query_iterator.Advance();
+  }
+  return additional_query_parameters;
 }
 
 }  // namespace lens

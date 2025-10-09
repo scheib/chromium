@@ -31,6 +31,7 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.app.feed.feedmanagement.FeedManagementActivity;
 import org.chromium.chrome.browser.feed.FeedSurfaceProvider.RestoringState;
 import org.chromium.chrome.browser.feed.Stream.ContentChangedListener;
+import org.chromium.chrome.browser.feed.componentinterfaces.SurfaceCoordinator;
 import org.chromium.chrome.browser.feed.sections.OnSectionHeaderSelectedListener;
 import org.chromium.chrome.browser.feed.sections.SectionHeaderListProperties;
 import org.chromium.chrome.browser.feed.sections.SectionHeaderProperties;
@@ -364,7 +365,7 @@ public class FeedSurfaceMediator
             Context context,
             @Nullable SnapScrollHelper snapScrollHelper,
             @Nullable PropertyModel headerModel,
-            @FeedSurfaceCoordinator.StreamTabId int openingTabId,
+            @SurfaceCoordinator.StreamTabId int openingTabId,
             FeedActionDelegate actionDelegate,
             FeedOptionsCoordinator optionsCoordinator,
             @Nullable UiConfig uiConfig,
@@ -999,7 +1000,8 @@ public class FeedSurfaceMediator
         } else {
             AccountPickerBottomSheetStrings bottomSheetStrings =
                     new AccountPickerBottomSheetStrings.Builder(
-                                    R.string.signin_account_picker_bottom_sheet_title)
+                                    mContext.getString(
+                                            R.string.signin_account_picker_bottom_sheet_title))
                             .build();
             SyncPromoController promoController =
                     new SyncPromoController(
@@ -1229,12 +1231,12 @@ public class FeedSurfaceMediator
 
     /** Returns the feed header text. */
     private @Nullable String getHeaderText(boolean isExpanded) {
-        if (isExpanded) {
+        if (isExpanded && ChromeFeatureList.isEnabled(ChromeFeatureList.FEED_HEADER_REMOVAL)) {
             String treatment =
                     ChromeFeatureList.getFieldTrialParamByFeature(
                             ChromeFeatureList.FEED_HEADER_REMOVAL, "treatment");
             // Returns null to indicate that no feed header is shown.
-            if (treatment.equals("none")) return null;
+            if (!treatment.equals("label")) return null;
         }
 
         Resources res = mContext.getResources();

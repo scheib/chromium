@@ -1137,9 +1137,9 @@ bool ColorSpace::ToSkYUVColorSpace(int bit_depth, SkYUVColorSpace* out) const {
   // There should be no usages of RGB matrix for YUV conversion.
   if (matrix_ == gfx::ColorSpace::MatrixID::RGB) {
     [[maybe_unused]] static bool call_once = [&]() {
-      SCOPED_CRASH_KEY_STRING32("ToSkYUVColorSpace", "ColorSpace", ToString());
-      CHECK(matrix_ != gfx::ColorSpace::MatrixID::RGB,
-            base::NotFatalUntil::M141);
+      SCOPED_CRASH_KEY_STRING256("ToSkYUVColorSpace", "ColorSpace", ToString());
+      DUMP_WILL_BE_CHECK(false)
+          << "ToSkYUVColorSpace called on RGB color space = " << ToString();
       return true;
     }();
   }

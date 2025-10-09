@@ -29,6 +29,7 @@
 #include "chrome/browser/ui/webui/side_panel/customize_chrome/wallpaper_search/wallpaper_search_string_map.h"
 #include "chrome/browser/ui/webui/theme_handler.h"
 #include "chrome/common/webui_url_constants.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/side_panel_customize_chrome_resources.h"
 #include "chrome/grit/side_panel_customize_chrome_resources_map.h"
@@ -135,10 +136,13 @@ CustomizeChromeUI::CustomizeChromeUI(content::WebUI* web_ui)
       {"newTabPageManagedByA11yLabel",
        IDS_NTP_CUSTOMIZE_CHROME_MANAGED_NEW_TAB_PAGE_ACCESSIBILITY},
       // Shortcut strings.
-      {"mostVisited", IDS_NTP_CUSTOMIZE_MOST_VISITED_LABEL},
+      {"topSites", IDS_NTP_CUSTOMIZE_MOST_VISITED_LABEL},
       {"myShortcuts", IDS_NTP_CUSTOMIZE_MY_SHORTCUTS_LABEL},
+      {"enterpriseShortcuts", IDS_NTP_CUSTOMIZE_ENTERPRISE_SHORTCUTS_LABEL},
       {"shortcutsCurated", IDS_NTP_CUSTOMIZE_MY_SHORTCUTS_DESC},
       {"shortcutsSuggested", IDS_NTP_CUSTOMIZE_MOST_VISITED_DESC},
+      {"enterpriseShortcutsCurated",
+       IDS_NTP_CUSTOMIZE_ENTERPRISE_SHORTCUTS_DESC},
       {"showShortcutsToggle", IDS_NTP_CUSTOMIZE_SHOW_SHORTCUTS_LABEL},
       // Card strings.
       {"showCardsToggleTitle", IDS_NTP_CUSTOMIZE_SHOW_CARDS_LABEL},

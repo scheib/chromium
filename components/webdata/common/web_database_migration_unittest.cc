@@ -29,7 +29,7 @@
 #include "components/autofill/core/common/autofill_constants.h"
 #include "components/os_crypt/async/browser/test_utils.h"
 #include "components/os_crypt/async/common/test_encryptor.h"
-#include "components/plus_addresses/webdata/plus_address_table.h"
+#include "components/plus_addresses/core/browser/webdata/plus_address_table.h"
 #include "components/search_engines/keyword_table.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/signin/public/webdata/token_service_table.h"
@@ -1724,6 +1724,102 @@ TEST_F(WebDatabaseMigrationTest, MigrateVersion140ToCurrent) {
               VersionFromConnection(&connection));
     EXPECT_TRUE(connection.DoesColumnExist("masked_credit_cards",
                                            "card_benefit_source"));
+  }
+}
+
+TEST_F(WebDatabaseMigrationTest, MigrateVersion141ToCurrent) {
+  ASSERT_NO_FATAL_FAILURE(LoadDatabase(FILE_PATH_LITERAL("version_141.sql")));
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(141, VersionFromConnection(&connection));
+  }
+  DoMigration();
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(WebDatabase::kCurrentVersionNumber,
+              VersionFromConnection(&connection));
+    ASSERT_TRUE(connection.DoesTableExist("autofill_ai_entities"));
+    EXPECT_TRUE(
+        connection.DoesColumnExist("autofill_ai_entities", "record_type"));
+  }
+}
+
+TEST_F(WebDatabaseMigrationTest, MigrateVersion142ToCurrent) {
+  ASSERT_NO_FATAL_FAILURE(LoadDatabase(FILE_PATH_LITERAL("version_142.sql")));
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(142, VersionFromConnection(&connection));
+    ASSERT_TRUE(connection.ExecuteScriptForTesting(R"(
+      INSERT INTO autofill_ai_entities
+      (guid, entity_type, nickname, date_modified, use_count, use_date)
+      VALUES
+      ('00000000-0000-0000-0000-000000000000', 'Passport', 'My Passport', 123, 123, 123);
+    )"));
+  }
+
+  DoMigration();
+
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(WebDatabase::kCurrentVersionNumber,
+              VersionFromConnection(&connection));
+    ASSERT_TRUE(connection.DoesTableExist("autofill_ai_entities"));
+    EXPECT_TRUE(connection.DoesColumnExist("autofill_ai_entities",
+                                           "attributes_read_only"));
+
+    sql::Statement s_entities(connection.GetUniqueStatement(
+        "SELECT guid, attributes_read_only from autofill_ai_entities"));
+    ASSERT_TRUE(s_entities.Step());
+    EXPECT_EQ(s_entities.ColumnString(0),
+              "00000000-0000-0000-0000-000000000000");
+    EXPECT_FALSE(s_entities.ColumnBool(1));
+    ASSERT_FALSE(s_entities.Step());
+  }
+}
+
+// Tests addition of card_creation_source column in masked_credit_cards table.
+TEST_F(WebDatabaseMigrationTest, MigrateVersion143ToCurrent) {
+  ASSERT_NO_FATAL_FAILURE(LoadDatabase(FILE_PATH_LITERAL("version_143.sql")));
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(143, VersionFromConnection(&connection));
+    EXPECT_FALSE(connection.DoesColumnExist("masked_credit_cards",
+                                            "card_creation_source"));
+  }
+  DoMigration();
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(WebDatabase::kCurrentVersionNumber,
+              VersionFromConnection(&connection));
+    EXPECT_TRUE(connection.DoesColumnExist("masked_credit_cards",
+                                           "card_creation_source"));
+  }
+}
+
+// Tests dropping the use_date2 and use_date3 columns from the addresses table.
+TEST_F(WebDatabaseMigrationTest, MigrateVersion144ToCurrent) {
+  ASSERT_NO_FATAL_FAILURE(LoadDatabase(FILE_PATH_LITERAL("version_144.sql")));
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(144, VersionFromConnection(&connection));
+    EXPECT_TRUE(connection.DoesColumnExist("addresses", "use_date2"));
+    EXPECT_TRUE(connection.DoesColumnExist("addresses", "use_date3"));
+  }
+  DoMigration();
+  {
+    sql::Database connection(sql::test::kTestTag);
+    ASSERT_TRUE(connection.Open(GetDatabasePath()));
+    EXPECT_EQ(WebDatabase::kCurrentVersionNumber,
+              VersionFromConnection(&connection));
+    EXPECT_FALSE(connection.DoesColumnExist("addresses", "use_date2"));
+    EXPECT_FALSE(connection.DoesColumnExist("addresses", "use_date3"));
   }
 }
 

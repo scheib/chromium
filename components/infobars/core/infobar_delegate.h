@@ -193,6 +193,8 @@ class InfoBarDelegate {
     COLLABORATION_GROUP_UPDATE_INFOBAR_DELEGATE = 125,
     COLLABORATION_OUT_OF_DATE_INFOBAR_DELEGATE = 126,
     PIN_INFOBAR_DELEGATE = 127,
+    SESSION_RESTORE_INFOBAR_DELEGATE = 128,
+    ROLL_BACK_MODE_B_INFOBAR_DELEGATE = 129,
   };
   // LINT.ThenChange(//tools/metrics/histograms/metadata/browser/enums.xml:InfoBarIdentifier)
 
@@ -294,11 +296,12 @@ class InfoBarDelegate {
   virtual bool ShouldAnimate() const;
 
   // Returns true if the InfoBar should hide when the browser is in fullscreen
-  // mode. True by default.
+  // mode. False by default.
   virtual bool ShouldHideInFullscreen() const;
 
   // Type-checking downcast routines:
   virtual ConfirmInfoBarDelegate* AsConfirmInfoBarDelegate();
+  virtual const ConfirmInfoBarDelegate* AsConfirmInfoBarDelegate() const;
   virtual blocked_content::PopupBlockedInfoBarDelegate*
   AsPopupBlockedInfoBarDelegate();
   virtual ThemeInstalledInfoBarDelegate* AsThemePreviewInfobarDelegate();

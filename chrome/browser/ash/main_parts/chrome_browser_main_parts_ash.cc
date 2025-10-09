@@ -48,6 +48,7 @@
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "build/branding_buildflags.h"
 #include "build/config/chromebox_for_meetings/buildflags.h"  // PLATFORM_CFM
+#include "build/config/cuttlefish/buildflags.h"  // PLATFORM_CUTTLEFISH
 #include "chrome/browser/ash/accessibility/accessibility_event_rewriter_delegate_impl.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
@@ -65,6 +66,7 @@
 #include "chrome/browser/ash/browser_delegate/browser_controller_impl.h"
 #include "chrome/browser/ash/camera/camera_general_survey_handler.h"
 #include "chrome/browser/ash/certs/system_token_cert_db_initializer.h"
+#include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
 #include "chrome/browser/ash/crosapi/browser_manager.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/crostini/crostini_unsupported_action_notifier.h"
@@ -133,9 +135,7 @@
 #include "chrome/browser/ash/notifications/debugd_notification_handler.h"
 #include "chrome/browser/ash/notifications/gnubby_notification.h"
 #include "chrome/browser/ash/notifications/low_disk_notification.h"
-#include "chrome/browser/ash/notifications/multi_capture_notifications.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
-#include "chrome/browser/ash/pcie_peripheral/ash_usb_detector.h"
 #include "chrome/browser/ash/performance/doze_mode_power_status_scheduler.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_manager_impl.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
@@ -163,6 +163,7 @@
 #include "chrome/browser/ash/usb/cros_usb_detector.h"
 #include "chrome/browser/ash/video_conference/video_conference_app_service_client.h"
 #include "chrome/browser/ash/video_conference/video_conference_ash_feature_client.h"
+#include "chrome/browser/ash/video_conference/video_conference_manager_ash.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
 #include "chrome/browser/chromeos/printing/print_preview/print_preview_webcontents_manager.h"
@@ -171,6 +172,7 @@
 #include "chrome/browser/defaults.h"
 #include "chrome/browser/device_identity/device_oauth2_token_service_factory.h"
 #include "chrome/browser/first_run/first_run.h"
+#include "chrome/browser/global_features.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/metrics/chrome_feature_list_creator.h"
 #include "chrome/browser/metrics/structured/chrome_structured_metrics_delegate.h"
@@ -226,6 +228,7 @@
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector_stub.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
 #include "chromeos/ash/components/network/traffic_counters_handler.h"
+#include "chromeos/ash/components/pcie_peripheral/ash_usb_detector.h"
 #include "chromeos/ash/components/peripheral_notification/peripheral_notification_manager.h"
 #include "chromeos/ash/components/policy/device_local_account/device_local_account_type.h"
 #include "chromeos/ash/components/power/dark_resume_controller.h"
@@ -297,6 +300,10 @@
 
 #if BUILDFLAG(PLATFORM_CFM)
 #include "chrome/browser/ash/chromebox_for_meetings/cfm_chrome_services.h"
+#endif
+
+#if BUILDFLAG(PLATFORM_CUTTLEFISH)
+#include "chrome/browser/ash/dbus/fjord_oobe_service_provider.h"
 #endif
 
 namespace ash {
@@ -532,6 +539,16 @@ class DBusServices {
         CrosDBusService::CreateServiceProviderList(
             std::make_unique<ArcCroshServiceProvider>()));
 
+#if BUILDFLAG(PLATFORM_CUTTLEFISH)
+    if (features::IsFjordOobeEnabled()) {
+      fjord_oobe_service_ = CrosDBusService::Create(
+          system_bus, chromeos::kFjordOobeServiceName,
+          dbus::ObjectPath(chromeos::kFjordOobeServicePath),
+          CrosDBusService::CreateServiceProviderList(
+              std::make_unique<FjordOobeServiceProvider>()));
+    }
+#endif
+
     // Initialize PowerDataCollector after DBusThreadManager is initialized.
     PowerDataCollector::Initialize();
 
@@ -598,6 +615,9 @@ class DBusServices {
     fusebox_service_.reset();
     mojo_connection_service_.reset();
     arc_crosh_service_.reset();
+#if BUILDFLAG(PLATFORM_CUTTLEFISH)
+    fjord_oobe_service_.reset();
+#endif
     PowerDataCollector::Shutdown();
     chromeos::PowerPolicyController::Shutdown();
     device::BluetoothAdapterFactory::Shutdown();
@@ -634,6 +654,9 @@ class DBusServices {
   std::unique_ptr<CrosDBusService> dlp_files_policy_service_;
   std::unique_ptr<CrosDBusService> arc_tracing_service_;
   std::unique_ptr<CrosDBusService> arc_crosh_service_;
+#if BUILDFLAG(PLATFORM_CUTTLEFISH)
+  std::unique_ptr<CrosDBusService> fjord_oobe_service_;
+#endif
 };
 
 }  // namespace internal
@@ -787,7 +810,8 @@ int ChromeBrowserMainPartsAsh::PreMainMessageLoopRun() {
       std::make_unique<SystemTokenCertDBInitializer>();
 
   system_token_key_permissions_manager_ = platform_keys::
-      KeyPermissionsManagerImpl::CreateSystemTokenKeyPermissionsManager();
+      KeyPermissionsManagerImpl::CreateSystemTokenKeyPermissionsManager(
+          g_browser_process->local_state());
 
   mojo::PendingRemote<media_session::mojom::MediaControllerManager>
       media_controller_manager;
@@ -840,7 +864,7 @@ int ChromeBrowserMainPartsAsh::PreMainMessageLoopRun() {
   DeviceOAuth2TokenServiceFactory::Initialize(
       g_browser_process->system_network_context_manager()
           ->GetSharedURLLoaderFactory(),
-      g_browser_process->local_state());
+      g_browser_process->local_state(), g_browser_process->os_crypt_async());
 
   fast_transition_observer_ = std::make_unique<FastTransitionObserver>(
       g_browser_process->local_state());
@@ -928,7 +952,9 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
       *g_browser_process->local_state());
 
   // AccessibilityManager and SystemKeyEventListener use InputMethodManager.
-  input_method::Initialize();
+  input_method::Initialize(
+      g_browser_process->local_state(),
+      g_browser_process->GetFeatures()->application_locale_storage());
 
   // keyboard::KeyboardController initializes ChromeKeyboardUI which depends
   // on ChromeKeyboardControllerClient.
@@ -965,7 +991,7 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
   // |arc_service_launcher_| must be initialized before NoteTakingHelper.
   NoteTakingHelper::Initialize();
 
-  AccessibilityManager::Initialize();
+  AccessibilityManager::Initialize(g_browser_process->local_state());
 
   // Initialize magnification manager before ash tray is created. And this
   // must be placed after UserManager initialization.
@@ -989,6 +1015,7 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
 
   kiosk_controller_ = std::make_unique<KioskControllerImpl>(
       CHECK_DEREF(g_browser_process->local_state()),
+      g_browser_process->shared_url_loader_factory(),
       user_manager::UserManager::Get());
 
   ambient_client_ = std::make_unique<AmbientClientImpl>();
@@ -1010,7 +1037,7 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           ::switches::kTestType) ||
       ShouldAutoLaunchKioskApp(*base::CommandLine::ForCurrentProcess(),
-                               *g_browser_process->local_state())) {
+                               CHECK_DEREF(g_browser_process->local_state()))) {
     WizardController::SetZeroDelays();
   }
 
@@ -1067,8 +1094,6 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
 
   // Needs to be initialized after crosapi_manager_.
   metrics::structured::ChromeStructuredMetricsDelegate::Get()->Initialize();
-
-  multi_capture_notifications_ = std::make_unique<MultiCaptureNotifications>();
 
   // Initialize Cellular Carrier Lock provisioning manager before login
   carrier_lock_manager_ = carrier_lock::CarrierLockManager::Create(
@@ -1285,6 +1310,10 @@ void ChromeBrowserMainPartsAsh::PostProfileInit(Profile* profile,
     // `DeviceDisablingManager` and `ChromeSessionManager`.
     g_browser_process->platform_part()
         ->InitializeDeviceRestrictionScheduleController();
+
+    parent_access_service_ =
+        std::make_unique<parent_access::ParentAccessService>(
+            g_browser_process->local_state());
 
     g_browser_process->platform_part()->session_manager()->Initialize(
         *base::CommandLine::ForCurrentProcess(), profile,
@@ -1522,12 +1551,20 @@ void ChromeBrowserMainPartsAsh::PostBrowserStart() {
   }
 
   if (features::IsVideoConferenceEnabled()) {
+    auto* vc_manager = ash::VideoConferenceManagerAsh::Get();
+
+    // TODO(crbug.com/354710097): Move VCM client initialization to
+    // ChromeBrowserMainExtraPartsAsh. This is currently not straightforward
+    // because the clients have dependencies on other services that are also
+    // initialized here in ChromeBrowserMainPartsAsh. Co-locating the clients
+    // with their dependencies is the current design.
     video_conference_manager_client_ =
-        std::make_unique<video_conference::VideoConferenceManagerClientImpl>();
+        std::make_unique<video_conference::VideoConferenceManagerClientImpl>(
+            vc_manager);
     vc_app_service_client_ =
-        std::make_unique<VideoConferenceAppServiceClient>();
+        std::make_unique<VideoConferenceAppServiceClient>(vc_manager);
     vc_ash_feature_client_ =
-        std::make_unique<VideoConferenceAshFeatureClient>();
+        std::make_unique<VideoConferenceAshFeatureClient>(vc_manager);
   }
 
   apn_migrator_ = std::make_unique<ApnMigrator>(
@@ -1729,8 +1766,6 @@ void ChromeBrowserMainPartsAsh::PostMainMessageLoopRun() {
   // Cleans up dbus services depending on ash.
   dbus_services_->PreAshShutdown();
 
-  multi_capture_notifications_.reset();
-
   // vc_app_service_client_ has to be destructed before PostMainMessageLoopRun.
   vc_app_service_client_.reset();
   vc_ash_feature_client_.reset();
@@ -1742,6 +1777,8 @@ void ChromeBrowserMainPartsAsh::PostMainMessageLoopRun() {
 
   // NOTE: Closes ash and destroys `Shell`.
   ChromeBrowserMainPartsLinux::PostMainMessageLoopRun();
+
+  parent_access_service_.reset();
 
   // TokenHandleStore needs to outlive the Profile, which
   // is destroyed inside ChromeBrowserMainPartsLinux::PostMainMessageLoopRun().

@@ -25,7 +25,6 @@
 #include "chrome/browser/ui/views/passwords/password_add_username_view.h"
 #include "chrome/browser/ui/views/passwords/password_auto_sign_in_view.h"
 #include "chrome/browser/ui/views/passwords/password_change/successful_password_change_view.h"
-#include "chrome/browser/ui/views/passwords/password_save_unsynced_credentials_locally_view.h"
 #include "chrome/browser/ui/views/passwords/password_save_update_view.h"
 #include "chrome/browser/ui/views/passwords/post_save_compromised_bubble_view.h"
 #include "chrome/browser/ui/views/passwords/shared_passwords_notification_view.h"
@@ -131,10 +130,6 @@ PasswordBubbleViewBase* PasswordBubbleViewBase::CreateBubble(
                  password_manager::ui::PENDING_PASSWORD_UPDATE_STATE ||
              model_state == password_manager::ui::PENDING_PASSWORD_STATE) {
     view = new PasswordSaveUpdateView(web_contents, anchor_view, reason);
-  } else if (model_state == password_manager::ui::
-                                WILL_DELETE_UNSYNCED_ACCOUNT_PASSWORDS_STATE) {
-    view = new PasswordSaveUnsyncedCredentialsLocallyView(web_contents,
-                                                          anchor_view);
   } else if (model_state ==
                  password_manager::ui::MOVE_CREDENTIAL_AFTER_LOG_IN_STATE ||
              model_state == password_manager::ui::
@@ -302,6 +297,14 @@ void PasswordBubbleViewBase::Init() {
   DCHECK(controller);
   SetTitle(controller->GetTitle());
   SetShowTitle(!controller->GetTitle().empty());
+}
+
+void PasswordBubbleViewBase::OnMouseEntered(const ui::MouseEvent& event) {
+  GetController()->OnMouseEntered();
+}
+
+void PasswordBubbleViewBase::OnMouseExited(const ui::MouseEvent& event) {
+  GetController()->OnMouseExited();
 }
 
 BEGIN_METADATA(PasswordBubbleViewBase)

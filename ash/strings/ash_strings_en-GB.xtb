@@ -332,10 +332,12 @@ Here are some things that you can try to get started.</translation>
 <translation id="2083190527011054446">Good night <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Open emoji picker</translation>
 <translation id="2088116547584365419">games</translation>
+<translation id="2093792000875799555">Steam for Chromebook news</translation>
 <translation id="209965399369889474">Not connected to network</translation>
 <translation id="2107581415810719320">Other Button <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Your USB-C cable does not support Thunderbolt. Device performance may be limited.</translation>
 <translation id="2108303511227308752">The Alt + Backspace keyboard shortcut has changed. To use the Delete key, press the <ph name="LAUNCHER_KEY_NAME" /> key + Backspace.</translation>
+<translation id="2115680839221566783">Battery at <ph name="PERCENTAGE" />%. Charging on hold.</translation>
 <translation id="2126242104232412123">New desk</translation>
 <translation id="2132302418721800944">Record full screen</translation>
 <translation id="2135456203358955318">Docked magnifier</translation>
@@ -1588,6 +1590,7 @@ No devices connected.</translation>
 <translation id="612734058257491180">The Google Assistant is not available in a guest session.</translation>
 <translation id="6127395413317891856">You're offline. Check your connection and try again.</translation>
 <translation id="6129953537138746214">Space</translation>
+<translation id="6136872094979134163">Unable to retrieve Steam for Chromebook news.</translation>
 <translation id="6137566720514957455">Open remove dialogue for <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">What would you like to focus on?</translation>
 <translation id="6141988275892716286">Confirm download</translation>
@@ -1677,6 +1680,7 @@ No devices connected.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> on <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> event</translation>
+<translation id="6448529022565414427">Charging on hold</translation>
 <translation id="6449483711453944360">Linux apps and incognito windows aren’t currently supported</translation>
 <translation id="6450245544201845082">The right-click shortcut is currently off</translation>
 <translation id="6452181791372256707">Reject</translation>

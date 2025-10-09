@@ -7,6 +7,8 @@ package org.chromium.chrome.browser.ntp;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.hamcrest.Matchers.allOf;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -34,7 +36,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
@@ -551,7 +553,7 @@ public class ShowNtpAtStartupTest {
     }
 
     private static void waitForNtpLoaded(final Tab tab) {
-        assert !tab.isIncognito();
+        assertThat(tab.isIncognito()).isFalse();
         CriteriaHelper.pollUiThread(
                 () -> {
                     Criteria.checkThat(tab.getNativePage(), Matchers.instanceOf(NewTabPage.class));
@@ -567,7 +569,7 @@ public class ShowNtpAtStartupTest {
         View searchBoxLayout = ntpLayout.findViewById(R.id.search_box);
 
         // Orientation changes are not supported on automotive.
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verifyFakeSearchBoxWidthForCurrentOrientation(
                     expectedLandScapeWidth, expectedPortraitWidth, ntpLayout, searchBoxLayout);
             return;
@@ -629,7 +631,7 @@ public class ShowNtpAtStartupTest {
                 ((MarginLayoutParams) mvTilesLayout.getTileAt(1).getLayoutParams()).leftMargin;
 
         // Orientation changes are not supported on automotive.
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verifyTileMargin(
                     expectedContainerWidth,
                     expectedEdgeMargin,

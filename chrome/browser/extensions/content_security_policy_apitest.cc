@@ -9,10 +9,13 @@
 #include "chrome/common/chrome_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "extensions/test/result_catcher.h"
 #include "extensions/test/test_extension_dir.h"
 #include "net/dns/mock_host_resolver.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -175,7 +178,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionCspApiTest,
   // Blocking the script load should emit a log.
   content::WebContents* web_contents = GetActiveWebContents();
   content::WebContentsConsoleObserver console_observer(web_contents);
-  console_observer.SetPattern("Refused to load the script '*");
+  console_observer.SetPattern("Loading the script '*' violates the following*");
 
   ASSERT_TRUE(
       NavigateToURL(web_contents, extension->GetResourceURL("page.html")));

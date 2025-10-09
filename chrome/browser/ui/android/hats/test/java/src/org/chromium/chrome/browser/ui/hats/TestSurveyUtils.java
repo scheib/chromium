@@ -17,7 +17,6 @@ import org.junit.runners.model.Statement;
 
 import org.chromium.base.CommandLine;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.util.InMemorySharedPreferences;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
@@ -25,7 +24,7 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 
 import java.util.Map;
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Util class for survey related testing. */
 public class TestSurveyUtils {
@@ -46,7 +45,7 @@ public class TestSurveyUtils {
                         false,
                         psdBitFields,
                         psdStringFields,
-                        Optional.empty(),
+                        null,
                         SurveyConfig.RequestedBrowserType.REGULAR));
     }
 

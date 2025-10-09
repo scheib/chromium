@@ -103,7 +103,6 @@ using testing::DoAll;
 using testing::ElementsAre;
 using testing::Eq;
 using testing::Field;
-using testing::Invoke;
 using testing::NiceMock;
 using testing::Return;
 using testing::ReturnRef;
@@ -334,7 +333,7 @@ class PasswordAutofillManagerTest : public testing::Test {
         .WillOnce(Return(&favicon_service));
     EXPECT_CALL(favicon_service,
                 GetFaviconImageForPageURL(fill_data_.url, _, _))
-        .WillOnce(Invoke(RespondWithTestIcon));
+        .WillOnce(RespondWithTestIcon);
     password_autofill_manager_->OnAddPasswordFillData(fill_data_);
     testing::Mock::VerifyAndClearExpectations(client);
     // Suppress the warnings in the tests.
@@ -486,7 +485,7 @@ TEST_F(PasswordAutofillManagerTest, ExternalDelegatePasswordSuggestions) {
   favicon::MockFaviconService favicon_service;
   EXPECT_CALL(client, GetFaviconService()).WillOnce(Return(&favicon_service));
   EXPECT_CALL(favicon_service, GetFaviconImageForPageURL(data.url, _, _))
-      .WillOnce(Invoke(RespondWithTestIcon));
+      .WillOnce(RespondWithTestIcon);
   password_autofill_manager_->OnAddPasswordFillData(data);
 
   // Show the popup and verify the suggestions.
@@ -544,7 +543,7 @@ TEST_F(PasswordAutofillManagerTest,
   favicon::MockFaviconService favicon_service;
   EXPECT_CALL(client, GetFaviconService()).WillOnce(Return(&favicon_service));
   EXPECT_CALL(favicon_service, GetFaviconImageForPageURL(data.url, _, _))
-      .WillOnce(Invoke(RespondWithTestIcon));
+      .WillOnce(RespondWithTestIcon);
   password_autofill_manager_->OnAddPasswordFillData(data);
 
   // Show the popup and verify local and account-stored suggestion coexist.
@@ -1520,7 +1519,10 @@ TEST_F(PasswordAutofillManagerTest, ShowsIdentitySuggestions) {
       IDS_AUTOFILL_IDENTITY_CREDENTIAL_LABEL_TEXT,
       base::UTF8ToUTF16(identity_provider_for_display)))});
   suggestion.custom_icon = decoded_picture;
-  auto payload = Suggestion::IdentityCredentialPayload(identity_provider, id);
+  std::map<autofill::FieldType, std::u16string> fields = {
+      {autofill::EMAIL_ADDRESS, u"john@example.com"}};
+  auto payload =
+      Suggestion::IdentityCredentialPayload(identity_provider, id, fields);
   suggestion.payload = payload;
   identity_suggestions.push_back(suggestion);
 
@@ -1659,7 +1661,7 @@ TEST_F(PasswordAutofillManagerTest,
   EXPECT_CALL(client, GetFaviconService()).WillOnce(Return(&favicon_service));
   EXPECT_CALL(*client.mock_driver(), CanShowAutofillUi).WillOnce(Return(true));
   EXPECT_CALL(favicon_service, GetFaviconImageForPageURL(data.url, _, _))
-      .WillOnce(Invoke(RespondWithTestIcon));
+      .WillOnce(RespondWithTestIcon);
   password_autofill_manager_->OnAddPasswordFillData(data);
 
   // Enable WebAuthn autofill to return a credential.
@@ -1704,7 +1706,7 @@ TEST_F(PasswordAutofillManagerTest, WebAuthnFaviconWithoutPasswords) {
   EXPECT_CALL(client, GetFaviconService()).WillOnce(Return(&favicon_service));
   EXPECT_CALL(*client.mock_driver(), CanShowAutofillUi).WillOnce(Return(true));
   EXPECT_CALL(favicon_service, GetFaviconImageForPageURL(data.url, _, _))
-      .WillOnce(Invoke(RespondWithTestIcon));
+      .WillOnce(RespondWithTestIcon);
   password_autofill_manager_->OnAddPasswordFillData(data);
 
   // Enable WebAuthn autofill to return a credential.
@@ -2147,6 +2149,7 @@ TEST_F(PasswordAutofillManagerTest,
 
   EXPECT_CALL(*client.mock_driver(),
               FillSuggestion(test_username_, backup_password_, _));
+  base::HistogramTester histogram;
   password_autofill_manager_->DidAcceptSuggestion(
       autofill::test::CreateAutofillSuggestion(
           autofill::SuggestionType::kBackupPasswordEntry, test_username_,
@@ -2155,6 +2158,9 @@ TEST_F(PasswordAutofillManagerTest,
 
   EXPECT_EQ(client.GetUndoPasswordChangeController()->GetState(test_username_),
             PasswordRecoveryState::kTroubleSigningIn);
+  histogram.ExpectUniqueSample(
+      kDropdownSelectedHistogram,
+      metrics_util::PasswordDropdownSelectedOption::kBackupPassword, 1);
 }
 
 TEST_F(PasswordAutofillManagerTest,
@@ -2191,6 +2197,7 @@ TEST_F(PasswordAutofillManagerTest,
           autofill::SuggestionType::kBackupPasswordEntry, test_username_,
           payload),
       SuggestionPosition{.row = 0});
+  base::HistogramTester histogram;
   // Clicking on trouble signin in will update the popup.
   EXPECT_CALL(autofill_client, UpdateAutofillSuggestions);
   password_autofill_manager_->DidAcceptSuggestion(
@@ -2202,6 +2209,9 @@ TEST_F(PasswordAutofillManagerTest,
   testing::Mock::VerifyAndClearExpectations(client.mock_driver());
   EXPECT_EQ(client.GetUndoPasswordChangeController()->GetState(test_username_),
             PasswordRecoveryState::kIncludeBackup);
+  histogram.ExpectUniqueSample(
+      kDropdownSelectedHistogram,
+      metrics_util::PasswordDropdownSelectedOption::kTroubleSigningIn, 1);
 }
 
 TEST_F(PasswordAutofillManagerTest,

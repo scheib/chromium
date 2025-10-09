@@ -32,6 +32,7 @@ class MockStreamFactory : public audio::FakeStreamFactory {
       mojo::PendingRemote<::media::mojom::AudioLog> log,
       const std::string& device_id,
       const media::AudioParameters& params,
+      const base::UnguessableToken& group_id,
       uint32_t shared_memory_count,
       bool enable_agc,
       media::mojom::AudioProcessingConfigPtr processing_config,
@@ -52,12 +53,7 @@ class AudioStreamCoordinatorTest : public InProcessBrowserTest {
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
     parent_view_ = std::make_unique<views::View>();
-    coordinator_ = std::make_unique<AudioStreamCoordinator>(
-        *parent_view_, media_preview_metrics::Context(
-                           media_preview_metrics::UiLocation::kPermissionPrompt,
-                           media_preview_metrics::PreviewType::kMic,
-                           media_preview_metrics::PromptType::kSingle,
-                           /*request=*/nullptr));
+    coordinator_ = std::make_unique<AudioStreamCoordinator>(*parent_view_);
     fake_stream_factory_ = std::make_unique<MockStreamFactory>();
   }
 

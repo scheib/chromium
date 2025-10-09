@@ -80,6 +80,7 @@
 #include "third_party/blink/renderer/core/css/css_repeat_style_value.h"
 #include "third_party/blink/renderer/core/css/css_repeat_value.h"
 #include "third_party/blink/renderer/core/css/css_revert_layer_value.h"
+#include "third_party/blink/renderer/core/css/css_revert_rule_value.h"
 #include "third_party/blink/renderer/core/css/css_revert_value.h"
 #include "third_party/blink/renderer/core/css/css_scoped_keyword_value.h"
 #include "third_party/blink/renderer/core/css/css_scroll_value.h"
@@ -88,6 +89,7 @@
 #include "third_party/blink/renderer/core/css/css_string_value.h"
 #include "third_party/blink/renderer/core/css/css_superellipse_value.h"
 #include "third_party/blink/renderer/core/css/css_timing_function_value.h"
+#include "third_party/blink/renderer/core/css/css_trigger_attachment_value.h"
 #include "third_party/blink/renderer/core/css/css_unicode_range_value.h"
 #include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/css_unresolved_color_value.h"
@@ -112,7 +114,6 @@ CSSValue* CSSValue::Create(const Length& value, float zoom) {
     case Length::kAuto:
     case Length::kMinContent:
     case Length::kMaxContent:
-    case Length::kFillAvailable:
     case Length::kStretch:
     case Length::kFitContent:
     case Length::kContent:
@@ -263,6 +264,8 @@ bool CSSValue::operator==(const CSSValue& other) const {
         return CompareCSSValues<cssvalue::CSSRevertValue>(*this, other);
       case kRevertLayerClass:
         return CompareCSSValues<cssvalue::CSSRevertLayerValue>(*this, other);
+      case kRevertRuleClass:
+        return CompareCSSValues<cssvalue::CSSRevertRuleValue>(*this, other);
       case kGridAutoRepeatClass:
         return CompareCSSValues<cssvalue::CSSGridAutoRepeatValue>(*this, other);
       case kGridIntegerRepeatClass:
@@ -347,6 +350,9 @@ bool CSSValue::operator==(const CSSValue& other) const {
         return CompareCSSValues<CSSLightDarkValuePair>(*this, other);
       case kScrollClass:
         return CompareCSSValues<cssvalue::CSSScrollValue>(*this, other);
+      case kTriggerAttachmentClass:
+        return CompareCSSValues<cssvalue::CSSTriggerAttachmentValue>(*this,
+                                                                     other);
       case kViewClass:
         return CompareCSSValues<cssvalue::CSSViewValue>(*this, other);
       case kRatioClass:
@@ -435,6 +441,8 @@ String CSSValue::CssText() const {
       return To<cssvalue::CSSRevertValue>(this)->CustomCSSText();
     case kRevertLayerClass:
       return To<cssvalue::CSSRevertLayerValue>(this)->CustomCSSText();
+    case kRevertRuleClass:
+      return To<cssvalue::CSSRevertRuleValue>(this)->CustomCSSText();
     case kInitialClass:
       return To<CSSInitialValue>(this)->CustomCSSText();
     case kGridAutoRepeatClass:
@@ -526,6 +534,8 @@ String CSSValue::CssText() const {
       return To<cssvalue::CSSRelativeColorValue>(this)->CustomCSSText();
     case kRepeatClass:
       return To<cssvalue::CSSRepeatValue>(this)->CustomCSSText();
+    case kTriggerAttachmentClass:
+      return To<cssvalue::CSSTriggerAttachmentValue>(this)->CustomCSSText();
   }
   NOTREACHED();
 }
@@ -569,6 +579,7 @@ unsigned CSSValue::Hash() const {
     case kUnsetClass:
     case kRevertClass:
     case kRevertLayerClass:
+    case kRevertRuleClass:
       return HashInt(GetClassType());
     case kMathFunctionClass:
     case kScopedKeywordClass:
@@ -633,6 +644,7 @@ unsigned CSSValue::Hash() const {
     case kAxisClass:
     case kRepeatClass:
     case kUnresolvedColorClass:
+    case kTriggerAttachmentClass:
       // For rare or complicated CSSValue types, we simply use the pointer value
       // as hash; it will definitely give false negatives, but those are fine.
       // The lower 32 bits should be fine, as we live inside a 4G Oilpan cage
@@ -770,6 +782,9 @@ void CSSValue::Trace(Visitor* visitor) const {
       return;
     case kRevertLayerClass:
       To<cssvalue::CSSRevertLayerValue>(this)->TraceAfterDispatch(visitor);
+      return;
+    case kRevertRuleClass:
+      To<cssvalue::CSSRevertRuleValue>(this)->TraceAfterDispatch(visitor);
       return;
     case kGridAutoRepeatClass:
       To<cssvalue::CSSGridAutoRepeatValue>(this)->TraceAfterDispatch(visitor);
@@ -911,6 +926,10 @@ void CSSValue::Trace(Visitor* visitor) const {
     case kRepeatClass:
       To<cssvalue::CSSRepeatValue>(this)->TraceAfterDispatch(visitor);
       return;
+    case kTriggerAttachmentClass:
+      To<cssvalue::CSSTriggerAttachmentValue>(this)->TraceAfterDispatch(
+          visitor);
+      return;
   }
   NOTREACHED();
 }
@@ -1012,6 +1031,8 @@ String CSSValue::ClassTypeToString() const {
       return "RevertClass";
     case kRevertLayerClass:
       return "RevertLayerClass";
+    case kRevertRuleClass:
+      return "RevertRuleClass";
     case kReflectClass:
       return "ReflectClass";
     case kShadowClass:
@@ -1076,6 +1097,8 @@ String CSSValue::ClassTypeToString() const {
       return "kPaletteMixClass";
     case kRepeatStyleClass:
       return "kRepeatStyleClass";
+    case kTriggerAttachmentClass:
+      return "kTriggerAttachmentClass";
   }
   NOTREACHED();
 }

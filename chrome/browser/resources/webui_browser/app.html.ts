@@ -11,7 +11,7 @@ export function getHtml(this: WebuiBrowserAppElement) {
   return html`<!--_html_template_start_-->
 <div class="activeFrame" id="rootContainer">
   <div id="topContainer">
-    <div class="titlebarDiv">
+    <div class="titlebarDiv" @mousedown="${this.onTabDragMouseDown_}">
       <div class="tabstripDiv">
         <webui-browser-tabstrip id="tabstrip"
           @tab-click="${this.onTabClick_}"
@@ -42,10 +42,24 @@ export function getHtml(this: WebuiBrowserAppElement) {
       <cr-icon-button iron-icon="cr:arrow-forward"
         ?disabled="${this.forwardButtonDisabled_}"
         @click="${this.onForwardClick_}"></cr-icon-button>
-      <cr-searchbox id="address"></cr-searchbox>
+      <cr-icon-button class="${this.reloadOrStopIcon_}"
+        title="${this.reloadOrStopTooltip_()}'"
+        @click="${this.onReloadOrStopClick_}"></cr-icon-button>
+      <div id="addressBox">
+        <cr-searchbox id="address"></cr-searchbox>
+        <cr-button id="locationIconButton" type="button"
+          ?hidden="${!this.showLocationIconButton_}"
+          @click="${this.onLocationIconClick_}">
+          <cr-icon id="locationIcon"
+            icon="webui-browser:${this.locationIcon_}Icon"></cr-icon>
+        </cr-button>
+      </div>
+      <webui-browser-extensions-bar id="extensionsBar">
+      </webui-browser-extensions-bar>
       <cr-icon-button id="avatarButton" iron-icon="cr:person"
         @click="${this.onAvatarClick_}"></cr-icon-button>
       <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
+        title="$i18n{appMenuTooltip}"
         @click="${this.onAppMenuClick_}"></cr-icon-button>
     </div>
     <webui-browser-bookmark-bar
@@ -56,8 +70,11 @@ export function getHtml(this: WebuiBrowserAppElement) {
     </webui-browser-bookmark-bar>
   </div>
   <div id="main">
-    <content-region id="contentRegion"">
+    <content-region id="contentRegion"
+      ?showing-side-panel="${this.showingSidePanel_}">
     </content-region>
+    <side-panel id="sidePanel" @side-panel-closed="${this.onSidePanelClosed_}">
+    </side-panel>
   </div>
 </div>
 

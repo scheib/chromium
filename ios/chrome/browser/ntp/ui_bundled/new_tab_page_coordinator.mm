@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_coordinator.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import "base/feature_list.h"
 #import "base/metrics/field_trial_params.h"
 #import "base/metrics/histogram_functions.h"
@@ -19,10 +17,12 @@
 #import "components/feed/core/v2/public/ios/pref_names.h"
 #import "components/feed/feed_feature_list.h"
 #import "components/image_fetcher/ios/ios_image_data_fetcher_wrapper.h"
+#import "components/ntp_tiles/pref_names.h"
 #import "components/omnibox/common/omnibox_features.h"
 #import "components/policy/policy_constants.h"
 #import "components/pref_registry/pref_registry_syncable.h"
 #import "components/prefs/pref_service.h"
+#import "components/safety_check/safety_check_pref_names.h"
 #import "components/search/search.h"
 #import "components/search_engines/template_url_service.h"
 #import "components/signin/public/base/signin_metrics.h"
@@ -33,10 +33,10 @@
 #import "ios/chrome/app/profile/profile_init_stage.h"
 #import "ios/chrome/app/profile/profile_state.h"
 #import "ios/chrome/app/profile/profile_state_observer.h"
-#import "ios/chrome/browser/aim/prototype/coordinator/aim_prototype_coordinator.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_coordinator.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_coordinator_delegate.h"
+#import "ios/chrome/browser/aim/prototype/coordinator/aim_prototype_availability.h"
+#import "ios/chrome/browser/authentication/account_menu/coordinator/account_menu_coordinator.h"
+#import "ios/chrome/browser/authentication/account_menu/coordinator/account_menu_coordinator_delegate.h"
+#import "ios/chrome/browser/authentication/account_menu/public/account_menu_constants.h"
 #import "ios/chrome/browser/authentication/ui_bundled/continuation.h"
 #import "ios/chrome/browser/authentication/ui_bundled/enterprise/enterprise_utils.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_coordinator.h"
@@ -98,6 +98,7 @@
 #import "ios/chrome/browser/omnibox/model/placeholder_service/placeholder_service.h"
 #import "ios/chrome/browser/omnibox/model/placeholder_service/placeholder_service_factory.h"
 #import "ios/chrome/browser/overscroll_actions/ui_bundled/overscroll_actions_controller.h"
+#import "ios/chrome/browser/policy/model/policy_util.h"
 #import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
 #import "ios/chrome/browser/shared/coordinator/layout_guide/layout_guide_util.h"
 #import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
@@ -119,8 +120,8 @@
 #import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
 #import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/shared/ui/util/util_swift.h"
 #import "ios/chrome/browser/sharing/ui_bundled/sharing_coordinator.h"
@@ -138,6 +139,7 @@
 #import "ios/chrome/browser/toolbar/ui_bundled/public/fakebox_focuser.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/tab_groups/coordinator/tab_group_indicator_coordinator.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/web/model/web_navigation_util.h"
 #import "ios/chrome/common/NSString+Chromium.h"
 #import "ios/chrome/common/material_timing.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
@@ -151,7 +153,6 @@
 #import "ui/base/l10n/l10n_util_mac.h"
 
 @interface NewTabPageCoordinator () <AccountMenuCoordinatorDelegate,
-                                     AIMPrototypeCoordinatorDelegate,
                                      AuthenticationServiceObserving,
                                      ContentSuggestionsDelegate,
                                      DiscoverFeedObserverBridgeDelegate,
@@ -280,8 +281,6 @@
 @implementation NewTabPageCoordinator {
   // IdentityManager for the primary account info.
   raw_ptr<signin::IdentityManager> _identityManager;
-  // Coordinator for the AIM prototype.
-  AIMPrototypeCoordinator* _aimPrototypeCoordinator;
   // Coordinator in charge of handling sharing use cases.
   SharingCoordinator* _sharingCoordinator;
   // Coordinator for presenting the Home customization menu.
@@ -315,6 +314,11 @@
     _canfocusAccessibilityOmniboxWhenViewAppears = YES;
   }
   return self;
+}
+
+- (void)dealloc {
+  CHECK(!self.started, base::NotFatalUntil::M145);
+  CHECK(!_authServiceObserverBridge, base::NotFatalUntil::M145);
 }
 
 - (void)start {
@@ -395,8 +399,6 @@
   if (!self.started) {
     return;
   }
-
-  [self stopAimPrototypeCoordinator];
 
   _webState = nullptr;
 
@@ -504,6 +506,10 @@
 
 - (void)focusFakebox {
   [self dismissCustomizationMenu];
+  if (MaybeShowAIMPrototype(self.browser,
+                            AIMPrototypeEntrypoint::kNTPFakebox)) {
+    return;
+  }
   _fakeboxTapped = NO;
   [self.NTPViewController focusOmnibox];
 }
@@ -608,6 +614,7 @@
   [self stopSharingCoordinator];
   [self stopAccountMenuCoordinator];
   [self stopSigninCoordinator];
+  [self dismissCustomizationMenu];
 }
 
 #pragma mark - Setters
@@ -686,6 +693,8 @@
   id<NewTabPageComponentFactoryProtocol> componentFactory =
       self.componentFactory;
   self.NTPViewController = [componentFactory NTPViewController];
+  self.NTPViewController.incognitoDisabled =
+      IsIncognitoModeDisabled(self.prefService);
   self.headerViewController =
       [componentFactory headerViewControllerForProfile:self.profile];
   self.NTPMediator =
@@ -909,6 +918,10 @@
 - (void)fakeboxTapped {
   [self dismissCustomizationMenu];
   _fakeboxTapped = YES;
+  if (MaybeShowAIMPrototype(self.browser,
+                            AIMPrototypeEntrypoint::kNTPFakebox)) {
+    return;
+  }
   [self.NTPViewController focusOmnibox];
 }
 
@@ -931,13 +944,7 @@
     [handler
         showGoogleServicesSettingsFromViewController:self.baseViewController];
   } else if (isSignedIn) {
-    if (IsIdentityDiscAccountMenuEnabled()) {
-      [self showAccountMenu:identityDisc];
-    } else {
-      id<ApplicationCommands> handler = HandlerForProtocol(
-          self.browser->GetCommandDispatcher(), ApplicationCommands);
-      [handler showSettingsFromViewController:self.baseViewController];
-    }
+    [self showAccountMenu:identityDisc];
   } else {
     __weak __typeof(self) weakSelf = self;
     auto accessPoint = signin_metrics::AccessPoint::kNtpSignedOutIcon;
@@ -985,13 +992,28 @@
 
 // This also belongs to #pragma mark - SigninPromoViewMediatorDelegate
 - (void)showSigninWithCommand:(ShowSigninCommand*)command {
-  if (_signinCoordinator) {
+  if (_signinCoordinator.viewWillPersist) {
+    // There is a signin-coordinator currently being presented.
+    // Let’s call the completion block of the command in order to inform the
+    // giver of the command that the command is interrupted.
     SigninCoordinatorCompletionCallback completion = command.completion;
     if (completion) {
       completion(SigninCoordinatorResultInterrupted, nil);
     }
     return;
+  } else if (_signinCoordinator) {
+    // There may be a signin-coordinator being presented. Due to uncertainty,
+    // let’s close the current sign-in coordinator and start the new one.
+    _signinCoordinator.signinCompletion(SigninCoordinatorResultInterrupted,
+                                        nil);
+    // The signin-completion should have unset the sign-in coordinator.
+    CHECK(!_signinCoordinator, base::NotFatalUntil::M146);
   }
+  __weak __typeof(self) weakSelf = self;
+  [command addSigninCompletion:^(SigninCoordinatorResult result,
+                                 id<SystemIdentity>) {
+    [weakSelf showSigninCommandDidFinish];
+  }];
   _signinCoordinator =
       [SigninCoordinator signinCoordinatorWithCommand:command
                                               browser:self.browser
@@ -1206,9 +1228,12 @@
                                            continuationProvider:
                                                DoNothingContinuationProvider()];
   } else {
+    Browser* browser = self.browser;
+    CHECK_EQ(browser->type(), Browser::Type::kRegular,
+             base::NotFatalUntil::M145);
     _signinCoordinator = [SigninCoordinator
         instantSigninCoordinatorWithBaseViewController:self.NTPViewController
-                                               browser:self.browser
+                                               browser:browser
                                               identity:nil
                                           contextStyle:SigninContextStyle::
                                                            kDefault
@@ -1281,7 +1306,6 @@
 - (void)updateModuleVisibility {
   [_customizationCoordinator updateMenuData];
   [self handleChangeInModules];
-  [self cancelOmniboxEdit];
   [self setContentOffsetToTop];
   [self.feedHeaderViewController updateForFeedVisibilityChanged];
   UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification,
@@ -1599,32 +1623,7 @@
   [self stopAccountMenuCoordinator];
 }
 
-#pragma mark - AIMPrototypeCoordinatorDelegate
-
-- (void)aimPrototypeCoordinatorDidFinish:(AIMPrototypeCoordinator*)coordinator {
-  [self stopAimPrototypeCoordinator];
-}
-
 #pragma mark - Private
-
-- (void)startAimPrototypeCoordinator {
-  if (_aimPrototypeCoordinator) {
-    return;
-  }
-  _aimPrototypeCoordinator = [[AIMPrototypeCoordinator alloc]
-      initWithBaseViewController:self.baseViewController
-                         browser:self.browser];
-  _aimPrototypeCoordinator.delegate = self;
-  [_aimPrototypeCoordinator start];
-}
-
-- (void)stopAimPrototypeCoordinator {
-  if (!_aimPrototypeCoordinator) {
-    return;
-  }
-  [_aimPrototypeCoordinator stop];
-  _aimPrototypeCoordinator = nil;
-}
 
 - (void)stopSharingCoordinator {
   [_sharingCoordinator stop];
@@ -1799,21 +1798,15 @@
 
       PrefService* prefService = self.prefService;
       BOOL safetyCheckEnabled = prefService->GetBoolean(
-          prefs::kHomeCustomizationMagicStackSafetyCheckEnabled);
-      BOOL setUpListEnabled = prefService->GetBoolean(
-          prefs::kHomeCustomizationMagicStackSetUpListEnabled);
+          safety_check::prefs::kSafetyCheckHomeModuleEnabled);
       BOOL tabResumptionEnabled = prefService->GetBoolean(
-          prefs::kHomeCustomizationMagicStackTabResumptionEnabled);
-      BOOL parcelTrackingEnabled = prefService->GetBoolean(
-          prefs::kHomeCustomizationMagicStackParcelTrackingEnabled);
+          ntp_tiles::prefs::kTabResumptionHomeModuleEnabled);
       BOOL tipsEnabled = prefService->GetBoolean(
           prefs::kHomeCustomizationMagicStackTipsEnabled);
       [self.NTPMetricsRecorder
-          recordMagicStackCustomizationStateWithSetUpList:setUpListEnabled
-                                              safetyCheck:safetyCheckEnabled
-                                            tabResumption:tabResumptionEnabled
-                                           parcelTracking:parcelTrackingEnabled
-                                                     tips:tipsEnabled];
+          recordMagicStackCustomizationStateWithSafetyCheck:safetyCheckEnabled
+                                              tabResumption:tabResumptionEnabled
+                                                       tips:tipsEnabled];
 
       // TODO(crbug.com/350990359): Deprecate IOS.NTP.Impression when Home
       // Customization launches.
@@ -1855,8 +1848,10 @@
 - (void)showSignInDisableMessage {
   id<SnackbarCommands> handler =
       static_cast<id<SnackbarCommands>>(self.browser->GetCommandDispatcher());
-  MDCSnackbarMessage* message = CreateSnackbarMessage(l10n_util::GetNSString(
-      IDS_IOS_NTP_FEED_SIGNIN_PROMO_DISABLE_SNACKBAR_MESSAGE));
+  SnackbarMessage* message = [[SnackbarMessage alloc]
+      initWithTitle:
+          l10n_util::GetNSString(
+              IDS_IOS_NTP_FEED_SIGNIN_PROMO_DISABLE_SNACKBAR_MESSAGE)];
 
   [handler showSnackbarMessage:message];
 }
@@ -1985,15 +1980,18 @@
 }
 
 - (void)openMIA {
-  if (base::FeatureList::IsEnabled(kAIMPrototype)) {
-    [self startAimPrototypeCoordinator];
+  if (MaybeShowAIMPrototype(self.browser,
+                            AIMPrototypeEntrypoint::kNTPAIMButton)) {
     return;
   }
   [self.NTPMetricsRecorder recordMIATapped];
-  OpenNewTabCommand* command = [OpenNewTabCommand
-      commandWithURLFromChrome:GetUrlForAim(
-                                   self.templateURLService,
-                                   /*query_start_time=*/base::Time::Now())];
+
+  GURL URL = GetUrlForAim(self.templateURLService,
+                          /*query_start_time=*/base::Time::Now());
+  OpenNewTabCommand* command = [OpenNewTabCommand commandWithURLFromChrome:URL];
+  command.extraHeaders =
+      web_navigation_util::VariationHeadersForURL(URL, /*is_incognito=*/false);
+
   id<ApplicationCommands> applicationHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ApplicationCommands);
   [applicationHandler openURLInNewTab:command];
@@ -2021,6 +2019,8 @@
 
 - (void)openIncognitoSearch {
   [self.NTPMetricsRecorder recordIncognitoTapped];
+  [self dismissCustomizationMenu];
+
   OpenNewTabCommand* command = [OpenNewTabCommand commandWithIncognito:YES];
   command.shouldFocusOmnibox = YES;
   id<ApplicationCommands> applicationHandler = HandlerForProtocol(

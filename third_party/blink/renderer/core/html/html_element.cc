@@ -106,6 +106,7 @@
 #include "third_party/blink/renderer/core/html/html_template_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/core/input/keyboard_event_manager.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/keywords.h"
@@ -117,6 +118,7 @@
 #include "third_party/blink/renderer/core/mathml_names.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/paint/timing/container_timing.h"
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/core/timing/soft_navigation_heuristics.h"
 #include "third_party/blink/renderer/core/trustedtypes/trusted_script.h"
@@ -129,6 +131,8 @@
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/text/bidi_paragraph.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
+#include "third_party/blink/renderer/platform/wtf/text/character_names.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
@@ -334,6 +338,14 @@ bool HTMLElement::IsValidDirAttribute(const AtomicString& value) {
          EqualIgnoringASCIICase(value, "rtl");
 }
 
+bool HTMLElement::IsValidContainerTimingNestingAttribute(
+    const AtomicString& value) {
+  return EqualIgnoringASCIICase(value, "auto") ||
+         EqualIgnoringASCIICase(value, "ignore") ||
+         EqualIgnoringASCIICase(value, "transparent") ||
+         EqualIgnoringASCIICase(value, "shadowed");
+}
+
 void HTMLElement::CollectStyleForPresentationAttribute(
     const QualifiedName& name,
     const AtomicString& value,
@@ -447,6 +459,8 @@ const AttributeTriggers* HTMLElement::TriggersForAttributeName(
        &HTMLElement::OnContainerTimingAttrChanged},
       {html_names::kContainertimingIgnoreAttr, kNoWebFeature, kNoEvent,
        &HTMLElement::OnContainerTimingIgnoreAttrChanged},
+      {html_names::kContainertimingNestingAttr, kNoWebFeature, kNoEvent,
+       &HTMLElement::OnContainerTimingNestingAttrChanged},
 
       {html_names::kOnabortAttr, kNoWebFeature, event_type_names::kAbort,
        nullptr},
@@ -1650,7 +1664,7 @@ void HTMLElement::ShowPopoverInternal(Element* invoker,
   after_event->SetTarget(this);
   GetPopoverData()->setPendingToggleEventTask(PostCancellableTask(
       *original_document.GetTaskRunner(TaskType::kDOMManipulation), FROM_HERE,
-      WTF::BindOnce(
+      BindOnce(
           [](HTMLElement* element, ToggleEvent* event) {
             CHECK(element);
             CHECK(event);
@@ -1979,12 +1993,14 @@ PopoverHideResult HTMLElement::HidePopoverInternal(
     // If this is the target of an active interest invoker, closing the popover
     // constitutes an automatic loss of interest in the invoker.
     if (Element* upstream_invoker = SourceInterestInvoker()) {
-      DCHECK(RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled(
-          GetDocument().GetExecutionContext()));
+      DCHECK(RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled());
       DCHECK_EQ(upstream_invoker->InterestForElement(), this);
       DCHECK_NE(upstream_invoker->GetInvokerData()->GetInterestState(),
                 InterestState::kNoInterest);
-      upstream_invoker->LoseInterestNow();
+      // We're already closing this popover, so don't try to close it again.
+      upstream_invoker->LoseInterestNow(
+          InterestLostCancelable::kCancelable,
+          InterestLostPopoverBehavior::kDontClosePopovers);
     }
 
     // The 'loseinterest' event handler could have changed this popover, e.g. by
@@ -1997,7 +2013,6 @@ PopoverHideResult HTMLElement::HidePopoverInternal(
 
     // Queue the "closing" toggle event.
     String old_state = "open";
-    ToggleEvent* after_event;
     if (GetPopoverData()->hasPendingToggleEventTask()) {
       // There's already a queued 'toggle' event. Cancel it and fire a new one
       // keeping the original value for old_state.
@@ -2007,9 +2022,9 @@ PopoverHideResult HTMLElement::HidePopoverInternal(
     } else {
       GetPopoverData()->setPendingToggleEventStartedClosed(false);
     }
-    after_event = ToggleEvent::Create(event_type_names::kToggle,
-                                      Event::Cancelable::kNo, old_state,
-                                      /*new_state*/ "closed", invoker);
+    ToggleEvent* after_event = ToggleEvent::Create(
+        event_type_names::kToggle, Event::Cancelable::kNo, old_state,
+        /*new_state*/ "closed", invoker);
     CHECK_EQ(after_event->newState(), "closed");
     CHECK_EQ(after_event->oldState(), old_state);
     CHECK(!after_event->bubbles());
@@ -2017,7 +2032,7 @@ PopoverHideResult HTMLElement::HidePopoverInternal(
     after_event->SetTarget(this);
     GetPopoverData()->setPendingToggleEventTask(PostCancellableTask(
         *document.GetTaskRunner(TaskType::kDOMManipulation), FROM_HERE,
-        WTF::BindOnce(
+        BindOnce(
             [](HTMLElement* element, ToggleEvent* event) {
               CHECK(element);
               CHECK(event);
@@ -2444,13 +2459,9 @@ void HTMLElement::InvokePopover(Element& invoker) {
 
 void HTMLElement::SetImplicitAnchor(Element* element) {
   CHECK(IsPopover());
-  if (auto* old_implicit_anchor =
-          GetPopoverData() ? GetPopoverData()->implicitAnchor() : nullptr) {
-    old_implicit_anchor->DecrementImplicitlyAnchoredElementCount();
-  }
   GetPopoverData()->setImplicitAnchor(element);
   if (element) {
-    element->IncrementImplicitlyAnchoredElementCount();
+    element->SetMayBeImplicitAnchor();
   }
 }
 
@@ -2470,7 +2481,10 @@ bool HTMLElement::IsValidBuiltinPopoverCommand(HTMLElement& invoker,
                                                CommandEventType command) {
   return command == CommandEventType::kTogglePopover ||
          command == CommandEventType::kHidePopover ||
-         command == CommandEventType::kShowPopover;
+         command == CommandEventType::kShowPopover ||
+         command == CommandEventType::kToggleMenu ||
+         command == CommandEventType::kHideMenu ||
+         command == CommandEventType::kShowMenu;
 }
 
 bool HTMLElement::IsValidBuiltinCommand(HTMLElement& invoker,
@@ -2498,10 +2512,10 @@ bool HTMLElement::HandleCommandInternal(HTMLElement& invoker,
                               command == CommandEventType::kRequestFullscreen ||
                               command == CommandEventType::kExitFullscreen;
 
-  bool is_show_interest = command == CommandEventType::kToggleInterest;
+  bool is_toggle_interest = command == CommandEventType::kToggleInterest;
 
   if (PopoverType() == PopoverValueType::kNone && !is_fullscreen_action &&
-      (!is_show_interest || !InterestForElement())) {
+      (!is_toggle_interest || !InterestForElement())) {
     return false;
   }
 
@@ -2558,12 +2572,13 @@ bool HTMLElement::HandleCommandInternal(HTMLElement& invoker,
 
   LocalFrame* frame = document.GetFrame();
 
-  if (is_show_interest && InterestForElement()) {
+  if (is_toggle_interest && InterestForElement()) {
     if (GetInterestState() == InterestState::kNoInterest) {
       ShowInterestNow();
     } else {
       CHECK_EQ(GetInterestState(), InterestState::kFullInterest);
-      LoseInterestNow();
+      LoseInterestNow(InterestLostCancelable::kCancelable,
+                      InterestLostPopoverBehavior::kClosePopovers);
     }
     return true;
   } else if (command == CommandEventType::kToggleFullscreen) {
@@ -2667,6 +2682,46 @@ void HTMLElement::click() {
 
 void HTMLElement::AccessKeyAction(SimulatedClickCreationScope creation_scope) {
   DispatchSimulatedClick(nullptr, creation_scope);
+}
+
+String HTMLElement::accessKeyLabel() {
+  CHECK(RuntimeEnabledFeatures::AccessKeyLabelEnabled());
+  const String access_key = FastGetAttribute(html_names::kAccesskeyAttr);
+  if (access_key.empty()) {
+    return String();
+  } else if (access_key.length() > 1) {
+    // If there is more than one code point for access key then it will
+    // cause no access key to be assigned.
+    // This is because the behavior of access_key is not matched
+    // with the spec[1][2]
+    // [1] https://html.spec.whatwg.org/#keyboard-shortcuts-processing-model
+    // [2] https://github.com/whatwg/html/issues/3769
+    AddConsoleMessage(
+        mojom::ConsoleMessageSource::kJavaScript,
+        mojom::ConsoleMessageLevel::kWarning,
+        "An accessKey with more than one code point is not supported.");
+    return String();
+  }
+
+  StringBuilder result;
+
+  const int modifiers = KeyboardEventManager::kAccessKeyModifiers;
+#if BUILDFLAG(IS_MAC)
+  if (modifiers & WebInputEvent::kControlKey) {
+    result.Append(uchar::kUpArrowheadKey);
+  }
+  if (modifiers & WebInputEvent::kAltKey) {
+    result.Append(uchar::kOptionKey);
+  }
+#else
+  DCHECK(!(modifiers & WebInputEvent::kControlKey));
+  if (modifiers & WebInputEvent::kAltKey) {
+    result.Append("Alt+");
+  }
+#endif
+
+  result.Append(access_key);
+  return result.ReleaseString();
 }
 
 String HTMLElement::title() const {
@@ -2836,18 +2891,14 @@ const AtomicString& HTMLElement::GetDirectionalAttribute(
 
   const AtomicString& result = FastGetAttribute(attr_name);
   if (!result.IsNull()) {
-    TextDirection direction = TextDirection::kLtr;
-    if (RuntimeEnabledFeatures::AttributeDirectionalityEnabled()) {
-      direction = CachedDirectionality();
-    }
+    TextDirection direction = CachedDirectionality();
 
     if (const LayoutObject* layout_object = GetLayoutObject()) {
       // Note that this isn't part of the HTML spec's concept, but we've
       // always honored CSS directionality for the title attribute.
       direction = layout_object->StyleRef().Direction();
     }
-    if (RuntimeEnabledFeatures::AttributeDirectionalityEnabled() &&
-        HasDirectionAuto()) {
+    if (HasDirectionAuto()) {
       if (const std::optional<TextDirection> string_direction =
               BidiParagraph::BaseDirectionForString(result)) {
         direction = *string_direction;
@@ -3336,6 +3387,13 @@ void HTMLElement::OnContainerTimingAttrChanged(
   if (!RuntimeEnabledFeatures::ContainerTimingEnabled()) {
     return;
   }
+
+  // Drop previous records in ContainerTiming
+  if (auto* window = GetDocument().domWindow()) {
+    ContainerTiming::From(*window).MaybeUpdateContainerRootIdentifier(
+        this, params.new_value);
+  }
+
   bool had_container_timing = !params.old_value.IsNull();
   bool has_container_timing = !params.new_value.IsNull();
   if (had_container_timing == has_container_timing) {
@@ -3378,6 +3436,28 @@ void HTMLElement::OnContainerTimingIgnoreAttrChanged(
   }
 }
 
+void HTMLElement::OnContainerTimingNestingAttrChanged(
+    const AttributeModificationParams& params) {
+  if (!RuntimeEnabledFeatures::ContainerTimingEnabled()) {
+    return;
+  }
+
+  if (!FastHasAttribute(html_names::kContainertimingAttr)) {
+    return;
+  }
+
+  bool is_old_valid = IsValidContainerTimingNestingAttribute(params.old_value);
+  bool is_new_valid = IsValidContainerTimingNestingAttribute(params.new_value);
+  if (!is_old_valid && !is_new_valid) {
+    return;
+  }
+
+  if (auto* window = GetDocument().domWindow()) {
+    ContainerTiming::From(*window).MaybeUpdateContainerRootNestingPolicy(
+        this, params.new_value);
+  }
+}
+
 ElementInternals* HTMLElement::attachInternals(
     ExceptionState& exception_state) {
   // 1. If this's is value is not null, then throw a "NotSupportedError"
@@ -3390,9 +3470,12 @@ ElementInternals* HTMLElement::attachInternals(
   }
 
   // 2. Let definition be the result of looking up a custom element definition
-  // given this's node document, its namespace, its local name, and null as the
+  // given this's node registry, its namespace, its local name, and null as the
   // is value.
   CustomElementRegistry* registry = GetTreeScope().customElementRegistry();
+  if (RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled()) {
+    registry = customElementRegistry();
+  }
   auto* definition =
       registry ? registry->DefinitionForName(localName()) : nullptr;
 

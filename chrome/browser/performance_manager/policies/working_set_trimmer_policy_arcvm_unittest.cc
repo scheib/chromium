@@ -28,6 +28,7 @@
 #include "chromeos/ui/base/app_types.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "components/prefs/testing_pref_service.h"
+#include "components/session_manager/core/fake_session_manager_delegate.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -125,7 +126,8 @@ class WorkingSetTrimmerPolicyArcVmTest : public testing::Test {
   display::test::TestScreen test_screen_{/*create_display=*/true,
                                          /*register_screen=*/true};
   TestingPrefServiceSimple local_state_;
-  session_manager::SessionManager session_manager_;
+  session_manager::SessionManager session_manager_{
+      std::make_unique<session_manager::FakeSessionManagerDelegate>()};
   std::unique_ptr<arc::ArcServiceManager> arc_service_manager_;
   std::unique_ptr<arc::FakeAppHost> app_host_;
   std::unique_ptr<arc::FakeAppInstance> app_instance_;
@@ -270,12 +272,16 @@ TEST_F(WorkingSetTrimmerPolicyArcVmTest, WindowFocused) {
   container_window.Init(ui::LAYER_NOT_DRAWN);
 
   // Create two fake windows.
-  aura::Window* arc_window = aura::test::CreateTestWindow(
-      SK_ColorGREEN, 0, gfx::Rect(), &container_window);
+  aura::Window* arc_window =
+      aura::test::CreateTestWindow(
+          {.parent = &container_window, .window_id = 0}, SK_ColorGREEN)
+          .release();
   arc_window->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::ARC_APP);
   ASSERT_TRUE(ash::IsArcWindow(arc_window));
-  aura::Window* chrome_window = aura::test::CreateTestWindow(
-      SK_ColorRED, 0, gfx::Rect(), &container_window);
+  aura::Window* chrome_window =
+      aura::test::CreateTestWindow(
+          {.parent = &container_window, .window_id = 0}, SK_ColorRED)
+          .release();
   ASSERT_FALSE(ash::IsArcWindow(chrome_window));
 
   bool is_first_trim_post_boot = true;

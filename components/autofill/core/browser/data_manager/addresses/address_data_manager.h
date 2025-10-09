@@ -19,17 +19,17 @@
 #include "base/time/time.h"
 #include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/data_model/addresses/autofill_profile.h"
-#include "components/autofill/core/browser/strike_databases/address_suggestion_strike_database.h"
-#include "components/autofill/core/browser/strike_databases/autofill_profile_migration_strike_database.h"
-#include "components/autofill/core/browser/strike_databases/autofill_profile_save_strike_database.h"
-#include "components/autofill/core/browser/strike_databases/autofill_profile_update_strike_database.h"
-#include "components/autofill/core/browser/strike_databases/strike_database_base.h"
+#include "components/autofill/core/browser/strike_databases/addresses/address_suggestion_strike_database.h"
+#include "components/autofill/core/browser/strike_databases/addresses/autofill_profile_migration_strike_database.h"
+#include "components/autofill/core/browser/strike_databases/addresses/autofill_profile_save_strike_database.h"
+#include "components/autofill/core/browser/strike_databases/addresses/autofill_profile_update_strike_database.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service_observer.h"
 #include "components/autofill/core/common/dense_set.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/prefs/pref_member.h"
 #include "components/signin/public/identity_manager/account_info.h"
+#include "components/strike_database/strike_database_base.h"
 #include "components/sync/service/sync_service.h"
 #include "components/webdata/common/web_data_service_consumer.h"
 
@@ -91,7 +91,7 @@ class AddressDataManager : public AutofillWebDataServiceObserverOnUISequence {
                      PrefService* local_state,
                      syncer::SyncService* sync_service,
                      signin::IdentityManager* identity_manager,
-                     StrikeDatabaseBase* strike_database,
+                     strike_database::StrikeDatabaseBase* strike_database,
                      GeoIpCountryCode variation_country_code,
                      std::string app_locale);
 
@@ -131,6 +131,8 @@ class AddressDataManager : public AutofillWebDataServiceObserverOnUISequence {
 
   // Returns the profiles to suggest to the user for filling, ordered by
   // frecency.
+  // If kAccountNameEmail is present in `profiles_`, it is always moved to the
+  // end of the vector unless this is the first time it is suggested.
   std::vector<const AutofillProfile*> GetProfilesToSuggest() const;
 
   // Returns all `GetProfiles()` in the order that the should be shown in the
@@ -147,9 +149,9 @@ class AddressDataManager : public AutofillWebDataServiceObserverOnUISequence {
   // Updates |profile| which already exists in the web database.
   virtual void UpdateProfile(const AutofillProfile& profile);
 
-  // Tivial wrapper that simply calls `RemoveProfileImpl()`.
+  // Trivial wrapper that simply calls `RemoveProfileImpl()`.
   void RemoveProfile(const std::string& guid,
-                     bool is_deduplication_initiated = false);
+                     bool non_permanent_account_profile_removal = false);
 
   // Removes all local profiles modified on or after `delete_begin` and strictly
   // before `delete_end`. Used for browsing data deletion purposes.
@@ -307,11 +309,20 @@ class AddressDataManager : public AutofillWebDataServiceObserverOnUISequence {
     return home_and_work_metadata_.get();
   }
 
+#if BUILDFLAG(IS_IOS)
+  // Calls `account_name_email_store_` in order to create or update the
+  // kAccountNameEmail profile using current primary account info.
+  // TODO(crbug.com/449708427): Remove once `AccountInfo` supports full_name on
+  // IOS.
+  void MaybeCreateAccountNameEmailProfile(std::string account_name,
+                                          std::string email);
+#endif
+
  protected:
   friend class AddressDataManagerTestApi;
 
   void SetPrefService(PrefService* pref_service);
-  void SetStrikeDatabase(StrikeDatabaseBase* strike_database);
+  void SetStrikeDatabase(strike_database::StrikeDatabaseBase* strike_database);
 
   // Used to get a pointer to the strike database for migrating existing
   // profiles. Note, the result can be a nullptr, for example, on incognito
@@ -382,11 +393,11 @@ class AddressDataManager : public AutofillWebDataServiceObserverOnUISequence {
   // Called when `prefs::kAutofillProfileEnabled` changed.
   void OnAutofillProfilePrefChanged();
 
-  // Removes the profile by `guid`. If `is_deduplication_initiated` is true and
-  // the profile is coming from the account, it will be removed from the local
-  // database and marked `invisible_in_autofill` on the server.
+  // Removes the profile by `guid`. If `non_permanent_account_profile_removal`
+  // is true and the profile is coming from the account, the removal will be
+  // treated as `AutofillProfileChange::HIDE_IN_AUTOFILL`.
   virtual void RemoveProfileImpl(const std::string& guid,
-                                 bool is_deduplication_initiated);
+                                 bool non_permanent_account_profile_removal);
 
   base::ObserverList<Observer> observers_;
 

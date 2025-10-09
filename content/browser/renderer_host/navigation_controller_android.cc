@@ -261,15 +261,12 @@ base::android::ScopedJavaLocalRef<jobject> NavigationControllerAndroid::LoadUrl(
 
     // If the attribution src token exists, then an impression exists with this
     // navigation.
-    if (GetAttributionSrcTokenFromJavaAdditionalNavigationParams(
-            env, j_additional_navigation_params)
-            .has_value()) {
-      blink::Impression impression;
-      impression.attribution_src_token =
-          GetAttributionSrcTokenFromJavaAdditionalNavigationParams(
-              env, j_additional_navigation_params)
-              .value();
-      params.impression = impression;
+    if (std::optional<blink::AttributionSrcToken> attribution_src_token =
+            GetAttributionSrcTokenFromJavaAdditionalNavigationParams(
+                env, j_additional_navigation_params)) {
+      params.impression = blink::Impression{
+          .attribution_src_token = *attribution_src_token,
+      };
     }
   }
 
@@ -486,6 +483,10 @@ NavigationControllerAndroid::GetPendingEntry(JNIEnv* env) {
 
 jint NavigationControllerAndroid::GetLastCommittedEntryIndex(JNIEnv* env) {
   return navigation_controller_->GetLastCommittedEntryIndex();
+}
+
+jboolean NavigationControllerAndroid::CanViewSource(JNIEnv* env) {
+  return navigation_controller_->CanViewSource();
 }
 
 jboolean NavigationControllerAndroid::RemoveEntryAtIndex(JNIEnv* env,

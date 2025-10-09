@@ -15,6 +15,8 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/process/process_handle.h"
+#include "base/types/pass_key.h"
+#include "build/build_config.h"
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
 #include "components/performance_manager/public/resource_attribution/process_context.h"
@@ -61,7 +63,7 @@ void MemoryMeasurementDelegateImpl::RequestMemorySummary(
   // The memory instrumentation service is not available in unit tests unless
   // explicitly created.
   if (!mem_instrumentation) {
-    std::move(callback).Run({});
+    std::move(callback).Run(CreateMemorySummaryMap());
     return;
   }
   // TODO(crbug.com/40926264): Pass a set of processes to measure instead of
@@ -77,10 +79,10 @@ void MemoryMeasurementDelegateImpl::OnMemorySummary(
     bool success,
     std::unique_ptr<GlobalMemoryDump> memory_dump) {
   if (!success) {
-    std::move(callback).Run({});
+    std::move(callback).Run(CreateMemorySummaryMap());
     return;
   }
-  MemorySummaryMap results;
+  MemorySummaryMap results = CreateMemorySummaryMap();
   CHECK(memory_dump);
   for (const auto& process_dump : memory_dump->process_dumps()) {
     ProcessNodeImpl* process_node =
@@ -91,13 +93,19 @@ void MemoryMeasurementDelegateImpl::OnMemorySummary(
       // be measured?
       continue;
     }
-    results.emplace(ProcessContext::FromProcessNode(process_node),
-                    MemorySummaryMeasurement{
-                        .resident_set_size =
-                            base::KiB(process_dump.os_dump().resident_set_kb),
-                        .private_footprint = base::KiB(
-                            process_dump.os_dump().private_footprint_kb),
-                    });
+    results.emplace(
+        ProcessContext::FromProcessNode(process_node),
+        MemorySummaryMeasurement{
+            .resident_set_size =
+                base::KiB(process_dump.os_dump().resident_set_kb),
+            .private_footprint =
+                base::KiB(process_dump.os_dump().private_footprint_kb),
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+            // `private_footprint_swap_kb` is only defined on these platforms
+            .private_swap =
+                base::KiB(process_dump.os_dump().private_footprint_swap_kb),
+#endif
+        });
   }
   std::move(callback).Run(std::move(results));
 }
@@ -134,6 +142,12 @@ MemoryMeasurementDelegate::GetDefaultFactory() {
   static base::NoDestructor<MemoryMeasurementDelegateFactoryImpl>
       default_factory;
   return default_factory.get();
+}
+
+// static
+MemoryMeasurementDelegate::MemorySummaryMap
+MemoryMeasurementDelegate::CreateMemorySummaryMap() {
+  return MemorySummaryMap(base::PassKey<MemoryMeasurementDelegate>{});
 }
 
 }  // namespace resource_attribution

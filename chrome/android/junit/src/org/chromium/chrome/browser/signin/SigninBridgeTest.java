@@ -12,6 +12,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
+
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -43,7 +46,11 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
 import org.chromium.components.signin.metrics.AccountConsistencyPromoAction;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
+import org.chromium.components.signin.test.util.TestAccounts;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.url.GURL;
+
+import java.lang.ref.WeakReference;
 
 /** JUnit tests for the class {@link SigninBridge}. */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -66,7 +73,7 @@ public class SigninBridgeTest {
         }
     }
 
-    private static final String CONTINUE_URL = "https://test-continue-url.com";
+    private static final GURL CONTINUE_URL = new GURL("https://test-continue-url.com");
 
     @Rule
     public final AccountManagerTestRule mAccountManagerTestRule = new AccountManagerTestRule();
@@ -174,7 +181,7 @@ public class SigninBridgeTest {
     @SmallTest
     public void testAccountPickerSuppressedIfDismissLimitReached() {
         when(mSigninManagerMock.isSigninAllowed()).thenReturn(true);
-        mAccountManagerTestRule.addAccount("account@test.com");
+        mAccountManagerTestRule.addAccount(TestAccounts.ACCOUNT1);
         ChromeSharedPreferences.getInstance()
                 .writeInt(
                         ChromePreferenceKeys.WEB_SIGNIN_ACCOUNT_PICKER_ACTIVE_DISMISSAL_COUNT,
@@ -194,7 +201,9 @@ public class SigninBridgeTest {
     @SmallTest
     public void testAccountPickerShown() {
         when(mSigninManagerMock.isSigninAllowed()).thenReturn(true);
-        mAccountManagerTestRule.addAccount("account@test.com");
+        mAccountManagerTestRule.addAccount(TestAccounts.ACCOUNT1);
+        Context context = ApplicationProvider.getApplicationContext();
+        when(mWindowAndroidMock.getContext()).thenReturn(new WeakReference<>(context));
 
         SigninBridge.openAccountPickerBottomSheet(
                 mTabMock, CONTINUE_URL, mAccountPickerBottomSheetCoordinatorFactoryMock);

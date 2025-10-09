@@ -24,8 +24,6 @@
 #error This file should only be included on desktop.
 #endif
 
-enum class BrowserClosingStatus;
-
 class Browser;
 class Profile;
 
@@ -45,22 +43,6 @@ class BrowserList {
   using const_iterator = BrowserVector::const_iterator;
   using const_reverse_iterator = BrowserVector::const_reverse_iterator;
 
-  struct BrowsersOrderedByActivationRange {
-    const raw_ref<const BrowserList> browser_list;
-
-    const_reverse_iterator begin() const {
-      return browser_list->begin_browsers_ordered_by_activation();
-    }
-    const_reverse_iterator end() const {
-      return browser_list->end_browsers_ordered_by_activation();
-    }
-
-   private:
-    // Stack allocated only to reduce risk of out of bounds lifetime with
-    // |browser_list|.
-    STACK_ALLOCATED();
-  };
-
   BrowserList(const BrowserList&) = delete;
   BrowserList& operator=(const BrowserList&) = delete;
 
@@ -73,8 +55,6 @@ class BrowserList {
 
   bool empty() const { return browsers_.empty(); }
   size_t size() const { return browsers_.size(); }
-
-  Browser* get(size_t index) const { return browsers_[index]; }
 
   // Enumerate the current browser and the new browser in-order.
   void ForEachCurrentAndNewBrowser(
@@ -91,14 +71,6 @@ class BrowserList {
   }
   const_reverse_iterator end_browsers_ordered_by_activation() const {
     return browsers_ordered_by_activation_.rend();
-  }
-
-  // Convenience method for iterating over browsers in activation order. I.e.
-  // the most recently used browser will be at the front of the list.
-  // Example:
-  // for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation())
-  BrowsersOrderedByActivationRange OrderedByActivation() const {
-    return {raw_ref(*this)};
   }
 
   // Returns the set of browsers that are currently in the closing state.
@@ -135,13 +107,9 @@ class BrowserList {
   // Notifies the observers when the current active browser becomes not active.
   static void NotifyBrowserNoLongerActive(Browser* browser);
 
-  // Notifies the observers that the attempted closure of `browser` was
-  // cancelled for a certain `reason`.
-  static void NotifyBrowserCloseCancelled(Browser* browser,
-                                          BrowserClosingStatus reason);
-
   // Notifies the observers when browser close was started. This may be called
   // more than once for a particular browser.
+  // DEPRECATED: Use BrowserWindowInterface::RegisterBrowserDidClose instead.
   static void NotifyBrowserCloseStarted(Browser* browser);
 
   // Closes all browsers for |profile| across all desktops.

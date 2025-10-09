@@ -282,7 +282,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.DriveIs{Attribute}Result" enum="OptionalBoolRecord"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>spvm@chromium.org</owner>
   <owner>catan-team@chromium.org</owner>
   <summary>
@@ -548,6 +548,18 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="UMA.MetricsService.OnFlushScopedTerminationChecker"
+    enum="ScopedTerminationCheckerStatus" expires_after="2026-02-28">
+  <owner>lucnguyen@google.com</owner>
+  <owner>src/base/metrics/OWNERS</owner>
+  <summary>
+    Tentative histogram to quantify how often the browser is ungracefully killed
+    while flushing a UMA log, which usually happens as the browser is being
+    backgrounded. Emitted before starting to finalize the log (Started bucket),
+    and right after (Finished bucket). Emitted only on Android currently.
+  </summary>
+</histogram>
+
 <histogram name="UMA.MetricsService.PendingOngoingLog" enum="Boolean"
     expires_after="2026-02-28">
   <owner>lucnguyen@google.com</owner>
@@ -702,7 +714,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.PrimaryUserType" enum="UserType"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>michaelpg@chromium.org</owner>
   <owner>yilkal@chromium.org</owner>
   <owner>src/base/metrics/OWNERS</owner>
@@ -950,7 +962,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.StructuredMetrics.NumEventsInUpload" units="count"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>troywang@google.com</owner>
   <owner>tby@chromium.org</owner>
   <owner>rkaplow@chromium.org</owner>
@@ -985,7 +997,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.TPMMetricsProvider.ReadSuccess" enum="Boolean"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>psarouthakis@google.com</owner>
   <owner>kristianm@google.com</owner>
   <summary>
@@ -995,7 +1007,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.TPMMetricsProvider.UnknownID" enum="Boolean"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>psarouthakis@google.com</owner>
   <owner>kristianm@google.com</owner>
   <summary>
@@ -1007,7 +1019,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.TruncatedEvents.UserAction" units="events"
-    expires_after="2026-02-28">
+    expires_after="2026-04-05">
   <owner>rkaplow@chromium.org</owner>
   <owner>src/base/metrics/OWNERS</owner>
   <summary>
@@ -1128,7 +1140,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="UMA.UserDemographics.Status" enum="UserDemographicsStatus"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>rogerm@google.com</owner>
   <owner>src/base/metrics/OWNERS</owner>
   <summary>

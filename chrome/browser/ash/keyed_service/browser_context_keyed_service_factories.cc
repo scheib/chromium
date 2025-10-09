@@ -7,7 +7,6 @@
 #include "ash/constants/ash_features.h"
 #include "ash/webui/help_app_ui/help_app_manager_factory.h"
 #include "ash/webui/shortcut_customization_ui/shortcuts_app_manager_factory.h"
-#include "chrome/browser/accessibility/service/accessibility_service_router_factory.h"
 #include "chrome/browser/apps/app_discovery_service/app_discovery_service_factory.h"
 #include "chrome/browser/apps/app_service/publishers/arc_apps_factory.h"
 #include "chrome/browser/ash/accessibility/live_caption/system_live_caption_service_factory.h"
@@ -18,7 +17,7 @@
 #include "chrome/browser/ash/app_list/arc/arc_vpn_provider_manager_factory.h"
 #include "chrome/browser/ash/app_list/search/local_image_search/local_image_search_service_factory.h"
 #include "chrome/browser/ash/app_mode/arcvm_app/kiosk_arcvm_app_service_factory.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_update_service.h"
+#include "chrome/browser/ash/app_mode/kiosk_app_update_service_factory.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler_factory.h"
 #include "chrome/browser/ash/app_restore/full_restore_service_factory.h"
 #include "chrome/browser/ash/apps/apk_web_app_service_factory.h"
@@ -130,10 +129,6 @@
 #include "chrome/browser/ui/webui/ash/settings/services/settings_manager/os_settings_manager_factory.h"
 #include "printing/buildflags/buildflags.h"
 
-#if BUILDFLAG(USE_CUPS)
-#include "chrome/browser/ash/printing/cups_proxy_service_manager_factory.h"
-#endif
-
 namespace ash {
 
 void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
@@ -151,7 +146,7 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
   AppSyncUIStateFactory::GetInstance();
   arc::ArcServiceLauncher::EnsureFactoriesBuilt();
   AuthErrorObserverFactory::GetInstance();
-  ax::AccessibilityServiceRouterFactory::EnsureFactoryBuilt();
+
   BirchKeyedServiceFactory::GetInstance();
   bluetooth::DebugLogsManagerFactory::GetInstance();
   boca::LockedQuizSessionManagerFactory::GetInstance();
@@ -178,9 +173,6 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
   crostini::CrostiniUpgraderFactory::GetInstance();
   CupsPrintersManagerFactory::GetInstance();
   CupsPrintJobManagerFactory::GetInstance();
-#if BUILDFLAG(USE_CUPS)
-  CupsProxyServiceManagerFactory::GetInstance();
-#endif
   data_migration::DataMigrationFactory::GetInstance();
   EarlyPrefsExportServiceFactory::GetInstance();
   eche_app::EcheAppManagerFactory::GetInstance();

@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/authentication/ui_bundled/authentication_flow/authentication_flow_in_profile_performer.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import <memory>
 #import <optional>
 
@@ -56,8 +54,6 @@
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/public/features/system_flags.h"
-#import "ios/chrome/browser/shared/ui/util/identity_snackbar/identity_snackbar_message.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
@@ -115,7 +111,7 @@
   std::string userEmail = base::SysNSStringToUTF8(identity.userEmail);
   CoreAccountId accountID =
       IdentityManagerFactory::GetForProfile(profile)->PickAccountIdForAccount(
-          GaiaId(identity.gaiaID), userEmail);
+          identity.gaiaId, userEmail);
 
   policy::UserPolicySigninService* userPolicyService =
       policy::UserPolicySigninServiceFactory::GetForProfile(profile);
@@ -125,6 +121,7 @@
   __weak __typeof(self) weakSelf = self;
   userPolicyService->RegisterForPolicyWithAccountId(
       userEmail, accountID,
+      /*is_registration_for_management_consistency_check=*/false,
       base::BindOnce(^(const std::string& dmToken, const std::string& clientID,
                        const std::vector<std::string>& userAffiliationIDs) {
         [weakSelf didRegisterForUserPolicyWithDMToken:dmToken
@@ -184,7 +181,7 @@
   const std::string userEmail = base::SysNSStringToUTF8(identity.userEmail);
 
   AccountId accountID = AccountId::FromUserEmailGaiaId(
-      gaia::CanonicalizeEmail(userEmail), GaiaId(identity.gaiaID));
+      gaia::CanonicalizeEmail(userEmail), identity.gaiaId);
 
   std::vector<std::string> userAffiliationIDsVector;
   for (NSString* userAffiliationID in userAffiliationIDs) {

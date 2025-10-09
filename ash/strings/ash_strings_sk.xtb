@@ -332,10 +332,12 @@ Na začiatok môžete vyskúšať niektoré z týchto vecí.</translation>
 <translation id="2083190527011054446">Dobrú noc, <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Otvoriť výber emodži</translation>
 <translation id="2088116547584365419">hry</translation>
+<translation id="2093792000875799555">Novinky zo služby Steam pre Chromebook</translation>
 <translation id="209965399369889474">Nemáte pripojenie k sieti</translation>
 <translation id="2107581415810719320">Iné tlačidlo <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Kábel USB-C nepodporuje Thunderbolt. Výkonnosť zariadenia môže byť obmedzená.</translation>
 <translation id="2108303511227308752">Klávesová skratka Alt + Backspace bola zmenená. Ak chcete použiť kláves Delete, stlačte klávesy <ph name="LAUNCHER_KEY_NAME" /> + backspace.</translation>
+<translation id="2115680839221566783">Batéria je nabitá na <ph name="PERCENTAGE" /> %. Nabíjanie je pozastavené.</translation>
 <translation id="2126242104232412123">Nová plocha</translation>
 <translation id="2132302418721800944">Nahrať celú obrazovku</translation>
 <translation id="2135456203358955318">Ukotvená lupa</translation>
@@ -1588,6 +1590,7 @@ Nie sú pripojené žiadne zariadenia.</translation>
 <translation id="612734058257491180">Asistent Google nie je k dispozícii v relácii hosťa.</translation>
 <translation id="6127395413317891856">Ste offline. Skontrolujte pripojenie a skúste to znova.</translation>
 <translation id="6129953537138746214">Medzerník</translation>
+<translation id="6136872094979134163">Novinky zo služby Steam pre Chromebook sa nepodarilo načítať.</translation>
 <translation id="6137566720514957455">Otvoriť dialógové okno na odstránenie účtu <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Na čo sa chcete sústrediť?</translation>
 <translation id="6141988275892716286">Potvrdenie sťahovania</translation>
@@ -1677,6 +1680,7 @@ Nie sú pripojené žiadne zariadenia.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> do zariadenia <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">procesor</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> udalosť</translation>
+<translation id="6448529022565414427">Nabíjanie je pozastavené</translation>
 <translation id="6449483711453944360">Aplikácie pre Linux a okná inkognito nie sú momentálne podporované.</translation>
 <translation id="6450245544201845082">Skratka kliknutia pravým tlačidlom je momentálne vypnutá</translation>
 <translation id="6452181791372256707">Odmietnuť</translation>

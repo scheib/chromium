@@ -23,6 +23,7 @@ enum EventResult {
   EVENT_RESULT_DETECTED = 5;
   EVENT_RESULT_DATA_MASKED = 6;
   EVENT_RESULT_DATA_UNMASKED = 7;
+  EVENT_RESULT_FORCED_SAVE_TO_CLOUD = 8;
 }
 
 // The reporting target of the events.
@@ -206,6 +207,7 @@ message TriggeredRuleInfo {
     REPORT_ONLY = 1;
     WARN = 2;
     BLOCK = 3;
+    FORCE_SAVE_TO_CLOUD = 4;
   }
 
   Action action = 5;
@@ -271,6 +273,8 @@ message RiskInfo {
     DATA_LOSS = 4;
     // Violates URL filtering rules.
     URL_FILTERING = 5;
+    // Brand abuse detected by customer submitted screenshots.
+    ENTERPRISE_BRAND_ABUSE = 6;
   }
   ThreatType threat_type = 1;
 

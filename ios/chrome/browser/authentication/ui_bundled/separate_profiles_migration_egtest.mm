@@ -4,10 +4,10 @@
 
 #import "base/strings/sys_string_conversions.h"
 #import "components/sync/base/features.h"
-#import "ios/chrome/browser/authentication/ui_bundled/separate_profiles_util.h"
+#import "ios/chrome/browser/authentication/test/separate_profiles_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_feature.h"
 #import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -52,7 +52,6 @@
 
   // The multi-profile features are initially *dis*abled for migration tests -
   // they'll be enabled later on.
-  config.features_disabled.push_back(kIdentityDiscAccountMenu);
   config.features_disabled.push_back(kSeparateProfilesForManagedAccounts);
 
   return config;
@@ -77,11 +76,6 @@
 }
 
 - (void)testMigrateWithConsumerPrimaryAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // A personal and a managed identity exist on the device.
   FakeSystemIdentity* const personalIdentity =
       [FakeSystemIdentity fakeIdentity1];
@@ -108,8 +102,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the managed account was moved into a separate profile.
@@ -126,11 +119,6 @@
 
 // TODO(crbug.com/433320893): Re-enable this test.
 - (void)DISABLED_testMigrateWithManagedPrimaryAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // A personal and a managed identity exist on the device.
   FakeSystemIdentity* const personalIdentity =
       [FakeSystemIdentity fakeIdentity1];
@@ -157,8 +145,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the managed account remained in the personal profile, since it
@@ -189,11 +176,6 @@
 }
 
 - (void)testForceMigrationPrefSetForManagedPrimaryAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Reset `kWaitingForMultiProfileForcedMigrationTimestamp`.
   [ChromeEarlGrey resetDataForLocalStatePref:
                       prefs::kWaitingForMultiProfileForcedMigrationTimestamp];
@@ -232,8 +214,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the managed account remained in the personal profile, since it
@@ -264,8 +245,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the managed account remained in the personal profile.
@@ -292,11 +272,6 @@
 }
 
 - (void)testForceMigrationPrefNotSetForConsumerPrimaryAccount {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Reset `kWaitingForMultiProfileForcedMigrationTimestamp`.
   [ChromeEarlGrey resetDataForLocalStatePref:
                       prefs::kWaitingForMultiProfileForcedMigrationTimestamp];
@@ -327,8 +302,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify `kWaitingForMultiProfileForcedMigrationTimestamp` is not set.
@@ -341,11 +315,6 @@
 }
 
 - (void)testForceMigrationPrefClearedWhenFeatureIsDisabled {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Reset `kWaitingForMultiProfileForcedMigrationTimestamp`.
   [ChromeEarlGrey resetDataForLocalStatePref:
                       prefs::kWaitingForMultiProfileForcedMigrationTimestamp];
@@ -384,8 +353,7 @@
 
   // Relaunch with the multi-profile features enabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-               enabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}
+               enabledFeatures:{kSeparateProfilesForManagedAccounts}
               disabledFeatures:{}];
 
   // Verify that the managed account remained in the personal profile, since it
@@ -413,8 +381,7 @@
   // Relaunch with the multi-profile features disabled.
   [self relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
                enabledFeatures:{}
-              disabledFeatures:{kIdentityDiscAccountMenu,
-                                kSeparateProfilesForManagedAccounts}];
+              disabledFeatures:{kSeparateProfilesForManagedAccounts}];
 
   // Verify `kWaitingForMultiProfileForcedMigrationTimestamp` is cleared.
   GREYAssertEqual(
@@ -426,11 +393,6 @@
 }
 
 - (void)testForceMigration {
-  // Separate profiles are only available in iOS 17+.
-  if (!@available(iOS 17, *)) {
-    return;
-  }
-
   // Reset `kWaitingForMultiProfileForcedMigrationTimestamp`.
   [ChromeEarlGrey resetDataForLocalStatePref:
                       prefs::kWaitingForMultiProfileForcedMigrationTimestamp];
@@ -464,8 +426,7 @@
   // Relaunch with the multi-profile features enabled.
   [self
       relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-             enabledFeatures:{kIdentityDiscAccountMenu,
-                              kSeparateProfilesForManagedAccounts,
+             enabledFeatures:{kSeparateProfilesForManagedAccounts,
                               kSeparateProfilesForManagedAccountsForceMigration}
             disabledFeatures:{}];
 
@@ -502,8 +463,7 @@
   // Relaunch with the multi-profile features enabled.
   [self
       relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-             enabledFeatures:{kIdentityDiscAccountMenu,
-                              kSeparateProfilesForManagedAccounts,
+             enabledFeatures:{kSeparateProfilesForManagedAccounts,
                               kSeparateProfilesForManagedAccountsForceMigration}
             disabledFeatures:{}];
 
@@ -551,8 +511,7 @@
   // again.
   [self
       relaunchWithIdentities:@[ personalIdentity, managedIdentity ]
-             enabledFeatures:{kIdentityDiscAccountMenu,
-                              kSeparateProfilesForManagedAccounts,
+             enabledFeatures:{kSeparateProfilesForManagedAccounts,
                               kSeparateProfilesForManagedAccountsForceMigration}
             disabledFeatures:{}];
   [[EarlGrey selectElementWithMatcher:

@@ -38,6 +38,11 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(//components/visitedlink/browser/partitioned_visitedlink_writer.cc:AddFingerprint) -->
 
+<enum name="BooleanDatabaseKilled">
+  <int value="0" label="Not Killed">The database was not razed.</int>
+  <int value="1" label="Killed">The database was razed.</int>
+</enum>
+
 <enum name="BooleanQueried">
   <int value="0" label="Not Queried"/>
   <int value="1" label="Queried"/>
@@ -302,6 +307,16 @@ chromium-metrics-reviews@google.com.
 </enum>
 
 <!-- LINT.ThenChange(//content/browser/storage_partition_impl.cc:TracingDataType) -->
+
+<!-- LINT.IfChange(VisitContextMenuAction) -->
+
+<enum name="VisitContextMenuAction">
+  <int value="0" label="More from this site clicked"/>
+  <int value="1" label="Remove from history clicked"/>
+  <int value="2" label="Remove bookmark clicked"/>
+</enum>
+
+<!-- LINT.ThenChange(//chrome/browser/resources/history/constants.ts:VisitContextMenuAction) -->
 
 </enums>
 

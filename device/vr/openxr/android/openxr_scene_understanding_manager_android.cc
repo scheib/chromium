@@ -13,6 +13,7 @@
 
 #include "base/containers/flat_set.h"
 #include "base/no_destructor.h"
+#include "device/vr/openxr/openxr_api_wrapper.h"
 #include "device/vr/openxr/openxr_extension_helper.h"
 #include "device/vr/openxr/openxr_util.h"
 #include "device/vr/public/mojom/xr_session.mojom-shared.h"
@@ -44,6 +45,11 @@ OpenXRSceneUnderstandingManagerAndroid::OpenXRSceneUnderstandingManagerAndroid(
 
 OpenXRSceneUnderstandingManagerAndroid::
     ~OpenXRSceneUnderstandingManagerAndroid() = default;
+
+OpenXrSceneUnderstandingManagerType
+OpenXRSceneUnderstandingManagerAndroid::GetType() const {
+  return OpenXrSceneUnderstandingManagerType::kAndroid;
+}
 
 OpenXrPlaneManager* OpenXRSceneUnderstandingManagerAndroid::GetPlaneManager() {
   return plane_manager_.get();
@@ -100,13 +106,13 @@ void OpenXrSceneUnderstandingManagerAndroidFactory::CheckAndUpdateEnabledState(
 std::unique_ptr<OpenXRSceneUnderstandingManager>
 OpenXrSceneUnderstandingManagerAndroidFactory::CreateSceneUnderstandingManager(
     const OpenXrExtensionHelper& extension_helper,
-    XrSession session,
+    OpenXrApiWrapper* openxr,
     XrSpace mojo_space) const {
   bool is_supported = IsEnabled();
   DVLOG(2) << __func__ << " is_supported=" << is_supported;
   if (is_supported) {
     return std::make_unique<OpenXRSceneUnderstandingManagerAndroid>(
-        extension_helper, session, mojo_space);
+        extension_helper, openxr->session(), mojo_space);
   }
 
   return nullptr;

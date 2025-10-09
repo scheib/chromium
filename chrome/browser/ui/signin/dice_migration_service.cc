@@ -7,12 +7,15 @@
 #include "base/check_is_test.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
+#include "chrome/browser/enterprise/util/managed_browser_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
+#include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/toasts/api/toast_id.h"
 #include "chrome/browser/ui/toasts/toast_controller.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -30,6 +33,7 @@
 #include "components/signin/public/identity_manager/account_managed_status_finder_outcome.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_utils.h"
+#include "components/signin/public/identity_manager/primary_account_mutator.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_education/common/user_education_features.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -40,7 +44,10 @@
 namespace {
 
 constexpr char kHelpCenterUrl[] =
-    "https://support.google.com/chrome/answer/185277";
+    "https://support.google.com/chrome/answer/"
+    "185277?p=manage_autofill_settings";
+
+constexpr base::TimeDelta kForcedSigninToastDelay = base::Seconds(5);
 
 constexpr char kDialogCloseReasonHistogram[] =
     "Signin.DiceMigrationDialog.CloseReason";
@@ -60,6 +67,11 @@ constexpr char kDialogNotShownReasonHistogram[] =
     "Signin.DiceMigrationDialog.NotShownReason";
 constexpr char kRestoredFromBackupHistogram[] =
     "Signin.DiceMigration.RestoredFromBackup";
+constexpr char kForceMigratedHistogram[] = "Signin.DiceMigration.ForceMigrated";
+constexpr char kForcedMigrationAccountManagedHistogram[] =
+    "Signin.ForcedDiceMigration.HasAcceptedAccountManagement";
+constexpr char kForcedSigninBrowserInstanceAvailableAfterTimerHistogram[] =
+    "Signin.ForcedDiceMigration.BrowserInstanceAvailableAfterTimer";
 
 void LogDialogCloseReason(DiceMigrationService::DialogCloseReason reason) {
   base::UmaHistogramEnumeration(kDialogCloseReasonHistogram, reason);
@@ -136,7 +148,7 @@ bool MaybeMigrateUser(Profile* profile) {
                   prefs::kPrefsThemesSearchEnginesAccountStorageEnabled)));
 
   // TODO(crbug.com/399838468): Consider calling
-  // `PrimaryAccountManager::ComputeExplicitBrowserSignin` upon explicit signin
+  // `PrimaryAccountManager::SetExplicitBrowserSigninPrefs` upon explicit signin
   // pref change.
   prefs->SetBoolean(prefs::kPrefsThemesSearchEnginesAccountStorageEnabled,
                     true);
@@ -193,28 +205,50 @@ class DiceMigrationService::AvatarButtonObserver
     CHECK(dice_migration_service_);
     CHECK(dice_migration_service_->dialog_widget_);
     avatar_button_observation_.Observe(avatar_button);
+
+    const std::u16string& avatar_button_text = base::ASCIIToUTF16(
+        dice_migration_service_->primary_account_info_.email);
+    if (!avatar_button_text.empty()) {
+      clear_avatar_button_effects_callback_ =
+          avatar_button->SetExplicitButtonState(
+              avatar_button_text, /*accessibility_label=*/std::nullopt,
+              /*explicit_action=*/std::nullopt);
+    }
   }
 
  private:
   // `AvatarToolbarButton::Observer`:
   void OnButtonPressed() override {
     CHECK(dice_migration_service_->dialog_widget_);
+    avatar_button_observation_.Reset();
     dice_migration_service_->StopTimerOrCloseDialog(
         DialogCloseReason::kAvatarButtonClicked);
-    avatar_button_observation_.Reset();
   }
 
   base::ScopedObservation<AvatarToolbarButton, AvatarToolbarButton::Observer>
       avatar_button_observation_{this};
   raw_ptr<DiceMigrationService> dice_migration_service_;
+
+  // Callback to reset the expanded avatar button.
+  base::ScopedClosureRunner clear_avatar_button_effects_callback_;
 };
 
 DiceMigrationService::DiceMigrationService(
     Profile* profile,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner_for_testing)
     : profile_(profile) {
-  CHECK(base::FeatureList::IsEnabled(switches::kOfferMigrationToDiceUsers));
   CHECK(profile_);
+  if (base::FeatureList::IsEnabled(switches::kForcedDiceMigration)) {
+    // Force migration all implicitly signed-in users.
+    const bool migrated = ForceMigrateUserIfEligible();
+    base::UmaHistogramBoolean(kForceMigratedHistogram, migrated);
+    // By now, the user should have been force migrated and is no longer in the
+    // DICe state.
+    CHECK(!IsUserEligibleForDiceMigration(profile_));
+    return;
+  }
+
+  CHECK(base::FeatureList::IsEnabled(switches::kOfferMigrationToDiceUsers));
   const std::optional<DialogNotShownReason> not_shown_reason =
       ShouldStartDialogTriggerTimer();
   base::UmaHistogramBoolean(kDialogTimerStartedHistogram,
@@ -223,6 +257,9 @@ DiceMigrationService::DiceMigrationService(
     LogDialogNotShownReason(not_shown_reason.value());
     return;
   }
+  // If the flag is enabled, the user should have already been migrated and
+  // the above return statement should have returned.
+  CHECK(!base::FeatureList::IsEnabled(switches::kForcedDiceMigration));
 
   signin::IdentityManager* identity_manager =
       IdentityManagerFactory::GetForProfile(profile_);
@@ -394,7 +431,7 @@ DiceMigrationService::ShowDiceMigrationOfferDialogIfUserEligible() {
         base::DoNothing(),
         ui::DialogModel::Button::Params()
             .SetId(kCancelButtonElementId)
-            .SetLabel(l10n_util::GetStringUTF16(IDS_NOT_NOW)));
+            .SetLabel(l10n_util::GetStringUTF16(IDS_PROMO_SNOOZE_BUTTON)));
   }
   builder.DisableCloseOnDeactivate();
   builder.SetIsAlertDialog();
@@ -403,7 +440,12 @@ DiceMigrationService::ShowDiceMigrationOfferDialogIfUserEligible() {
       builder.Build(), avatar_button, views::BubbleBorder::TOP_RIGHT);
   dialog_widget_ = views::BubbleDialogDelegate::CreateBubble(std::move(bubble));
   dialog_widget_observation_.Observe(dialog_widget_);
+
   browser_ = browser->AsWeakPtr();
+  browser_close_subscription_ =
+      browser->RegisterBrowserDidClose(base::BindRepeating(
+          &DiceMigrationService::BrowserDidClose, base::Unretained(this)));
+
   dialog_widget_->Show();
 
   // Update the dialog shown count and time. Note that the user may not interact
@@ -415,7 +457,8 @@ DiceMigrationService::ShowDiceMigrationOfferDialogIfUserEligible() {
   // never interacts with it.
   UpdateDialogShownCountAndTime();
 
-  // Close the dialog when the avatar pill is clicked.
+  // Close the dialog when the avatar pill is clicked. This is also responsible
+  // for expanding the avatar pill when the dialog is showing.
   avatar_button_observer_ =
       std::make_unique<AvatarButtonObserver>(avatar_button, this);
 
@@ -434,6 +477,7 @@ void DiceMigrationService::OnWidgetDestroying(views::Widget* widget) {
   CHECK_EQ(dialog_widget_, widget);
   avatar_button_observer_.reset();
   dialog_widget_observation_.Reset();
+  browser_close_subscription_.reset();
   dialog_widget_ = nullptr;
   switch (widget->closed_reason()) {
     // Losing focus should not close the dialog.
@@ -578,4 +622,60 @@ void DiceMigrationService::UpdateDialogShownCountAndTime() {
   CHECK(prefs);
   prefs->SetInteger(kDiceMigrationDialogShownCount, GetDialogShownCount() + 1);
   prefs->SetTime(kDiceMigrationDialogLastShownTime, base::Time::Now());
+}
+
+void DiceMigrationService::BrowserDidClose(BrowserWindowInterface* browser) {
+  if (dialog_widget_) {
+    dialog_widget_->CloseNow();
+  }
+}
+
+bool DiceMigrationService::ForceMigrateUserIfEligible() {
+  if (!IsUserEligibleForDiceMigration(profile_)) {
+    return false;
+  }
+  signin::IdentityManager* identity_manager =
+      IdentityManagerFactory::GetForProfile(profile_);
+  CHECK(identity_manager);
+  const bool has_accepted_account_management =
+      enterprise_util::UserAcceptedAccountManagement(profile_);
+  base::UmaHistogramBoolean(kForcedMigrationAccountManagedHistogram,
+                            has_accepted_account_management);
+  if (!has_accepted_account_management) {
+    // This is either a consumer account or an enterprise account that has not
+    // accepted the account management.
+    // Remove the primary account, but keep the tokens. This will make the user
+    // signed in only to the web.
+    CHECK(identity_manager->GetPrimaryAccountMutator()
+              ->RemovePrimaryAccountButKeepTokens(
+                  signin_metrics::ProfileSignout::kForcedDiceMigration));
+    return true;
+  }
+  // The user is an enterprise account that has accepted the account management.
+  // Such users cannot be signed out. Migrate these users to explicitly
+  // signed-in state.
+  CHECK(MaybeMigrateUser(profile_));
+
+  // Trigger the timer to show the toast.
+  auto show_toast = [](Profile* profile) {
+    Browser* browser = chrome::FindBrowserWithProfile(profile);
+    base::UmaHistogramBoolean(
+        kForcedSigninBrowserInstanceAvailableAfterTimerHistogram, browser);
+    if (browser) {
+      CHECK(MaybeShowToast(browser));
+    } else {
+      // The profile is under creation and hence no browser instance is tied to
+      // it yet. Wait for the browser to be created before trying to show the
+      // toast.
+      // This object deletes itself when done.
+      new profiles::BrowserAddedForProfileObserver(
+          profile, base::BindOnce(base::IgnoreResult(&MaybeShowToast)));
+    }
+  };
+  // TODO(crbug.com/437083916): Rename the timer to reflect that it is also used
+  // for showing this toast.
+  CHECK(!dialog_trigger_timer_.IsRunning());
+  dialog_trigger_timer_.Start(FROM_HERE, kForcedSigninToastDelay,
+                              base::BindOnce(std::move(show_toast), profile_));
+  return true;
 }

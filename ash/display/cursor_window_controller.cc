@@ -63,7 +63,7 @@ std::vector<gfx::ImageSkia> GetCursorImages(
   // or fast ink canvas (for fast ink based cursor), so don't do any
   // rotation here.
   std::optional<ui::CursorData> cursor_data = wm::GetCursorData(
-      type, cursor_size, dsf,
+      type, dsf,
       cursor_size == ui::CursorSize::kLarge
           ? std::make_optional(target_cursor_size_in_dip * dsf)
           : std::nullopt,
@@ -211,7 +211,12 @@ void CursorWindowController::SetLargeCursorSizeInDip(
 void CursorWindowController::SetCursorColor(SkColor cursor_color) {
   if (cursor_color_ == cursor_color)
     return;
+
   cursor_color_ = cursor_color;
+
+  // Reset cursor lottie animation cache when new color needs to be applied.
+  wm::ClearCursorAnimationCache();
+
   if (display_.is_valid())
     UpdateCursorImage();
 }
@@ -298,7 +303,7 @@ void CursorWindowController::SetCursorCompositingEnabled(bool enabled) {
 
 void CursorWindowController::UpdateContainer() {
   if (is_cursor_compositing_enabled_) {
-    display::Screen* screen = display::Screen::GetScreen();
+    display::Screen* screen = display::Screen::Get();
     display::Display display =
         screen->GetDisplayNearestPoint(screen->GetCursorScreenPoint());
     DCHECK(display.is_valid());

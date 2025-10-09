@@ -26,6 +26,8 @@ import org.chromium.components.cached_flags.CachedFlagUtils;
 import org.chromium.components.cached_flags.CachedFlagsSafeMode;
 import org.chromium.components.omnibox.OmniboxFeatures;
 import org.chromium.components.permissions.PermissionsAndroidFeatureList;
+import org.chromium.components.signin.SigninFeatureMap;
+import org.chromium.content_public.browser.ContentFeatureList;
 import org.chromium.ui.base.UiAndroidFeatureList;
 
 import java.util.ArrayList;
@@ -39,15 +41,18 @@ public class ChromeCachedFlags {
     static final List<List<CachedFlag>> LISTS_OF_CACHED_FLAGS_FULL_BROWSER =
             List.of(
                     ChromeFeatureList.sFlagsCachedFullBrowser,
+                    ContentFeatureList.sCachedFlags,
                     OmniboxFeatures.getFlagsToCache(),
                     ModalDialogFeatureMap.sCachedFlags,
-                    UiAndroidFeatureList.sFlagsCachedUiAndroid);
+                    UiAndroidFeatureList.sFlagsCachedUiAndroid,
+                    SigninFeatureMap.sCachedFlags);
     static final List<List<CachedFlag>> LISTS_OF_CACHED_FLAGS_MINIMAL_BROWSER =
             List.of(ChromeFeatureList.sFlagsCachedInMinimalBrowser);
 
     static final List<List<CachedFlag>> LISTS_OF_CACHED_FLAGS =
             List.of(
                     ChromeFeatureList.sFlagsCachedFullBrowser,
+                    ContentFeatureList.sCachedFlags,
                     OmniboxFeatures.getFlagsToCache(),
                     ModalDialogFeatureMap.sCachedFlags,
                     ChromeFeatureList.sFlagsCachedInMinimalBrowser,

@@ -182,6 +182,7 @@ bool IsValidRole(ax::mojom::blink::Role role) {
     case ax::mojom::blink::Role::kKeyboard:
     case ax::mojom::blink::Role::kImeCandidate:
     case ax::mojom::blink::Role::kListGrid:
+    case ax::mojom::blink::Role::kMenuItemSeparator:
     case ax::mojom::blink::Role::kPane:
     case ax::mojom::blink::Role::kPdfActionableHighlight:
     case ax::mojom::blink::Role::kPdfRoot:
@@ -982,18 +983,6 @@ Node* AXObject::GetParentNodeForComputeParent(AXObjectCacheImpl& cache,
                : nullptr;
   }
 
-  if (RuntimeEnabledFeatures::SelectAccessibilityReparentInputEnabled()) {
-    if (auto* input = DynamicTo<HTMLInputElement>(node)) {
-      if (auto* select = input->FirstAncestorSelectElement()) {
-        if (input->IsFirstTextInputInAncestorSelect() && input->IsTextField()) {
-          // The first descendant <input> in a <select> is reparented to be a
-          // direct child of the <select> in the a11y tree.
-          return select;
-        }
-      }
-    }
-  }
-
   return CanComputeAsNaturalParent(parent) ? parent : nullptr;
 }
 
@@ -1410,6 +1399,9 @@ void AXObject::Serialize(ui::AXNodeData* node_data,
   // Always try to serialize child tree ids.
   SerializeChildTreeID(node_data);
 
+  SerializeAriaNotificationAttributes(
+      AXObjectCache().RetrieveAriaNotifications(this), node_data);
+
   // Return early. The following attributes are unnecessary for ignored nodes.
   // Exception: focusable ignored nodes are fully serialized, so that reasonable
   // verbalizations can be made if they actually receive focus.
@@ -1452,8 +1444,6 @@ void AXObject::Serialize(ui::AXNodeData* node_data,
   }
   SerializeOtherScreenReaderAttributes(node_data);
   SerializeMathContent(node_data);
-  SerializeAriaNotificationAttributes(
-      AXObjectCache().RetrieveAriaNotifications(this), node_data);
 }
 
 void AXObject::SerializeBoundingBoxAttributes(ui::AXNodeData& dst) const {
@@ -2824,8 +2814,7 @@ AXObject* AXObject::GetInterestForTargetPopover() const {
     return nullptr;
   }
 
-  if (!RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled(
-          GetElement()->GetDocument().GetExecutionContext())) {
+  if (!RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled()) {
     return nullptr;
   }
 
@@ -3712,17 +3701,23 @@ void AXObject::UpdateCachedAttributeValuesIfNeeded(
   bool is_aria_hidden = ComputeIsAriaHidden();
   bool is_in_menu_list_subtree = ComputeIsInMenuListSubtree();
   bool is_descendant_of_disabled_node = ComputeIsDescendantOfDisabledNode();
+  bool is_ignored_as_inside_inactive_scroll_marker_tab =
+      ComputeIsIgnoredAsInsideInactiveScrollMarkerTab();
   bool is_changing_inherited_values = false;
   if (cached_is_inert_ != is_inert ||
       cached_is_aria_hidden_ != is_aria_hidden ||
       cached_is_in_menu_list_subtree_ != is_in_menu_list_subtree ||
       cached_is_descendant_of_disabled_node_ !=
-          is_descendant_of_disabled_node) {
+          is_descendant_of_disabled_node ||
+      cached_is_ignored_as_inside_inactive_scroll_marker_tab_ !=
+          is_ignored_as_inside_inactive_scroll_marker_tab) {
     is_changing_inherited_values = true;
     cached_is_inert_ = is_inert;
     cached_is_aria_hidden_ = is_aria_hidden;
     cached_is_in_menu_list_subtree_ = is_in_menu_list_subtree;
     cached_is_descendant_of_disabled_node_ = is_descendant_of_disabled_node;
+    cached_is_ignored_as_inside_inactive_scroll_marker_tab_ =
+        is_ignored_as_inside_inactive_scroll_marker_tab;
   }
 
   // Must be after inert computation, because focusability depends on that, but
@@ -3997,33 +3992,13 @@ bool AXObject::ComputeIsInertViaStyle(const ComputedStyle* style,
                : false;
   }
   // TODO(szager): This method is n^2 -- it recurses into itself via
-  // ComputeIsInert(), and InertRoot() does as well. This is only the case if
-  // CSSInert runtime flag is disabled.
+  // ComputeIsInert().
   if (style) {
     if (style->IsInert()) {
       if (ignored_reasons) {
-        if (!RuntimeEnabledFeatures::CSSInertEnabled()) {
-          // With CSSInert disabled, the inert attribute causes the style to be
-          // IsHTMLInert. With CSSInert enabled, the inert attribute instead has
-          // a UA style rule that sets the interactivity property, which
-          // cascades along interactivity declarations from other sources, so it
-          // does not make sense to look for InertRoot() separately. The
-          // interactivity value is handled generally where kAXInertStyle is
-          // pushed below.
-          const AXObject* ax_inert_root = InertRoot();
-          if (ax_inert_root == this) {
-            ignored_reasons->push_back(IgnoredReason(kAXInertElement));
-            return true;
-          }
-          if (ax_inert_root) {
-            ignored_reasons->push_back(
-                IgnoredReason(kAXInertSubtree, ax_inert_root));
-            return true;
-          }
-        }
         if (style->IsHTMLInert()) {
           // HTML inertness is either forced by a modal dialog or a fullscreen
-          // element (see AdjustStyleForInert).
+          // element (see ApplyInertness in style_resolver.cc).
           Document& document = GetNode()->GetDocument();
           if (HTMLDialogElement* dialog = document.ActiveModalDialog()) {
             if (AXObject* dialog_object = AXObjectCache().Get(dialog)) {
@@ -4040,11 +4015,9 @@ bool AXObject::ComputeIsInertViaStyle(const ComputedStyle* style,
             }
           }
         }
-        if (RuntimeEnabledFeatures::CSSInertEnabled()) {
-          // Inertness set by interactivity:inert
-          ignored_reasons->push_back(IgnoredReason(kAXInertStyle));
-          return true;
-        }
+        // Inertness set by interactivity:inert
+        ignored_reasons->push_back(IgnoredReason(kAXInertStyle));
+        return true;
       }
       return true;
     } else if (IsBlockedByAriaModalDialog(ignored_reasons)) {
@@ -4065,26 +4038,6 @@ bool AXObject::ComputeIsInertViaStyle(const ComputedStyle* style,
 
   // Either GetNode() is null, or it's locked by content-visibility, or we
   // failed to obtain a ComputedStyle. Make a guess iterating the ancestors.
-  if (!RuntimeEnabledFeatures::CSSInertEnabled()) {
-    // See the comment for the InertRoot() when style is non-null. Looking at
-    // elements with the inert attribute inside a non-rendered subtree does not
-    // make sense on its own as the inertness of that element could be affected
-    // by interactivity declarations that would have applied to the style if it
-    // was computed. Instead we traverse to ancestor at the end of this function
-    // to find the closest ancestor with a ComputedStyle where we can check the
-    // computed interactivity.
-    if (const AXObject* ax_inert_root = InertRoot()) {
-      if (ignored_reasons) {
-        if (ax_inert_root == this) {
-          ignored_reasons->push_back(IgnoredReason(kAXInertElement));
-        } else {
-          ignored_reasons->push_back(
-              IgnoredReason(kAXInertSubtree, ax_inert_root));
-        }
-      }
-      return true;
-    }
-  }
   if (IsBlockedByAriaModalDialog(ignored_reasons)) {
     if (ignored_reasons)
       ignored_reasons->push_back(IgnoredReason(kAXAriaModalDialog));
@@ -4238,29 +4191,6 @@ const AXObject* AXObject::AriaHiddenRoot() const {
   return IsAriaHidden() ? FindAncestorWithAriaHidden(this) : nullptr;
 }
 
-const AXObject* AXObject::InertRoot() const {
-  const AXObject* object = this;
-  while (object && !object->IsAXNodeObject())
-    object = object->ParentObject();
-
-  DCHECK(object);
-
-  Node* node = object->GetNode();
-  if (!node)
-    return nullptr;
-  auto* element = DynamicTo<Element>(node);
-  if (!element)
-    element = FlatTreeTraversal::ParentElement(*node);
-
-  while (element) {
-    if (element->IsInertRoot())
-      return AXObjectCache().Get(element);
-    element = FlatTreeTraversal::ParentElement(*element);
-  }
-
-  return nullptr;
-}
-
 bool AXObject::IsDescendantOfDisabledNode() {
   CheckCanAccessCachedValues();
 
@@ -4381,6 +4311,11 @@ void AXObject::AnnotateXrHitTestOrder(const Document& document,
 
 bool AXObject::ComputeIsIgnoredButIncludedInTree() {
   CHECK(!IsDetached());
+
+  // Nothing inside an inactive scroll marker's tab is included in the tree.
+  if (InsideOriginatingElementForInactiveScrollMarkerInTabsMode()) {
+    return false;
+  }
 
   // If an inline text box is ignored, it is never included in the tree.
   if (IsAXInlineTextBox()) {
@@ -5876,7 +5811,6 @@ const AXObject* AXObject::AncestorMenuList() const {
     if (ax_menu_list->IsMenuList()) {
       DCHECK(IsA<HTMLSelectElement>(ax_menu_list->GetNode()));
       DCHECK(To<HTMLSelectElement>(ax_menu_list->GetNode())->UsesMenuList());
-      DCHECK(!To<HTMLSelectElement>(ax_menu_list->GetNode())->IsMultiple());
       return ax_menu_list;
     }
   }
@@ -6085,7 +6019,7 @@ ax::mojom::blink::Role AXObject::DetermineAriaRole() const {
       role = ax::mojom::blink::Role::kTextFieldWithComboBox;
     } else if (auto* select_element =
                    DynamicTo<HTMLSelectElement>(*GetNode())) {
-      if (select_element->UsesMenuList() && !select_element->IsMultiple()) {
+      if (select_element->UsesMenuList()) {
         // This is a select element. Don't set the aria role for it.
         role = ax::mojom::blink::Role::kUnknown;
       }
@@ -6535,12 +6469,13 @@ AXObject* AXObject::UnignoredChildAtSlow(int index) const {
 }
 
 AXObject* AXObject::UnignoredNextSiblingSlow() const {
-  if (IsIgnored()) {
+  if (!IsIgnoredButIncludedInTree() && IsIgnored()) {
     // TODO(crbug.com/1407397): Make sure this no longer fires then turn this
     // block into CHECK(!IsIgnored());
     DUMP_WILL_BE_NOTREACHED()
         << "We don't support finding unignored siblings for ignored "
-           "objects because it is not clear whether to search for the "
+           "not-included in tree objects because it is not clear whether to "
+           "search for the "
            "sibling in the unignored tree or in the whole tree: "
         << this;
     return nullptr;
@@ -6580,9 +6515,10 @@ AXObject* AXObject::UnignoredNextSiblingSlow() const {
 }
 
 AXObject* AXObject::UnignoredPreviousSiblingSlow() const {
-  if (IsIgnored()) {
+  if (!IsIgnoredButIncludedInTree() && IsIgnored()) {
     NOTREACHED() << "We don't support finding unignored siblings for ignored "
-                    "objects because it is not clear whether to search for the "
+                    "not-included in tree objects because it is not clear "
+                    "whether to search for the "
                     "sibling in the unignored tree or in the whole tree: "
                  << this;
   }
@@ -7158,17 +7094,19 @@ gfx::Point AXObject::MaximumScrollOffset() const {
   return gfx::PointAtOffsetFromOrigin(area->MaximumScrollOffsetInt());
 }
 
-void AXObject::SetScrollOffset(const gfx::Point& offset) const {
+void AXObject::SetScrollOffset(const gfx::Point& offset,
+                               cc::ScrollSourceType source_type) const {
   ScrollableArea* area = GetScrollableAreaIfScrollable();
   if (!area)
     return;
 
   // TODO(bokan): This should potentially be a UserScroll.
   area->SetScrollOffset(ScrollOffset(offset.OffsetFromOrigin()),
-                        mojom::blink::ScrollType::kProgrammatic);
+                        mojom::blink::ScrollType::kProgrammatic, source_type);
 }
 
-void AXObject::Scroll(ax::mojom::blink::Action scroll_action) const {
+void AXObject::Scroll(ax::mojom::blink::Action scroll_action,
+                      cc::ScrollSourceType source_type) const {
   AXObject* offset_container = nullptr;
   gfx::RectF bounds;
   gfx::Transform container_transform;
@@ -7223,7 +7161,7 @@ void AXObject::Scroll(ax::mojom::blink::Action scroll_action) const {
       NOTREACHED();
   }
 
-  SetScrollOffset(gfx::Point(x, y));
+  SetScrollOffset(gfx::Point(x, y), source_type);
 
   if (!RuntimeEnabledFeatures::
           SynthesizedKeyboardEventsForAccessibilityActionsEnabled())
@@ -7599,7 +7537,10 @@ bool AXObject::PerformAction(const ui::AXActionData& action_data) {
     case ax::mojom::blink::Action::kSetAccessibilityFocus:
       return InternalSetAccessibilityFocusAction();
     case ax::mojom::blink::Action::kSetScrollOffset:
-      SetScrollOffset(action_data.target_point);
+      // TODO(crbug.com/414556050): Figure out if this can be called for
+      // relative scrolls.
+      SetScrollOffset(action_data.target_point,
+                      cc::ScrollSourceType::kAbsoluteScroll);
       return true;
     case ax::mojom::blink::Action::kSetSequentialFocusNavigationStartingPoint:
       return RequestSetSequentialFocusNavigationStartingPointAction();
@@ -7615,7 +7556,7 @@ bool AXObject::PerformAction(const ui::AXActionData& action_data) {
     case ax::mojom::blink::Action::kScrollLeft:
     case ax::mojom::blink::Action::kScrollRight:
     case ax::mojom::blink::Action::kScrollUp:
-      Scroll(action_data.action);
+      Scroll(action_data.action, cc::ScrollSourceType::kRelativeScroll);
       return true;
     case ax::mojom::blink::Action::kStitchChildTree:
       if (action_data.child_tree_id == ui::AXTreeIDUnknown()) {
@@ -8178,7 +8119,6 @@ bool AXObject::SupportsNameFromContents(bool recursive,
     case ax::mojom::blink::Role::kGraphicsObject:
     case ax::mojom::blink::Role::kGraphicsSymbol:
     case ax::mojom::blink::Role::kGrid:
-    case ax::mojom::blink::Role::kGroup:
     case ax::mojom::blink::Role::kHeader:
     case ax::mojom::blink::Role::kIframePresentational:
     case ax::mojom::blink::Role::kIframe:
@@ -8286,6 +8226,18 @@ bool AXObject::SupportsNameFromContents(bool recursive,
     // ----- Conditional: contribute to ancestor only, unless focusable -------
     // Some objects can contribute their contents to ancestor names, but
     // only have their own name if they are focusable
+    case ax::mojom::blink::Role::kGroup:
+      // When kAXObjectSupportsNameFromAddressContents is enabled, address tags
+      // are allowed to contribute to their ancestors' accessible names
+      // (https://www.w3.org/TR/html-aria/#docconformance). All other Group
+      // objects should return false for now.
+      // TODO(crbug.com/443106926): investigate whether other Group objects
+      // should be eligible in the future.
+      if (!::features::IsAXObjectSupportsNameFromAddressContentEnabled() ||
+          !GetNode()->HasTagName(html_names::kAddressTag)) {
+        return false;
+      }
+      [[fallthrough]];
     case ax::mojom::blink::Role::kGenericContainer:
       if (IsA<HTMLBodyElement>(GetNode()) ||
           GetNode() == GetDocument()->documentElement()) {
@@ -8388,6 +8340,7 @@ bool AXObject::SupportsNameFromContents(bool recursive,
     case ax::mojom::blink::Role::kDirectoryDeprecated:
     case ax::mojom::blink::Role::kKeyboard:
     case ax::mojom::blink::Role::kImeCandidate:
+    case ax::mojom::blink::Role::kMenuItemSeparator:
     case ax::mojom::blink::Role::kListGrid:
     case ax::mojom::blink::Role::kPane:
     case ax::mojom::blink::Role::kPdfActionableHighlight:
@@ -8819,10 +8772,6 @@ bool operator==(const AXObject& first, const AXObject& second) {
     return true;
   }
   return false;
-}
-
-bool operator!=(const AXObject& first, const AXObject& second) {
-  return !(first == second);
 }
 
 bool operator<(const AXObject& first, const AXObject& second) {

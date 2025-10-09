@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.settings;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
+
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -16,12 +18,10 @@ import android.text.style.RelativeSizeSpan;
 import android.text.style.SuperscriptSpan;
 import android.view.View;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 import androidx.lifecycle.Lifecycle;
 import androidx.preference.Preference;
 
-import org.chromium.base.BuildInfo;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.DeviceInfo;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
@@ -29,6 +29,9 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
+import org.chromium.build.annotations.EnsuresNonNull;
+import org.chromium.build.annotations.Initializer;
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.appearance.settings.AppearanceSettingsFragment;
@@ -50,6 +53,7 @@ import org.chromium.chrome.browser.password_manager.settings.PasswordsPreference
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.preferences.Pref;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.safety_hub.SafetyHubMetricUtils;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
@@ -77,6 +81,7 @@ import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
+import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.ui.base.DeviceFormFactor;
@@ -88,6 +93,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** The main settings screen, shown when the user first opens Settings. */
+@NullMarked
 public class MainSettings extends ChromeBaseSettingsFragment
         implements TemplateUrlService.LoadListener,
                 SyncService.SyncStateChangedListener,
@@ -125,8 +131,8 @@ public class MainSettings extends ChromeBaseSettingsFragment
 
     private ManagedPreferenceDelegate mManagedPreferenceDelegate;
     private ChromeBasePreference mManageSync;
-    private ObservableSupplier<ModalDialogManager> mModalDialogManagerSupplier;
-    // TODO(crbug.com/343933167): This should be removed when the snackbar issue is addressed.
+    private ObservableSupplier<@Nullable ModalDialogManager> mModalDialogManagerSupplier;
+    // TODO(crbug.com/354927682): This should be removed when the snackbar issue is addressed.
     // Will be true if `onSignedOut()` was called when the current activity state is not
     // `Lifecycle.State.STARTED`.
     private boolean mShouldShowSnackbar;
@@ -147,6 +153,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
         super.onCreate(savedInstanceState);
         mPageTitle.set(getString(R.string.settings));
         SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(getProfile());
+        assumeNonNull(signinManager);
         if (signinManager.isSigninSupported(/* requireUpdatedPlayServices= */ false)) {
             signinManager.addSignInStateObserver(this);
         }
@@ -169,6 +176,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
     public void onDestroy() {
         super.onDestroy();
         SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(getProfile());
+        assumeNonNull(signinManager);
         if (signinManager.isSigninSupported(/* requireUpdatedPlayServices= */ false)) {
             signinManager.removeSignInStateObserver(this);
         }
@@ -209,15 +217,18 @@ public class MainSettings extends ChromeBaseSettingsFragment
         mSettingsCustomTabLauncher = customTabLauncher;
     }
 
+    @Initializer
     private void createPreferences() {
         mManagedPreferenceDelegate = createManagedPreferenceDelegate();
 
         SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
 
+        IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(getProfile());
+        assert identityManager != null;
         ProfileDataCache profileDataCache =
                 ProfileDataCache.createWithDefaultImageSizeAndNoBadge(
-                        getContext(),
-                        IdentityServicesProvider.get().getIdentityManager(getProfile()));
+                        getContext(), identityManager);
         AccountManagerFacade accountManagerFacade = AccountManagerFacadeProvider.getInstance();
 
         if (ChromeFeatureList.isEnabled(ChromeFeatureList.DEFAULT_BROWSER_PROMO_ANDROID2)) {
@@ -302,7 +313,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
             removePreferenceIfPresent(PREF_UI_THEME);
         }
 
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             getPreferenceScreen().removePreference(findPreference(PREF_SAFETY_HUB));
         } else {
             findPreference(PREF_SAFETY_HUB)
@@ -320,6 +331,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
      * Stores all preferences in memory so that, if they needed to be added/removed from the
      * PreferenceScreen, there would be no need to reload them from 'main_preferences.xml'.
      */
+    @EnsuresNonNull("mManageSync")
     private void cachePreferences() {
         int preferenceCount = getPreferenceScreen().getPreferenceCount();
         for (int index = 0; index < preferenceCount; index++) {
@@ -331,7 +343,16 @@ public class MainSettings extends ChromeBaseSettingsFragment
 
     private void setManagedPreferenceDelegateForPreference(String key) {
         ChromeBasePreference chromeBasePreference = (ChromeBasePreference) mAllPreferences.get(key);
+        assumeNonNull(chromeBasePreference);
         chromeBasePreference.setManagedPreferenceDelegate(mManagedPreferenceDelegate);
+    }
+
+    private void maybeUpdatePreferences() {
+        // `updatePreferences()` should be called only if the fragment is in the `STARTED` state,
+        // otherwise it will be called in `onStart()`.
+        if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
+            updatePreferences();
+        }
     }
 
     private void updatePreferences() {
@@ -341,9 +362,9 @@ public class MainSettings extends ChromeBaseSettingsFragment
             promoCardPreference.updatePreferences();
         }
 
-        if (IdentityServicesProvider.get()
-                .getSigninManager(getProfile())
-                .isSigninSupported(/* requireUpdatedPlayServices= */ false)) {
+        SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(getProfile());
+        assumeNonNull(signinManager);
+        if (signinManager.isSigninSupported(/* requireUpdatedPlayServices= */ false)) {
             addPreferenceIfAbsent(PREF_SIGN_IN);
         } else {
             removePreferenceIfPresent(PREF_SIGN_IN);
@@ -373,14 +394,19 @@ public class MainSettings extends ChromeBaseSettingsFragment
             removePreferenceIfPresent(PREF_DEVELOPER);
         }
         if (ChromeFeatureList.sAndroidSettingsContainment.isEnabled()) {
-            updateBackgrounds(getListView());
+            // TODO(crbug.com/439911511): Remove old resources once the feature is launched.
+            findPreference(PREF_GOOGLE_SERVICES)
+                    .setIcon(R.drawable.ic_google_services_48dp_with_bg_containment);
         }
+        notifyPreferencesUpdated();
     }
 
     private Preference addPreferenceIfAbsent(String key) {
         Preference preference = getPreferenceScreen().findPreference(key);
-        if (preference == null) getPreferenceScreen().addPreference(mAllPreferences.get(key));
-        return mAllPreferences.get(key);
+        Preference preferenceInAllPreferences = mAllPreferences.get(key);
+        assumeNonNull(preferenceInAllPreferences);
+        if (preference == null) getPreferenceScreen().addPreference(preferenceInAllPreferences);
+        return preferenceInAllPreferences;
     }
 
     private void removePreferenceIfPresent(String key) {
@@ -391,11 +417,11 @@ public class MainSettings extends ChromeBaseSettingsFragment
     private void updateManageSyncPreference() {
         // TODO(crbug.com/40067770): Remove usage of ConsentLevel.SYNC after kSync users are
         // migrated to kSignin in phase 3. See ConsentLevel::kSync documentation for details.
+        IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(getProfile());
+        assumeNonNull(identityManager);
         boolean isSyncConsentAvailable =
-                IdentityServicesProvider.get()
-                                .getIdentityManager(getProfile())
-                                .getPrimaryAccountInfo(ConsentLevel.SYNC)
-                        != null;
+                identityManager.getPrimaryAccountInfo(ConsentLevel.SYNC) != null;
         mManageSync.setVisible(isSyncConsentAvailable);
         if (!isSyncConsentAvailable) return;
 
@@ -405,8 +431,10 @@ public class MainSettings extends ChromeBaseSettingsFragment
         mManageSync.setOnPreferenceClickListener(
                 pref -> {
                     Context context = getContext();
-                    if (SyncServiceFactory.getForProfile(getProfile())
-                            .isSyncDisabledByEnterprisePolicy()) {
+                    Profile profile = getProfile();
+                    SyncService syncService = SyncServiceFactory.getForProfile(profile);
+                    assumeNonNull(syncService);
+                    if (syncService.isSyncDisabledByEnterprisePolicy()) {
                         SyncSettingsUtils.showSyncDisabledByAdministratorToast(context);
                     } else {
                         SettingsNavigation settingsNavigation =
@@ -521,7 +549,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
         boolean showSetting =
                 ChromeFeatureList.sAndroidBottomToolbar.isEnabled()
                         && !DeviceInfo.isAutomotive()
-                        && (BuildInfo.getInstance().isFoldable
+                        && (DeviceInfo.isFoldable()
                                 || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(
                                         getContext()));
 
@@ -549,10 +577,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
     }
 
     private void updateNewPreferenceAndIncrementViewCount(
-            @NonNull Preference pref,
-            @NonNull String title,
-            @NonNull String clickedPrefKey,
-            @NonNull String viewCountPrefKey) {
+            Preference pref, String title, String clickedPrefKey, String viewCountPrefKey) {
         final SharedPreferencesManager sharedPreferences = ChromeSharedPreferences.getInstance();
 
         boolean clicked;
@@ -600,18 +625,22 @@ public class MainSettings extends ChromeBaseSettingsFragment
 
     private void showSignoutSnackbar() {
         assert getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
+        Profile profile = getProfile();
+        assumeNonNull(profile);
+        SyncService syncService = SyncServiceFactory.getForProfile(profile);
+        assumeNonNull(syncService);
         SignOutCoordinator.showSnackbar(
                 getContext(),
                 ((SnackbarManager.SnackbarManageable) getActivity()).getSnackbarManager(),
-                SyncServiceFactory.getForProfile(getProfile()));
+                syncService);
     }
 
     // SigninManager.SignInStateObserver implementation.
     @Override
     public void onSignedIn() {
-        // After signing in or out of a managed account, preferences may change or become enabled
-        // or disabled.
-        new Handler().post(() -> updatePreferences());
+        // After signing in or out of a managed account, preferences may change or become enabled or
+        // disabled.
+        new Handler().post(() -> maybeUpdatePreferences());
     }
 
     @Override
@@ -619,10 +648,12 @@ public class MainSettings extends ChromeBaseSettingsFragment
         // TODO(crbug.com/343933167): The snackbar should be shown from
         // SignOutCoordinator.startSignOutFlow(), in other words SignOutCoordinator.showSnackbar()
         // should be private method.
-        if (IdentityServicesProvider.get()
-                        .getIdentityManager(getProfile())
-                        .getPrimaryAccountInfo(ConsentLevel.SIGNIN)
-                == null) {
+        Profile profile = getProfile();
+        assumeNonNull(profile);
+        IdentityManager identityManager =
+                IdentityServicesProvider.get().getIdentityManager(profile);
+        assumeNonNull(identityManager);
+        if (identityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN) == null) {
             // Show the signout snackbar, or wait until `onStart()` if the fragment is not in the
             // `STARTED` state.
             if (getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED)) {
@@ -682,8 +713,9 @@ public class MainSettings extends ChromeBaseSettingsFragment
         };
     }
 
+    @Initializer
     public void setModalDialogManagerSupplier(
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier) {
+            ObservableSupplier<@Nullable ModalDialogManager> modalDialogManagerSupplier) {
         mModalDialogManagerSupplier = modalDialogManagerSupplier;
     }
 

@@ -42,11 +42,11 @@ autofill::FieldType FieldTypeFromString(std::string_view str, NSError** error) {
   // creating the recipe either type can be returned from predictions.
   // Therefore, store both in this map.
   if (string_to_field_type_map.empty()) {
-    for (autofill::FieldType ft : autofill::kAllFieldTypes) {
+    for (autofill::FieldType ft : autofill::FieldTypeSet::all()) {
       string_to_field_type_map[autofill::FieldTypeToStringView(ft)] = ft;
     }
 
-    for (autofill::HtmlFieldType hft : autofill::kAllHtmlFieldTypes) {
+    for (autofill::HtmlFieldType hft : autofill::HtmlFieldTypeSet::all()) {
       string_to_field_type_map[autofill::FieldTypeToStringView(hft)] =
           autofill::HtmlFieldTypeToBestCorrespondingFieldType(hft);
     }
@@ -152,7 +152,8 @@ NSError* PrepareAutofillProfileWithValues(
 
 + (NSError*)setAutofillAutomationProfile:(NSString*)profileJSON {
   std::optional<base::Value> readResult =
-      base::JSONReader::Read(base::SysNSStringToUTF8(profileJSON));
+      base::JSONReader::Read(base::SysNSStringToUTF8(profileJSON),
+                             base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!readResult.has_value()) {
     return testing::NSErrorWithLocalizedDescription(
         @"Unable to parse JSON string in app side.");

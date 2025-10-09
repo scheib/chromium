@@ -818,8 +818,8 @@ void DOMWindow::InstallCoopAccessMonitor(
   // TODO(arthursonzogni): Consider observing |accessing_main_frame| deletion
   // instead.
   monitor->reporter.set_disconnect_handler(
-      WTF::BindOnce(&DOMWindow::DisconnectCoopAccessMonitor,
-                    WrapWeakPersistent(this), monitor->accessing_main_frame));
+      blink::BindOnce(&DOMWindow::DisconnectCoopAccessMonitor,
+                      WrapWeakPersistent(this), monitor->accessing_main_frame));
 
   // As long as RenderDocument isn't shipped, it can exist a CoopAccessMonitor
   // for the same |accessing_main_frame|, because it might now host a different
@@ -885,7 +885,7 @@ void DOMWindow::ReportCoopAccess(const char* property_name) {
   const LocalFrameToken accessing_main_frame_token =
       accessing_main_frame.GetLocalFrameToken();
 
-  WTF::EraseIf(
+  EraseIf(
       coop_access_monitor_, [&](const Member<CoopAccessMonitor>& monitor) {
         if (monitor->accessing_main_frame != accessing_main_frame_token) {
           return false;
@@ -1023,16 +1023,6 @@ void DOMWindow::DoPostMessage(scoped_refptr<SerializedScriptValue> message,
     } else {
       UseCounter::Count(source, WebFeature::kCrossSitePostMessage);
     }
-  }
-  auto* local_dom_window = DynamicTo<LocalDOMWindow>(this);
-  KURL target_url = local_dom_window
-                        ? local_dom_window->Url()
-                        : KURL(NullURL(), target_security_origin->ToString());
-  if (!source->GetContentSecurityPolicy()->AllowConnectToSource(
-          target_url, target_url, RedirectStatus::kNoRedirect,
-          ReportingDisposition::kSuppressReporting)) {
-    UseCounter::Count(
-        source, WebFeature::kPostMessageOutgoingWouldBeBlockedByConnectSrc);
   }
   UserActivation* user_activation = nullptr;
   if (options->includeUserActivation())
@@ -1234,11 +1224,10 @@ void DOMWindow::Trace(Visitor* visitor) const {
 
 void DOMWindow::DisconnectCoopAccessMonitor(
     const LocalFrameToken& accessing_main_frame) {
-  WTF::EraseIf(
-      coop_access_monitor_,
-      [&accessing_main_frame](const Member<CoopAccessMonitor>& monitor) {
-        return monitor->accessing_main_frame == accessing_main_frame;
-      });
+  EraseIf(coop_access_monitor_,
+          [&accessing_main_frame](const Member<CoopAccessMonitor>& monitor) {
+            return monitor->accessing_main_frame == accessing_main_frame;
+          });
 }
 
 }  // namespace blink

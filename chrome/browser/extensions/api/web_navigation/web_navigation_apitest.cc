@@ -21,16 +21,13 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_browser_main.h"
-#include "chrome/browser/download/download_browsertest_utils.h"
-#include "chrome/browser/download/download_prefs.h"
+#include "chrome/browser/extensions/api/web_navigation/frame_navigation_state.h"
 #include "chrome/browser/extensions/api/web_navigation/web_navigation_api.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
 #include "chrome/browser/ssl/https_upgrades_util.h"
-#include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_navigator_params.h"
-#include "chrome/test/base/ui_test_utils.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/navigation_handle.h"
@@ -52,11 +49,15 @@
 #include "content/public/test/prerender_test_util.h"
 #include "content/public/test/test_navigation_throttle_inserter.h"
 #include "content/public/test/test_utils.h"
+#include "extensions/browser/background_script_executor.h"
 #include "extensions/browser/extension_registry.h"
+#include "extensions/browser/test_event_router_observer.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/switches.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
+#include "extensions/test/test_extension_dir.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -67,6 +68,23 @@
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/android/tab_android.h"
+#include "chrome/browser/ui/android/tab_model/tab_model.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+#include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
+#else
+#include "chrome/browser/download/download_browsertest_utils.h"
+#include "chrome/browser/download/download_prefs.h"
+#include "chrome/browser/renderer_context_menu/render_view_context_menu_test_util.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_navigator_params.h"
+#include "chrome/test/base/ui_test_utils.h"
+#endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using content::WebContents;
 
@@ -79,19 +97,72 @@ namespace {
 // |script| in the last committed RVH and resumes the load when a URL ending in
 // |until_url_suffix| commits. This class expects |script| to trigger the load
 // of an URL ending in |until_url_suffix|.
-class DelayLoadStartAndExecuteJavascript : public TabStripModelObserver,
-                                           public content::WebContentsObserver {
+class DelayLoadStartAndExecuteJavascript : public content::WebContentsObserver {
  public:
-  DelayLoadStartAndExecuteJavascript(Browser* browser,
-                                     const GURL& delay_url,
+#if BUILDFLAG(IS_ANDROID)
+  // Notifies DelayLoadStartAndExecuteJavascript when a tab is added.
+  class TabHelper : public TabModelObserver {
+   public:
+    explicit TabHelper(DelayLoadStartAndExecuteJavascript* owner)
+        : owner_(owner) {
+      // Assumes only one window open, which is fine for these tests.
+      CHECK_EQ(1u, TabModelList::models().size());
+      TabModelList::models().front()->AddObserver(this);
+    }
+
+    // TabModelObserver:
+    void DidAddTab(TabAndroid* tab, TabModel::TabLaunchType type) override {
+      if (!tab->GetContents()) {
+        return;
+      }
+
+      CHECK_EQ(1u, TabModelList::models().size());
+      TabModelList::models().front()->RemoveObserver(this);
+
+      owner_->OnTabAdded(tab->GetContents());
+    }
+
+    raw_ptr<DelayLoadStartAndExecuteJavascript> owner_;
+  };
+#else
+  // Notifies DelayLoadStartAndExecuteJavascript when a tab is added.
+  class TabHelper : public TabStripModelObserver {
+   public:
+    explicit TabHelper(DelayLoadStartAndExecuteJavascript* owner)
+        : owner_(owner) {
+      // Assume only one window open, which is fine for these tests.
+      CHECK_EQ(BrowserList::GetInstance()->size(), 1u);
+      BrowserWindowInterface* const browser =
+          GetLastActiveBrowserWindowInterfaceWithAnyProfile();
+      browser->GetTabStripModel()->AddObserver(this);
+    }
+
+    // TabStripModelObserver:
+    void OnTabStripModelChanged(
+        TabStripModel* tab_strip_model,
+        const TabStripModelChange& change,
+        const TabStripSelectionChange& selection) override {
+      if (change.type() != TabStripModelChange::kInserted) {
+        return;
+      }
+
+      tab_strip_model->RemoveObserver(this);
+
+      owner_->OnTabAdded(change.GetInsert()->contents[0].contents);
+    }
+
+    raw_ptr<DelayLoadStartAndExecuteJavascript> owner_;
+  };
+#endif  // BUILDFLAG(IS_ANDROID)
+
+  DelayLoadStartAndExecuteJavascript(const GURL& delay_url,
                                      const std::string& script,
                                      const std::string& until_url_suffix)
       : content::WebContentsObserver(),
         delay_url_(delay_url),
         until_url_suffix_(until_url_suffix),
-        script_(script) {
-    browser->tab_strip_model()->AddObserver(this);
-  }
+        script_(script),
+        tab_helper_(this) {}
 
   DelayLoadStartAndExecuteJavascript(
       const DelayLoadStartAndExecuteJavascript&) = delete;
@@ -100,18 +171,9 @@ class DelayLoadStartAndExecuteJavascript : public TabStripModelObserver,
 
   ~DelayLoadStartAndExecuteJavascript() override = default;
 
-  // TabStripModelObserver:
-  void OnTabStripModelChanged(
-      TabStripModel* tab_strip_model,
-      const TabStripModelChange& change,
-      const TabStripSelectionChange& selection) override {
-    if (change.type() != TabStripModelChange::kInserted) {
-      return;
-    }
-
-    content::WebContentsObserver::Observe(
-        change.GetInsert()->contents[0].contents);
-    tab_strip_model->RemoveObserver(this);
+  // Called after a tab has been added.
+  void OnTabAdded(WebContents* contents) {
+    content::WebContentsObserver::Observe(contents);
 
     throttle_inserter_ =
         std::make_unique<content::TestNavigationThrottleInserter>(
@@ -213,6 +275,7 @@ class DelayLoadStartAndExecuteJavascript : public TabStripModelObserver,
   raw_ptr<content::RenderFrameHost, AcrossTasksDanglingUntriaged>
       render_frame_host_ = nullptr;
   std::unique_ptr<content::TestNavigationThrottleInserter> throttle_inserter_;
+  TabHelper tab_helper_;
 };
 
 // Handles requests for URLs with paths of "/test*" sent to the test server, so
@@ -257,9 +320,7 @@ class WebNavigationApiTest : public ExtensionApiTest {
     command_line->AppendSwitch(blink::switches::kAllowPreCommitInput);
   }
 
-  content::WebContents* GetWebContents() {
-    return browser()->tab_strip_model()->GetActiveWebContents();
-  }
+  content::WebContents* GetWebContents() { return GetActiveWebContents(); }
 };
 
 class WebNavigationApiBackForwardCacheTest : public WebNavigationApiTest {
@@ -297,6 +358,20 @@ class WebNavigationApiTestWithContextType
   }
 };
 
+#if !BUILDFLAG(IS_ANDROID)
+// Android only supports service worker, not persistent background pages.
+INSTANTIATE_TEST_SUITE_P(PersistentBackground,
+                         WebNavigationApiTestWithContextType,
+                         testing::Values(ContextType::kPersistentBackground));
+#endif  // !BUILDFLAG(IS_ANDROID)
+INSTANTIATE_TEST_SUITE_P(ServiceWorker,
+                         WebNavigationApiTestWithContextType,
+                         testing::Values(ContextType::kServiceWorker));
+
+IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, Api) {
+  ASSERT_TRUE(RunExtensionTest("webnavigation/api")) << message_;
+}
+
 class WebNavigationApiPrerenderTestWithContextType
     : public WebNavigationApiTest,
       public testing::WithParamInterface<ContextType> {
@@ -313,10 +388,6 @@ class WebNavigationApiPrerenderTestWithContextType
   content::test::ScopedPrerenderFeatureList prerender_feature_list_;
 };
 
-IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, Api) {
-  ASSERT_TRUE(RunExtensionTest("webnavigation/api")) << message_;
-}
-
 // TODO(crbug.com/40858121): Flakily timing out.
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, DISABLED_GetFrame) {
   ASSERT_TRUE(StartEmbeddedTestServer());
@@ -328,6 +399,9 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiPrerenderTestWithContextType, GetFrame) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/getFrame")) << message_;
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// TODO(crbug.com/371432404): Port to desktop Android. Lookup of incognito
+// windows is broken on Android in some cases, including this one.
 IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, GetFrameIncognito) {
   // TODO(crbug.com/40937027): Convert test to use HTTPS and then remove.
   ScopedAllowHttpForHostnamesForTesting allow_http({"a.com"},
@@ -336,24 +410,23 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, GetFrameIncognito) {
 
   GURL url = embedded_test_server()->GetURL("a.com", "/empty.html");
 
-  Browser* incognito_browser = OpenURLOffTheRecord(profile(), url);
-  ASSERT_TRUE(incognito_browser);
+  content::WebContents* incognito_contents =
+      PlatformOpenURLOffTheRecord(profile(), url);
+  ASSERT_TRUE(incognito_contents);
 
   // Now that we have a OTR browser, run the extension test.
   ASSERT_TRUE(RunExtensionTest("webnavigation/getFrameIncognito", {},
                                {.allow_in_incognito = true}))
       << message_;
 }
+#endif  // BUILDFLAG(ENABLE_EXTENIONS)
 
-INSTANTIATE_TEST_SUITE_P(PersistentBackground,
-                         WebNavigationApiTestWithContextType,
-                         testing::Values(ContextType::kPersistentBackground));
-INSTANTIATE_TEST_SUITE_P(ServiceWorker,
-                         WebNavigationApiTestWithContextType,
-                         testing::Values(ContextType::kServiceWorker));
+#if !BUILDFLAG(IS_ANDROID)
+// Android only supports service worker, not persistent background pages.
 INSTANTIATE_TEST_SUITE_P(PersistentBackground,
                          WebNavigationApiPrerenderTestWithContextType,
                          testing::Values(ContextType::kPersistentBackground));
+#endif  // !BUILDFLAG(IS_ANDROID)
 INSTANTIATE_TEST_SUITE_P(ServiceWorker,
                          WebNavigationApiPrerenderTestWithContextType,
                          testing::Values(ContextType::kServiceWorker));
@@ -370,6 +443,71 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, ServerRedirect) {
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, FormSubmission) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   ASSERT_TRUE(RunExtensionTest("webnavigation/formSubmission")) << message_;
+}
+
+// Test that WebNavigation API does not emit the same event twice when providing
+// filters in addListener. Regression test for https://crbug.com/439995191.
+// Disabled due to flake on multiple platforms:
+// TODO(crbug.com/40276609): Flake on Mac.
+// TODO(crbug.com/371432404): Flake on Android.
+// TODO(crbug.com/443575628): Flake on Linux.
+// Windows is flaky as well.
+IN_PROC_BROWSER_TEST_F(
+    WebNavigationApiTest,
+    DISABLED_MultipleListenersWithFilterDontDuplicateEvents) {
+  ASSERT_TRUE(StartEmbeddedTestServer());
+
+  TestExtensionDir test_dir;
+  test_dir.WriteManifest(R"({
+      "name": "WebNavigation Duplicate Event Regression Test",
+      "manifest_version": 3,
+      "version": "1.0",
+      "background": { "service_worker": "background.js" },
+      "permissions": ["webNavigation"]
+  })");
+
+  test_dir.WriteFile(FILE_PATH_LITERAL("background.js"), R"(
+      let counts = { listener1: 0, listener2: 0 };
+
+      chrome.webNavigation.onCompleted.addListener((details) => {
+        if (details.frameId === 0) { counts.listener1++; }
+      }, { url: [{ schemes: ["http", "https"] }] });
+
+      chrome.webNavigation.onCompleted.addListener((details) => {
+        if (details.frameId === 0) { counts.listener2++; }
+      });
+  )");
+
+  const Extension* extension = LoadExtension(test_dir.UnpackedPath());
+  ASSERT_TRUE(extension);
+
+  TestEventRouterObserver event_router_observer(EventRouter::Get(profile()));
+
+  // Navigate to trigger the onCompleted events.
+  ASSERT_TRUE(NavigateToURL(GetActiveWebContents(),
+                            embedded_test_server()->GetURL("/simple.html")));
+
+  // Check that the EventRouter has received and will dispatch the event.
+  ASSERT_TRUE(base::Contains(event_router_observer.events(),
+                             "webNavigation.onCompleted"));
+  // Wait until the EventRouter has actually dispatched the event.
+  // TODO(crbug.com/40276609): when this is solved, the event will
+  // be dispatched immediately and this won't be necessary.
+  event_router_observer.WaitForDispatchedEventWithName(
+      "webNavigation.onCompleted");
+
+  // Execute a script to retrieve the invocation counts.
+  const char kGetCountsScript[] = "chrome.test.sendScriptResult(counts);";
+  base::Value result = BackgroundScriptExecutor::ExecuteScript(
+      profile(), extension->id(), kGetCountsScript,
+      BackgroundScriptExecutor::ResultCapture::kSendScriptResult);
+
+  ASSERT_TRUE(result.is_dict());
+  const base::Value::Dict& counts = result.GetDict();
+
+  // Each listener is invoked only once.
+  EXPECT_EQ(1, counts.FindInt("listener1"));
+  EXPECT_EQ(1, counts.FindInt("listener2"));
 }
 
 class WebNavigationApiPrerenderTestWithServiceWorker
@@ -398,6 +536,8 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiPrerenderTestWithServiceWorker,
   EXPECT_TRUE(RunExtensionTest("webnavigation/prerendering")) << message_;
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// TODO(crbug.com/371432404): Fix for desktop Android. Times out.
 // TODO(crbug.com/40791797):
 // WebNavigationApiTestWithContextType.Download test is flaky.
 #if BUILDFLAG(IS_WIN)
@@ -416,6 +556,9 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, MAYBE_Download) {
   ASSERT_TRUE(result) << message_;
 }
 
+// TODO(crbug.com/371432404): Port to desktop Android. Fails due to differences
+// in behavior between ExtensionBrowserTest::NavigateToURL() and
+// ui_test_utils::NavigateToURL().
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType,
                        ServerRedirectSingleProcess) {
   // TODO(crbug.com/40248833): Use https in the test and remove these allowlist
@@ -451,6 +594,7 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType,
 
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, ForwardBack) {
   ASSERT_TRUE(RunTest("webnavigation/forwardBack")) << message_;
@@ -497,6 +641,9 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, FilteredTest) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/filtered")) << message_;
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+// Skipped on Android because RenderViewContextMenu only exists on
+// Win/Mac/Linux.
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, UserAction) {
   content::IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
   ASSERT_TRUE(StartEmbeddedTestServer());
@@ -537,7 +684,12 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, UserAction) {
 
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// TODO(crbug.com/371432404): Port to desktop Android. Fails due to differences
+// in behavior between ExtensionBrowserTest::NavigateToURL() and
+// ui_test_utils::NavigateToURL().
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, RequestOpenTab) {
   // Wait for the extension to set itself up and return control to us.
   ASSERT_TRUE(RunExtensionTest("webnavigation/requestOpenTab")) << message_;
@@ -575,6 +727,9 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, RequestOpenTab) {
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
 
+// TODO(crbug.com/371432404): Port to desktop Android. Fails due to differences
+// in behavior between ExtensionBrowserTest::NavigateToURL() and
+// ui_test_utils::NavigateToURL().
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, TargetBlank) {
   ASSERT_TRUE(StartEmbeddedTestServer());
 
@@ -614,6 +769,9 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, TargetBlank) {
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
 
+// TODO(crbug.com/371432404): Port to desktop Android. Fails due to differences
+// in behavior between ExtensionBrowserTest::PlatformOpenURLOffTheRecord() and
+// OpenURLOffTheRecord().
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType,
                        TargetBlankIncognito) {
   ASSERT_TRUE(StartEmbeddedTestServer());
@@ -653,6 +811,7 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType,
 
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, History) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/history")) << message_;
@@ -665,12 +824,10 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, CrossProcess) {
 
   // See crossProcess/d.html.
   DelayLoadStartAndExecuteJavascript call_script(
-      browser(), embedded_test_server()->GetURL("/test1"), "navigate2()",
-      "empty.html");
+      embedded_test_server()->GetURL("/test1"), "navigate2()", "empty.html");
 
   DelayLoadStartAndExecuteJavascript call_script_user_gesture(
-      browser(), embedded_test_server()->GetURL("/test2"), "navigate2()",
-      "empty.html");
+      embedded_test_server()->GetURL("/test2"), "navigate2()", "empty.html");
   call_script_user_gesture.set_has_user_gesture(true);
 
   ASSERT_TRUE(RunExtensionTest("webnavigation/crossProcess")) << message_;
@@ -682,12 +839,12 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, DISABLED_CrossProcessFragment) {
 
   // See crossProcessFragment/f.html.
   DelayLoadStartAndExecuteJavascript call_script3(
-      browser(), embedded_test_server()->GetURL("/test3"), "updateFragment()",
+      embedded_test_server()->GetURL("/test3"), "updateFragment()",
       base::StringPrintf("f.html?%u#foo", embedded_test_server()->port()));
 
   // See crossProcessFragment/g.html.
   DelayLoadStartAndExecuteJavascript call_script4(
-      browser(), embedded_test_server()->GetURL("/test4"), "updateFragment()",
+      embedded_test_server()->GetURL("/test4"), "updateFragment()",
       base::StringPrintf("g.html?%u#foo", embedded_test_server()->port()));
 
   ASSERT_TRUE(RunExtensionTest("webnavigation/crossProcessFragment"))
@@ -700,17 +857,17 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType,
 
   // See crossProcessHistory/e.html.
   DelayLoadStartAndExecuteJavascript call_script2(
-      browser(), embedded_test_server()->GetURL("/test2"), "updateHistory()",
+      embedded_test_server()->GetURL("/test2"), "updateHistory()",
       "empty.html");
 
   // See crossProcessHistory/h.html.
   DelayLoadStartAndExecuteJavascript call_script5(
-      browser(), embedded_test_server()->GetURL("/test5"), "updateHistory()",
+      embedded_test_server()->GetURL("/test5"), "updateHistory()",
       "empty.html");
 
   // See crossProcessHistory/i.html.
   DelayLoadStartAndExecuteJavascript call_script6(
-      browser(), embedded_test_server()->GetURL("/test6"), "updateHistory()",
+      embedded_test_server()->GetURL("/test6"), "updateHistory()",
       "empty.html");
 
   ASSERT_TRUE(RunExtensionTest("webnavigation/crossProcessHistory"))
@@ -730,6 +887,10 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, PendingDeletion) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/pendingDeletion")) << message_;
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// TODO(crbug.com/371432404): Port to desktop Android. Fails due to differences
+// in behavior between ExtensionBrowserTest::NavigateToURL() and
+// ui_test_utils::NavigateToURL().
 IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, Crash) {
   // TODO(crbug.com/40248833): Use https in the test and remove this allowlist
   // entry.
@@ -763,6 +924,7 @@ IN_PROC_BROWSER_TEST_P(WebNavigationApiTestWithContextType, Crash) {
 
   ASSERT_TRUE(catcher.GetNextResult()) << catcher.message();
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_MAC)
 // TODO(crbug.com/40187463): Re-enable this test.
@@ -798,4 +960,5 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiFencedFrameTest, Load) {
   ASSERT_TRUE(StartEmbeddedTestServer());
   ASSERT_TRUE(RunExtensionTest("webnavigation/fencedFrames")) << message_;
 }
+
 }  // namespace extensions

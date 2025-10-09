@@ -12,7 +12,6 @@
 #include "gpu/command_buffer/service/gles2_cmd_decoder_mock.h"
 #include "gpu/command_buffer/service/gpu_service_test.h"
 #include "gpu/command_buffer/service/gpu_tracer.h"
-#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/command_buffer/service/test_helper.h"
 #include "gpu/command_buffer/service/texture_manager.h"
@@ -36,9 +35,7 @@ namespace gles2 {
 
 class ContextGroupTest : public GpuServiceTest {
  public:
-  static const bool kBindGeneratesResource = false;
-
-  ContextGroupTest() : discardable_manager_(gpu_preferences_) {}
+  ContextGroupTest() {}
 
  protected:
   void SetUp() override {
@@ -50,13 +47,11 @@ class ContextGroupTest : public GpuServiceTest {
         gpu_preferences_, /*memory_tracker=*/nullptr,
         /*shader_translator_cache=*/nullptr,
         /*framebuffer_completeness_cache=*/nullptr, feature_info,
-        kBindGeneratesResource, /*progress_reporter=*/nullptr, GpuFeatureInfo(),
-        &discardable_manager_,
-        /*passthrough_discardable_manager=*/nullptr, &shared_image_manager_));
+        /*progress_reporter=*/nullptr, GpuFeatureInfo(),
+        &shared_image_manager_));
   }
 
   GpuPreferences gpu_preferences_;
-  ServiceDiscardableManager discardable_manager_;
   SharedImageManager shared_image_manager_;
   FakeCommandBufferServiceBase command_buffer_service_;
   FakeDecoderClient client_;
@@ -83,9 +78,9 @@ TEST_F(ContextGroupTest, Basic) {
 }
 
 TEST_F(ContextGroupTest, InitializeNoExtensions) {
-  TestHelper::SetupContextGroupInitExpectations(
-      gl_.get(), DisallowedFeatures(), "ANGLE", "OpenGL ES 2.0",
-      CONTEXT_TYPE_OPENGLES2, kBindGeneratesResource);
+  TestHelper::SetupContextGroupInitExpectations(gl_.get(), DisallowedFeatures(),
+                                                "ANGLE", "OpenGL ES 2.0",
+                                                CONTEXT_TYPE_OPENGLES2);
   group_->Initialize(decoder_.get(), CONTEXT_TYPE_OPENGLES2,
                      DisallowedFeatures());
   EXPECT_EQ(static_cast<uint32_t>(TestHelper::kNumVertexAttribs),
@@ -122,9 +117,9 @@ TEST_F(ContextGroupTest, MultipleContexts) {
   TraceOutputter outputter;
   std::unique_ptr<MockGLES2Decoder> decoder2_(
       new MockGLES2Decoder(&client2, &command_buffer_service2, &outputter));
-  TestHelper::SetupContextGroupInitExpectations(
-      gl_.get(), DisallowedFeatures(), "ANGLE", "OpenGL ES 2.0",
-      CONTEXT_TYPE_OPENGLES2, kBindGeneratesResource);
+  TestHelper::SetupContextGroupInitExpectations(gl_.get(), DisallowedFeatures(),
+                                                "ANGLE", "OpenGL ES 2.0",
+                                                CONTEXT_TYPE_OPENGLES2);
   EXPECT_EQ(group_->Initialize(decoder_.get(), CONTEXT_TYPE_OPENGLES2,
                                DisallowedFeatures()),
             gpu::ContextResult::kSuccess);

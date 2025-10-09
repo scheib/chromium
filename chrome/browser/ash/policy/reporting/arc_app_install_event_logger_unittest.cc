@@ -33,7 +33,6 @@ namespace {
 
 using ::testing::_;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::Mock;
 using ::testing::WithArgs;
 namespace em = ::enterprise_management;
@@ -233,10 +232,10 @@ class AppInstallEventLoggerTest : public testing::Test {
     }
     EXPECT_CALL(delegate_, GetAndroidId_(_))
         .WillOnce(WithArgs<0>(
-            Invoke([=](ArcAppInstallEventLogger::Delegate::AndroidIdCallback*
-                           callback) {
+            [=](ArcAppInstallEventLogger::Delegate::AndroidIdCallback*
+                    callback) {
               std::move(*callback).Run(android_id, kAndroidId);
-            })));
+            }));
   }
 
   PolicyMap CreatePolicyWithForceInstalls(std::set<std::string> package_names) {
@@ -253,8 +252,7 @@ class AppInstallEventLoggerTest : public testing::Test {
     }
 
     arc_policy.Set("applications", std::move(list));
-    std::string arc_policy_string;
-    base::JSONWriter::Write(arc_policy, &arc_policy_string);
+    std::string arc_policy_string = base::WriteJson(arc_policy).value_or("");
     SetPolicy(&policy_map, key::kArcEnabled, base::Value(true));
     SetPolicy(&policy_map, key::kArcPolicy, base::Value(arc_policy_string));
 
@@ -486,8 +484,7 @@ TEST_F(AppInstallEventLoggerTest, UpdatePolicy) {
   list.Append(std::move(package5));
   arc_policy.Set("applications", std::move(list));
 
-  std::string arc_policy_string;
-  base::JSONWriter::Write(arc_policy, &arc_policy_string);
+  std::string arc_policy_string = base::WriteJson(arc_policy).value_or("");
   SetPolicy(&new_policy_map, key::kArcEnabled, base::Value(true));
   SetPolicy(&new_policy_map, key::kArcPolicy, base::Value(arc_policy_string));
 

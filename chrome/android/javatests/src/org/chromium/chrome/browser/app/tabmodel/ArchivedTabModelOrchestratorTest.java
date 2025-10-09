@@ -9,6 +9,8 @@ import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertEquals;
@@ -40,7 +42,6 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Features.DisableFeatures;
@@ -113,7 +114,6 @@ public class ArchivedTabModelOrchestratorTest {
 
     @Mock private ArchivedTabModelOrchestrator.Observer mObserver;
     @Mock private TabArchiverImpl.Clock mClock;
-    @Mock private ObservableSupplierImpl<Boolean> mSkipSaveTabListSupplier;
     @Mock private TabPersistentStore mArchivedTabPersistentStore;
     @Mock private TabPersistentStore mNormalTabPersistentStore;
     @Mock private TabModelSelectorBase mTabModelSelector;
@@ -158,14 +158,13 @@ public class ArchivedTabModelOrchestratorTest {
                                             .get();
                     mOrchestrator = ArchivedTabModelOrchestrator.getForProfile(mProfile);
                 });
-        doReturn(false).when(mSkipSaveTabListSupplier).get();
     }
 
     private void finishLoading() {
         runOnUiThreadBlocking(
                 () -> {
                     mDeferredStartupHandler.runAllTasks();
-                    assert mOrchestrator.areTabModelsInitialized();
+                    assertThat(mOrchestrator.areTabModelsInitialized()).isTrue();
                     mOrchestrator.getTabArchiveSettings().resetSettingsForTesting();
                     mArchivedTabModel = mOrchestrator.getTabModelSelector().getModel(false);
                     mRegularTabModel = mActivityTestRule.getActivity().getCurrentTabModel();
@@ -525,7 +524,7 @@ public class ArchivedTabModelOrchestratorTest {
                 tabSwitcherSearchStation.findSuggestion(
                         /* index= */ null, /* title= */ "About", /* text= */ null);
         mPage = suggestion.openPage();
-        assertEquals(declutterUrl, mPage.loadedTabElement.get().getUrl().getSpec());
+        assertEquals(declutterUrl, mPage.loadedTabElement.value().getUrl().getSpec());
         CriteriaHelper.pollUiThread(() -> 2 == mRegularTabModel.getCount());
     }
 

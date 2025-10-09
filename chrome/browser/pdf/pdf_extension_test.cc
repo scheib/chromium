@@ -479,7 +479,7 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionTest, CSPFrameAncestorsCanBlockEmbedding) {
   WebContents* web_contents = GetActiveWebContents();
   content::WebContentsConsoleObserver console_observer(web_contents);
   console_observer.SetPattern(
-      "*because an ancestor violates the following Content Security Policy "
+      "*violates the following Content Security Policy "
       "directive: \"frame-ancestors 'none'*");
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
@@ -640,11 +640,6 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionBlobNavigationTest, SameTab) {
 }
 
 IN_PROC_BROWSER_TEST_P(PDFExtensionTest, LoadInPlatformApp) {
-  // TODO(crbug.com/40268279): Remove this once the test passes for OOPIF PDF.
-  if (UseOopif()) {
-    GTEST_SKIP();
-  }
-
   extensions::TestExtensionDir dir;
   dir.WriteManifest(R"(
     {
@@ -677,7 +672,8 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionTest, LoadInPlatformApp) {
   }
 
   extensions::ResultCatcher result_catcher;
-  ASSERT_TRUE(LoadAndLaunchApp(dir.UnpackedPath(), /*uses_guest_view=*/true));
+  ASSERT_TRUE(
+      LoadAndLaunchApp(dir.UnpackedPath(), /*uses_guest_view=*/!UseOopif()));
   ASSERT_TRUE(result_catcher.GetNextResult()) << result_catcher.message();
 
   auto* app_registry = extensions::AppWindowRegistry::Get(browser()->profile());
@@ -1977,7 +1973,7 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionLinkClickTest, OpenPDFWithReplaceState) {
   ASSERT_TRUE(content::ExecJs(web_contents, kPdfLinkClick));
   navigation_observer.Wait();
   const GURL& current_url = web_contents->GetLastCommittedURL();
-  ASSERT_EQ("/pdf/test-link.pdf", current_url.path());
+  ASSERT_EQ("/pdf/test-link.pdf", current_url.GetPath());
 
   ASSERT_TRUE(EnsureFullPagePDFHasLoadedWithValidFrameTree(
       web_contents, /*allow_multiple_frames=*/false));
@@ -2100,8 +2096,8 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionInternalLinkClickTest, CtrlLeft) {
   ASSERT_NE(web_contents, new_web_contents);
 
   const GURL& url = new_web_contents->GetVisibleURL();
-  EXPECT_EQ("/pdf/test-internal-link.pdf", url.path());
-  EXPECT_EQ("page=2&zoom=100,0,200", url.ref());
+  EXPECT_EQ("/pdf/test-internal-link.pdf", url.GetPath());
+  EXPECT_EQ("page=2&zoom=100,0,200", url.GetRef());
 }
 
 IN_PROC_BROWSER_TEST_P(PDFExtensionInternalLinkClickTest, Middle) {
@@ -2128,8 +2124,8 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionInternalLinkClickTest, Middle) {
   ASSERT_NE(web_contents, new_web_contents);
 
   const GURL& url = new_web_contents->GetVisibleURL();
-  EXPECT_EQ("/pdf/test-internal-link.pdf", url.path());
-  EXPECT_EQ("page=2&zoom=100,0,200", url.ref());
+  EXPECT_EQ("/pdf/test-internal-link.pdf", url.GetPath());
+  EXPECT_EQ("page=2&zoom=100,0,200", url.GetRef());
 }
 
 IN_PROC_BROWSER_TEST_P(PDFExtensionInternalLinkClickTest, ShiftLeft) {
@@ -2154,8 +2150,8 @@ IN_PROC_BROWSER_TEST_P(PDFExtensionInternalLinkClickTest, ShiftLeft) {
   ASSERT_NE(web_contents, active_web_contents);
 
   const GURL& url = active_web_contents->GetVisibleURL();
-  EXPECT_EQ("/pdf/test-internal-link.pdf", url.path());
-  EXPECT_EQ("page=2&zoom=100,0,200", url.ref());
+  EXPECT_EQ("/pdf/test-internal-link.pdf", url.GetPath());
+  EXPECT_EQ("page=2&zoom=100,0,200", url.GetRef());
 }
 
 class PDFExtensionComboBoxTest : public PDFExtensionTest {

@@ -19,7 +19,6 @@
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/layout/box_layout.h"
-#include "ui/views/metadata/view_factory_internal.h"
 #include "ui/views/view_targeter_delegate.h"
 #include "ui/views/widget/widget.h"
 
@@ -88,7 +87,7 @@ bool ShouldShowLandscape(const views::Widget* widget) {
 
   // Get the orientation for |widget|.
   const display::Display& display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(
+      display::Screen::Get()->GetDisplayNearestWindow(
           widget->GetNativeWindow());
 
   // The display bounds are updated after a rotation. This means that if the

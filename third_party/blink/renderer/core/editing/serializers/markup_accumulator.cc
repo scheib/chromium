@@ -212,8 +212,7 @@ void MarkupAccumulator::AppendStartMarkup(const Node& node) {
     case Node::kAttributeNode:
       // Only XMLSerializer can pass an Attr.  So, |documentIsHTML| flag is
       // false.
-      formatter_.AppendAttributeValue(markup_, To<Attr>(node).value(), false,
-                                      node.GetDocument());
+      formatter_.AppendAttributeValue(markup_, To<Attr>(node).value(), false);
       break;
     default:
       formatter_.AppendStartMarkup(markup_, node);
@@ -264,8 +263,7 @@ AtomicString MarkupAccumulator::AppendElement(const Element& element) {
               attribute, DefaultNsDeclarationMatchType::kNamespaceUri)) {
         // Drop xmlns= only if it's inconsistent with element's namespace.
         // https://github.com/w3c/DOM-Parsing/issues/47
-        if (!WTF::EqualIgnoringNullity(attribute.Value(),
-                                       element.namespaceURI())) {
+        if (!EqualIgnoringNullity(attribute.Value(), element.namespaceURI())) {
           continue;
         }
       }
@@ -359,7 +357,7 @@ MarkupAccumulator::AppendStartTagOpen(const Element& element) {
     // let prefix be the result of generating a prefix providing as input map,
     // ns, and prefix index
     if (element.hasAttribute(
-            AtomicString(String(WTF::g_xmlns_with_colon + prefix)))) {
+            AtomicString(String(g_xmlns_with_colon + prefix)))) {
       prefix = GeneratePrefix(ns);
     } else {
       // 12.5.2. Add prefix to map given namespace ns.
@@ -371,8 +369,7 @@ MarkupAccumulator::AppendStartTagOpen(const Element& element) {
     formatter_.AppendStartTagOpen(markup_, prefix, element.localName());
     data.serialized_prefix_ = prefix;
     // 12.5.5. Append the following to markup, in the order listed:
-    MarkupFormatter::AppendAttribute(markup_, g_xmlns_atom, prefix, ns, false,
-                                     element.GetDocument());
+    MarkupFormatter::AppendAttribute(markup_, g_xmlns_atom, prefix, ns, false);
     // 12.5.5.7. If local default namespace is not null (there exists a
     // locally-defined default namespace declaration attribute), then let
     // inherited ns get the value of local default namespace unless the local
@@ -384,7 +381,7 @@ MarkupAccumulator::AppendStartTagOpen(const Element& element) {
   // 12.6. Otherwise, if local default namespace is null, or local default
   // namespace is not null and its value is not equal to ns, then:
   if (local_default_namespace.IsNull() ||
-      !WTF::EqualIgnoringNullity(local_default_namespace, ns)) {
+      !EqualIgnoringNullity(local_default_namespace, ns)) {
     // 12.6.1. Set the ignore namespace definition attribute flag to true.
     data.ignore_namespace_definition_attribute_ = true;
     // 12.6.3. Let the value of inherited ns be ns.
@@ -393,14 +390,14 @@ MarkupAccumulator::AppendStartTagOpen(const Element& element) {
     formatter_.AppendStartTagOpen(markup_, element);
     // 12.6.5. Append the following to markup, in the order listed:
     MarkupFormatter::AppendAttribute(markup_, g_null_atom, g_xmlns_atom, ns,
-                                     false, element.GetDocument());
+                                     false);
     return data;
   }
 
   // 12.7. Otherwise, the node has a local default namespace that matches
   // ns. Append to qualified name the value of node's localName, let the value
   // of inherited ns be ns, and append the value of qualified name to markup.
-  DCHECK(WTF::EqualIgnoringNullity(local_default_namespace, ns));
+  DCHECK(EqualIgnoringNullity(local_default_namespace, ns));
   namespace_context.SetContextNamespace(ns);
   formatter_.AppendStartTagOpen(markup_, element);
   return data;
@@ -414,8 +411,7 @@ void MarkupAccumulator::AppendAttribute(const Element& element,
                                         const Attribute& attribute) {
   String value = formatter_.ResolveURLIfNeeded(element, attribute);
   if (SerializeAsHTML()) {
-    MarkupFormatter::AppendAttributeAsHTML(markup_, attribute, value,
-                                           element.GetDocument());
+    MarkupFormatter::AppendAttributeAsHTML(markup_, attribute, value);
   } else {
     AppendAttributeAsXMLWithNamespace(element, attribute, value);
   }
@@ -435,8 +431,7 @@ void MarkupAccumulator::AppendAttributeAsXMLWithNamespace(
 
   if (attribute_namespace.IsNull()) {
     MarkupFormatter::AppendAttribute(markup_, candidate_prefix,
-                                     attribute.LocalName(), value, false,
-                                     element.GetDocument());
+                                     attribute.LocalName(), value, false);
     return;
   }
   // 3.5. If attribute namespace is not null, then run these sub-steps:
@@ -463,17 +458,15 @@ void MarkupAccumulator::AppendAttributeAsXMLWithNamespace(
         // 3.5.3.2. Append the following to result, in the order listed:
         MarkupFormatter::AppendAttribute(markup_, g_xmlns_atom,
                                          candidate_prefix, attribute_namespace,
-                                         false, element.GetDocument());
+                                         false);
       } else {
         DCHECK(candidate_prefix);
-        AppendNamespace(candidate_prefix, attribute_namespace,
-                        element.GetDocument());
+        AppendNamespace(candidate_prefix, attribute_namespace);
       }
     }
   }
   MarkupFormatter::AppendAttribute(markup_, candidate_prefix,
-                                   attribute.LocalName(), value, false,
-                                   element.GetDocument());
+                                   attribute.LocalName(), value, false);
 }
 
 bool MarkupAccumulator::ShouldAddNamespaceAttribute(
@@ -490,22 +483,21 @@ bool MarkupAccumulator::ShouldAddNamespaceAttribute(
   if (!candidate_prefix)
     return true;
 
-  return !WTF::EqualIgnoringNullity(LookupNamespaceURI(candidate_prefix),
-                                    attribute.NamespaceURI());
+  return !EqualIgnoringNullity(LookupNamespaceURI(candidate_prefix),
+                               attribute.NamespaceURI());
 }
 
 void MarkupAccumulator::AppendNamespace(const AtomicString& prefix,
-                                        const AtomicString& namespace_uri,
-                                        const Document& document) {
+                                        const AtomicString& namespace_uri) {
   AtomicString found_uri = LookupNamespaceURI(prefix);
-  if (!WTF::EqualIgnoringNullity(found_uri, namespace_uri)) {
+  if (!EqualIgnoringNullity(found_uri, namespace_uri)) {
     AddPrefix(prefix, namespace_uri);
     if (prefix.empty()) {
       MarkupFormatter::AppendAttribute(markup_, g_null_atom, g_xmlns_atom,
-                                       namespace_uri, false, document);
+                                       namespace_uri, false);
     } else {
       MarkupFormatter::AppendAttribute(markup_, g_xmlns_atom, prefix,
-                                       namespace_uri, false, document);
+                                       namespace_uri, false);
     }
   }
 }
@@ -543,7 +535,7 @@ AtomicString MarkupAccumulator::RetrievePreferredPrefixString(
   // 2.1. If prefix matches preferred prefix, then stop running these steps and
   // return prefix.
   if (!preferred_prefix.empty() && !ns_for_preferred.IsNull() &&
-      WTF::EqualIgnoringNullity(ns_for_preferred, ns)) {
+      EqualIgnoringNullity(ns_for_preferred, ns)) {
     return preferred_prefix;
   }
 
@@ -562,7 +554,7 @@ AtomicString MarkupAccumulator::RetrievePreferredPrefixString(
   for (const auto& candidate_prefix : base::Reversed(candidate_list)) {
     DCHECK(!candidate_prefix.empty());
     AtomicString ns_for_candidate = LookupNamespaceURI(candidate_prefix);
-    if (WTF::EqualIgnoringNullity(ns_for_candidate, ns)) {
+    if (EqualIgnoringNullity(ns_for_candidate, ns)) {
       return candidate_prefix;
     }
   }
@@ -657,7 +649,8 @@ std::pair<ShadowRoot*, HTMLTemplateElement*> MarkupAccumulator::GetShadowTree(
                                           true);
   }
   if (RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled() &&
-      shadow_root->IsWaitingForScopedRegistry()) {
+      shadow_root->host().customElementRegistry() !=
+          shadow_root->customElementRegistry()) {
     template_element->SetBooleanAttribute(
         html_names::kShadowrootcustomelementregistryAttr, true);
   }

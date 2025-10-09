@@ -141,6 +141,7 @@ class TestCascade {
     EnsureAtLeast(options.origin);
     cascade_.MutableMatchResult().AddMatchedProperties(
         set,
+        /*env_bindings=*/nullptr,
         {
             .link_match_type = static_cast<uint8_t>(options.link_match_type),
             .is_inline_style = options.is_inline_style,
@@ -170,8 +171,8 @@ class TestCascade {
                           CascadeOrigin& origin) {
     TestCascadeResolver resolver;
     return cascade_.Resolve(property, value, /*tree_scope=*/&GetDocument(),
-                            CascadePriority(origin), origin,
-                            resolver.InnerResolver());
+                            /*env_bindings=*/nullptr, CascadePriority(origin),
+                            origin, resolver.InnerResolver());
   }
 
   static const CSSValue* StaticResolve(StyleResolverState& state,
@@ -183,7 +184,8 @@ class TestCascade {
     DCHECK(set->PropertyCount());
     const CSSPropertyValue& reference = set->PropertyAt(0);
     return StyleCascade::Resolve(state, reference.Name(), reference.Value(),
-                                 /*tree_scope=*/&state.GetDocument());
+                                 /*tree_scope=*/&state.GetDocument(),
+                                 /*env_bindings=*/nullptr);
   }
 
   std::unique_ptr<CSSBitset> GetImportantSet() {
@@ -268,7 +270,7 @@ class TestCascade {
       state.CreateNewStyle(*InitialStyle(state.GetDocument()), *parent_style);
       state.SetParentStyle(parent_style);
     } else {
-      state.SetStyle(*InitialStyle(state.GetDocument()));
+      state.CreateNewClonedStyle(*InitialStyle(state.GetDocument()));
       state.SetParentStyle(InitialStyle(state.GetDocument()));
     }
     state.SetOldStyle(state.GetElement().GetComputedStyle());
@@ -1313,11 +1315,23 @@ TEST_F(StyleCascadeTest, CycleMultipleAttr) {
   EXPECT_FALSE(cascade.ComputedValue("--x"));
 }
 
-TEST_F(StyleCascadeTest, CycleAttrWithFallback) {
+TEST_F(StyleCascadeTest, CycleAttrIgnoreFallback) {
   Element* element = DocumentElement();
   TestCascade cascade(GetDocument(), element);
   element->setAttribute(AtomicString("data-foo"),
-                        AtomicString("attr(data-foo"));
+                        AtomicString("attr(data-foo)"));
+
+  cascade.Reset();
+  cascade.Add("--x", "attr(data-foo type(*), abc)");
+  cascade.Apply();
+
+  EXPECT_EQ(cascade.ComputedValue("--x"), "abc");
+}
+
+TEST_F(StyleCascadeTest, CycleAttrUseFallback) {
+  Element* element = DocumentElement();
+  TestCascade cascade(GetDocument(), element);
+  element->setAttribute(AtomicString("data-foo"), AtomicString("var(--x)"));
 
   cascade.Reset();
   cascade.Add("--x", "attr(data-foo type(*), abc)");

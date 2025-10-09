@@ -5,11 +5,13 @@
 #include "net/disk_cache/sql/cache_entry_key.h"
 
 #include "base/check.h"
+#include "base/hash/hash.h"
 
 namespace disk_cache {
 
 CacheEntryKey::CacheEntryKey(std::string str)
-    : data_(base::MakeRefCounted<base::RefCountedString>(std::move(str))) {}
+    : data_(base::MakeRefCounted<base::RefCountedString>(std::move(str))),
+      hash_(static_cast<int32_t>(base::PersistentHash(string()))) {}
 
 CacheEntryKey::~CacheEntryKey() = default;
 
@@ -23,7 +25,8 @@ bool CacheEntryKey::operator<(const CacheEntryKey& other) const {
 }
 
 bool CacheEntryKey::operator==(const CacheEntryKey& other) const {
-  return data_ == other.data_ || string() == other.string();
+  return data_ == other.data_ ||
+         (hash() == other.hash() && string() == other.string());
 }
 
 const std::string& CacheEntryKey::string() const {

@@ -64,7 +64,7 @@ void LookalikeUrlTabHelper::ShouldAllowResponse(
   // If the URL is in the allowlist, don't show any warning.
   LookalikeUrlTabAllowList* allow_list =
       LookalikeUrlTabAllowList::FromWebState(web_state());
-  if (allow_list->IsDomainAllowed(response_url.host())) {
+  if (allow_list->IsDomainAllowed(response_url.GetHost())) {
     std::move(callback).Run(CreateAllowDecision());
     return;
   }
@@ -91,6 +91,7 @@ void LookalikeUrlTabHelper::ShouldAllowResponse(
       lookalikes::GetDomainInfo(response_url);
   // Empty domain_and_registry happens on private domains.
   if (navigated_domain.domain_and_registry.empty()) {
+    std::move(callback).Run(CreateAllowDecision());
     return;
   }
 

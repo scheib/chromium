@@ -22,6 +22,7 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/webui/whats_new/whats_new_util.h"
 #include "chrome/common/chrome_version.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -35,23 +36,42 @@
 #include "url/gurl.h"
 
 namespace whats_new {
-const char kChromeWhatsNewV2URL[] =
-    "https://www.google.com/chrome/v2/whats-new/";
-const char kChromeWhatsNewV2StagingURL[] =
-    "https://chrome-staging.corp.google.com/chrome/v2/whats-new/";
+const char kChromeWhatsNewURL[] = "https://www.google.com/chrome/whats-new/";
+const char kChromeWhatsNewRefreshURL[] =
+    "https://www.google.com/chrome/wn-2025/whats-new/";
+const char kChromeWhatsNewStagingURL[] =
+    "https://chrome-staging.corp.google.com/chrome/whats-new/";
+const char kChromeWhatsNewRefreshStagingURL[] =
+    "https://chrome-staging.corp.google.com/chrome/wn-2025/whats-new/";
 
 const int64_t kMaxDownloadBytes = 1024 * 1024;
 
-GURL GetV2ServerURL(bool is_staging) {
-  const GURL base_url = is_staging ? GURL(kChromeWhatsNewV2StagingURL)
-                                   : GURL(kChromeWhatsNewV2URL);
+GURL AddVersionParameter(const GURL& base_url) {
   return net::AppendQueryParameter(base_url, "version",
                                    base::NumberToString(CHROME_VERSION_MAJOR));
 }
 
-GURL GetV2ServerURLForRender(const WhatsNewRegistry& whats_new_registry,
-                             bool is_staging) {
-  GURL url = GetV2ServerURL(is_staging);
+GURL GetServerLegacyURL(bool is_staging) {
+  const GURL base_url =
+      is_staging ? GURL(kChromeWhatsNewStagingURL) : GURL(kChromeWhatsNewURL);
+  return AddVersionParameter(base_url);
+}
+
+GURL GetServerRefreshURL(bool is_staging) {
+  const GURL base_url = is_staging ? GURL(kChromeWhatsNewRefreshStagingURL)
+                                   : GURL(kChromeWhatsNewRefreshURL);
+  return AddVersionParameter(base_url);
+}
+
+GURL GetServerURL(bool is_staging) {
+  return base::FeatureList::IsEnabled(features::kWhatsNewDesktopRefresh)
+             ? GetServerRefreshURL(is_staging)
+             : GetServerLegacyURL(is_staging);
+}
+
+GURL GetServerURLForRender(const WhatsNewRegistry& whats_new_registry,
+                           bool is_staging) {
+  GURL url = GetServerURL(is_staging);
   const auto active_features = whats_new_registry.GetActiveFeatureNames();
   if (!active_features.empty()) {
     url = net::AppendQueryParameter(
@@ -81,7 +101,7 @@ class WhatsNewFetcher : public BrowserListObserver {
   explicit WhatsNewFetcher(Browser* browser) : browser_(browser) {
     BrowserList::AddObserver(this);
 
-    GURL server_url = GetV2ServerURL();
+    GURL server_url = GetServerURL();
     startup_url_ = GetWebUIStartupURL();
 
     if (IsRemoteContentDisabled()) {

@@ -17,11 +17,10 @@
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/ui/test/keyboard_test_util.h"
-#include "ash/multi_user/multi_user_window_manager_impl.h"
+#include "ash/multi_user/multi_user_window_manager.h"
+#include "ash/multi_user/multi_user_window_manager_observer.h"
 #include "ash/public/cpp/ash_prefs.h"
 #include "ash/public/cpp/event_rewriter_controller.h"
-#include "ash/public/cpp/multi_user_window_manager.h"
-#include "ash/public/cpp/multi_user_window_manager_observer.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_prefs.h"
 #include "ash/public/cpp/shelf_types.h"
@@ -185,9 +184,9 @@ class StuckWidgetDelegate : public views::WidgetDelegate {
   ~StuckWidgetDelegate() override = default;
 
   // Overridden from WidgetDelegate:
-  std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
+  std::unique_ptr<views::FrameView> CreateFrameView(
       views::Widget* widget) override {
-    return Shell::Get()->CreateDefaultNonClientFrameView(widget);
+    return Shell::Get()->CreateDefaultFrameView(widget);
   }
 
   bool OnCloseRequested(views::Widget::ClosedReason close_reason) override {
@@ -380,21 +379,13 @@ class TestDeskObserver : public Desk::Observer {
 
   int notify_counts() const { return notify_counts_; }
 
-  const std::vector<uint64_t>& lacros_profile_id_updates() const {
-    return lacros_profile_id_updates_;
-  }
-
   // Desk::Observer:
   void OnContentChanged() override { ++notify_counts_; }
   void OnDeskDestroyed(const Desk* desk) override {}
   void OnDeskNameChanged(const std::u16string& new_name) override {}
-  void OnDeskProfileChanged(uint64_t lacros_profile_id) override {
-    lacros_profile_id_updates_.push_back(lacros_profile_id);
-  }
 
  private:
   int notify_counts_ = 0;
-  std::vector<uint64_t> lacros_profile_id_updates_;
 };
 
 class FullScreenStateObserver : public ShellObserver {
@@ -2538,31 +2529,6 @@ TEST_P(DesksTest, MruFocusedOnDeskSwitchDualDisplay) {
   ASSERT_FALSE(win4->HasFocus());
 }
 
-// Tests that we can set a lacros profile ID on a desk and that observers get
-// notified.
-TEST_P(DesksTest, LacrosProfileId) {
-  auto* controller = DesksController::Get();
-  Desk* desk = controller->GetDeskAtIndex(0);
-
-  TestDeskObserver desk_observer;
-  desk->AddObserver(&desk_observer);
-
-  desk->SetLacrosProfileId(1001);
-  EXPECT_THAT(desk_observer.lacros_profile_id_updates(),
-              testing::ElementsAre(1001));
-
-  // Setting the same ID does not result in observer notifications.
-  desk->SetLacrosProfileId(1001);
-  EXPECT_THAT(desk_observer.lacros_profile_id_updates(),
-              testing::ElementsAre(1001));
-
-  desk->SetLacrosProfileId(2001);
-  EXPECT_THAT(desk_observer.lacros_profile_id_updates(),
-              testing::ElementsAre(1001, 2001));
-
-  desk->RemoveObserver(&desk_observer);
-}
-
 // Tests that a display can be removed during a desk switch.
 TEST_P(DesksTest, RemoveDisplayWhileSwitchingDesks) {
   auto* controller = DesksController::Get();
@@ -2883,23 +2849,6 @@ std::vector<base::Uuid> GetDeskRestoreGuids(PrefService* user_prefs) {
     guids.emplace_back(base::Uuid::ParseLowercase(value.GetString()));
   }
   return guids;
-}
-
-// Returns the lacros profile IDs in the given `user_prefs`.
-std::vector<uint64_t> GetDeskRestoreLacrosProfileIds(PrefService* user_prefs) {
-  const base::Value::List& lacros_profile_ids_list =
-      user_prefs->GetList(prefs::kDesksLacrosProfileIdList);
-
-  std::vector<uint64_t> lacros_profile_ids;
-  for (const base::Value& value : lacros_profile_ids_list) {
-    uint64_t lacros_profile_id = 0;
-    if (base::StringToUint64(value.GetString(), &lacros_profile_id)) {
-      lacros_profile_ids.push_back(lacros_profile_id);
-    } else {
-      lacros_profile_ids.push_back(0);
-    }
-  }
-  return lacros_profile_ids;
 }
 
 class DesksEditableNamesTest : public DesksTest {
@@ -4094,7 +4043,7 @@ class DesksPerDeskZOrderTest : public AshTestBase {
       // This is only used for multi-displays tests and will in those cases
       // represent the secondary display.
       display::Display secondary_display =
-          display::Screen::GetScreen()->GetAllDisplays().back();
+          display::Screen::Get()->GetAllDisplays().back();
 
       std::map<int, std::unique_ptr<aura::Window>> id_to_window;
       std::map<aura::Window*, int> window_to_id;
@@ -4837,7 +4786,7 @@ class DesksMultiUserTest : public NoSessionAshTestBase {
   ~DesksMultiUserTest() override = default;
 
   MultiUserWindowManager* multi_user_window_manager() {
-    return multi_user_window_manager_.get();
+    return Shell::Get()->multi_user_window_manager();
   }
   PrefService* user_1_prefs() { return user_1_prefs_; }
   PrefService* user_2_prefs() { return user_2_prefs_; }
@@ -4857,17 +4806,14 @@ class DesksMultiUserTest : public NoSessionAshTestBase {
   void TearDown() override {
     user_1_prefs_ = nullptr;
     user_2_prefs_ = nullptr;
-    multi_user_window_manager_.reset();
     NoSessionAshTestBase::TearDown();
   }
 
   void SimulateUser1Login() {
     auto account_id = SimulateUserLogin({kUser1Email}, std::nullopt,
                                         std::move(owned_user_1_prefs_));
-    multi_user_window_manager_ = MultiUserWindowManager::Create();
-    multi_user_window_manager_->SetPrimaryUser(account_id);
-    MultiUserWindowManagerImpl::Get()->SetAnimationSpeedForTest(
-        MultiUserWindowManagerImpl::ANIMATION_SPEED_DISABLED);
+    MultiUserWindowManager::Get()->SetAnimationSpeedForTest(
+        MultiUserWindowManager::ANIMATION_SPEED_DISABLED);
     GetSessionControllerClient()->SetSessionState(
         session_manager::SessionState::ACTIVE);
   }
@@ -4906,7 +4852,6 @@ class DesksMultiUserTest : public NoSessionAshTestBase {
   }
 
  private:
-  std::unique_ptr<MultiUserWindowManager> multi_user_window_manager_;
   std::unique_ptr<PrefService> owned_user_1_prefs_;
   std::unique_ptr<PrefService> owned_user_2_prefs_;
   raw_ptr<PrefService> user_1_prefs_ = nullptr;
@@ -8910,34 +8855,6 @@ TEST_P(DesksTest, DeskGuidsReorder) {
 
   EXPECT_THAT(GetDeskRestoreGuids(GetPrimaryUserPrefService()),
               testing::ElementsAre(desk1_guid, desk3_guid, desk2_guid));
-}
-
-TEST_P(DesksTest, DeskLacrosIdPrefs) {
-  NewDesk();
-  NewDesk();
-
-  auto* controller = DesksController::Get();
-  // Set some lacros profile IDs for the three desks.
-  controller->GetDeskAtIndex(0)->SetLacrosProfileId(1001);
-  controller->GetDeskAtIndex(1)->SetLacrosProfileId(2001);
-  controller->GetDeskAtIndex(2)->SetLacrosProfileId(3001);
-  EXPECT_THAT(GetDeskRestoreLacrosProfileIds(GetPrimaryUserPrefService()),
-              testing::ElementsAre(1001, 2001, 3001));
-
-  // Reorder the last two desks. We expect the prefs to update to match.
-  controller->ReorderDesk(1, 2);
-  EXPECT_THAT(GetDeskRestoreLacrosProfileIds(GetPrimaryUserPrefService()),
-              testing::ElementsAre(1001, 3001, 2001));
-
-  // Remove the first desk.
-  RemoveDesk(controller->GetDeskAtIndex(0));
-  EXPECT_THAT(GetDeskRestoreLacrosProfileIds(GetPrimaryUserPrefService()),
-              testing::ElementsAre(3001, 2001));
-
-  // Create a new desk, its lacros profile ID should default to 0.
-  NewDesk();
-  EXPECT_THAT(GetDeskRestoreLacrosProfileIds(GetPrimaryUserPrefService()),
-              testing::ElementsAre(3001, 2001, 0));
 }
 
 // Tests that windows are closed when the user interacts with the shelf.

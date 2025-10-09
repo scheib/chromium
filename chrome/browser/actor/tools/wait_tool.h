@@ -26,8 +26,10 @@ class WaitTool : public Tool {
   void Invoke(InvokeCallback callback) override;
   std::string DebugString() const override;
   std::string JournalEvent() const override;
-  std::unique_ptr<ObservationDelayController> GetObservationDelayer()
-      const override;
+  std::unique_ptr<ObservationDelayController> GetObservationDelayer(
+      std::optional<ObservationDelayController::PageStabilityConfig>
+          page_stability_config) override;
+  tabs::TabHandle GetTargetTab() const override;
 
   static void SetNoDelayForTesting();
 

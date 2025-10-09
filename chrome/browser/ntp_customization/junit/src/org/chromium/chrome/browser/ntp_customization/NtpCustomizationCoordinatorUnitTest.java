@@ -17,6 +17,8 @@ import static org.chromium.chrome.browser.ntp_customization.NtpCustomizationCoor
 import static org.chromium.chrome.browser.ntp_customization.NtpCustomizationCoordinator.BottomSheetType.NTP_CARDS;
 
 import android.content.Context;
+import android.view.ContextThemeWrapper;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ViewFlipper;
 
@@ -30,11 +32,12 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.ntp_customization.ntp_cards.NtpCardsCoordinator;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
+
+import java.util.function.Supplier;
 
 /** Unit tests for {@link NtpCustomizationCoordinator} */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -43,15 +46,23 @@ public class NtpCustomizationCoordinatorUnitTest {
 
     @Mock private BottomSheetController mBottomSheetController;
     @Mock private NtpCustomizationMediator mMediator;
-    @Mock private View mView;
     @Mock private ViewFlipper mViewFlipper;
 
     private Context mContext;
     private NtpCustomizationCoordinator mNtpCustomizationCoordinator;
+    private View mContentView;
 
     @Before
     public void setUp() {
-        mContext = ApplicationProvider.getApplicationContext();
+        mContext =
+                new ContextThemeWrapper(
+                        ApplicationProvider.getApplicationContext(),
+                        R.style.Theme_BrowserUI_DayNight);
+        mContentView =
+                LayoutInflater.from(mContext)
+                        .inflate(
+                                R.layout.ntp_customization_ntp_cards_bottom_sheet,
+                                /* root= */ null);
         mNtpCustomizationCoordinator =
                 new NtpCustomizationCoordinator(
                         mContext, mBottomSheetController, mock(Supplier.class), MAIN);
@@ -71,8 +82,8 @@ public class NtpCustomizationCoordinatorUnitTest {
                 mNtpCustomizationCoordinator.getBottomSheetDelegateForTesting();
 
         // Verifies each implementation calls the corresponding method of the mediator.
-        delegate.registerBottomSheetLayout(11, mView);
-        verify(mViewFlipper).addView(eq(mView));
+        delegate.registerBottomSheetLayout(11, mContentView);
+        verify(mViewFlipper).addView(eq(mContentView));
         verify(mMediator).registerBottomSheetLayout(11);
 
         delegate.backPressOnCurrentBottomSheet();
@@ -112,7 +123,7 @@ public class NtpCustomizationCoordinatorUnitTest {
                         mContext, mBottomSheetController, mock(Supplier.class), MAIN);
         mNtpCustomizationCoordinator.setMediatorForTesting(mMediator);
         BottomSheetContent bottomSheetContent =
-                mNtpCustomizationCoordinator.initBottomSheetContent(mView);
+                mNtpCustomizationCoordinator.initBottomSheetContent(mContentView);
         bottomSheetContent.handleBackPress();
         verify(mMediator).backPressOnCurrentBottomSheet();
 
@@ -122,18 +133,18 @@ public class NtpCustomizationCoordinatorUnitTest {
                 new NtpCustomizationCoordinator(
                         mContext, mBottomSheetController, mock(Supplier.class), NTP_CARDS);
         mNtpCustomizationCoordinator.setMediatorForTesting(mMediator);
-        bottomSheetContent = mNtpCustomizationCoordinator.initBottomSheetContent(mView);
+        bottomSheetContent = mNtpCustomizationCoordinator.initBottomSheetContent(mContentView);
         bottomSheetContent.handleBackPress();
-        verify(mMediator).dismissBottomSheet();
+        verify(mMediator).dismissBottomSheet(/* animate= */ eq(true));
 
         clearInvocations(mMediator);
         mNtpCustomizationCoordinator =
                 new NtpCustomizationCoordinator(
                         mContext, mBottomSheetController, mock(Supplier.class), FEED);
         mNtpCustomizationCoordinator.setMediatorForTesting(mMediator);
-        bottomSheetContent = mNtpCustomizationCoordinator.initBottomSheetContent(mView);
+        bottomSheetContent = mNtpCustomizationCoordinator.initBottomSheetContent(mContentView);
         bottomSheetContent.handleBackPress();
-        verify(mMediator).dismissBottomSheet();
+        verify(mMediator).dismissBottomSheet(/* animate= */ eq(true));
     }
 
     @Test

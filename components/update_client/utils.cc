@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -23,6 +24,7 @@
 #include "base/files/file_util.h"
 #include "base/files/memory_mapped_file.h"
 #include "base/functional/callback.h"
+#include "base/functional/function_ref.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
@@ -37,8 +39,7 @@
 #include "components/update_client/network.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
-#include "crypto/secure_hash.h"
-#include "crypto/sha2.h"
+#include "crypto/hash.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -67,7 +68,7 @@ bool IsHttpServerError(int status_code) {
 }
 
 bool DeleteFileAndEmptyParentDirectory(const base::FilePath& filepath) {
-  if (!base::DeleteFile(filepath)) {
+  if (!RetryFileOperation(&base::DeleteFile, filepath)) {
     return false;
   }
 
@@ -79,7 +80,7 @@ bool DeleteEmptyDirectory(const base::FilePath& dir_path) {
     return true;
   }
 
-  return base::DeleteFile(dir_path);
+  return RetryFileOperation(&base::DeleteFile, dir_path);
 }
 
 std::string GetCrxComponentID(const CrxComponent& component) {
@@ -95,14 +96,10 @@ std::string GetCrxIdFromPublicKeyHash(base::span<const uint8_t> pk_hash) {
 
 bool VerifyFileHash256(const base::FilePath& filepath,
                        const std::string& expected_hash_str) {
-  std::vector<uint8_t> expected_hash;
-  if (!base::HexStringToBytes(expected_hash_str, &expected_hash) ||
-      expected_hash.size() != crypto::kSHA256Length) {
+  std::array<uint8_t, crypto::hash::kSha256Size> expected_hash;
+  if (!base::HexStringToSpan(expected_hash_str, expected_hash)) {
     return false;
   }
-
-  std::unique_ptr<crypto::SecureHash> hasher(
-      crypto::SecureHash::Create(crypto::SecureHash::SHA256));
 
   base::File file(filepath, base::File::FLAG_OPEN |
                                 base::File::FLAG_WIN_SEQUENTIAL_SCAN |
@@ -110,19 +107,13 @@ bool VerifyFileHash256(const base::FilePath& filepath,
   if (!file.IsValid()) {
     return false;
   }
-  auto buffer = base::HeapArray<uint8_t>::Uninit(4096);
-  std::optional<size_t> bytes_read = file.ReadAtCurrentPos(buffer);
-  while (bytes_read.value_or(0) > 0) {
-    hasher->Update(buffer.first(*bytes_read));
-    bytes_read = file.ReadAtCurrentPos(buffer);
-  }
-  if (!bytes_read) {
+
+  std::array<uint8_t, crypto::hash::kSha256Size> hash;
+  if (!crypto::hash::HashFile(crypto::hash::kSha256, &file, hash)) {
     return false;
   }
-  std::array<uint8_t, crypto::kSHA256Length> sha256_hash;
-  hasher->Finish(sha256_hash);
 
-  return base::span(sha256_hash) == base::span(expected_hash);
+  return base::span(hash) == base::span(expected_hash);
 }
 
 bool IsValidBrand(const std::string& brand) {
@@ -201,27 +192,18 @@ std::string GetArchitecture() {
 #endif  // BUILDFLAG(IS_WIN)
 }
 
-bool RetryDeletePathRecursively(const base::FilePath& path) {
-  return RetryDeletePathRecursivelyCustom(
-      path, /*tries=*/5,
-      /*seconds_between_tries=*/base::Seconds(1));
-}
-
-bool RetryDeletePathRecursivelyCustom(const base::FilePath& path,
-                                      size_t tries,
-                                      base::TimeDelta seconds_between_tries) {
+bool RetryFileOperation(
+    base::FunctionRef<bool(const base::FilePath&)> file_operation,
+    const base::FilePath& path,
+    size_t tries,
+    base::TimeDelta time_between_tries) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::WILL_BLOCK);
-  for (size_t i = 0;;) {
-    if (base::DeletePathRecursively(path)) {
-      return true;
-    }
-    if (++i >= tries) {
-      break;
-    }
-    base::PlatformThread::Sleep(seconds_between_tries);
+
+  while (!file_operation(path) && --tries) {
+    base::PlatformThread::Sleep(time_between_tries);
   }
-  return false;
+  return tries;
 }
 
 bool CreateTempDirectory(const base::FilePath::StringType& prefix,

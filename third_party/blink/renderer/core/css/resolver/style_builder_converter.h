@@ -162,6 +162,8 @@ class StyleBuilderConverter {
   static scoped_refptr<FontVariationSettings> ConvertFontVariationSettings(
       const StyleResolverState&,
       const CSSValue&);
+  static AtomicString ConvertFontLanguageOverride(StyleResolverState&,
+                                                  const CSSValue&);
   static scoped_refptr<FontPalette> ConvertFontPalette(
       StyleResolverState& state,
       const CSSValue& value);
@@ -221,6 +223,8 @@ class StyleBuilderConverter {
   static StyleHyphenateLimitChars ConvertHyphenateLimitChars(
       StyleResolverState&,
       const CSSValue&);
+  static StyleInterestDelay ConvertInterestDelayValue(const StyleResolverState&,
+                                                      const CSSValue&);
   template <typename T>
   static T ConvertLineWidth(StyleResolverState&, const CSSValue&);
   static int ConvertBorderWidth(const StyleResolverState&, const CSSValue&);
@@ -397,6 +401,7 @@ class StyleBuilderConverter {
       const StyleResolverState&,
       const CSSValue&);
 
+  // View transition related properties.
   static StyleViewTransitionName* ConvertViewTransitionName(StyleResolverState&,
                                                             const CSSValue&);
   static ScopedCSSNameList* ConvertViewTransitionClass(StyleResolverState&,
@@ -404,6 +409,12 @@ class StyleBuilderConverter {
   static StyleViewTransitionGroup ConvertViewTransitionGroup(
       StyleResolverState&,
       const CSSValue&);
+
+  // Overscroll gesture related properties.
+  static ScopedCSSNameList* ConvertOverscrollArea(StyleResolverState&,
+                                                  const CSSValue&);
+  static ScopedCSSName* ConvertOverscrollPosition(StyleResolverState&,
+                                                  const CSSValue&);
 
   // Take a list value for a specified color-scheme, extract flags for known
   // color-schemes and the 'only' modifier, and push the list items into a
@@ -430,10 +441,13 @@ class StyleBuilderConverter {
   static ScopedCSSNameList* ConvertTimelineScope(StyleResolverState&,
                                                  const CSSValue&);
 
-  static PositionArea ConvertPositionArea(StyleResolverState&, const CSSValue&);
+  static PositionArea ConvertPositionArea(StyleResolverState&,
+                                          const CSSValue&,
+                                          bool allow_any_keyword = false);
   static PositionTryFallback ConvertSinglePositionTryFallback(
       StyleResolverState&,
-      const CSSValue&);
+      const CSSValue&,
+      bool allow_any_keyword_in_position_area = false);
   static FitText ConvertFitText(StyleResolverState&, const CSSValue&);
   static TextOverflowData ConvertTextOverflow(StyleResolverState&,
                                               const CSSValue&);

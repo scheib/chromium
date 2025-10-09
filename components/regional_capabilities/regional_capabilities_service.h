@@ -28,6 +28,7 @@ struct PrepopulatedEngine;
 
 namespace regional_capabilities {
 
+enum class ActiveRegionalProgram;
 class CountryIdHolder;
 enum class Program;
 
@@ -84,6 +85,19 @@ class RegionalCapabilitiesService : public KeyedService {
 #endif
   };
 
+  // Contains the string IDs for the UI elements on the search engine choice
+  // screen. This is returned for regions that require a choice screen.
+  struct ChoiceScreenDesign {
+    int title_string_id;
+    int subtitle_1_string_id;
+    // String id for learn more with a link. This learn more needs to be
+    // appended to `subtitle_1_string_id`.
+    int subtitle_1_learn_more_suffix_string_id;
+    // String id for the learn more accessibility.
+    int subtitle_1_learn_more_a11y_string_id;
+    std::optional<int> subtitle_2_string_id;
+  };
+
   RegionalCapabilitiesService(
       PrefService& profile_prefs,
       std::unique_ptr<Client> regional_capabilities_client);
@@ -97,6 +111,21 @@ class RegionalCapabilitiesService : public KeyedService {
   // Returns whether the profile is associated with a region in which we can
   // show a search engine choice screen.
   bool IsInSearchEngineChoiceScreenRegion();
+
+  // Returns true when the choice screen eligibility check against country
+  // association is not required, or if the current location is compatible with
+  // the regional scope.
+  bool IsChoiceScreenCompatibleWithCurrentLocation();
+
+  bool ShouldRecordSearchEngineChoicesMadeFromSettings();
+
+  // Returns the appropriate choice screen design strings for the active
+  // program, if one is required. Returns `std::nullopt` if the region does not
+  // require a search engine choice screen.
+  std::optional<ChoiceScreenDesign> GetChoiceScreenDesign();
+
+  const std::optional<ChoiceScreenEligibilityConfig>&
+  GetChoiceScreenEligibilityConfig();
 
   // -- Internal utils & deprecated getters -----------------------------------
 
@@ -114,15 +143,47 @@ class RegionalCapabilitiesService : public KeyedService {
   // more details.
   CountryIdHolder GetCountryId();
 
-  // Clears the caches to be able to change countries multiple times
-  // in tests.
+  // Returns the metrics enum for the active regional program. This is used for
+  // logging only.
+  ActiveRegionalProgram GetActiveProgramForMetrics();
+
+  // Returns an opaque `int` value representing the program.
+  int GetSerializedActiveProgram();
+
+  // -- Test Utils & Accessors ------------------------------------------------
+
+  // Clears the caches to be able to change countries multiple times in tests.
   void ClearCacheForTesting();
 
-  Program GetActiveProgramForTesting();
+  // Tests can control ProgramSettings in one of two ways:
+  // 1. Specifying a value via the `switches::kSearchEngineChoiceCountry`
+  //    command line argument, in which case the program settings are not cached
+  //    and entirely depend how this command line is parsed. It could be
+  //    directly setting a program, or rely on the full country / platform /
+  //    form factor combination. See the argument's documentation for more info.
+  // 2. Defining the exact country and program settings via this setter. This
+  // allows tests more fine-grained control over
+  //    the particular attributes they are testing, and means they are not
+  //    constrained by dependencies or the particular platforms a particular
+  //    program is supported on.
+  //
+  // Overriding program settings will prevent using the command line country
+  // override, and vice versa. This is enforced by a CHECK in
+  // `SetCacheForTesting()`.
+  void SetCacheForTesting(country_codes::CountryId, const ProgramSettings&);
 
-#if BUILDFLAG(IS_ANDROID)
+  // Forwards to `SetCacheForTesting(CountryId, const ProgramSettings&)`,
+  // deriving from the `ProgramSettings`'s associated countries. If no country
+  // is available, the invalid `CountryId()` will be used.
+  void SetCacheForTesting(const ProgramSettings&);
+
+  const ProgramSettings& GetActiveProgramSettingsForTesting();
+
+  // Returns a reference to the client.
+  Client& GetClientForTesting();
+
   // -- JNI Interface ---------------------------------------------------------
-
+#if BUILDFLAG(IS_ANDROID)
   // Returns a reference to the Java-side `RegionalCapabilitiesService`, lazily
   // creating it if needed.
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
@@ -132,9 +193,8 @@ class RegionalCapabilitiesService : public KeyedService {
 
   // See `IsInEeaCountry()`.
   jboolean IsInEeaCountry(JNIEnv* env);
-
-  // -- JNI Interface End -----------------------------------------------------
 #endif
+  // -- JNI Interface End ----------------------------------------------------
 
  private:
   // Returns how features should adjust themselves based on the active country

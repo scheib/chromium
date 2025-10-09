@@ -340,10 +340,18 @@ void PreviewServerProxy::GetSharedDataPreview(
 std::unique_ptr<EndpointFetcher> PreviewServerProxy::CreateEndpointFetcher(
     const GURL& url) {
   return std::make_unique<EndpointFetcher>(
-      url_loader_factory_, kOAuthName, url, net::HttpRequestHeaders::kGetMethod,
-      kContentType, std::vector<std::string>{kOAuthScope}, kTimeout,
-      /* post_data= */ std::string(), kGetSharedDataPreviewTrafficAnnotation,
-      identity_manager_, signin::ConsentLevel::kSignin);
+      url_loader_factory_, identity_manager_,
+      EndpointFetcher::RequestParams::Builder(
+          endpoint_fetcher::HttpMethod::kGet,
+          kGetSharedDataPreviewTrafficAnnotation)
+          .SetAuthType(endpoint_fetcher::OAUTH)
+          .SetConsentLevel(signin::ConsentLevel::kSignin)
+          .SetContentType(kContentType)
+          .SetTimeout(kTimeout)
+          .SetUrl(url)
+          .SetOauthScopes(std::vector<std::string>{kOAuthScope})
+          .SetOauthConsumerName(kOAuthName)
+          .Build());
 }
 
 void PreviewServerProxy::HandleServerResponse(
@@ -371,19 +379,18 @@ void PreviewServerProxy::HandleServerResponse(
     return;
   }
 
-  data_decoder::DataDecoder::ParseJsonIsolated(
-      response->response,
-      base::BindOnce(&PreviewServerProxy::OnResponseJsonParsed,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  std::optional<base::Value::Dict> parsed_response =
+      base::JSONReader::ReadDict(response->response, base::JSON_PARSE_RFC);
+  OnResponseJsonParsed(std::move(callback), std::move(parsed_response));
 }
 
 void PreviewServerProxy::OnResponseJsonParsed(
     base::OnceCallback<void(
         const DataSharingService::SharedDataPreviewOrFailureOutcome&)> callback,
-    data_decoder::DataDecoder::ValueOrError result) {
+    std::optional<base::Value::Dict> result) {
   SharedDataPreview preview;
-  if (result.has_value() && result->is_dict()) {
-    if (auto* response_json = result->GetDict().FindList(kSharedEntitiesKey)) {
+  if (result.has_value()) {
+    if (auto* response_json = result->FindList(kSharedEntitiesKey)) {
       std::optional<SharedTabGroupPreview> group_preview;
       std::vector<TabData> tab_data;
       for (const auto& shared_entity_json : *response_json) {

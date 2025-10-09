@@ -109,8 +109,8 @@ class TabLoader::ReentrancyHelper {
 TabLoader* TabLoader::shared_tab_loader_ = nullptr;
 
 // static
-void TabLoader::RestoreTabs(const std::vector<RestoredTab>& tabs,
-                            const base::TimeTicks& restore_started) {
+void TabLoader::DeprecatedRestoreTabs(const std::vector<RestoredTab>& tabs,
+                                      const base::TimeTicks& restore_started) {
   if (tabs.empty())
     return;
 
@@ -209,8 +209,9 @@ void TabLoader::SetAllTabsScored(bool all_tabs_scored) {
 }
 
 TabLoader::TabLoader()
-    : memory_pressure_listener_(
+    : memory_pressure_listener_registration_(
           FROM_HERE,
+          base::MemoryPressureListenerTag::kTabLoader,
           base::BindRepeating(&TabLoader::OnMemoryPressure,
                               base::Unretained(this))),
       clock_(GetDefaultTickClock()) {
@@ -360,7 +361,7 @@ void TabLoader::OnStopTracking(WebContents* web_contents,
 }
 
 void TabLoader::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+    base::MemoryPressureLevel memory_pressure_level) {
   ReentrancyHelper lifetime_helper(this);
   TRACE_EVENT_INSTANT(
       "browser", "TabLoader::OnMemoryPressure",
@@ -372,10 +373,10 @@ void TabLoader::OnMemoryPressure(
       });
 
   switch (memory_pressure_level) {
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MEMORY_PRESSURE_LEVEL_NONE:
       break;
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+    case base::MEMORY_PRESSURE_LEVEL_MODERATE:
+    case base::MEMORY_PRESSURE_LEVEL_CRITICAL:
       StopLoadingTabs();
       break;
   }
@@ -390,8 +391,9 @@ bool TabLoader::ShouldStopLoadingTabs() const {
   if (g_browser_process->IsShuttingDown())
     return true;
   if (base::MemoryPressureMonitor::Get()) {
-    return base::MemoryPressureMonitor::Get()->GetCurrentPressureLevel() !=
-           base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE;
+    return base::MemoryPressureMonitor::Get()->GetCurrentPressureLevel(
+               base::MemoryPressureMonitorTag::kTabLoader) !=
+           base::MEMORY_PRESSURE_LEVEL_NONE;
   }
   return false;
 }

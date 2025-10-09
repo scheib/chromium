@@ -35,6 +35,7 @@
 #include "components/privacy_sandbox/tracking_protection_prefs.h"
 #include "components/privacy_sandbox/tracking_protection_settings.h"
 #include "components/variations/service/variations_service.h"
+#include "components/network_session_configurator/common/network_switches.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "google_apis/common/api_key_request_util.h"
@@ -149,19 +150,8 @@ void IpProtectionCoreHost::TryGetAuthTokens(
     return;
   }
 
-  // The mojo callback requires `std::optional<..>&`, while the fetcher callback
-  // provides arguments by value. This seemingly-redundant lambda converts the
-  // two.
-  auto callback_with_refs = base::BindOnce(
-      [](TryGetAuthTokensCallback callback,
-         std::optional<std::vector<ip_protection::BlindSignedAuthToken>> tokens,
-         std::optional<::base::Time> try_again_after) {
-        std::move(callback).Run(tokens, try_again_after);
-      },
-      std::move(callback));
-
   ip_protection_token_fetcher_->TryGetAuthTokens(batch_size, proxy_layer,
-                                                 std::move(callback_with_refs));
+                                                 std::move(callback));
 }
 
 void IpProtectionCoreHost::GetProxyConfig(GetProxyConfigCallback callback) {
@@ -218,6 +208,17 @@ void IpProtectionCoreHost::TryGetProbabilisticRevealTokens(
         std::move(callback).Run(outcome, result);
       },
       std::move(callback)));
+}
+
+void IpProtectionCoreHost::RecycleTokens(
+    ip_protection::ProxyLayer proxy_layer,
+    std::vector<ip_protection::BlindSignedAuthToken> tokens) {
+  recycled_tokens_[proxy_layer] = std::move(tokens);
+}
+
+IpProtectionCoreHost::IpProtectionTokenCache
+IpProtectionCoreHost::TakeRecycledTokens() {
+  return std::exchange(recycled_tokens_, {});
 }
 
 void IpProtectionCoreHost::AuthenticateRequest(
@@ -455,10 +456,12 @@ bool IpProtectionCoreHost::CanRequestOAuthToken() {
 
 // static
 bool IpProtectionCoreHost::CanIpProtectionBeEnabled() {
+  const base::CommandLine& command_line =
+      *base::CommandLine::ForCurrentProcess();
   return base::FeatureList::IsEnabled(
              net::features::kEnableIpProtectionProxy) &&
-         !base::CommandLine::ForCurrentProcess()->HasSwitch(
-             switches::kDisableIpProtectionProxy);
+         !command_line.HasSwitch(switches::kDisableIpProtectionProxy) &&
+         !command_line.HasSwitch(switches::kDisableHttp2);
 }
 
 bool IpProtectionCoreHost::ShouldDisableIpProtectionForEnterpriseForTesting() {

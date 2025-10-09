@@ -498,8 +498,9 @@ void ContentAutofillDriver::ExtractForm(FormGlobalId form_id,
       form_id, WithNewVersion(std::move(final_handler)));
 }
 
-void ContentAutofillDriver::ExposeDomNodeIDs() {
-  GetAutofillAgent()->ExposeDomNodeIDs();
+void ContentAutofillDriver::ExposeDomNodeIdsInAllFrames() {
+  RouteToAgent(router(), &AutofillDriverRouter::ExposeDomNodeIdsInAllFrames,
+               &mojom::AutofillAgent::ExposeDomNodeIds);
 }
 
 void ContentAutofillDriver::SendTypePredictionsToRenderer(
@@ -540,6 +541,14 @@ void ContentAutofillDriver::RendererShouldSetSuggestionAvailability(
                &AutofillDriverRouter::RendererShouldSetSuggestionAvailability,
                &mojom::AutofillAgent::SetSuggestionAvailability, field_id,
                suggestion_availability);
+}
+
+void ContentAutofillDriver::DispatchEmailVerifiedEvent(
+    FieldGlobalId field_id,
+    const std::string& presentation_token) {
+  RouteToAgent(router(), &AutofillDriverRouter::DispatchEmailVerifiedEvent,
+               &mojom::AutofillAgent::DispatchEmailVerifiedEvent, field_id,
+               presentation_token);
 }
 
 void ContentAutofillDriver::FormsSeen(
@@ -619,11 +628,10 @@ void ContentAutofillDriver::FocusOnFormField(const FormData& form,
       AutofillDriverRouter::RoutedCallback<>(focus_no_longer_on_form));
 }
 
-void ContentAutofillDriver::DidFillAutofillFormData(const FormData& form,
-                                                    base::TimeTicks timestamp) {
-  RouteToManager(*this, router(),
-                 &AutofillDriverRouter::DidFillAutofillFormData,
-                 &AutofillManager::OnDidFillAutofillFormData, form, timestamp);
+void ContentAutofillDriver::DidAutofillForm(const FormData& form,
+                                            base::TimeTicks timestamp) {
+  RouteToManager(*this, router(), &AutofillDriverRouter::DidAutofillForm,
+                 &AutofillManager::OnDidAutofillForm, form, timestamp);
 }
 
 void ContentAutofillDriver::DidEndTextFieldEditing() {

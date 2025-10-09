@@ -194,7 +194,7 @@ void OpenTabForSyncTrustedVaultUserAction(Browser* browser, const GURL& url) {
   Navigate(&params);
 }
 
-std::optional<AvatarSyncErrorType> GetTrustedVaultError(
+AvatarSyncErrorType GetTrustedVaultError(
     const syncer::SyncService* sync_service) {
   if (sync_service->GetUserSettings()
           ->IsTrustedVaultKeyRequiredForPreferredDataTypes()) {
@@ -211,7 +211,7 @@ std::optional<AvatarSyncErrorType> GetTrustedVaultError(
                      kTrustedVaultRecoverabilityDegradedForPasswordsError;
   }
 
-  return std::nullopt;
+  return AvatarSyncErrorType::kNone;
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
@@ -241,11 +241,10 @@ SyncStatusLabels GetSyncStatusLabels(Profile* profile) {
   signin::IdentityManager* identity_manager =
       IdentityManagerFactory::GetForProfile(profile);
   CHECK(identity_manager);
-  return GetSyncStatusLabels(
-      SyncServiceFactory::GetForProfile(profile), identity_manager,
-      ChromeSigninClientFactory::GetForProfile(profile)
-          ->IsClearPrimaryAccountAllowed(identity_manager->HasPrimaryAccount(
-              signin::ConsentLevel::kSync)));
+  return GetSyncStatusLabels(SyncServiceFactory::GetForProfile(profile),
+                             identity_manager,
+                             ChromeSigninClientFactory::GetForProfile(profile)
+                                 ->IsClearPrimaryAccountAllowed());
 }
 
 SyncStatusMessageType GetSyncStatusMessageType(Profile* profile) {
@@ -300,6 +299,8 @@ SyncStatusLabels GetAvatarSyncErrorLabelsForSettings(
     Profile* profile,
     AvatarSyncErrorType error) {
   switch (error) {
+    case AvatarSyncErrorType::kNone:
+      NOTREACHED();
     case AvatarSyncErrorType::kSyncPaused:
       return {SyncStatusMessageType::kSyncError, IDS_SYNC_RELOGIN_ERROR,
               IDS_SYNC_RELOGIN_BUTTON, IDS_SYNC_EMPTY_STRING,
@@ -355,9 +356,7 @@ SyncStatusLabels GetAvatarSyncErrorLabelsForSettings(
     case AvatarSyncErrorType::kUnrecoverableError:
       // Managed users get different labels.
       if (!ChromeSigninClientFactory::GetForProfile(profile)
-               ->IsClearPrimaryAccountAllowed(
-                   IdentityManagerFactory::GetForProfile(profile)
-                       ->HasPrimaryAccount(signin::ConsentLevel::kSync))) {
+               ->IsClearPrimaryAccountAllowed()) {
         return {SyncStatusMessageType::kSyncError,
                 IDS_SYNC_STATUS_UNRECOVERABLE_ERROR_NEEDS_SIGNOUT,
                 IDS_SYNC_RELOGIN_BUTTON, IDS_PROFILES_ACCOUNT_REMOVAL_TITLE,
@@ -370,11 +369,11 @@ SyncStatusLabels GetAvatarSyncErrorLabelsForSettings(
   }
 }
 
-std::optional<AvatarSyncErrorType> GetAvatarSyncErrorType(Profile* profile) {
+AvatarSyncErrorType GetAvatarSyncErrorType(Profile* profile) {
   const syncer::SyncService* service =
       SyncServiceFactory::GetForProfile(profile);
   if (!service) {
-    return std::nullopt;
+    return AvatarSyncErrorType::kNone;
   }
 
   if (service->HasSyncConsent()) {
@@ -408,6 +407,8 @@ std::optional<AvatarSyncErrorType> GetAvatarSyncErrorType(Profile* profile) {
 std::u16string GetAvatarSyncErrorDescription(AvatarSyncErrorType error,
                                              const std::string& user_email) {
   switch (error) {
+    case AvatarSyncErrorType::kNone:
+      NOTREACHED();
     case AvatarSyncErrorType::kSyncPaused:
       return l10n_util::GetStringUTF16(IDS_PROFILES_DICE_SYNC_PAUSED_TITLE);
     case AvatarSyncErrorType::kTrustedVaultKeyMissingForPasswordsError:

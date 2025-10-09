@@ -23,6 +23,7 @@ source_set("tab_resumption") {
     "//components/commerce/core:proto",
     "//components/commerce/core:shopping_service",
     "//components/commerce/core:utils",
+    "//components/ntp_tiles:pref_names",
     "//components/optimization_guide/core",
     "//components/page_image_service",
     "//components/payments/core:currency_formatter",
@@ -48,7 +49,6 @@ source_set("tab_resumption") {
     "//ios/chrome/browser/ntp/ui_bundled",
     "//ios/chrome/browser/ntp_tiles/model/tab_resumption:tab_resumption_prefs",
     "//ios/chrome/browser/optimization_guide/model",
-    "//ios/chrome/browser/optimization_guide/model",
     "//ios/chrome/browser/page_image/model",
     "//ios/chrome/browser/price_notifications/ui_bundled/cells",
     "//ios/chrome/browser/push_notification/model:push_notification_service_header",
@@ -66,9 +66,9 @@ source_set("tab_resumption") {
     "//ios/chrome/browser/shared/public/commands",
     "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/browser/shared/public/features:system_flags",
+    "//ios/chrome/browser/shared/public/snackbar",
     "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/shared/ui/util",
-    "//ios/chrome/browser/shared/ui/util:snackbar_util",
     "//ios/chrome/browser/signin/model:authentication_service",
     "//ios/chrome/browser/snapshots/model",
     "//ios/chrome/browser/snapshots/model:model_common",
@@ -85,7 +85,6 @@ source_set("tab_resumption") {
     "//ios/chrome/common/ui/favicon",
     "//ios/chrome/common/ui/favicon:favicon_constants",
     "//ios/chrome/common/ui/util",
-    "//ios/third_party/material_components_ios",
     "//ui/base",
     "//url",
   ]
@@ -121,7 +120,6 @@ source_set("eg2_tests") {
   sources = [ "tab_resumption_egtest.mm" ]
   deps = [
     ":constants",
-    ":eg_test_support+eg2",
     "//base/test:test_support",
     "//components/commerce/core:feature_list",
     "//components/segmentation_platform/public",
@@ -129,7 +127,7 @@ source_set("eg2_tests") {
     "//components/url_formatter",
     "//components/visited_url_ranking/public",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/authentication/ui_bundled:eg_test_support+eg2",
+    "//ios/chrome/browser/authentication/test:eg_test_support+eg2",
     "//ios/chrome/browser/content_suggestions/ui_bundled:constants",
     "//ios/chrome/browser/content_suggestions/ui_bundled:eg_test_support+eg2",
     "//ios/chrome/browser/content_suggestions/ui_bundled/magic_stack:constants",
@@ -146,33 +144,4 @@ source_set("eg2_tests") {
     "//ui/base",
   ]
   frameworks = [ "UIKit.framework" ]
-}
-
-source_set("eg_app_support+eg2") {
-  testonly = true
-  sources = [
-    "tab_resumption_app_interface.h",
-    "tab_resumption_app_interface.mm",
-  ]
-  deps = [
-    "//base",
-    "//base/test:test_support",
-    "//components/commerce/core:shopping_service_test_support",
-    "//ios/chrome/browser/commerce/model:shopping_service",
-    "//ios/chrome/browser/shared/model/profile",
-    "//ios/chrome/test/app:test_support",
-    "//ios/web/public",
-  ]
-}
-
-source_set("eg_test_support+eg2") {
-  testonly = true
-  sources = [
-    "tab_resumption_app_interface.h",
-    "tab_resumption_app_interface_stub.mm",
-  ]
-  deps = [
-    "//base",
-    "//ios/testing/earl_grey:eg_test_support+eg2",
-  ]
 }

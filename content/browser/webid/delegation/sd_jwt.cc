@@ -55,23 +55,39 @@ std::optional<Jwk> Jwk::From(const base::Value::Dict& dict) {
   }
   result.kty = *kty;
 
-  auto* crv = dict.FindString("crv");
-  if (!crv) {
-    return std::nullopt;
-  }
-  result.crv = *crv;
+  if (result.kty == "EC") {
+    auto* crv = dict.FindString("crv");
+    if (!crv) {
+      return std::nullopt;
+    }
+    result.crv = *crv;
 
-  auto* x = dict.FindString("x");
-  if (!x) {
-    return std::nullopt;
-  }
-  result.x = *x;
+    auto* x = dict.FindString("x");
+    if (!x) {
+      return std::nullopt;
+    }
+    result.x = *x;
 
-  auto* y = dict.FindString("y");
-  if (!y) {
+    auto* y = dict.FindString("y");
+    if (!y) {
+      return std::nullopt;
+    }
+    result.y = *y;
+  } else if (result.kty == "RSA") {
+    auto* n = dict.FindString("n");
+    if (!n) {
+      return std::nullopt;
+    }
+    result.n = *n;
+
+    auto* e = dict.FindString("e");
+    if (!e) {
+      return std::nullopt;
+    }
+    result.e = *e;
+  } else {
     return std::nullopt;
   }
-  result.y = *y;
 
   // The "d" parameters is an optional parameter and unavailable in public keys.
   auto* d = dict.FindString("d");
@@ -79,23 +95,42 @@ std::optional<Jwk> Jwk::From(const base::Value::Dict& dict) {
     result.d = *d;
   }
 
+  auto* alg = dict.FindString("alg");
+  if (alg) {
+    result.alg = *alg;
+  }
+
   return result;
 }
 
-std::optional<std::string> Jwk::Serialize() const {
+base::Value::Dict Jwk::ToDict() const {
   base::Value::Dict result;
 
   result.Set("kty", kty);
-  result.Set("crv", crv);
-  result.Set("x", x);
-  result.Set("y", y);
+  if (kty == "EC") {
+    result.Set("crv", crv);
+    result.Set("x", x);
+    result.Set("y", y);
+  } else if (kty == "RSA") {
+    result.Set("n", n);
+    result.Set("e", e);
+  } else {
+    NOTREACHED() << "Unsupported key type: " << kty;
+  }
 
   // Private parameter d is optional.
   if (!d.empty()) {
     result.Set("d", d);
   }
 
-  return base::WriteJson(result);
+  if (!alg.empty()) {
+    result.Set("alg", alg);
+  }
+  return result;
+}
+
+std::optional<std::string> Jwk::Serialize() const {
+  return base::WriteJson(ToDict());
 }
 
 Disclosure::Disclosure() = default;
@@ -266,6 +301,12 @@ std::optional<Header> Header::From(const base::Value::Dict& json) {
   }
   result.alg = *alg;
 
+  auto* jwk = json.FindDict("jwk");
+  if (jwk) {
+    // JWK is an optional parameter.
+    result.jwk = Jwk::From(*jwk);
+  }
+
   return result;
 }
 
@@ -274,6 +315,10 @@ std::optional<JSONString> Header::ToJson() const {
 
   header_dict.Set("typ", typ);
   header_dict.Set("alg", alg);
+
+  if (jwk) {
+    header_dict.Set("jwk", jwk->ToDict());
+  }
 
   auto result = base::WriteJson(header_dict);
 
@@ -370,6 +415,11 @@ std::optional<Payload> Payload::From(const base::Value::Dict& json) {
     }
   }
 
+  auto* email = json.FindString("email");
+  if (email) {
+    result.email = *email;
+  }
+
   return result;
 }
 
@@ -391,14 +441,8 @@ std::optional<JSONString> Payload::ToJson() const {
   if (cnf) {
     base::Value::Dict jwk;
 
-    jwk.Set("kty", cnf->jwk.kty);
-    jwk.Set("crv", cnf->jwk.crv);
-    jwk.Set("x", cnf->jwk.x);
-    jwk.Set("y", cnf->jwk.y);
-
     base::Value::Dict cnf_dict;
-    cnf_dict.Set("jwk", std::move(jwk));
-
+    cnf_dict.Set("jwk", cnf->jwk.ToDict());
     payload_dict.Set("cnf", std::move(cnf_dict));
   }
 
@@ -411,11 +455,11 @@ std::optional<JSONString> Payload::ToJson() const {
   }
 
   if (iat) {
-    payload_dict.Set("iat", (int)iat->ToTimeT());
+    payload_dict.Set("iat", static_cast<int>(iat->ToTimeT()));
   }
 
   if (exp) {
-    payload_dict.Set("exp", (int)exp->ToTimeT());
+    payload_dict.Set("exp", static_cast<int>(exp->ToTimeT()));
   }
 
   if (!sd_hash.value().empty()) {
@@ -424,7 +468,7 @@ std::optional<JSONString> Payload::ToJson() const {
 
   if (_sd.size() > 0) {
     base::Value::List list;
-    for (auto disclosure : _sd) {
+    for (const auto& disclosure : _sd) {
       list.Append(disclosure.value());
     }
     payload_dict.Set("_sd", std::move(list));
@@ -432,6 +476,10 @@ std::optional<JSONString> Payload::ToJson() const {
 
   if (!_sd_alg.empty()) {
     payload_dict.Set("_sd_alg", _sd_alg);
+  }
+
+  if (!email.empty()) {
+    payload_dict.Set("email", email);
   }
 
   auto result = base::WriteJson(payload_dict);

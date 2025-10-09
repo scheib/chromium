@@ -16,8 +16,10 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabCreationState;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.TabSelectionType;
+import org.chromium.components.tabs.TabStripCollection;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -269,8 +271,11 @@ class IncognitoTabModelImpl implements IncognitoTabModelInternal {
     }
 
     @Override
-    public void pinTab(int tabId) {
-        mDelegateModel.pinTab(tabId);
+    public void pinTab(
+            int tabId,
+            boolean showUngroupDialog,
+            @Nullable TabModelActionListener tabModelActionListener) {
+        mDelegateModel.pinTab(tabId, showUngroupDialog, tabModelActionListener);
     }
 
     @Override
@@ -416,5 +421,30 @@ class IncognitoTabModelImpl implements IncognitoTabModelInternal {
     @Override
     public int findFirstNonPinnedTabIndex() {
         return mDelegateModel.findFirstNonPinnedTabIndex();
+    }
+
+    @Override
+    public int getPinnedTabsCount() {
+        return mDelegateModel.getPinnedTabsCount();
+    }
+
+    @Override
+    public @Nullable Integer getNativeSessionIdForTesting() {
+        return mDelegateModel.getNativeSessionIdForTesting();
+    }
+
+    @Override
+    public void setMuteSetting(List<Tab> tabs, boolean mute) {
+        mDelegateModel.setMuteSetting(tabs, mute);
+    }
+
+    @Override
+    public boolean isMuted(Tab tab) {
+        return mDelegateModel.isMuted(tab);
+    }
+
+    @Override
+    public @Nullable TabStripCollection getTabStripCollection() {
+        return mDelegateModel.getTabStripCollection();
     }
 }

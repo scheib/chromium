@@ -4,13 +4,17 @@
 
 package org.chromium.chrome.browser.compositor.overlays.strip.reorder;
 
+import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
+import static org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutUtils.isTabPinningFromStripEnabled;
 
 import android.app.Activity;
 import android.content.ClipDescription;
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.os.Handler;
@@ -23,21 +27,21 @@ import android.widget.ImageView;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.Log;
 import org.chromium.base.Token;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.compositor.LayerTitleCache;
-import org.chromium.chrome.browser.compositor.layouts.LayoutManagerImpl;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutHelper;
 import org.chromium.chrome.browser.dragdrop.ChromeDragDropUtils;
 import org.chromium.chrome.browser.dragdrop.ChromeDropDataAndroid;
 import org.chromium.chrome.browser.dragdrop.ChromeTabDropDataAndroid;
+import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab_ui.TabContentManager;
@@ -50,12 +54,12 @@ import org.chromium.ui.dragdrop.DragDropGlobalState;
 import org.chromium.ui.dragdrop.DragDropMetricUtils;
 import org.chromium.ui.dragdrop.DragDropMetricUtils.DragDropResult;
 import org.chromium.ui.dragdrop.DragDropMetricUtils.DragDropType;
-import org.chromium.ui.util.XrUtils;
 import org.chromium.ui.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Manages initiating tab drag and drop and handles the events that are received during drag and
@@ -118,11 +122,11 @@ public class TabStripDragHandler extends TabDragHandlerBase {
             MultiInstanceManager multiInstanceManager,
             DragAndDropDelegate dragAndDropDelegate,
             BrowserControlsStateProvider browserControlStateProvider,
-            Supplier<@Nullable Activity> mActivitySupplier,
+            Supplier<@Nullable Activity> activitySupplier,
             ObservableSupplier<Integer> tabStripHeightSupplier,
             Supplier<Boolean> isAppInDesktopWindowSupplier) {
         super(
-                mActivitySupplier,
+                activitySupplier,
                 multiInstanceManager,
                 dragAndDropDelegate,
                 isAppInDesktopWindowSupplier);
@@ -189,7 +193,7 @@ public class TabStripDragHandler extends TabDragHandlerBase {
             return false;
         }
 
-        ChromeDropDataAndroid dropData = prepareMultiTabDropData(tabsBeingDragged);
+        ChromeDropDataAndroid dropData = prepareMultiTabDropData(tabsBeingDragged, primaryTab);
 
         // Initialize drag shadow.
         initShadowView(dragSourceView);
@@ -321,7 +325,8 @@ public class TabStripDragHandler extends TabDragHandlerBase {
                     DragDropMetricUtils.recordDragDropResult(
                             DragDropResult.IGNORED_TOOLBAR,
                             mIsAppInDesktopWindowSupplier.get(),
-                            isTabGroupDrop());
+                            isTabGroupDrop(),
+                            isMultiTabDrop());
                     res = false;
                 }
                 break;
@@ -368,7 +373,7 @@ public class TabStripDragHandler extends TabDragHandlerBase {
     private boolean onDragEnter(float xPx) {
         mHoveringInStrip = true;
         boolean isDragSource = isDragSource();
-        if (isDragSource || XrUtils.isXrDevice()) {
+        if (isDragSource || DeviceInfo.isXr()) {
             mHandler.removeCallbacks(mOnDragExitRunnable);
             showDragShadow(false);
         }
@@ -383,12 +388,7 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         float yDp = yPx * mPxToDp;
         mStripLayoutHelperSupplier
                 .get()
-                .handleDragWithin(
-                        LayoutManagerImpl.time(),
-                        xDp,
-                        yDp,
-                        xDp - mLastXDp,
-                        isDraggedItemIncognito());
+                .handleDragWithin(xDp, yDp, xDp - mLastXDp, isDraggedItemIncognito());
         return true;
     }
 
@@ -397,7 +397,7 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         helper.stopReorderMode();
         if (isDragSource()) {
             DragDropMetricUtils.recordReorderStripWithDragDrop(
-                    mDragEverLeftStrip, isTabGroupDrop());
+                    mDragEverLeftStrip, isTabGroupDrop(), isMultiTabDrop());
             return true;
         }
 
@@ -420,8 +420,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
     }
 
     private boolean handleTabDrop(DragEvent dropEvent, StripLayoutHelper helper) {
-        Tab tabBeingDragged =
-                ChromeDragDropUtils.getTabFromGlobalState(getDragDropGlobalState(dropEvent));
+        DragDropGlobalState globalState = getDragDropGlobalState(dropEvent);
+        assertNonNull(globalState);
+        Tab tabBeingDragged = ChromeDragDropUtils.getTabFromGlobalState(globalState);
         if (tabBeingDragged == null) {
             return false;
         }
@@ -433,6 +434,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
 
         // Move tab to another window.
         if (!tabDraggedBelongToCurrentModel) {
+            // Reject cross-model drops if incognito is opened as a new window.
+            if (IncognitoUtils.shouldOpenIncognitoAsWindow()) return false;
+
             mMultiInstanceManager.moveTabsToWindow(
                     getActivity(),
                     Collections.singletonList(tabBeingDragged),
@@ -440,7 +444,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
             showDroppedDifferentModelToast(getActivity());
         } else {
             // Reparent tab at drop index and merge to group on destination if needed.
-            int tabIndex = helper.getTabIndexForTabDrop(dropEvent.getX() * mPxToDp);
+            int tabIndex =
+                    helper.getTabIndexForTabDrop(
+                            dropEvent.getX() * mPxToDp, tabBeingDragged.getIsPinned());
             mMultiInstanceManager.moveTabsToWindow(
                     getActivity(), Collections.singletonList(tabBeingDragged), tabIndex);
             helper.maybeMergeToGroupOnDrop(
@@ -451,13 +457,16 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         DragDropMetricUtils.recordDragDropType(
                 DragDropType.TAB_STRIP_TO_TAB_STRIP,
                 mIsAppInDesktopWindowSupplier.get(),
-                /* isTabGroup= */ false);
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ false);
         return true;
     }
 
+    // TODO(crbug.com/437417213): Handle pinned tab.
     private boolean handleMultiTabDrop(DragEvent dropEvent, StripLayoutHelper helper) {
-        List<Tab> tabsBeingDragged =
-                ChromeDragDropUtils.getTabsFromGlobalState(getDragDropGlobalState(dropEvent));
+        DragDropGlobalState globalState = getDragDropGlobalState(dropEvent);
+        assertNonNull(globalState);
+        List<Tab> tabsBeingDragged = ChromeDragDropUtils.getTabsFromGlobalState(globalState);
         if (tabsBeingDragged == null || tabsBeingDragged.isEmpty()) {
             return false;
         }
@@ -465,6 +474,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
                 doesBelongToCurrentModel(tabsBeingDragged.get(0).isIncognitoBranded());
         // Move tabs to another window.
         if (!tabsDraggedBelongToCurrentModel) {
+            // Reject cross-model drops if incognito is opened as a new window.
+            if (IncognitoUtils.shouldOpenIncognitoAsWindow()) return false;
+
             mMultiInstanceManager.moveTabsToWindow(
                     getActivity(),
                     tabsBeingDragged,
@@ -474,7 +486,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
             showDroppedDifferentModelToast(getActivity());
         } else {
             // Reparent tabs at drop index.
-            int tabIndex = helper.getTabIndexForTabDrop(dropEvent.getX() * mPxToDp);
+            int tabIndex =
+                    helper.getTabIndexForTabDrop(
+                            dropEvent.getX() * mPxToDp, isDraggingPinnedItem());
             mMultiInstanceManager.moveTabsToWindow(getActivity(), tabsBeingDragged, tabIndex);
             List<Integer> tabsBeingDraggedIds = new ArrayList<>();
             for (Tab tab : tabsBeingDragged) {
@@ -485,14 +499,16 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         DragDropMetricUtils.recordDragDropType(
                 DragDropType.TAB_STRIP_TO_TAB_STRIP,
                 mIsAppInDesktopWindowSupplier.get(),
-                /* isTabGroup= */ false);
+                /* isTabGroup= */ false,
+                /* isMultiTab= */ true);
         return true;
     }
 
     private boolean handleGroupDrop(DragEvent dropEvent, StripLayoutHelper helper) {
+        DragDropGlobalState globalState = getDragDropGlobalState(dropEvent);
+        assertNonNull(globalState);
         @Nullable TabGroupMetadata tabGroupMetadata =
-                ChromeDragDropUtils.getTabGroupMetadataFromGlobalState(
-                        getDragDropGlobalState(dropEvent));
+                ChromeDragDropUtils.getTabGroupMetadataFromGlobalState(globalState);
         if (tabGroupMetadata == null) {
             return false;
         }
@@ -506,6 +522,9 @@ public class TabStripDragHandler extends TabDragHandlerBase {
 
         // Move tab group to another window.
         if (!tabGroupDraggedBelongToCurrentModel) {
+            // Reject cross-model drops if incognito is opened as a new window.
+            if (IncognitoUtils.shouldOpenIncognitoAsWindow()) return false;
+
             mMultiInstanceManager.moveTabGroupToWindow(
                     getActivity(),
                     tabGroupMetadata,
@@ -513,13 +532,15 @@ public class TabStripDragHandler extends TabDragHandlerBase {
             showDroppedDifferentModelToast(getActivity());
         } else {
             // Reparent tab group at drop index.
-            int tabIndex = helper.getTabIndexForTabDrop(dropEvent.getX() * mPxToDp);
+            int tabIndex =
+                    helper.getTabIndexForTabDrop(dropEvent.getX() * mPxToDp, /* isPinned= */ false);
             mMultiInstanceManager.moveTabGroupToWindow(getActivity(), tabGroupMetadata, tabIndex);
         }
         DragDropMetricUtils.recordDragDropType(
                 DragDropType.TAB_STRIP_TO_TAB_STRIP,
                 mIsAppInDesktopWindowSupplier.get(),
-                /* isTabGroup= */ true);
+                /* isTabGroup= */ true,
+                /* isMultiTab= */ false);
         return true;
     }
 
@@ -554,7 +575,7 @@ public class TabStripDragHandler extends TabDragHandlerBase {
     private boolean onDragExit() {
         mHoveringInStrip = false;
         mDragEverLeftStrip = true;
-        if (XrUtils.isXrDevice()) {
+        if (DeviceInfo.isXr()) {
             showDragShadow(true);
         }
         boolean isDragSource = isDragSource();
@@ -582,11 +603,26 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         builder.update(show);
     }
 
-    public static boolean canMergeIntoGroupOnDrop() {
-        @Nullable Tab tab =
-                ChromeDragDropUtils.getTabFromGlobalState(
-                        getDragDropGlobalState(/* dragEvent= */ null));
-        return tab != null;
+    public static boolean isDraggingUnpinnedTab() {
+        DragDropGlobalState globalState = getDragDropGlobalState(/* dragEvent= */ null);
+        assertNonNull(globalState);
+
+        Tab tab = ChromeDragDropUtils.getTabFromGlobalState(globalState);
+        if (tab != null && !tab.getIsPinned()) return true;
+
+        Tab primaryTab = ChromeDragDropUtils.getPrimaryTabFromGlobalState(globalState);
+        return primaryTab != null && !primaryTab.getIsPinned();
+    }
+
+    public static boolean isDraggingPinnedItem() {
+        DragDropGlobalState globalState = getDragDropGlobalState(/* dragEvent= */ null);
+        if (!isTabPinningFromStripEnabled() || globalState == null) return false;
+
+        Tab tab = ChromeDragDropUtils.getTabFromGlobalState(globalState);
+        if (tab != null && tab.getIsPinned()) return true;
+
+        Tab primaryTab = ChromeDragDropUtils.getPrimaryTabFromGlobalState(globalState);
+        return primaryTab != null && primaryTab.getIsPinned();
     }
 
     /**
@@ -613,7 +649,8 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         DragDropMetricUtils.recordDragDropResult(
                 DragDropResult.IGNORED_MHTML_TAB,
                 mIsAppInDesktopWindowSupplier.get(),
-                /* isTabGroup= */ true);
+                /* isTabGroup= */ true,
+                /* isMultiTab= */ false);
         return true;
     }
 
@@ -625,12 +662,27 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         private final View mDragSourceView;
         // Whether drag shadow should be shown.
         private boolean mShowDragShadow;
+        // Paint for the shadow.
+        private final Paint mShadowPaint;
+        private final float mCornerRadius;
 
         public TabDragShadowBuilder(View dragSourceView, View shadowView, PointF dragShadowOffset) {
             // Store the View parameter.
             super(shadowView);
             mDragShadowOffset = dragShadowOffset;
             mDragSourceView = dragSourceView;
+
+            // Set up the shadow paint.
+            Context context = shadowView.getContext();
+            Resources resources = shadowView.getResources();
+            mShadowPaint = new Paint();
+            mShadowPaint.setAntiAlias(true);
+            mShadowPaint.setColor(context.getColor(R.color.tab_strip_reorder_shadow_color));
+            float blurThickness =
+                    resources.getDimension(R.dimen.tab_strip_dragged_tab_shadow_thickness);
+            mShadowPaint.setMaskFilter(
+                    new BlurMaskFilter(blurThickness, BlurMaskFilter.Blur.OUTER));
+            mCornerRadius = resources.getDimension(R.dimen.tab_grid_card_bg_radius);
         }
 
         public void update(boolean show) {
@@ -642,6 +694,22 @@ public class TabStripDragHandler extends TabDragHandlerBase {
         public void onDrawShadow(Canvas canvas) {
             View shadowView = getView();
             if (mShowDragShadow) {
+                View cardView = shadowView.findViewById(R.id.card_view);
+                if (cardView == null) {
+                    shadowView.draw(canvas); // Fallback
+                    return;
+                }
+                // Draw the shadow.
+                canvas.drawRoundRect(
+                        cardView.getLeft(),
+                        cardView.getTop(),
+                        cardView.getRight(),
+                        cardView.getBottom(),
+                        mCornerRadius,
+                        mCornerRadius,
+                        mShadowPaint);
+
+                // Draw the view on top of the shadow.
                 shadowView.draw(canvas);
             } else {
                 // When drag shadow should hide, replace with empty ImageView.

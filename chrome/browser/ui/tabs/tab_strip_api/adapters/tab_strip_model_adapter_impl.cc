@@ -9,6 +9,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_api/adapters/tree_builder/mojo_tree_builder.h"
 #include "chrome/browser/ui/tabs/tab_strip_api/converters/tab_converters.h"
 #include "components/tab_groups/tab_group_visual_data.h"
+#include "components/tabs/public/split_tab_collection.h"
 #include "components/tabs/public/tab_collection.h"
 #include "components/tabs/public/tab_group.h"
 #include "components/tabs/public/tab_interface.h"
@@ -148,11 +149,21 @@ void TabStripModelAdapterImpl::MoveCollection(const NodeId& id,
       tab_strip_model_->MoveGroupTo(group_id.value(), to_position);
       break;
     }
+    case tabs::TabCollection::Type::SPLIT: {
+      const tabs::SplitTabCollection* split_collection =
+          static_cast<const tabs::SplitTabCollection*>(collection);
+      const split_tabs::SplitTabId split_id = split_collection->GetSplitTabId();
+      const int to_position =
+          tab_strip_model_->IndexOfFirstNonPinnedTab() + position.index();
+      // TODO(crbug.com/412709271): Currently only moves within the unpinned
+      // collection.
+      tab_strip_model_->MoveSplitTo(split_id, to_position, false /* pinned */,
+                                    std::nullopt);
+      break;
+    }
     case tabs::TabCollection::Type::PINNED:
     case tabs::TabCollection::Type::UNPINNED:
     case tabs::TabCollection::Type::TABSTRIP:
-    // TODO(412709271). Implement moving a SplitTab collection.
-    case tabs::TabCollection::Type::SPLIT:
       NOTIMPLEMENTED();
       return;
   }
@@ -164,7 +175,7 @@ tabs_api::mojom::ContainerPtr TabStripModelAdapterImpl::GetTabStripTopology() {
 
 std::optional<const tab_groups::TabGroupId>
 TabStripModelAdapterImpl::FindGroupIdFor(
-    const tabs::TabCollection::Handle& collection_handle) {
+    const tabs::TabCollection::Handle& collection_handle) const {
   return tab_strip_model_->FindGroupIdFor(
       collection_handle, base::PassKey<TabStripModelAdapterImpl>());
 }
@@ -198,6 +209,77 @@ void TabStripModelAdapterImpl::SetTabSelection(
   selection.set_active(active_index.value());
 
   tab_strip_model_->SetSelectionFromModel(selection);
+}
+
+std::optional<tab_groups::TabGroupId>
+TabStripModelAdapterImpl::GetTabGroupForTab(int index) const {
+  return tab_strip_model_->GetTabGroupForTab(index);
+}
+
+tabs::TabCollectionHandle
+TabStripModelAdapterImpl::GetCollectionHandleForTabGroupId(
+    tab_groups::TabGroupId group_id) const {
+  const TabGroup* tab_group =
+      tab_strip_model_->group_model()->GetTabGroup(group_id);
+  return tab_group->GetCollectionHandle();
+}
+
+tabs_api::Position TabStripModelAdapterImpl::GetPositionForAbsoluteIndex(
+    int absolute_index) const {
+  const auto tab_group_id = GetTabGroupForTab(absolute_index);
+  int relative_index =
+      absolute_index - tab_strip_model_->IndexOfFirstNonPinnedTab();
+  std::optional<tabs_api::NodeId> parent_id =
+      NodeId::FromTabCollectionHandle(GetUnpinnedTabsCollectionHandle());
+
+  if (absolute_index < tab_strip_model_->IndexOfFirstNonPinnedTab()) {
+    relative_index = absolute_index;
+    parent_id =
+        NodeId::FromTabCollectionHandle(GetPinnedTabsCollectionHandle());
+  } else if (tab_group_id.has_value()) {
+    const TabGroup* tab_group =
+        tab_strip_model_->group_model()->GetTabGroup(tab_group_id.value());
+    relative_index = absolute_index - tab_group->ListTabs().start();
+    parent_id = NodeId::FromTabCollectionHandle(
+        GetCollectionHandleForTabGroupId(tab_group_id.value()));
+  }
+
+  return tabs_api::Position(relative_index, parent_id);
+}
+
+InsertionParams TabStripModelAdapterImpl::CalculateInsertionParams(
+    const std::optional<tabs_api::Position>& pos) const {
+  tabs_api::InsertionParams params;
+  if (pos.has_value()) {
+    params.index = pos->index();
+    const std::optional<tabs_api::NodeId>& parent_id = pos->parent_id();
+    if (parent_id.has_value()) {
+      if (parent_id.value() ==
+          NodeId::FromTabCollectionHandle(GetPinnedTabsCollectionHandle())) {
+        params.pinned = true;
+      } else {
+        std::optional<tabs::TabCollectionHandle> collection_handle =
+            parent_id.value().ToTabCollectionHandle();
+        if (collection_handle.has_value()) {
+          params.group_id = FindGroupIdFor(collection_handle.value());
+        }
+      }
+    }
+  }
+
+  return params;
+}
+
+tabs::TabCollectionHandle
+TabStripModelAdapterImpl::GetPinnedTabsCollectionHandle() const {
+  return tab_strip_model_->GetPinnedTabsCollectionHandle(
+      base::PassKey<TabStripModelAdapterImpl>());
+}
+
+tabs::TabCollectionHandle
+TabStripModelAdapterImpl::GetUnpinnedTabsCollectionHandle() const {
+  return tab_strip_model_->GetUnpinnedTabsCollectionHandle(
+      base::PassKey<TabStripModelAdapterImpl>());
 }
 
 }  // namespace tabs_api

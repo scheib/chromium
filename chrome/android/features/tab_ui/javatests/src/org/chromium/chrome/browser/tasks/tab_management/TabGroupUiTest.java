@@ -41,7 +41,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
@@ -56,7 +55,6 @@ import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
-import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.layouts.LayoutType;
@@ -65,6 +63,7 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter;
+import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter.MergeNotificationType;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsCoordinator;
@@ -103,7 +102,6 @@ public class TabGroupUiTest {
                     .setRevision(4)
                     .build();
 
-    @Mock private BrowserControlsStateProvider mBrowserControlsStateProvider;
     private RegularNewTabPageStation mNtp;
 
     @Before
@@ -322,7 +320,9 @@ public class TabGroupUiTest {
                                     .getTabGroupModelFilterProvider()
                                     .getTabGroupModelFilter(false);
                     filter.mergeListOfTabsToGroup(
-                            List.of(tab), filter.getRepresentativeTabAt(0), /* notify= */ false);
+                            List.of(tab),
+                            filter.getRepresentativeTabAt(0),
+                            /* notify= */ MergeNotificationType.DONT_NOTIFY);
                 });
         ViewUtils.waitForVisibleView(
                 allOf(
@@ -371,7 +371,9 @@ public class TabGroupUiTest {
                                     .getTabGroupModelFilterProvider()
                                     .getTabGroupModelFilter(false);
                     filter.mergeListOfTabsToGroup(
-                            List.of(tab), filter.getRepresentativeTabAt(0), /* notify= */ false);
+                            List.of(tab),
+                            filter.getRepresentativeTabAt(0),
+                            /* notify= */ MergeNotificationType.DONT_NOTIFY);
                 });
         ViewUtils.waitForVisibleView(
                 allOf(

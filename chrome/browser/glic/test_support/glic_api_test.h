@@ -15,8 +15,53 @@
 #include "chrome/browser/glic/test_support/non_interactive_glic_test.h"
 #include "chrome/test/interaction/interactive_browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "net/dns/mock_host_resolver.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 namespace glic {
+
+// This file defines Glic API test fixtures NonInteractiveGlicApiTest and
+// InteractiveGlicApiTest.
+// These fixtures configure a Glic client that runs test code. Each .cc test
+// file corresponds to a .ts file. The .cc file runs browser-side code, and the
+// .ts file runs glic client code. Each gtest in the .cc file should correspond
+// to a test function in the .ts file.
+// Using these fixtures requires a little bit of setup. Example:
+//
+// class MyNewGlicTest : public NonInteractiveGlicApiTest {
+//  public:
+//   MyNewGlicTest() :
+//     // Make a new .ts file in chrome/test/data/webui/glic/browser_tests
+//     // update build rules, and point to the generated .js file here.
+//     NonInteractiveGlicApiTest("./my_new_glic_test_browsertest.js") {}
+// };
+//
+// // Always include this test in one fixture of your test file. It ensures
+// // the set of tests in the .ts file match the set of tests in the .cc file.
+// IN_PROC_BROWSER_TEST_F(MyNewGlicTest, testAllTestsAreRegistered) {
+//   // Include all test fixture names here.
+//   AssertAllTestsRegistered({
+//       "MyNewGlicTest",
+//   });
+// }
+// // Add test cases...
+//
+// Next, here's boilerplate for the my_new_glic_test_browsertest.ts file:
+//
+// import {ApiTestFixtureBase, testMain} from './browser_test_base.js';
+//
+// class MyNewGlicTest extends ApiTestFixtureBase {
+//   // Normally it's useful to wait until the client is shown to start the test
+//   // but is not necessary.
+//   override async setUpTest() {
+//     await this.client.waitForFirstOpen();
+//   }
+//   // Add test cases...
+// }
+// testMain([
+//   // All test fixtures need to be listed here.
+//   MyNewGlicTest,
+// ]);
 
 struct ExecuteTestOptions {
   // Test parameters passed to the JS test. See `ApiTestFixtureBase.testParams`.
@@ -60,7 +105,7 @@ class WebUIStateListener : public Host::Observer {
   void WaitForWebUiState(mojom::WebUiState state);
 
  private:
-  raw_ptr<Host> host_;
+  base::WeakPtr<Host> host_;
   std::deque<mojom::WebUiState> states_;
 };
 
@@ -90,6 +135,8 @@ class GlicApiTestBase : public T {
   explicit GlicApiTestBase(std::string_view js_source_path) {
     T::embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
         &GlicApiTestBase::SorryPageRequestHandler, base::Unretained(this)));
+    T::embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
+        &GlicApiTestBase::FakeRpcRequestHandler, base::Unretained(this)));
 
     T::embedded_test_server()->RegisterRequestMonitor(
         base::BindRepeating(&GlicApiTestBase::OnEmbeddedTestServerHttpRequest,
@@ -141,8 +188,8 @@ class GlicApiTestBase : public T {
   }
 
   Host* GetHost() {
-    Profile* profile = T::browser()->profile();
-    return &GlicKeyedServiceFactory::GetGlicKeyedService(profile)->host();
+    GlicInstance* instance = T::GetGlicInstance();
+    return instance ? &instance->host() : nullptr;
   }
 
   // Run the test typescript function. The typescript function must have the
@@ -155,8 +202,7 @@ class GlicApiTestBase : public T {
     }
     content::RenderFrameHost* glic_guest_frame = T::FindGlicGuestMainFrame();
     ASSERT_TRUE(glic_guest_frame);
-    std::string param_json;
-    base::JSONWriter::Write(options.params, &param_json);
+    std::string param_json = base::WriteJson(options.params).value_or("");
     ProcessTestResult(
         options,
         content::EvalJs(
@@ -175,8 +221,7 @@ class GlicApiTestBase : public T {
     content::RenderFrameHost* glic_guest_frame = T::FindGlicGuestMainFrame();
     next_step_required_ = false;
     ASSERT_TRUE(glic_guest_frame);
-    std::string param_json;
-    base::JSONWriter::Write(options.params, &param_json);
+    std::string param_json = base::WriteJson(options.params).value_or("");
     ProcessTestResult(
         options,
         content::EvalJs(glic_guest_frame,
@@ -204,7 +249,7 @@ class GlicApiTestBase : public T {
   }
 
   void WaitForWebUiState(mojom::WebUiState state) {
-    WebUIStateListener listener(&T::host());
+    WebUIStateListener listener(T::GetHost());
     listener.WaitForWebUiState(state);
   }
 
@@ -222,6 +267,24 @@ class GlicApiTestBase : public T {
     result->set_code(net::HttpStatusCode::HTTP_OK);
     result->set_content_type("text/html");
     result->set_content("Sorry!");
+    return result;
+  }
+
+  // Fake RPC endpoint that sometimes produces a CORS response.
+  // It does not respond to allow preflights, though.
+  std::unique_ptr<net::test_server::HttpResponse> FakeRpcRequestHandler(
+      const net::test_server::HttpRequest& request) {
+    if (request.method != net::test_server::METHOD_GET ||
+        !base::StartsWith(request.relative_url, "/fake-rpc")) {
+      return nullptr;
+    }
+    auto result = std::make_unique<net::test_server::BasicHttpResponse>();
+    result->set_code(net::HttpStatusCode::HTTP_OK);
+    result->set_content_type("application/json");
+    result->set_content("{\"status\": \"ok\"}");
+    if (request.relative_url.find("/cors") != std::string::npos) {
+      result->AddCustomHeader("Access-Control-Allow-Origin", "*");
+    }
     return result;
   }
 
@@ -256,6 +319,12 @@ class GlicApiTestBase : public T {
 
   void AssertAllTestsRegistered(
       std::vector<std::string> gunit_test_suite_names) {
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER) || \
+    defined(MEMORY_SANITIZER)
+    GTEST_SKIP() << "AssertAllTestsRegistered not processed for slow binaries.";
+#else
+    T::RunTestSequence(T::OpenGlicWindow(T::GlicWindowMode::kDetached,
+                                         T::GlicInstrumentMode::kNone));
     ExecuteJsTest();
     ASSERT_TRUE(step_data()->is_list());
     ::testing::UnitTest* unit_test = ::testing::UnitTest::GetInstance();
@@ -284,6 +353,7 @@ class GlicApiTestBase : public T {
     ASSERT_THAT(js_test_names, testing::IsSubsetOf(cc_test_names))
         << "Test cases in js, but not cc";
     ContinueJsTest();
+#endif
   }
 
   // Records all requests to the embedded test server.
@@ -306,6 +376,7 @@ class GlicApiTestBase : public T {
 };
 
 using NonInteractiveGlicApiTest = GlicApiTestBase<NonInteractiveGlicTest>;
+using InteractiveGlicApiTest = GlicApiTestBase<test::InteractiveGlicTest>;
 
 }  // namespace glic
 

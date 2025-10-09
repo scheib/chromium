@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_TOUCH_TO_FILL_AUTOFILL_ANDROID_TOUCH_TO_FILL_PAYMENT_METHOD_VIEW_IMPL_H_
 #define CHROME_BROWSER_TOUCH_TO_FILL_AUTOFILL_ANDROID_TOUCH_TO_FILL_PAYMENT_METHOD_VIEW_IMPL_H_
 
+#include <string>
+
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/touch_to_fill/autofill/android/touch_to_fill_payment_method_view.h"
@@ -14,6 +16,10 @@ class WebContents;
 }
 
 namespace autofill {
+
+namespace payments {
+struct BnplIssuerContext;
+}  // namespace payments
 
 class Iban;
 class LoyaltyCard;
@@ -36,15 +42,24 @@ class TouchToFillPaymentMethodViewImpl : public TouchToFillPaymentMethodView {
   bool IsReadyToShow(TouchToFillPaymentMethodViewController* controller,
                      JNIEnv* env);
   // TouchToFillPaymentMethodView:
-  bool ShowCreditCards(TouchToFillPaymentMethodViewController* controller,
-                       base::span<const Suggestion> suggestions,
-                       bool should_show_scan_credit_card) override;
+  bool ShowPaymentMethods(TouchToFillPaymentMethodViewController* controller,
+                          base::span<const Suggestion> suggestions,
+                          bool should_show_scan_credit_card) override;
   bool ShowIbans(TouchToFillPaymentMethodViewController* controller,
                  base::span<const autofill::Iban> ibans_to_suggest) override;
   bool ShowLoyaltyCards(TouchToFillPaymentMethodViewController* controller,
                         base::span<const LoyaltyCard> affiliated_loyalty_cards,
                         base::span<const LoyaltyCard> all_loyalty_cards,
                         bool first_time_usage) override;
+  bool UpdateBnplPaymentMethod(std::optional<uint64_t> extracted_amount,
+                               bool is_amount_supported_by_any_issuer) override;
+  bool ShowProgressScreen(
+      TouchToFillPaymentMethodViewController* controller) override;
+  bool ShowBnplIssuers(base::span<const payments::BnplIssuerContext>
+                           bnpl_issuer_contexts) override;
+  bool ShowErrorScreen(TouchToFillPaymentMethodViewController* controller,
+                       const std::u16string& title,
+                       const std::u16string& description) override;
   void Hide() override;
 
   // The corresponding Java TouchToFillPaymentMethodViewBridge.

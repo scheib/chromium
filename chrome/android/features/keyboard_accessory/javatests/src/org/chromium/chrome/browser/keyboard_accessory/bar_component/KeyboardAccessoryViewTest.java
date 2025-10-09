@@ -10,6 +10,7 @@ import static androidx.test.espresso.action.ViewActions.longClick;
 import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+import static androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.isRoot;
 import static androidx.test.espresso.matcher.ViewMatchers.isSelected;
@@ -21,6 +22,7 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,6 +34,7 @@ import static org.chromium.chrome.browser.keyboard_accessory.AccessoryAction.CRE
 import static org.chromium.chrome.browser.keyboard_accessory.AccessoryAction.GENERATE_PASSWORD_AUTOMATIC;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.BAR_ITEMS;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.DISABLE_ANIMATIONS_FOR_TESTING;
+import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.HAS_STICKY_LAST_ITEM;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.OBFUSCATED_CHILD_AT_CALLBACK;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHEET_OPENER_ITEM;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHOW_SWIPING_IPH;
@@ -49,7 +52,11 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
 
+import androidx.annotation.DimenRes;
 import androidx.annotation.Nullable;
 import androidx.test.espresso.ViewInteraction;
 import androidx.test.espresso.matcher.RootMatchers;
@@ -72,9 +79,12 @@ import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.CriteriaNotSatisfiedException;
 import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.autofill.AutofillImageFetcher;
 import org.chromium.chrome.browser.autofill.AutofillImageFetcherFactory;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.keyboard_accessory.R;
 import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.AutofillBarItem;
@@ -106,7 +116,7 @@ import org.chromium.ui.test.util.ViewUtils;
 import org.chromium.ui.widget.ChromeImageView;
 import org.chromium.url.GURL;
 
-import java.util.Optional;
+import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeoutException;
@@ -117,6 +127,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @SuppressWarnings("DoNotMock") // Mocks GURL
+@DisableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_KEYBOARD_ACCESSORY_CHIP_REDESIGN})
 public class KeyboardAccessoryViewTest {
     private static final String CUSTOM_ICON_URL = "https://www.example.com/image.png";
     private static final Bitmap TEST_CARD_ART_IMAGE =
@@ -214,7 +225,7 @@ public class KeyboardAccessoryViewTest {
 
         @Override
         public void addOnInitializedCallback(Callback<Boolean> callback) {
-            assert false : "Implement addOnInitializedCallback if you need it.";
+            throw new AssertionError("Implement addOnInitializedCallback if you need it.");
         }
     }
 
@@ -240,6 +251,7 @@ public class KeyboardAccessoryViewTest {
                                     .with(DISABLE_ANIMATIONS_FOR_TESTING, true)
                                     .with(OBFUSCATED_CHILD_AT_CALLBACK, unused -> {})
                                     .with(SHOW_SWIPING_IPH, false)
+                                    .with(HAS_STICKY_LAST_ITEM, true)
                                     .build();
                     AsyncViewStub viewStub =
                             mActivityTestRule
@@ -284,6 +296,49 @@ public class KeyboardAccessoryViewTest {
                     mModel.set(VISIBLE, false);
                 });
         assertNotEquals(view.getVisibility(), View.VISIBLE);
+    }
+
+    @Test
+    @MediumTest
+    public void testAccessoryDimensions() throws InterruptedException {
+        assertNull(mKeyboardAccessoryView.poll());
+        // After setting the visibility to true, the view should exist and be visible.
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mModel.set(VISIBLE, true);
+                });
+        KeyboardAccessoryView view = mKeyboardAccessoryView.take();
+
+        LinearLayout barContents = view.findViewById(R.id.accessory_bar_contents);
+        assertThat(
+                barContents.getMinimumHeight(),
+                is(getDimensionPixelSize(R.dimen.keyboard_accessory_height)));
+        LinearLayout.LayoutParams params =
+                (LinearLayout.LayoutParams) barContents.getLayoutParams();
+        assertThat(params.height, is(getDimensionPixelSize(R.dimen.keyboard_accessory_height)));
+    }
+
+    @Test
+    @MediumTest
+    @EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_KEYBOARD_ACCESSORY_CHIP_REDESIGN})
+    public void testAccessoryDimensionsWithRedesign() throws InterruptedException {
+        assertNull(mKeyboardAccessoryView.poll());
+        // After setting the visibility to true, the view should exist and be visible.
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mModel.set(VISIBLE, true);
+                });
+        KeyboardAccessoryView view = mKeyboardAccessoryView.take();
+
+        LinearLayout barContents = view.findViewById(R.id.accessory_bar_contents);
+        assertThat(
+                barContents.getMinimumHeight(),
+                is(getDimensionPixelSize(R.dimen.keyboard_accessory_height_redesign)));
+        LinearLayout.LayoutParams params =
+                (LinearLayout.LayoutParams) barContents.getLayoutParams();
+        assertThat(
+                params.height,
+                is(getDimensionPixelSize(R.dimen.keyboard_accessory_height_redesign)));
     }
 
     @Test
@@ -786,8 +841,7 @@ public class KeyboardAccessoryViewTest {
         when(customIconUrl.getSpec()).thenReturn(CUSTOM_ICON_URL);
         // Return the cached image when AutofillImageFetcher.getImageIfAvailable is called for the
         // above url.
-        when(mMockImageFetcher.getImageIfAvailable(any(), any()))
-                .thenReturn(Optional.of(TEST_CARD_ART_IMAGE));
+        when(mMockImageFetcher.getImageIfAvailable(any(), any())).thenReturn(TEST_CARD_ART_IMAGE);
         // Create an autofill suggestion and set the `customIconUrl`.
         AutofillBarItem customIconItem =
                 new AutofillBarItem(
@@ -822,9 +876,9 @@ public class KeyboardAccessoryViewTest {
         GURL customIconUrl = mock(GURL.class);
         when(customIconUrl.isValid()).thenReturn(true);
         when(customIconUrl.getSpec()).thenReturn(CUSTOM_ICON_URL);
-        // Return null to AutofillImageFetcher.getImageIfAvailable to indicate that the image is not
-        // present in the cache.
-        when(mMockImageFetcher.getImageIfAvailable(any(), any())).thenReturn(Optional.empty());
+        // Return the response of PersonalDataManager.getImageIfAvailable
+        // to null to indicate that the image is not present in the cache.
+        when(mMockImageFetcher.getImageIfAvailable(any(), any())).thenReturn(null);
         AutofillBarItem customIconItem =
                 new AutofillBarItem(
                         getDefaultAutofillSuggestionBuilder()
@@ -914,6 +968,88 @@ public class KeyboardAccessoryViewTest {
         onView(withText("Virtual Card")).check(matches(not(isSelected())));
     }
 
+    @Test
+    @MediumTest
+    public void testAccessoryButtonsHaveHoverBackground() throws InterruptedException {
+        KeyboardAccessoryButtonGroupView buttonGroupView = setupButtonsAndGetGroup();
+        ArrayList<ImageButton> buttons = buttonGroupView.getButtons();
+        assertEquals("Expected two buttons to be present.", 2, buttons.size());
+
+        // The presence of a background drawable (e.g., a state-list drawable)
+        // is used to enable visual feedback on hover and press states.
+        assertNotNull(
+                "First button should have a background for hover effects.",
+                buttons.get(0).getBackground());
+        assertNotNull(
+                "Second button should have a background for hover effects.",
+                buttons.get(1).getBackground());
+    }
+
+    @Test
+    @MediumTest
+    public void testAccessoryButtonsHaveCorrectSpacing() throws InterruptedException {
+        KeyboardAccessoryButtonGroupView buttonGroupView = setupButtonsAndGetGroup();
+        ArrayList<ImageButton> buttons = buttonGroupView.getButtons();
+        assertEquals("Expected two buttons to be present.", 2, buttons.size());
+
+        ImageButton button1 = buttons.get(0);
+        ImageButton button2 = buttons.get(1);
+
+        // Check spacing.
+        ViewGroup.MarginLayoutParams params1 =
+                (ViewGroup.MarginLayoutParams) button1.getLayoutParams();
+        ViewGroup.MarginLayoutParams params2 =
+                (ViewGroup.MarginLayoutParams) button2.getLayoutParams();
+
+        int expectedMargin =
+                buttonGroupView
+                        .getResources()
+                        .getDimensionPixelSize(R.dimen.keyboard_accessory_tab_icon_spacing);
+
+        assertEquals(
+                "First button's left margin is incorrect.", expectedMargin, params1.leftMargin);
+        assertEquals(
+                "First button's right margin is incorrect.", expectedMargin, params1.rightMargin);
+        assertEquals(
+                "Second button's left margin is incorrect.", expectedMargin, params2.leftMargin);
+        assertEquals(
+                "Second button's right margin is incorrect.", expectedMargin, params2.rightMargin);
+    }
+
+    /**
+     * Sets up the accessory, adds two buttons, and waits for them to be laid out.
+     *
+     * @return The {@link KeyboardAccessoryButtonGroupView} containing the buttons.
+     */
+    private KeyboardAccessoryButtonGroupView setupButtonsAndGetGroup() throws InterruptedException {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mModel.set(VISIBLE, true);
+                    mModel.get(BAR_ITEMS).set(new BarItem[] {createSheetOpener()});
+                });
+
+        // Wait for the view and find the KeyboardAccessoryButtonGroupView.
+        mKeyboardAccessoryView.take(); // Make sure the view is inflated.
+        AtomicReference<KeyboardAccessoryButtonGroupView> buttonGroupViewRef =
+                new AtomicReference<>();
+        onView(isAssignableFrom(KeyboardAccessoryButtonGroupView.class))
+                .check(
+                        (v, noViewFoundException) -> {
+                            if (noViewFoundException != null) {
+                                throw new RuntimeException(noViewFoundException);
+                            }
+                            buttonGroupViewRef.set((KeyboardAccessoryButtonGroupView) v);
+                        });
+
+        KeyboardAccessoryButtonGroupView buttonGroupView = buttonGroupViewRef.get();
+        assertNotNull(buttonGroupView);
+
+        // Wait for buttons to be added.
+        CriteriaHelper.pollUiThread(() -> buttonGroupView.getButtons().size() == 2);
+
+        return buttonGroupView;
+    }
+
     private static AutofillSuggestion.Builder getDefaultAutofillSuggestionBuilder() {
         return new AutofillSuggestion.Builder()
                 .setLabel("Johnathan")
@@ -933,6 +1069,10 @@ public class KeyboardAccessoryViewTest {
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);
         return bitmap;
+    }
+
+    private int getDimensionPixelSize(@DimenRes int res) {
+        return mActivityTestRule.getActivity().getResources().getDimensionPixelSize(res);
     }
 
     private ViewInteraction waitForHelpBubble(Matcher<View> matcher) {
@@ -992,14 +1132,20 @@ public class KeyboardAccessoryViewTest {
                 new KeyboardAccessoryButtonGroupCoordinator.SheetOpenerCallbacks() {
                     @Override
                     public void onViewBound(View buttons) {
-                        if (((KeyboardAccessoryButtonGroupView) buttons).getButtons().size() > 0) {
+                        KeyboardAccessoryButtonGroupView group =
+                                (KeyboardAccessoryButtonGroupView) buttons;
+                        if (group.getButtons().size() > 0) {
                             return;
                         }
-                        ((KeyboardAccessoryButtonGroupView) buttons)
-                                .addButton(
-                                        buttons.getContext()
-                                                .getDrawable(R.drawable.ic_password_manager_key),
-                                        "Key Icon");
+
+                        group.addButton(
+                                buttons.getContext()
+                                        .getDrawable(R.drawable.ic_password_manager_key),
+                                "Key Icon");
+
+                        group.addButton(
+                                buttons.getContext().getDrawable(R.drawable.ic_credit_card_black),
+                                "Card Icon 2");
                     }
 
                     @Override

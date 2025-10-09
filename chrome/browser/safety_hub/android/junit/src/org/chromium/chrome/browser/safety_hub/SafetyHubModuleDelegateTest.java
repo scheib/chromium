@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,7 +28,6 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -39,6 +39,8 @@ import org.chromium.chrome.browser.ui.signin.history_sync.HistorySyncConfig;
 import org.chromium.components.browser_ui.settings.SettingsCustomTabLauncher;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.ui.modaldialog.ModalDialogManager;
+
+import java.util.function.Supplier;
 
 /** Tests {@link SafetyHubModuleDelegate} */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -102,6 +104,7 @@ public class SafetyHubModuleDelegateTest {
     @Test
     public void testLaunchSigninPromo() {
         mSafetyHubTestRule.setSignedInState(false);
+        when(mContext.getString(anyInt())).thenReturn("string");
         when(mSigninLauncher.createBottomSheetSigninIntentOrShowError(
                         eq(mContext), eq(mProfile), any(), eq(SigninAccessPoint.SAFETY_CHECK)))
                 .thenReturn(mSigninIntent);

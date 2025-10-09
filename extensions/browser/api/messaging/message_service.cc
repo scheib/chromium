@@ -25,6 +25,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_host.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -1214,6 +1215,14 @@ void MessageService::NotifyResponsePending(const PortId& port_id) {
     return;
 
   it->second->receiver->NotifyResponsePending();
+}
+
+bool MessageService::HasPendingLazyContextChannelsForExtension(
+    const ExtensionId& extension_id) const {
+  return std::ranges::any_of(
+      pending_lazy_context_channels_, [&extension_id](const auto& pair) {
+        return pair.second.extension_id() == extension_id;
+      });
 }
 
 bool MessageService::MaybeAddPendingLazyContextOpenChannelTask(

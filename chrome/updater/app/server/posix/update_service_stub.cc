@@ -19,10 +19,12 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/version.h"
+#include "chrome/updater/constants.h"
 #include "chrome/updater/ipc/ipc_names.h"
 #include "chrome/updater/ipc/ipc_security.h"
 #include "chrome/updater/mojom/updater_service.mojom-forward.h"
 #include "chrome/updater/registration_data.h"
+#include "chrome/updater/update_service.h"
 #include "components/named_mojo_ipc_server/connection_info.h"
 #include "components/named_mojo_ipc_server/endpoint_options.h"
 #include "components/named_mojo_ipc_server/named_mojo_ipc_server.h"
@@ -31,57 +33,14 @@
 namespace updater {
 namespace {
 
-// Helper functions for converting between mojom types and their native
-// counterparts.
-[[nodiscard]] updater::RegistrationRequest MakeRegistrationRequest(
-    const mojom::RegistrationRequestPtr& mojom) {
-  CHECK(mojom);
-
-  updater::RegistrationRequest request;
-  request.app_id = mojom->app_id;
-  request.brand_code = mojom->brand_code;
-  request.brand_path = mojom->brand_path;
-  request.ap = mojom->ap;
-  request.version = base::Version(mojom->version);
-  request.existence_checker_path = mojom->existence_checker_path;
-  if (mojom->version_path) {
-    request.version_path = *mojom->version_path;
-  }
-  if (mojom->version_key) {
-    request.version_key = *mojom->version_key;
-  }
-  if (mojom->ap_path) {
-    request.ap_path = *mojom->ap_path;
-  }
-  if (mojom->ap_key) {
-    request.ap_key = *mojom->ap_key;
-  }
-  if (mojom->install_id) {
-    request.install_id = *mojom->install_id;
-  }
-  return request;
-}
-
 [[nodiscard]] mojom::AppStatePtr MakeMojoAppState(
     const updater::UpdateService::AppState& app_state) {
-  return mojom::AppState::New(
-      app_state.app_id, app_state.version.GetString(), app_state.ap,
-      app_state.brand_code, app_state.brand_path, app_state.ecp,
-      app_state.ap_path, app_state.ap_key, app_state.version_path,
-      app_state.version_key, app_state.cohort);
+  return mojom::AppState::New(app_state);
 }
 
 [[nodiscard]] mojom::UpdateStatePtr MakeMojoUpdateState(
     const updater::UpdateService::UpdateState& update_state) {
-  return mojom::UpdateState::New(
-      update_state.app_id,
-      static_cast<mojom::UpdateState::State>(update_state.state),
-      update_state.next_version.GetString(), update_state.downloaded_bytes,
-      update_state.total_bytes, update_state.install_progress,
-      static_cast<mojom::UpdateService::ErrorCategory>(
-          update_state.error_category),
-      update_state.error_code, update_state.extra_code1,
-      update_state.installer_text, update_state.installer_cmd_line);
+  return mojom::UpdateState::New(update_state);
 }
 
 // A thin wrapper around a StateChangeObserver remote to allow for refcounting.
@@ -266,8 +225,8 @@ void UpdateServiceStub::RegisterApp(mojom::RegistrationRequestPtr request,
                                     RegisterAppCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   task_start_listener_.Run();
-  impl_->RegisterApp(MakeRegistrationRequest(request),
-                     std::move(callback).Then(task_end_listener_));
+  CHECK(request);
+  impl_->RegisterApp(*request, std::move(callback).Then(task_end_listener_));
 }
 
 void UpdateServiceStub::GetAppStates(GetAppStatesCallback callback) {
@@ -351,8 +310,8 @@ void UpdateServiceStub::Install(mojom::RegistrationRequestPtr registration,
 
   auto [state_change_callback, on_complete_callback] =
       MakeStateChangeObserverCallbacks(std::move(observer));
-  impl_->Install(MakeRegistrationRequest(registration), client_install_data,
-                 install_data_index,
+  CHECK(registration);
+  impl_->Install(*registration, client_install_data, install_data_index,
                  static_cast<updater::UpdateService::Priority>(priority),
                  language.value_or(""), std::move(state_change_callback),
                  std::move(on_complete_callback).Then(task_end_listener_));

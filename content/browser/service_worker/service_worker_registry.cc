@@ -45,25 +45,14 @@ namespace content {
 
 namespace {
 
-// Another switch for `kServiceWorkerBackgroundUpdateForRegisteredStorageKeys`
-// intended to be controlled from Field Trial (e.g. kill-switch). The original
-// flag may be overridden by `AwFieldTrials::RegisterFeatureOverrides`.
-BASE_FEATURE(
-    kServiceWorkerBackgroundUpdateForRegisteredStorageKeysFieldTrialControlled,
-    "ServiceWorkerBackgroundUpdateForRegisteredStorageKeysFieldTrialControlled",
-    base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kServiceWorkerBackgroundUpdateForServiceWorkerScopeCache,
-             "ServiceWorkerBackgroundUpdateForServiceWorkerScopeCache",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kServiceWorkerBackgroundUpdateForFindRegistrationForClientUrl,
-             "ServiceWorkerBackgroundUpdateForFindRegistrationForClientUrl",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kReduceCallingServiceWorkerRegisteredStorageKeysOnStartup,
-             "ReduceCallingServiceWorkerRegisteredStorageKeysOnStartup",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool ReduceCallingServiceWorkerRegisteredStorageKeysOnStartupEnabled() {
   static const bool enabled = base::FeatureList::IsEnabled(
@@ -181,7 +170,6 @@ constexpr size_t kServiceWorkerRegistrationCacheSize = 100;
 
 // Enables merging duplicate calls of FindRegistrationForClientUrl.
 BASE_FEATURE(kServiceWorkerMergeFindRegistrationForClientUrl,
-             "ServiceWorkerMergeFindRegistrationForClientUrl",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 template <typename... ReplyArgs>
@@ -239,10 +227,7 @@ ServiceWorkerRegistry::ServiceWorkerRegistry(
                              storage::ServiceWorkerStorage::
                                  StorageSharedBuffer>(
           base::FeatureList::IsEnabled(
-              features::
-                  kServiceWorkerBackgroundUpdateForRegisteredStorageKeys) &&
-              base::FeatureList::IsEnabled(
-                  kServiceWorkerBackgroundUpdateForRegisteredStorageKeysFieldTrialControlled),
+              features::kServiceWorkerBackgroundUpdateForRegisteredStorageKeys),
           base::FeatureList::IsEnabled(
               kServiceWorkerBackgroundUpdateForServiceWorkerScopeCache),
           base::FeatureList::IsEnabled(

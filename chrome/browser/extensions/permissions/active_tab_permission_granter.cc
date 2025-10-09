@@ -15,6 +15,7 @@
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
@@ -26,6 +27,7 @@
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/renderer_startup_helper.h"
 #include "extensions/browser/script_injection_tracker.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_id.h"
@@ -36,6 +38,8 @@
 #include "extensions/common/url_pattern_set.h"
 #include "extensions/common/user_script.h"
 #include "url/gurl.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 

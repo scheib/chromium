@@ -346,23 +346,23 @@ MockPeerConnectionImpl::MockPeerConnectionImpl(
       .WillByDefault(testing::Invoke(
           this, &MockPeerConnectionImpl::SetLocalDescriptionWorker));
   ON_CALL(*this, SetLocalDescriptionForMock(_, _))
-      .WillByDefault(testing::Invoke(
+      .WillByDefault(
           [this](std::unique_ptr<webrtc::SessionDescriptionInterface>* desc,
                  webrtc::scoped_refptr<
                      webrtc::SetLocalDescriptionObserverInterface>* observer) {
-            SetLocalDescriptionWorker(nullptr, desc->release());
-          }));
+            SetLocalDescriptionWorker(nullptr, desc->get());
+          });
   // TODO(hbos): Remove once no longer mandatory to implement.
   ON_CALL(*this, SetRemoteDescription(_, _))
       .WillByDefault(testing::Invoke(
           this, &MockPeerConnectionImpl::SetRemoteDescriptionWorker));
   ON_CALL(*this, SetRemoteDescriptionForMock(_, _))
-      .WillByDefault(testing::Invoke(
+      .WillByDefault(
           [this](std::unique_ptr<webrtc::SessionDescriptionInterface>* desc,
                  webrtc::scoped_refptr<
                      webrtc::SetRemoteDescriptionObserverInterface>* observer) {
-            SetRemoteDescriptionWorker(nullptr, desc->release());
-          }));
+            SetRemoteDescriptionWorker(nullptr, desc->get());
+          });
 }
 
 MockPeerConnectionImpl::~MockPeerConnectionImpl() {}
@@ -534,30 +534,28 @@ void MockPeerConnectionImpl::CreateOffer(
     CreateSessionDescriptionObserver* observer,
     const RTCOfferAnswerOptions& options) {
   DCHECK(observer);
-  created_sessiondescription_ =
-      MockParsedSessionDescription("unknown", kDummyAnswer).release();
+  created_session_description_ = true;
 }
 
 void MockPeerConnectionImpl::CreateAnswer(
     CreateSessionDescriptionObserver* observer,
     const RTCOfferAnswerOptions& options) {
   DCHECK(observer);
-  created_sessiondescription_ =
-      MockParsedSessionDescription("unknown", kDummyAnswer).release();
+  created_session_description_ = true;
 }
 
 void MockPeerConnectionImpl::SetLocalDescriptionWorker(
     SetSessionDescriptionObserver* observer,
     SessionDescriptionInterface* desc) {
   desc->ToString(&description_sdp_);
-  local_desc_.reset(desc);
+  local_desc_ = desc->Clone();
 }
 
 void MockPeerConnectionImpl::SetRemoteDescriptionWorker(
     SetSessionDescriptionObserver* observer,
     SessionDescriptionInterface* desc) {
   desc->ToString(&description_sdp_);
-  remote_desc_.reset(desc);
+  remote_desc_ = desc->Clone();
 }
 
 webrtc::RTCError MockPeerConnectionImpl::SetConfiguration(
@@ -568,7 +566,8 @@ webrtc::RTCError MockPeerConnectionImpl::SetConfiguration(
 bool MockPeerConnectionImpl::AddIceCandidate(const IceCandidate* candidate) {
   sdp_mid_ = candidate->sdp_mid();
   sdp_mline_index_ = candidate->sdp_mline_index();
-  return candidate->ToString(&ice_sdp_);
+  ice_sdp_ = candidate->ToString();
+  return !ice_sdp_.empty();
 }
 
 void MockPeerConnectionImpl::AddIceCandidate(

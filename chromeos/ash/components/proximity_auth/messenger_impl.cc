@@ -34,9 +34,7 @@ const char kUnlockEventName[] = "easy_unlock";
 
 // Serializes the |value| to a JSON string and returns the result.
 std::string SerializeValueToJson(const base::Value::Dict& value) {
-  std::string json;
-  base::JSONWriter::Write(value, &json);
-  return json;
+  return base::WriteJson(value).value_or("");
 }
 
 // Returns the message type represented by the |message|. This is a convenience
@@ -148,7 +146,7 @@ void MessengerImpl::OnMessageReceived(const std::string& payload) {
 void MessengerImpl::HandleMessage(const std::string& message) {
   // The decoded message should be a JSON string.
   std::optional<base::Value::Dict> message_value =
-      base::JSONReader::ReadDict(message);
+      base::JSONReader::ReadDict(message, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!message_value) {
     PA_LOG(ERROR) << "Unable to parse message as JSON:\n" << message;
     return;

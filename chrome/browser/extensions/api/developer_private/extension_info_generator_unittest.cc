@@ -47,7 +47,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/crx_file/id_util.h"
 #include "components/signin/public/base/signin_pref_names.h"
-#include "components/signin/public/base/signin_switches.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "extensions/browser/blocklist_state.h"
@@ -126,9 +125,7 @@ std::string SiteControlsToString(
     list.Append(control.ToValue());
   }
 
-  std::string json;
-  CHECK(base::JSONWriter::Write(list, &json));
-  return json;
+  return base::WriteJson(list).value_or("");
 }
 
 }  // namespace
@@ -289,8 +286,8 @@ class ExtensionInfoGeneratorUnitTest : public ExtensionServiceTestWithInstall {
         continue;
       }
       if (*actual_value != expected_value) {
-        base::JSONWriter::Write(expected_value, &expected_string);
-        base::JSONWriter::Write(*actual_value, &actual_string);
+        expected_string = base::WriteJson(expected_value).value_or("");
+        actual_string = base::WriteJson(*actual_value).value_or("");
         EXPECT_EQ(expected_string, actual_string)
             << field.first << paths_details;
       }
@@ -417,6 +414,44 @@ TEST_F(ExtensionInfoGeneratorUnitTest, BasicInfoTest) {
   const api::developer_private::ManifestError& manifest_error =
       info->manifest_errors[0];
   EXPECT_EQ(extension->id(), manifest_error.extension_id);
+
+  // Additional sanity check for service worker background: `canInspect` should
+  // be true for runtime errors from a service worker-based extension, even when
+  // no RenderFrameHost exists.
+  {
+    scoped_refptr<const Extension> sw_extension =
+        ExtensionBuilder("sw_extension")
+            .SetBackgroundContext(
+                ExtensionBuilder::BackgroundContext::SERVICE_WORKER)
+            .SetPath(data_dir())
+            .Build();
+
+    registrar()->AddExtension(sw_extension.get());
+    PermissionsUpdater sw_updater(profile());
+    sw_updater.InitializePermissions(sw_extension.get());
+    sw_updater.GrantActivePermissions(sw_extension.get());
+
+    ErrorConsole* sw_error_console = ErrorConsole::Get(profile());
+    const GURL sw_context_url("http://example.com");
+    // Simulate a service worker runtime error. Use -1 IDs to reflect the lack
+    // of a RenderFrameHost for service workers.
+    sw_error_console->ReportError(std::make_unique<RuntimeError>(
+        sw_extension->id(), false, u"source", u"message",
+        StackTrace(1, StackFrame(1, 1, u"source", u"function")), sw_context_url,
+        logging::LOGGING_ERROR,
+        /*render_frame_id=*/-1,
+        /*render_process_id=*/-1,
+        /*is_from_service_worker=*/true));
+
+    std::unique_ptr<api::developer_private::ExtensionInfo> sw_info =
+        GenerateExtensionInfo(sw_extension->id());
+    ASSERT_TRUE(sw_info);
+    ASSERT_EQ(1u, sw_info->runtime_errors.size());
+    const api::developer_private::RuntimeError& sw_runtime_error =
+        sw_info->runtime_errors[0];
+    EXPECT_TRUE(sw_runtime_error.is_service_worker);
+    EXPECT_TRUE(sw_runtime_error.can_inspect);
+  }
 
   // Test an extension that isn't unpacked.
   manifest_copy.Set("update_url",
@@ -929,16 +964,12 @@ TEST_F(ExtensionInfoGeneratorUnitTest,
       GenerateExtensionInfo(active_tab_extension->id());
   EXPECT_TRUE(active_tab_info->permissions.can_access_site_data);
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  // TODO(crbug.com/427285233): Desktop Android does not support the debugger
-  // API nor its permission.
   scoped_refptr<const Extension> debugger_extension =
       CreateExtension("activeTab", base::Value::List().Append("debugger"),
                       ManifestLocation::kInternal);
   std::unique_ptr<developer::ExtensionInfo> debugger_info =
       GenerateExtensionInfo(debugger_extension->id());
   EXPECT_TRUE(debugger_info->permissions.can_access_site_data);
-#endif
 }
 
 // Tests that the granted optional API permissions, when revoked, are not
@@ -1241,10 +1272,6 @@ TEST_F(ExtensionInfoGeneratorUnitTest, IsPinnedToToolbar) {
 // signed out or signed in with full sync consent (automatically syncs all data
 // types including extensions).
 TEST_F(ExtensionInfoGeneratorUnitTest, UploadAsAccountExtension_FullSync) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(
-      switches::kEnableExtensionsExplicitBrowserSignin);
-
   // Create two extensions: one syncable and one non-syncable.
   const scoped_refptr<const Extension> syncable_extension = CreateExtension(
       "test1", base::Value::List(), ManifestLocation::kInternal);
@@ -1281,13 +1308,10 @@ TEST_F(ExtensionInfoGeneratorUnitTest, UploadAsAccountExtension_FullSync) {
 
 // Same test as above, except test that extensions CAN be uploaded if the user
 // is signed into transport mode with extensions sync enabled.
+// Disabled on ChromeOS since users should not be able to sign into transport
+// mode on ChromeOS.
+#if !BUILDFLAG(IS_CHROMEOS)
 TEST_F(ExtensionInfoGeneratorUnitTest, UploadAsAccountExtension_TransportMode) {
-  // Allow extensions to sync in transport mode.
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitWithFeatures(
-      {switches::kEnableExtensionsExplicitBrowserSignin},
-      /*disabled_features=*/{});
-
   // Sign the user in without full sync with an explicit signin.
   auto identity_test_env_profile_adaptor =
       std::make_unique<IdentityTestEnvironmentProfileAdaptor>(profile());
@@ -1319,6 +1343,7 @@ TEST_F(ExtensionInfoGeneratorUnitTest, UploadAsAccountExtension_TransportMode) {
   info = GenerateExtensionInfo(syncable_extension->id());
   EXPECT_FALSE(info->can_upload_as_account_extension);
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 class ExtensionInfoGeneratorWithMV2DeprecationUnitTest
     : public ExtensionInfoGeneratorUnitTest,

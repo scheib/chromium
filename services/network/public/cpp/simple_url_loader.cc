@@ -43,6 +43,7 @@
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
 #include "net/http/http_request_headers.h"
+#include "net/http/http_response_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/data_element.h"
 #include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
@@ -60,7 +61,6 @@ constexpr size_t SimpleURLLoader::kMaxBoundedStringDownloadSize;
 constexpr size_t SimpleURLLoader::kMaxUploadStringSizeToCopy;
 
 BASE_FEATURE(kSimpleURLLoaderUseReadAndDiscardBodyOption,
-             "SimpleURLLoaderUseReadAndDiscardBodyOption",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 namespace {

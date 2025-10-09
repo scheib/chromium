@@ -26,7 +26,7 @@ class ContentRuleListData final {
   // content rule list data.
   class Observer : public base::CheckedObserver {
    public:
-    virtual void OnScriptBlockingRuleListUpdated() = 0;
+    virtual void OnContentRuleListDataUpdated() = 0;
 
    protected:
     ~Observer() override = default;
@@ -38,7 +38,7 @@ class ContentRuleListData final {
   ContentRuleListData& operator=(const ContentRuleListData&) = delete;
 
   // Updates the internal rule list from a JSON string and notifies observers.
-  void SetContentRuleList(std::string content_rule_list);
+  void SetContentRuleList(std::optional<std::string> content_rule_list);
 
   // Returns a reference to the content rule list string.
   // Returns std::nullopt if the data has not yet been populated.

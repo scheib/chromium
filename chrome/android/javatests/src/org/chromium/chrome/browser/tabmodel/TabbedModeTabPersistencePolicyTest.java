@@ -45,6 +45,7 @@ import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
 import org.chromium.chrome.browser.crypto.CipherFactory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
+import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
 import org.chromium.chrome.browser.price_tracking.PriceTrackingFeatures;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.profiles.ProfileProvider;
@@ -76,7 +77,9 @@ import java.nio.ByteBuffer;
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class TabbedModeTabPersistencePolicyTest {
     private static final WebContentsState WEB_CONTENTS_STATE =
-            new WebContentsState(ByteBuffer.allocateDirect(100));
+            new WebContentsState(
+                    ByteBuffer.allocateDirect(100),
+                    WebContentsState.CONTENTS_STATE_CURRENT_VERSION);
 
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
@@ -100,7 +103,8 @@ public class TabbedModeTabPersistencePolicyTest {
                             ModalDialogManager modalDialogManager,
                             OneshotSupplier<ProfileProvider> profileProviderSupplier,
                             TabCreatorManager tabCreatorManager,
-                            NextTabPolicySupplier nextTabPolicySupplier) {
+                            NextTabPolicySupplier nextTabPolicySupplier,
+                            MultiInstanceManager multiInstanceManager) {
                         return new MockTabModelSelector(mProfile, mIncognitoProfile, 0, 0, null);
                     }
 
@@ -184,6 +188,7 @@ public class TabbedModeTabPersistencePolicyTest {
                                     new ChromeTabbedActivity(),
                                     mModalDialogManager,
                                     profileProviderSupplier,
+                                    null,
                                     null,
                                     null,
                                     mMismatchedIndicesHandler,

@@ -33,6 +33,7 @@
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/text_constants.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -150,15 +151,13 @@ views::Textfield& LabeledTextfieldWithErrorMessage::GetInputTextField() const {
   return *input;
 }
 
-void LabeledTextfieldWithErrorMessage::SetErrorState(
-    bool is_valid,
-    std::optional<std::u16string> error_message) {
+void LabeledTextfieldWithErrorMessage::SetErrorState(bool is_valid) {
   CHECK(input);
   is_valid_input = is_valid;
   input->SetInvalid(!is_valid);
   if (error_label) {
-    if (error_message.has_value()) {
-      error_label->SetText(error_message.value());
+    if (!is_valid) {
+      error_label->GetViewAccessibility().AnnounceAlert(error_label->GetText());
     }
     error_label->SetVisible(!is_valid);
   }

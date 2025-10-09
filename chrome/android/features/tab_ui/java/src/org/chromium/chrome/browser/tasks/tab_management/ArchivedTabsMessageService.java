@@ -20,7 +20,6 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.build.annotations.EnsuresNonNull;
@@ -46,6 +45,7 @@ import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabListItemSizeChangedObserver;
 import org.chromium.chrome.browser.tasks.tab_management.TabListCoordinator.TabListMode;
+import org.chromium.chrome.browser.tasks.tab_management.TabProperties.UiType;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcherMessageManager.MessageType;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcherMessageManager.MessageUpdateObserver;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
@@ -58,10 +58,12 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modelutil.PropertyModel;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /** A message service to surface information about archived tabs. */
 @NullMarked
-public class ArchivedTabsMessageService extends MessageService<@MessageType Integer>
+public class ArchivedTabsMessageService
+        extends MessageService<@MessageType Integer, @UiType Integer>
         implements MessageUpdateObserver {
 
     /** Provides message data for the archived message card. */
@@ -159,7 +161,11 @@ public class ArchivedTabsMessageService extends MessageService<@MessageType Inte
             Supplier<TabGroupUiActionHandler> tabGroupUiActionHandlerSupplier,
             ObservableSupplier<@Nullable TabGroupModelFilter> currentTabGroupModelFilterSupplier,
             Supplier<LayoutStateProvider> layoutStateProviderSupplier) {
-        super(MessageType.ARCHIVED_TABS_MESSAGE);
+        super(
+                MessageType.ARCHIVED_TABS_MESSAGE,
+                UiType.ARCHIVED_TABS_MESSAGE,
+                R.layout.archived_tabs_message_card_view,
+                ArchivedTabsCardViewBinder::bind);
         mActivity = activity;
         mArchivedTabModelOrchestrator = archivedTabModelOrchestrator;
         mBrowserControlsStateProvider = browserControlStateProvider;
@@ -180,8 +186,9 @@ public class ArchivedTabsMessageService extends MessageService<@MessageType Inte
         mTabGroupUiActionHandlerSupplier = tabGroupUiActionHandlerSupplier;
         mCurrentTabGroupModelFilterSupplier = currentTabGroupModelFilterSupplier;
         mLayoutStateProviderSupplier = layoutStateProviderSupplier;
-        if (mLayoutStateProviderSupplier.hasValue()) {
-            mLayoutStateProviderSupplier.get().addObserver(mLayoutStateObserver);
+        var layoutStateProvider = mLayoutStateProviderSupplier.get();
+        if (layoutStateProvider != null) {
+            layoutStateProvider.addObserver(mLayoutStateObserver);
         }
 
         mTabListCoordinatorSupplier.addObserver(
@@ -248,9 +255,8 @@ public class ArchivedTabsMessageService extends MessageService<@MessageType Inte
             mArchivedTabsDialogCoordinator.destroy();
         }
 
-        if (mTabListCoordinatorSupplier.hasValue()) {
-            TabListCoordinator tabListCoordinator = mTabListCoordinatorSupplier.get();
-            assumeNonNull(tabListCoordinator);
+        TabListCoordinator tabListCoordinator = mTabListCoordinatorSupplier.get();
+        if (tabListCoordinator != null) {
             tabListCoordinator.removeTabListItemSizeChangedObserver(
                     mTabListItemSizeChangedObserver);
         }
@@ -259,8 +265,9 @@ public class ArchivedTabsMessageService extends MessageService<@MessageType Inte
             mTabCountSupplier.removeObserver(mTabCountObserver);
         }
 
-        if (mLayoutStateProviderSupplier.hasValue()) {
-            mLayoutStateProviderSupplier.get().removeObserver(mLayoutStateObserver);
+        var layoutStateProvider = mLayoutStateProviderSupplier.get();
+        if (layoutStateProvider != null) {
+            layoutStateProvider.removeObserver(mLayoutStateObserver);
         }
     }
 
@@ -277,9 +284,8 @@ public class ArchivedTabsMessageService extends MessageService<@MessageType Inte
             PostTask.postTask(
                     TaskTraits.UI_DEFAULT,
                     () -> {
-                        if (!mTabListCoordinatorSupplier.hasValue()) return;
                         TabListCoordinator tabListCoordinator = mTabListCoordinatorSupplier.get();
-                        assumeNonNull(tabListCoordinator);
+                        if (tabListCoordinator == null) return;
                         if (tabListCoordinator.specialItemExists(
                                 MessageType.ARCHIVED_TABS_MESSAGE)) {
                             tabListCoordinator.setRecyclerViewPosition(

@@ -190,9 +190,17 @@ bool IsControlKeyModifier(int flags) {
 #endif
 }
 
-bool IsValidCharToInsert(const char16_t& ch) {
+bool IsValidCharToInsert(const char16_t& ch, ui::TextInputType input_type) {
   // Filter out all control characters, including tab and new line characters.
-  return (ch >= 0x20 && ch < 0x7F) || ch > 0x9F;
+  if ((ch < 0x20 || ch >= 0x7f) && ch <= 0x9f) {
+    return false;
+  }
+
+  if (input_type == ui::TEXT_INPUT_TYPE_NUMBER) {
+    return ch >= '0' && ch <= '9';
+  }
+
+  return true;
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -201,11 +209,6 @@ const float kOpaque = 1.0;
 #endif
 
 }  // namespace
-
-// static
-base::TimeDelta Textfield::GetCaretBlinkInterval() {
-  return ui::NativeTheme::GetInstanceForNativeUi()->GetCaretBlinkInterval();
-}
 
 // static
 const gfx::FontList& Textfield::GetDefaultFontList() {
@@ -1248,6 +1251,14 @@ void Textfield::OnTextChanged() {
   drop_weak_ptr_factory_.InvalidateWeakPtrs();
 }
 
+void Textfield::WriteTextToClipboard(ui::ClipboardBuffer clipboard_buffer,
+                                     const std::u16string_view& text) {
+  if (!controller_ ||
+      !controller_->HandleWriteTextToClipboard(clipboard_buffer, text)) {
+    ui::ScopedClipboardWriter(clipboard_buffer).WriteText(text);
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Textfield, ContextMenuController overrides:
 
@@ -1275,7 +1286,7 @@ void Textfield::WriteDragDataForView(View* sender,
   gfx::Size size(label.GetPreferredSize({}));
   gfx::NativeView native_view = GetWidget()->GetNativeView();
   display::Display display =
-      display::Screen::GetScreen()->GetDisplayNearestView(native_view);
+      display::Screen::Get()->GetDisplayNearestView(native_view);
   size.SetToMin(gfx::Size(display.size().width(), height()));
   label.SetBoundsRect(gfx::Rect(size));
   label.SetEnabledColor(GetTextColor());
@@ -1317,7 +1328,8 @@ int Textfield::GetDragOperationsForView(View* sender, const gfx::Point& p) {
 bool Textfield::CanStartDragForView(View* sender,
                                     const gfx::Point& press_pt,
                                     const gfx::Point& p) {
-  return initiating_drag_ && GetRenderText()->IsPointInSelection(press_pt);
+  return initiating_drag_ && GetRenderText()->IsPointInSelection(press_pt) &&
+         (!controller_ || controller_->AllowStartDragEvent(GetSelectedText()));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1683,7 +1695,9 @@ void Textfield::InsertText(const std::u16string& new_text,
                            InsertTextCursorBehavior cursor_behavior) {
   std::u16string filtered_new_text;
   std::ranges::copy_if(new_text, std::back_inserter(filtered_new_text),
-                       IsValidCharToInsert);
+                       [this](char16_t ch) {
+                         return IsValidCharToInsert(ch, GetTextInputType());
+                       });
 
   if (GetTextInputType() == ui::TEXT_INPUT_TYPE_NONE ||
       filtered_new_text.empty()) {
@@ -1710,7 +1724,7 @@ void Textfield::InsertChar(const ui::KeyEvent& event) {
   // On Windows AltGr is represented by Alt+Ctrl or Right Alt, and on Linux it's
   // a different flag that we don't care about.
   const char16_t ch = event.GetCharacter();
-  const bool should_insert_char = IsValidCharToInsert(ch) &&
+  const bool should_insert_char = IsValidCharToInsert(ch, GetTextInputType()) &&
                                   !ui::IsSystemKeyModifier(event.flags()) &&
                                   !IsControlKeyModifier(event.flags());
   if (GetTextInputType() == ui::TEXT_INPUT_TYPE_NONE || !should_insert_char) {
@@ -2687,8 +2701,7 @@ void Textfield::UpdateSelectionClipboard() {
   if (ui::Clipboard::IsSupportedClipboardBuffer(
           ui::ClipboardBuffer::kSelection)) {
     if (text_input_type_ != ui::TEXT_INPUT_TYPE_PASSWORD) {
-      ui::ScopedClipboardWriter(ui::ClipboardBuffer::kSelection)
-          .WriteText(GetSelectedText());
+      WriteTextToClipboard(ui::ClipboardBuffer::kSelection, GetSelectedText());
       if (controller_) {
         controller_->OnAfterCutOrCopy(ui::ClipboardBuffer::kSelection);
       }
@@ -3083,13 +3096,17 @@ int Textfield::CharsToDips(int width_in_chars) const {
 }
 
 bool Textfield::ShouldBlinkCursor() const {
-  return ShouldShowCursor() && !Textfield::GetCaretBlinkInterval().is_zero();
+  return ShouldShowCursor() && !ui::NativeTheme::GetInstanceForNativeUi()
+                                    ->caret_blink_interval()
+                                    .is_zero();
 }
 
 void Textfield::StartBlinkingCursor() {
   DCHECK(ShouldBlinkCursor());
-  cursor_blink_timer_.Start(FROM_HERE, Textfield::GetCaretBlinkInterval(), this,
-                            &Textfield::OnCursorBlinkTimerFired);
+  cursor_blink_timer_.Start(
+      FROM_HERE,
+      ui::NativeTheme::GetInstanceForNativeUi()->caret_blink_interval(), this,
+      &Textfield::OnCursorBlinkTimerFired);
 }
 
 void Textfield::StopBlinkingCursor() {

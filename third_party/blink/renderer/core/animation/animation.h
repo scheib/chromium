@@ -455,6 +455,9 @@ class CORE_EXPORT Animation : public EventTarget,
 
   void SetPausedForTrigger(bool paused_for_trigger) {
     paused_for_trigger_ = paused_for_trigger;
+    if (effect()) {
+      effect()->SetPausedForTrigger(paused_for_trigger);
+    }
   }
   bool PausedForTrigger() const { return paused_for_trigger_; }
   void ResetPlayback();
@@ -469,6 +472,11 @@ class CORE_EXPORT Animation : public EventTarget,
 
   void AddTrigger(AnimationTrigger* trigger);
   void RemoveTrigger(AnimationTrigger* trigger);
+
+  // Playback rate that will take effect once any pending tasks are resolved.
+  // If there are no pending tasks, then the effective playback rate equals the
+  // active playback rate.
+  double EffectivePlaybackRate() const;
 
  protected:
   DispatchEventResult DispatchEventInternal(Event&) override;
@@ -487,10 +495,6 @@ class CORE_EXPORT Animation : public EventTarget,
   AnimationTimeDelta EffectEnd() const;
   bool Limited(std::optional<AnimationTimeDelta> current_time) const;
 
-  // Playback rate that will take effect once any pending tasks are resolved.
-  // If there are no pending tasks, then the effective playback rate equals the
-  // active playback rate.
-  double EffectivePlaybackRate() const;
   void ApplyPendingPlaybackRate();
 
   std::optional<AnimationTimeDelta> CalculateStartTime(
@@ -760,7 +764,8 @@ class CORE_EXPORT Animation : public EventTarget,
                            NoCompositeWithoutCompositedElementId);
   FRIEND_TEST_ALL_PREFIXES(AnimationAnimationTestNoCompositing,
                            PendingActivityWithFinishedEventListener);
-  friend class ScriptedAnimationTriggerTest;
+  friend class ScriptedTimelineTriggerTest;
+  FRIEND_TEST_ALL_PREFIXES(CSSAnimationsTriggerTest, ChangeTriggerName);
 };
 
 }  // namespace blink

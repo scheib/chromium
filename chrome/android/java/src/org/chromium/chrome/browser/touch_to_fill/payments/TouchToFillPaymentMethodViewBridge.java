@@ -71,9 +71,9 @@ class TouchToFillPaymentMethodViewBridge {
     }
 
     @CalledByNative
-    private void showCreditCards(
+    private void showPaymentMethods(
             @JniType("std::vector") Object[] suggestions, boolean shouldShowScanCreditCard) {
-        mComponent.showCreditCards(
+        mComponent.showPaymentMethods(
                 (List<AutofillSuggestion>) (List<?>) Arrays.asList(suggestions),
                 shouldShowScanCreditCard);
     }
@@ -89,6 +89,32 @@ class TouchToFillPaymentMethodViewBridge {
             @JniType("base::span<const LoyaltyCard>") List<LoyaltyCard> allLoyaltyCards,
             boolean firstTimeUsage) {
         mComponent.showLoyaltyCards(affiliatedLoyaltyCards, allLoyaltyCards, firstTimeUsage);
+    }
+
+    @CalledByNative
+    private void updateBnplPaymentMethod(
+            @JniType("std::optional<int64_t>") @Nullable Long extractedAmount,
+            boolean isAmountSupportedByAnyIssuer) {
+        mComponent.updateBnplPaymentMethod(extractedAmount, isAmountSupportedByAnyIssuer);
+    }
+
+    @CalledByNative
+    private void showProgressScreen() {
+        mComponent.showProgressScreen();
+    }
+
+    @CalledByNative
+    private void showBnplIssuers(
+            @JniType("std::vector")
+                    List<PersonalDataManager.BnplIssuerContext> bnplIssuerContexts) {
+        mComponent.showBnplIssuers(bnplIssuerContexts);
+    }
+
+    @CalledByNative
+    private void showErrorScreen(
+            @JniType("std::u16string") String title,
+            @JniType("std::u16string") String description) {
+        mComponent.showErrorScreen(title, description);
     }
 
     @CalledByNative

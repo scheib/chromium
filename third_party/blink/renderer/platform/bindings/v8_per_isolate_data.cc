@@ -59,7 +59,6 @@
 namespace blink {
 
 BASE_FEATURE(kTaskAttributionInfrastructureDisabledForTesting,
-             "TaskAttributionInfrastructureDisabledForTesting",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 namespace {

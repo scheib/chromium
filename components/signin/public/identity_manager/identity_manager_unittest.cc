@@ -19,6 +19,7 @@
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "components/image_fetcher/core/fake_image_decoder.h"
@@ -66,7 +67,6 @@
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_facade_impl.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
-#include "components/account_manager_core/chromeos/account_manager_mojo_service.h"
 #include "components/signin/internal/identity_manager/test_profile_oauth2_token_service_delegate_chromeos.h"
 #endif
 
@@ -368,25 +368,15 @@ class IdentityManagerTest : public testing::Test {
             &test_url_loader_factory_));
     ash_account_manager->SetPrefService(&pref_service_);
 
-    auto* ash_account_manager_mojo_service =
-        GetAccountManagerFactory()->GetAccountManagerMojoService(
+    auto* account_manager_facade =
+        GetAccountManagerFactory()->GetAccountManagerFacade(
             temp_profile_dir_.GetPath().value());
-
-    mojo::Remote<crosapi::mojom::AccountManager> remote;
-    ash_account_manager_mojo_service->BindReceiver(
-        remote.BindNewPipeAndPassReceiver());
-    account_manager_facade_ =
-        std::make_unique<account_manager::AccountManagerFacadeImpl>(
-            std::move(remote),
-            /*remote_version=*/std::numeric_limits<uint32_t>::max(),
-            /*account_manager_for_tests=*/
-            ash_account_manager->GetWeakPtr());
 
     auto token_service = std::make_unique<CustomFakeProfileOAuth2TokenService>(
         &pref_service_,
         std::make_unique<TestProfileOAuth2TokenServiceDelegateChromeOS>(
             &signin_client_, account_tracker_service.get(),
-            ash_account_manager_mojo_service,
+            account_manager_facade,
             /*is_regular_profile=*/true));
 #else
     auto token_service =
@@ -450,7 +440,7 @@ class IdentityManagerTest : public testing::Test {
         primary_account_manager.get(), &pref_service_);
 #endif
 #if BUILDFLAG(IS_CHROMEOS)
-    init_params.account_manager_facade = account_manager_facade_.get();
+    init_params.account_manager_facade = account_manager_facade;
 #endif
     init_params.signin_client = &signin_client_;
     init_params.account_fetcher_service = std::move(account_fetcher_service);
@@ -510,8 +500,6 @@ class IdentityManagerTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
 #if BUILDFLAG(IS_CHROMEOS)
   ash::AccountManagerFactory account_manager_factory_;
-  std::unique_ptr<account_manager::AccountManagerFacadeImpl>
-      account_manager_facade_;
 #endif
   sync_preferences::TestingPrefServiceSyncable pref_service_;
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -2238,6 +2226,16 @@ TEST_F(IdentityManagerTest,
             identity_manager_observer()->BatchChangeRecords().at(0).at(0));
 }
 
+// Verifies that passing an empty access token does not crash.
+TEST_F(IdentityManagerTest, RevokeEmptyAccessToken) {
+  account_tracker()->SeedAccountInfo(kTestGaiaId, kTestEmail);
+  identity_manager()->GetPrimaryAccountMutator()->SetPrimaryAccount(
+      primary_account_id(), ConsentLevel::kSync,
+      signin_metrics::AccessPoint::kUnknown);
+  identity_manager()->RemoveAccessTokenFromCache(
+      primary_account_id(), signin::OAuthConsumerId::kSync, std::string());
+}
+
 // Check that FindExtendedAccountInfo returns a valid account info iff the
 // account is known, and all the extended information is available.
 TEST_F(IdentityManagerTest, FindExtendedAccountInfo) {
@@ -2260,12 +2258,8 @@ TEST_F(IdentityManagerTest, FindExtendedAccountInfo) {
       account_tracker()->SeedAccountInfo(account_info.gaia, account_info.email);
   ASSERT_EQ(account_info.account_id, account_id);
 
-  // The refresh token is not available.
-  EXPECT_TRUE(
-      identity_manager()->FindExtendedAccountInfo(account_info).IsEmpty());
-
   // FindExtendedAccountInfo() returns extended account information if the
-  // account is known and the token is available.
+  // account is known.
   SetRefreshTokenForAccount(identity_manager(), account_info.account_id,
                             "token");
   const AccountInfo extended_account_info =
@@ -2291,16 +2285,9 @@ TEST_F(IdentityManagerTest, FindExtendedAccountInfoByAccountId) {
           account_info.account_id);
   EXPECT_TRUE(maybe_account_info.IsEmpty());
 
-  // Refresh token is not available.
+  // Account is known.
   const CoreAccountId account_id =
       account_tracker()->SeedAccountInfo(account_info.gaia, account_info.email);
-  maybe_account_info = identity_manager()->FindExtendedAccountInfoByAccountId(
-      account_info.account_id);
-  EXPECT_TRUE(maybe_account_info.IsEmpty());
-
-  // Account with refresh token.
-  SetRefreshTokenForAccount(identity_manager(), account_info.account_id,
-                            "token");
   maybe_account_info = identity_manager()->FindExtendedAccountInfoByAccountId(
       account_info.account_id);
   EXPECT_FALSE(maybe_account_info.IsEmpty());
@@ -2324,17 +2311,9 @@ TEST_F(IdentityManagerTest, FindExtendedAccountInfoByEmailAddress) {
           account_info.email);
   EXPECT_TRUE(maybe_account_info.IsEmpty());
 
-  // Refresh token is not available.
+  // Account is known.
   const CoreAccountId account_id =
       account_tracker()->SeedAccountInfo(account_info.gaia, account_info.email);
-  maybe_account_info =
-      identity_manager()->FindExtendedAccountInfoByEmailAddress(
-          account_info.email);
-  EXPECT_TRUE(maybe_account_info.IsEmpty());
-
-  // Account with refresh token.
-  SetRefreshTokenForAccount(identity_manager(), account_info.account_id,
-                            "token");
   maybe_account_info =
       identity_manager()->FindExtendedAccountInfoByEmailAddress(
           account_info.email);
@@ -2358,16 +2337,9 @@ TEST_F(IdentityManagerTest, FindExtendedAccountInfoByGaiaId) {
       identity_manager()->FindExtendedAccountInfoByGaiaId(account_info.gaia);
   EXPECT_TRUE(maybe_account_info.IsEmpty());
 
-  // Refresh token is not available.
+  // Account is known.
   const CoreAccountId account_id =
       account_tracker()->SeedAccountInfo(account_info.gaia, account_info.email);
-  maybe_account_info =
-      identity_manager()->FindExtendedAccountInfoByGaiaId(account_info.gaia);
-  EXPECT_TRUE(maybe_account_info.IsEmpty());
-
-  // Account with refresh token.
-  SetRefreshTokenForAccount(identity_manager(), account_info.account_id,
-                            "token");
   maybe_account_info =
       identity_manager()->FindExtendedAccountInfoByGaiaId(account_info.gaia);
   EXPECT_FALSE(maybe_account_info.IsEmpty());

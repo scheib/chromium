@@ -11,11 +11,31 @@ import org.chromium.build.annotations.NullMarked;
 public class BaseFeatureList {
     private BaseFeatureList() {}
 
+    public static final MutableFlagWithSafeDefault sBackgroundNotPerceptibleBinding =
+            new MutableFlagWithSafeDefault(
+                    BaseFeatureMap.getInstance(),
+                    BaseFeatures.BACKGROUND_NOT_PERCEPTIBLE_BINDING,
+                    false);
+
+    public static final MutableFlagWithSafeDefault sEffectiveBindingState =
+            new MutableFlagWithSafeDefault(
+                    BaseFeatureMap.getInstance(), BaseFeatures.EFFECTIVE_BINDING_STATE, false);
+
+    public static final MutableFlagWithSafeDefault sRebindingChildServiceConnectionController =
+            new MutableFlagWithSafeDefault(
+                    BaseFeatureMap.getInstance(),
+                    BaseFeatures.REBINDING_CHILD_SERVICE_CONNECTION_CONTROLLER,
+                    false);
+
     public static final MutableFlagWithSafeDefault sUpdateStateBeforeUnbinding =
             new MutableFlagWithSafeDefault(
                     BaseFeatureMap.getInstance(),
                     BaseFeatures.UPDATE_STATE_BEFORE_UNBINDING,
                     false);
+
+    public static final MutableFlagWithSafeDefault sUseIsUnboundCheck =
+            new MutableFlagWithSafeDefault(
+                    BaseFeatureMap.getInstance(), BaseFeatures.USE_IS_UNBOUND_CHECK, false);
 
     public static final MutableFlagWithSafeDefault sUseSharedRebindServiceConnection =
             new MutableFlagWithSafeDefault(

@@ -419,6 +419,17 @@
         'os_type': 'chromeos',
         'cros_board': 'jacuzzi',
       },
+      'chromeos-reven-chrome-preuprev': {
+        'additional_compile_targets': [
+          'chromiumos_preflight',
+        ],
+        'test_suites': {
+          'skylab_tests': 'chromeos_ctp_preuprev_tests_no_arc',
+        },
+        'os_type': 'chromeos',
+        'cros_board': 'reven-vmtest',
+        'cros_dut_pool': 'vmlab',
+      },
       'chromeos-volteer-chrome-preuprev': {
         'additional_compile_targets': [
           'chromiumos_preflight',
@@ -1082,7 +1093,7 @@
           'mac_toolchain',
           'out_dir_arg',
           'xctest',
-          'xcode_16_main',
+          'xcode_26_main',
         ],
         'test_suites': {
            'isolated_scripts': 'optimization_guide_ios_device_gtests',
@@ -1096,7 +1107,7 @@
           'mac_toolchain',
           'out_dir_arg',
           'xctest',
-          'xcode_16_main',
+          'xcode_26_main',
         ],
         'test_suites': {
            'isolated_scripts': 'optimization_guide_ios_sim_gtests',
@@ -1104,6 +1115,9 @@
         'os_type': 'ios',
       },
       'optimization_guide-linux': {
+        'additional_compile_targets': [
+          'ondevice_model_benchmark'
+        ],
         'mixins': [
           'chrome-intelligence-swarming-pool',
           'linux-jammy',

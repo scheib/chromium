@@ -913,7 +913,8 @@ void EffectiveURLContentBrowserTestContentBrowserClient::AddTranslation(
   helper_.AddTranslation(url_to_modify, url_to_return);
 }
 
-GURL EffectiveURLContentBrowserTestContentBrowserClient::GetEffectiveURL(
+std::optional<GURL>
+EffectiveURLContentBrowserTestContentBrowserClient::GetEffectiveURL(
     BrowserContext* browser_context,
     const GURL& url) {
   return helper_.GetEffectiveURL(url);
@@ -999,7 +1000,7 @@ RedirectToTargetOnSecondNavigation(
   }
 
   std::string url_from_query =
-      base::UnescapeBinaryURLComponent(request.GetURL().query_piece());
+      base::UnescapeBinaryURLComponent(request.GetURL().query());
   auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
   http_response->set_code(net::HttpStatusCode::HTTP_FOUND);
   http_response->AddCustomHeader("Location", url_from_query);

@@ -77,9 +77,20 @@ class InstanceSwitcherItemViewBinder {
             moreButton.setVisibility(View.GONE);
             closeButton.setOnClickListener(
                     model.get(InstanceSwitcherItemProperties.CLOSE_BUTTON_CLICK_LISTENER));
+
+        } else if (InstanceSwitcherItemProperties.CLOSE_BUTTON_CONTENT_DESCRIPTION == propertyKey) {
+            ImageView closeButton = view.findViewById(R.id.close_button);
+            closeButton.setContentDescription(
+                    model.get(InstanceSwitcherItemProperties.CLOSE_BUTTON_CONTENT_DESCRIPTION));
+
         } else if (InstanceSwitcherItemProperties.MORE_MENU == propertyKey) {
             ListMenuDelegate delegate = model.get(InstanceSwitcherItemProperties.MORE_MENU);
             ((ListMenuButton) view.findViewById(R.id.more)).setDelegate(delegate);
+
+        } else if (InstanceSwitcherItemProperties.MORE_MENU_CONTENT_DESCRIPTION == propertyKey) {
+            View moreMenuButton = view.findViewById(R.id.more);
+            moreMenuButton.setContentDescription(
+                    model.get(InstanceSwitcherItemProperties.MORE_MENU_CONTENT_DESCRIPTION));
 
         } else if (InstanceSwitcherItemProperties.ENABLE_COMMAND == propertyKey) {
             View newWindow = view.findViewById(R.id.new_window);

@@ -22,7 +22,7 @@
 #include "ui/menus/simple_menu_model.h"
 
 class Browser;
-class BrowserNonClientFrameView;
+class BrowserFrameView;
 class Tab;
 class TabGroup;
 
@@ -156,7 +156,8 @@ class BrowserTabStripController : public TabStripController,
                               tabs::TabInterface* tab,
                               int index) override;
   void SetTabNeedsAttentionAt(int index, bool attention) override;
-  bool IsFrameButtonsRightAligned() const override;
+  void SetTabGroupNeedsAttention(const tab_groups::TabGroupId& group,
+                                 bool attention) override;
   void OnSplitTabChanged(const SplitTabChange& change) override;
 
   const Browser* browser() const { return browser_view_->browser(); }
@@ -167,8 +168,8 @@ class BrowserTabStripController : public TabStripController,
  private:
   class TabContextMenuContents;
 
-  BrowserNonClientFrameView* GetFrameView();
-  const BrowserNonClientFrameView* GetFrameView() const;
+  BrowserFrameView* GetFrameView();
+  const BrowserFrameView* GetFrameView() const;
 
   // Invokes tabstrip_->SetTabData.
   void SetTabDataAt(content::WebContents* web_contents, int model_index);

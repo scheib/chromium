@@ -68,9 +68,10 @@ class TabLoader : public base::RefCounted<TabLoader>,
   TabLoader(const TabLoader&) = delete;
   TabLoader& operator=(const TabLoader&) = delete;
 
-  // Called to start restoring tabs.
-  static void RestoreTabs(const std::vector<RestoredTab>& tabs,
-                          const base::TimeTicks& restore_started);
+  // Called to start restoring tabs. Deprecated: use
+  // performance_manager::policies::ScheduleLoadForRestoredTabs().
+  static void DeprecatedRestoreTabs(const std::vector<RestoredTab>& tabs,
+                                    const base::TimeTicks& restore_started);
 
  private:
   friend class base::RefCounted<TabLoader>;
@@ -118,8 +119,7 @@ class TabLoader : public base::RefCounted<TabLoader>,
                       LoadingState loading_state) override;
 
   // React to memory pressure by stopping to load any more tabs.
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_pressure_level);
 
   // Determines whether or not tab loading should stop early due to external
   // factors.
@@ -233,7 +233,8 @@ class TabLoader : public base::RefCounted<TabLoader>,
 
   // Listens for system under memory pressure notifications and stops loading
   // of tabs when we start running out of memory.
-  base::MemoryPressureListener memory_pressure_listener_;
+  base::MemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   // Used for selecting which timeout to use, and to prevent additional
   // non-active tabs from being scheduled to load initially.

@@ -90,6 +90,12 @@
 #include "chrome/browser/web_applications/web_app_utils.h"
 #endif
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
+#include "components/webapps/isolated_web_apps/scheme.h"
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS)
+
 using base::UserMetricsAction;
 
 namespace chrome {
@@ -143,18 +149,20 @@ void ShowHelpImpl(Browser* browser, Profile* profile, HelpSource source) {
 #if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
   auto app_launch_source = apps::LaunchSource::kUnknown;
   switch (source) {
-    case HELP_SOURCE_KEYBOARD:
+    case HelpSource::kKeyboard:
       app_launch_source = apps::LaunchSource::kFromKeyboard;
       break;
-    case HELP_SOURCE_MENU:
+    case HelpSource::kMenu:
       app_launch_source = apps::LaunchSource::kFromMenu;
       break;
-    case HELP_SOURCE_WEBUI:
-    case HELP_SOURCE_WEBUI_CHROME_OS:
+    case HelpSource::kWebUI:
+    case HelpSource::kWebUIChromeOS:
       app_launch_source = apps::LaunchSource::kFromOtherApp;
       break;
     default:
-      NOTREACHED() << "Unhandled help source" << source;
+      NOTREACHED() << "Unhandled help source "
+                   << static_cast<std::underlying_type<HelpSource>::type>(
+                          source);
   }
 
   ash::SystemAppLaunchParams params;
@@ -163,32 +171,34 @@ void ShowHelpImpl(Browser* browser, Profile* profile, HelpSource source) {
 #else
   GURL url;
   switch (source) {
-    case HELP_SOURCE_KEYBOARD:
+    case HelpSource::kKeyboard:
       url = GURL(kChromeHelpViaKeyboardURL);
       break;
-    case HELP_SOURCE_MENU:
+    case HelpSource::kMenu:
       url = GURL(kChromeHelpViaMenuURL);
       break;
-    case HELP_SOURCE_WEBHID:
+    case HelpSource::kWebHID:
       url = GURL(kChooserHidOverviewUrl);
       break;
 #if BUILDFLAG(IS_CHROMEOS)
-    case HELP_SOURCE_WEBUI:
+    case HelpSource::kWebUI:
       url = GURL(kChromeHelpViaWebUIURL);
       break;
-    case HELP_SOURCE_WEBUI_CHROME_OS:
+    case HelpSource::kWebUIChromeOS:
       url = GURL(kChromeOsHelpViaWebUIURL);
       break;
 #else
-    case HELP_SOURCE_WEBUI:
+    case HelpSource::kWebUI:
       url = GURL(kChromeHelpViaWebUIURL);
       break;
 #endif  // BUILDFLAG(IS_CHROMEOS)
-    case HELP_SOURCE_WEBUSB:
+    case HelpSource::kWebUSD:
       url = GURL(kChooserUsbOverviewURL);
       break;
     default:
-      NOTREACHED() << "Unhandled help source " << source;
+      NOTREACHED() << "Unhandled help source "
+                   << static_cast<std::underlying_type<HelpSource>::type>(
+                          source);
   }
   if (browser) {
     ShowSingletonTab(browser, url);
@@ -224,6 +234,8 @@ std::string GenerateContentSettingsExceptionsSubPage(ContentSettingsType type) {
           {ContentSettingsType::STORAGE_ACCESS, "storageAccess"},
           {ContentSettingsType::USB_CHOOSER_DATA, "usbDevices"},
           {ContentSettingsType::WEB_PRINTING, "webPrinting"},
+          {ContentSettingsType::AUTO_PICTURE_IN_PICTURE,
+           "autoPictureInPicture"},
       });
 
   const std::string_view* override =
@@ -239,8 +251,13 @@ bool SiteGURLIsValid(const GURL& url) {
   // TODO(crbug.com/40399136): Site Details should work with file:// urls
   // when this bug is fixed, so add it to the allowlist when that happens.
   return !site_origin.opaque() && (url.SchemeIsHTTPOrHTTPS() ||
-                                   url.SchemeIs(extensions::kExtensionScheme) ||
-                                   url.SchemeIs(chrome::kIsolatedAppScheme));
+                                   url.SchemeIs(extensions::kExtensionScheme)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
+                                   || url.SchemeIs(webapps::kIsolatedAppScheme)
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
+        // BUILDFLAG(IS_CHROMEOS)
+                                  );
 }
 
 void ShowSiteSettingsImpl(Browser* browser, Profile* profile, const GURL& url) {
@@ -348,6 +365,10 @@ void ShowHistory(Browser* browser) {
   ShowHistory(browser, std::string());
 }
 
+void ShowHistorySubPage(Browser* browser, std::string_view sub_page) {
+  ShowSingletonTabIgnorePathOverwriteNTP(browser, GetHistoryUrl(sub_page));
+}
+
 void ShowDownloads(Browser* browser) {
   base::RecordAction(UserMetricsAction("ShowDownloads"));
 #if !BUILDFLAG(IS_CHROMEOS)
@@ -419,6 +440,10 @@ void ShowSlow(Browser* browser) {
 
 GURL GetSettingsUrl(std::string_view sub_page) {
   return GURL(base::StrCat({kChromeUISettingsURL, sub_page}));
+}
+
+GURL GetHistoryUrl(std::string_view sub_page) {
+  return GURL(kChromeUIHistoryURL).Resolve(kChromeUIHistorySyncedTabs);
 }
 
 bool IsTrustedPopupWindowWithScheme(const Browser* browser,

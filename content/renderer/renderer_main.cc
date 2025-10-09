@@ -26,10 +26,12 @@
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/threading/hang_watcher.h"
 #include "base/threading/platform_thread.h"
+#include "base/threading/platform_thread_metrics.h"
 #include "base/time/time.h"
 #include "base/timer/hi_res_timer_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "content/child/memory_coordinator/child_memory_consumer_registry.h"
 #include "content/common/content_constants_internal.h"
 #include "content/common/content_switches_internal.h"
 #include "content/common/features.h"
@@ -38,6 +40,7 @@
 #include "content/public/common/main_function_params.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_thread.h"
+#include "content/renderer/memory_coordinator/renderer_memory_coordinator_policy.h"
 #include "content/renderer/render_process_impl.h"
 #include "content/renderer/render_thread_impl.h"
 #include "content/renderer/renderer_main_platform_delegate.h"
@@ -217,6 +220,10 @@ int RendererMain(MainFunctionParams parameters) {
   // is OK.
   InitializeWebRtcModuleBeforeSandbox();
 
+  RendererMemoryCoordinatorPolicy render_memory_coordinator_policy(
+      static_cast<ChildMemoryConsumerRegistry&>(
+          base::MemoryConsumerRegistry::Get()));
+
   {
     content::ContentRendererClient* client = GetContentClient()->renderer();
     bool should_run_loop = true;
@@ -325,6 +332,12 @@ int RendererMain(MainFunctionParams parameters) {
           uncovered_hang_watcher_time);
       base::HangWatcher::GetInstance()->Start();
     }
+
+#if BUILDFLAG(IS_ANDROID)
+    base::PlatformThreadPriorityMonitor::Get().RegisterCurrentThread(
+        "RendererMain");
+    base::PlatformThreadPriorityMonitor::Get().Start();
+#endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(MOJO_RANDOM_DELAYS_ENABLED)
     mojo::BeginRandomMojoDelays();

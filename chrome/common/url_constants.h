@@ -145,11 +145,6 @@ inline constexpr char kChromeOsHelpViaWebUIURL[] =
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-// The isolated-app: scheme is used for Isolated Web Apps. A public explainer
-// can be found here: https://github.com/reillyeon/isolated-web-apps
-inline constexpr char kIsolatedAppScheme[] = "isolated-app";
-inline constexpr char16_t kIsolatedAppSchemeUtf16[] = u"isolated-app";
-
 // The chrome-native: scheme is used show pages rendered with platform specific
 // widgets instead of using HTML.
 inline constexpr char kChromeNativeScheme[] = "chrome-native";
@@ -323,6 +318,11 @@ inline constexpr char kGoogleAccountWorkAddressURL[] =
     "https://myaccount.google.com/address/"
     "work?utm_source=chrome&utm_campaign=manage_addresses";
 
+// URL of the change Google Account name page.
+inline constexpr char kGoogleAccountNameEmailAddressEditURL[] =
+    "https://myaccount.google.com/"
+    "personal-info?utm_source=chrome-settings&utm_medium=autofill";
+
 // URL of the two factor authentication setup required intersitial.
 inline constexpr char kGoogleTwoFactorIntersitialURL[] =
     "https://myaccount.google.com/interstitials/twosvrequired";
@@ -381,11 +381,23 @@ inline constexpr char16_t kManagedUiLearnMoreUrl[] =
 inline constexpr char kInsecureDownloadBlockingLearnMoreUrl[] =
     "https://support.google.com/chrome?p=mixed_content_downloads";
 
-// "myactivity.google.com" URL for the history checkbox in ClearBrowsingData.
+// "myactivity.google.com" URLs with their respective UTM sources.
+// - In the Clear Browsing Data footer.
+// - In the Clear Browsing Data "notice about other forms of history".
+// - On the history page.
 inline constexpr char16_t kMyActivityUrlInClearBrowsingData[] =
     u"https://myactivity.google.com/myactivity?utm_source=chrome_cbd";
+inline constexpr char16_t kMyActivityUrlInClearBrowsingDataNotice[] =
+    u"https://myactivity.google.com/myactivity/?utm_source=chrome_n";
+inline constexpr char16_t kMyActivityUrlInHistory[] =
+    u"https://myactivity.google.com/myactivity/?utm_source=chrome_h";
 
-// The URL for "Your Gemini Apps Activity" page.
+// The URL for the Gemini Personal Context page.
+inline constexpr char16_t kGeminiPersonalContextUrl[] =
+    u"https://gemini.google.com/saved-info";
+
+// The URL for "Your Gemini Apps Activity" page.inline constexpr char16_t
+// kMyActivityGeminiAppsUrl[] =
 inline constexpr char16_t kMyActivityGeminiAppsUrl[] =
     u"https://myactivity.google.com/product/gemini";
 
@@ -406,8 +418,8 @@ inline constexpr char kPageInfoHelpCenterURL[] =
 #endif
 
 // Help center article URL for automated password change.
-inline constexpr char kPasswordChangeLearnMoreURL[] =
-    "https://support.google.com/chrome?p=automatedpasswordchange";
+inline constexpr char16_t kPasswordChangeLearnMoreURL[] =
+    u"https://support.google.com/chrome?p=automatedpasswordchange";
 
 // Help URL for the bulk password check.
 inline constexpr char kPasswordCheckLearnMoreURL[] =
@@ -601,6 +613,10 @@ inline constexpr char16_t kHistorySearchSettingURL[] =
 // The URL for the "Learn more" page for Wallpaper Search.
 inline constexpr char kWallpaperSearchLearnMorePageURL[] =
     "https://support.google.com/chrome?p=create_themes_with_ai";
+
+// The URL for the passed in Google Wallet.
+inline constexpr char kWalletPassesPageURL[] =
+    "https://wallet.google.com/wallet/passes";
 
 // The URL for the "Learn more" page for Tab Organization.
 inline constexpr char kTabOrganizationLearnMorePageURL[] =

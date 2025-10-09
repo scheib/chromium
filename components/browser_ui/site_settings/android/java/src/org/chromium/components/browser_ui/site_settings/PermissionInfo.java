@@ -6,7 +6,7 @@ package org.chromium.components.browser_ui.site_settings;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.content_settings.SessionModel;
 import org.chromium.components.permissions.PermissionsAndroidFeatureList;
@@ -65,7 +65,7 @@ public class PermissionInfo implements Serializable {
     }
 
     /** Returns the ContentSetting value using the minimal set of defining parameters. */
-    public static @ContentSettingValues @Nullable Integer getContentSetting(
+    public static @ContentSetting @Nullable Integer getContentSetting(
             BrowserContextHandle browserContextHandle,
             @ContentSettingsType.EnumType int mContentSettingsType,
             String origin,
@@ -80,7 +80,7 @@ public class PermissionInfo implements Serializable {
     }
 
     /** Returns the ContentSetting value for this origin. */
-    public @ContentSettingValues @Nullable Integer getContentSetting(
+    public @ContentSetting @Nullable Integer getContentSetting(
             BrowserContextHandle browserContextHandle) {
         assert mContentSettingsType != ContentSettingsType.GEOLOCATION_WITH_OPTIONS;
         return PermissionInfo.getContentSetting(
@@ -89,7 +89,7 @@ public class PermissionInfo implements Serializable {
 
     /** Sets the native ContentSetting value for this origin. */
     public void setContentSetting(
-            BrowserContextHandle browserContextHandle, @ContentSettingValues int value) {
+            BrowserContextHandle browserContextHandle, @ContentSetting int value) {
         assert mContentSettingsType != ContentSettingsType.GEOLOCATION_WITH_OPTIONS;
         WebsitePreferenceBridgeJni.get()
                 .setPermissionSettingForOrigin(
@@ -114,16 +114,6 @@ public class PermissionInfo implements Serializable {
                                 mOrigin,
                                 getEmbedderSafe());
 
-        // Return fake approximate permission for permission.site until we can set create real
-        // approximate permissions.
-        if (PermissionsAndroidFeatureList.APPROXIMATE_GEOLOCATION_SAMPLE_DATA.getValue()) {
-            if (mOrigin.equals("https://permission.site")
-                    && setting.mPrecise == ContentSettingValues.ASK
-                    && setting.mApproximate == ContentSettingValues.ASK) {
-                return new GeolocationSetting(
-                        ContentSettingValues.ALLOW, ContentSettingValues.BLOCK);
-            }
-        }
         return setting;
     }
 
@@ -137,7 +127,7 @@ public class PermissionInfo implements Serializable {
                         mContentSettingsType,
                         mOrigin,
                         getEmbedderSafe(),
-                        setting != null ? setting.mApproximate : ContentSettingValues.DEFAULT,
-                        setting != null ? setting.mPrecise : ContentSettingValues.DEFAULT);
+                        setting != null ? setting.mApproximate : ContentSetting.DEFAULT,
+                        setting != null ? setting.mPrecise : ContentSetting.DEFAULT);
     }
 }

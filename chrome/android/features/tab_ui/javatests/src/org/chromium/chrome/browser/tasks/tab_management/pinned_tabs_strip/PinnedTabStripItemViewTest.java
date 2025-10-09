@@ -5,7 +5,10 @@
 package org.chromium.chrome.browser.tasks.tab_management.pinned_tabs_strip;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import android.app.Activity;
 import android.content.res.Resources;
@@ -15,7 +18,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.Size;
 import android.view.LayoutInflater;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -30,11 +32,13 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.tab_ui.TabListFaviconProvider;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.components.tab_groups.TabGroupColorId;
+import org.chromium.ui.animation.AnimationHandler;
+import org.chromium.ui.base.ViewUtils;
 import org.chromium.ui.test.util.BlankUiTestActivity;
 import org.chromium.ui.test.util.RenderTestRule;
 
@@ -43,6 +47,7 @@ import org.chromium.ui.test.util.RenderTestRule;
 @Batch(Batch.UNIT_TESTS)
 public class PinnedTabStripItemViewTest {
     private static final int STRIP_ITEM_WIDTH = 500;
+    private static final int STRIP_ITEM_HEIGHT = 80;
 
     @Rule
     public BaseActivityTestRule<BlankUiTestActivity> mActivityTestRule =
@@ -54,7 +59,7 @@ public class PinnedTabStripItemViewTest {
                     .setBugComponent(
                             RenderTestRule.Component
                                     .UI_BROWSER_MOBILE_TAB_SWITCHER_PINNED_TABS_STRIP)
-                    .setRevision(1)
+                    .setRevision(2)
                     .build();
 
     private Activity mActivity;
@@ -71,10 +76,7 @@ public class PinnedTabStripItemViewTest {
                     mView =
                             (PinnedTabStripItemView)
                                     LayoutInflater.from(mActivity)
-                                            .inflate(
-                                                    R.layout.pinned_tab_strip_item,
-                                                    new FrameLayout(mActivity),
-                                                    false);
+                                            .inflate(R.layout.pinned_tab_strip_item, mView, false);
                     mActivity.setContentView(mView);
                 });
 
@@ -120,14 +122,68 @@ public class PinnedTabStripItemViewTest {
 
     @Test
     @SmallTest
-    public void testSetGridCardSize() {
+    public void testSetGridCardSize_NoAnimationWhenWidthIsSame() {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mView.getLayoutParams().width = 100;
+                    ViewUtils.requestLayout(
+                            mView, "PinnedTabStripItemViewTest.testNoAnimationWhenSameWidth");
+                });
+
+        CriteriaHelper.pollUiThread(() -> mView.getWidth() == 100);
+
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     Size size = new Size(100, 200);
                     mView.setGridCardSize(size);
-                    assertEquals(100, mView.getLayoutParams().width);
-                    assertEquals(200, mView.getLayoutParams().height);
+                    assertFalse(mView.getWidthAnimationHandlerForTesting().isAnimationPresent());
                 });
+    }
+
+    @Test
+    @SmallTest
+    public void testSetGridCardSize_NoAnimationWhenInitialWidthIsZero() {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mView.getLayoutParams().width = 0;
+                    ViewUtils.requestLayout(
+                            mView,
+                            "PinnedTabStripItemViewTest.testNoAnimationWhenInitialWidthZero");
+                });
+
+        CriteriaHelper.pollUiThread(() -> mView.getWidth() == 0);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Size size = new Size(100, 200);
+                    mView.setGridCardSize(size);
+                    assertNotNull(mView.getWidthAnimationHandlerForTesting());
+                    assertFalse(mView.getWidthAnimationHandlerForTesting().isAnimationPresent());
+                });
+    }
+
+    @Test
+    @SmallTest
+    public void testSetGridCardSize_AnimatesWidth() {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mView.getLayoutParams().width = 100;
+                    ViewUtils.requestLayout(
+                            mView, "PinnedTabStripItemViewTest.testWidthChangeAnimation");
+                });
+
+        CriteriaHelper.pollUiThread(() -> mView.getWidth() == 100);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Size size = new Size(346, 200);
+                    mView.setGridCardSize(size);
+
+                    AnimationHandler handler = mView.getWidthAnimationHandlerForTesting();
+                    assertTrue(handler.isAnimationPresent());
+                });
+
+        CriteriaHelper.pollUiThread(() -> mView.getWidth() == 346);
     }
 
     @Test
@@ -171,9 +227,9 @@ public class PinnedTabStripItemViewTest {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     mView.setTitle("Test Title");
+                    mView.setSelected(/* isSelected= */ true, /* isIncognito= */ false);
                     mView.setFaviconIcon(mFetcher, /* isSelected= */ true);
-                    mView.setSelected(true, false, TabGroupColorId.GREY);
-                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, -1));
+                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, STRIP_ITEM_HEIGHT));
                 });
         mRenderTestRule.render(mView, "pinned_tab_strip_item_view_selected");
     }
@@ -185,9 +241,9 @@ public class PinnedTabStripItemViewTest {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     mView.setTitle("Test Title");
+                    mView.setSelected(/* isSelected= */ false, /* isIncognito= */ false);
                     mView.setFaviconIcon(mFetcher, /* isSelected= */ true);
-                    mView.setSelected(false, false, TabGroupColorId.GREY);
-                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, -1));
+                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, STRIP_ITEM_HEIGHT));
                 });
         mRenderTestRule.render(mView, "pinned_tab_strip_item_view_not_selected");
     }
@@ -199,9 +255,9 @@ public class PinnedTabStripItemViewTest {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     mView.setTitle("Test Title");
+                    mView.setSelected(/* isSelected= */ true, /* isIncognito= */ true);
                     mView.setFaviconIcon(mFetcher, /* isSelected= */ true);
-                    mView.setSelected(true, true, TabGroupColorId.GREY);
-                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, -1));
+                    mView.setGridCardSize(new Size(STRIP_ITEM_WIDTH, STRIP_ITEM_HEIGHT));
                 });
         mRenderTestRule.render(mView, "pinned_tab_strip_item_view_incognito");
     }

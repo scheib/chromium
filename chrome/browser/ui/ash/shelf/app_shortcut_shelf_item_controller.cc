@@ -20,7 +20,6 @@
 #include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/shelf_context_menu.h"
@@ -29,6 +28,8 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
@@ -246,6 +247,15 @@ AppShortcutShelfItemController::AppShortcutShelfItemController(
     const ash::ShelfID& shelf_id)
     : ash::ShelfItemDelegate(shelf_id) {
   BrowserList::AddObserver(this);
+
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [this](BrowserWindowInterface* browser) {
+        browser_close_subscriptions_[browser] =
+            browser->RegisterBrowserDidClose(base::BindRepeating(
+                &AppShortcutShelfItemController::OnBrowserDidClose,
+                base::Unretained(this)));
+        return true;  // Continue iterating through all browsers
+      });
 
   // To detect V1 applications we use their domain and match them against the
   // used URL. This will also work with applications like Google Drive.
@@ -485,12 +495,21 @@ void AppShortcutShelfItemController::Close() {
   }
 }
 
-void AppShortcutShelfItemController::OnBrowserClosing(Browser* browser) {
+void AppShortcutShelfItemController::OnBrowserAdded(Browser* browser) {
+  browser_close_subscriptions_[browser] = browser->RegisterBrowserDidClose(
+      base::BindRepeating(&AppShortcutShelfItemController::OnBrowserDidClose,
+                          base::Unretained(this)));
+}
+
+void AppShortcutShelfItemController::OnBrowserDidClose(
+    BrowserWindowInterface* browser_window_interface) {
+  browser_close_subscriptions_.erase(browser_window_interface);
+
   if (!app_menu_cached_by_browsers_) {
     return;
   }
   // Reset pointers to the closed browser, but leave menu indices intact.
-  auto it = std::ranges::find(app_menu_browsers_, browser);
+  auto it = std::ranges::find(app_menu_browsers_, browser_window_interface);
   if (it != app_menu_browsers_.end()) {
     *it = nullptr;
   }

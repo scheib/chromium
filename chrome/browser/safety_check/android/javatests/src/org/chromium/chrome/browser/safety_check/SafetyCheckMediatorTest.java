@@ -47,13 +47,10 @@ import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRule;
 import org.chromium.chrome.browser.loading_modal.LoadingModalDialogCoordinator;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher;
-import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerBackendException;
-import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerError;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncherFactory;
 import org.chromium.chrome.browser.password_manager.LoginDbDeprecationUtilBridge;
 import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
 import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper;
-import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper.PasswordCheckBackendException;
 import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelperFactory;
 import org.chromium.chrome.browser.password_manager.PasswordManagerBackendSupportHelper;
 import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
@@ -75,12 +72,9 @@ import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.components.browser_ui.settings.SettingsCustomTabLauncher;
 import org.chromium.components.browser_ui.settings.SettingsNavigation;
-import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.UserSelectableType;
-import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.content_public.browser.BrowserContextHandle;
 import org.chromium.google_apis.gaia.GaiaId;
 import org.chromium.ui.modaldialog.ModalDialogManager;
@@ -90,7 +84,6 @@ import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 
 /** Unit tests for {@link SafetyCheckMediator}. */
@@ -126,8 +119,6 @@ public class SafetyCheckMediatorTest {
     @Mock private PasswordCheckupClientHelper mPasswordCheckupHelper;
     @Mock private CredentialManagerLauncher mCredentialManagerLauncher;
     @Mock private PasswordStoreBridge mPasswordStoreBridge;
-    @Mock private PrefService mPrefService;
-    @Mock private UserPrefs.Natives mUserPrefsJniMock;
 
     // TODO(crbug.com/40854050): Use fake instead of mocking
     @Mock private PasswordManagerBackendSupportHelper mBackendSupportHelperMock;
@@ -214,7 +205,6 @@ public class SafetyCheckMediatorTest {
                 mUpdatesDelegate,
                 new SafetyCheckBridge(mProfile),
                 mSyncService,
-                mPrefService,
                 mHandler,
                 mPasswordStoreBridge,
                 mPasswordCheckControllerFactory,
@@ -234,7 +224,7 @@ public class SafetyCheckMediatorTest {
     }
 
     @Before
-    public void setUp() throws PasswordCheckBackendException, CredentialManagerBackendException {
+    public void setUp() {
         PasswordManagerUtilBridgeJni.setInstanceForTesting(mPasswordManagerUtilBridgeNativeMock);
         PasswordManagerHelperJni.setInstanceForTesting(mPasswordManagerHelperNativeMock);
         when(mProfile.getOriginalProfile()).thenReturn(mProfile);
@@ -247,14 +237,11 @@ public class SafetyCheckMediatorTest {
 
         SafetyCheckBridgeJni.setInstanceForTesting(mSafetyCheckBridge);
 
-        UserPrefsJni.setInstanceForTesting(mUserPrefsJniMock);
-        when(mUserPrefsJniMock.get(mProfile)).thenReturn(mPrefService);
-
         mSafetyCheckModel = SafetyCheckProperties.createSafetyCheckModel();
         mPasswordCheckModel =
                 PasswordsCheckPreferenceProperties.createPasswordSafetyCheckModel("Passwords");
         mPasswordCheckControllerFactory = new FakePasswordCheckControllerFactory();
-        when(mPasswordManagerUtilBridgeNativeMock.isPasswordManagerAvailable(mPrefService, true))
+        when(mPasswordManagerUtilBridgeNativeMock.isPasswordManagerAvailable(true))
                 .thenReturn(mUseGmsApi);
         // TODO(crbug.com/40854050): Use existing fake instead of mocking
         PasswordCheckupClientHelperFactory mockPasswordCheckFactory =
@@ -386,25 +373,6 @@ public class SafetyCheckMediatorTest {
                 PasswordStorageType.ACCOUNT_STORAGE, new Exception("Test exception"));
 
         assertEquals(PasswordsState.ERROR, mPasswordCheckModel.get(PASSWORDS_STATE));
-        assertEquals(
-                1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        SAFETY_CHECK_PASSWORDS_RESULT_HISTOGRAM, PasswordsStatus.ERROR));
-    }
-
-    @Test
-    public void testPasswordsCheckBackendOutdated() {
-        if (!mUseGmsApi) return;
-
-        mMediator.performSafetyCheck();
-        setUpPasswordCheckToReturnError(
-                PasswordStorageType.ACCOUNT_STORAGE,
-                new PasswordCheckBackendException(
-                        "test", CredentialManagerError.BACKEND_VERSION_NOT_SUPPORTED));
-
-        assertEquals(
-                PasswordsState.BACKEND_VERSION_NOT_SUPPORTED,
-                mPasswordCheckModel.get(PASSWORDS_STATE));
         assertEquals(
                 1,
                 RecordHistogram.getHistogramValueCountForTesting(
@@ -715,6 +683,7 @@ public class SafetyCheckMediatorTest {
     @Test
     public void testClickListenerLeadsToUPMAccountPasswordCheckup() {
         // Order: initial state -> safety check triggered -> check done -> load completed.
+        LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
         mMediator.setInitialState();
         assertEquals(PasswordsState.CHECKING, mPasswordCheckModel.get(PASSWORDS_STATE));
 
@@ -729,8 +698,7 @@ public class SafetyCheckMediatorTest {
         click(getPasswordsClickListener(mPasswordCheckModel));
 
         verify(mPasswordCheckupHelper, times(mUseGmsApi ? 1 : 0))
-                .getPasswordCheckupIntent(
-                        eq(SAFETY_CHECK), eq(Optional.of(TEST_EMAIL_ADDRESS)), any(), any());
+                .getPasswordCheckupIntent(eq(SAFETY_CHECK), eq(TEST_EMAIL_ADDRESS), any(), any());
     }
 
     @Test
@@ -772,6 +740,7 @@ public class SafetyCheckMediatorTest {
 
     @Test
     public void testClickListenerLeadsToUPMLocalPasswordCheckup() {
+        LoginDbDeprecationUtilBridge.setHasCsvFileForTesting(false);
         PropertyModel passwordCheckLocalModel =
                 PasswordsCheckPreferenceProperties.createPasswordSafetyCheckModel("Passwords");
         mMediator =
@@ -796,7 +765,7 @@ public class SafetyCheckMediatorTest {
         click(getPasswordsClickListener(passwordCheckLocalModel));
 
         verify(mPasswordCheckupHelper, times(mUseGmsApi ? 1 : 0))
-                .getPasswordCheckupIntent(eq(SAFETY_CHECK), eq(Optional.empty()), any(), any());
+                .getPasswordCheckupIntent(eq(SAFETY_CHECK), eq(null), any(), any());
     }
 
     @Test

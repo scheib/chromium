@@ -106,6 +106,10 @@ class CONTENT_EXPORT IndexedDBContextImpl
   void AddObserver(
       mojo::PendingRemote<storage::mojom::IndexedDBObserver> observer) override;
 
+  base::FilePath GetFilePathForTesting(
+      const storage::BucketLocator& bucket_locator,
+      bool sqlite);
+
   // mojom::IndexedDBControlTest implementation:
   void GetBaseDataPathForTesting(
       GetBaseDataPathForTestingCallback callback) override;
@@ -120,8 +124,6 @@ class CONTENT_EXPORT IndexedDBContextImpl
   void FlushBackingStoreForTesting(const storage::BucketLocator& bucket_locator,
                                    base::OnceClosure callback) override;
   void GetUsageForTesting(GetUsageForTestingCallback) override;
-  void GetSchedulingPriorityForTesting(
-      GetSchedulingPriorityForTestingCallback callback) override;
   void BindMockFailureSingletonForTesting(
       mojo::PendingReceiver<storage::mojom::MockFailureInjector> receiver)
       override;

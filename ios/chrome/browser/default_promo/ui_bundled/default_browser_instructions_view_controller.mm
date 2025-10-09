@@ -6,8 +6,10 @@
 
 #import "base/check.h"
 #import "base/i18n/rtl.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/confirmation_alert/confirmation_alert_action_handler.h"
 #import "ios/chrome/common/ui/confirmation_alert/confirmation_alert_view_controller.h"
 #import "ios/chrome/common/ui/instruction_view/instruction_view.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
@@ -43,6 +45,9 @@ NSString* const kChromeKeypath = @"IDS_CHROME";
 // Spacing used in the bottom alert view.
 constexpr CGFloat kSpacing = 24;
 
+// The spacing around the close button.
+constexpr CGFloat kCloseButtonSpacing = 20;
+
 // Vertical center offset for tablets.
 constexpr CGFloat kTabletCenterOffset = 40;
 }  // namespace
@@ -58,6 +63,12 @@ constexpr CGFloat kTabletCenterOffset = 40;
 // Subview for information and action part of the view.
 @property(nonatomic, strong) ConfirmationAlertViewController* alertScreen;
 
+// The navigation bar for the close button, if present.
+@property(nonatomic, strong) UINavigationBar* navigationBar;
+
+// The action handler for interactions in this View Controller.
+@property(nonatomic, weak) id<ConfirmationAlertActionHandler> actionHandler;
+
 @end
 
 NSString* const kDefaultBrowserInstructionsViewAnimationViewId =
@@ -69,6 +80,7 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
 @implementation DefaultBrowserInstructionsViewController
 
 - (instancetype)initWithDismissButton:(BOOL)hasDismissButton
+                       hasCloseButton:(BOOL)hasCloseButton
                      hasRemindMeLater:(BOOL)hasRemindMeLater
             useDefaultAppsDestination:(BOOL)useDefaultAppsDestination
                              hasSteps:(BOOL)hasSteps
@@ -76,7 +88,13 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
                             (id<ConfirmationAlertActionHandler>)actionHandler
                             titleText:(NSString*)titleText {
   if ((self = [super init])) {
+    self.actionHandler = actionHandler;
+    useDefaultAppsDestination |= IsDefaultAppsDestinationAvailable() &&
+                                 IsUseDefaultAppsDestinationForPromosEnabled();
     [self addVideoSection:useDefaultAppsDestination];
+    if (hasCloseButton) {
+      [self addNavigationBarAndCloseButton];
+    }
     [self addInformationSectionWithDismissButton:hasDismissButton
                                 hasRemindMeLater:hasRemindMeLater
                        useDefaultAppsDestination:useDefaultAppsDestination
@@ -85,28 +103,13 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
                                        titleText:titleText];
     [self.view setBackgroundColor:[UIColor colorNamed:kGrey100Color]];
 
-    if (@available(iOS 17, *)) {
-      NSArray<UITrait>* traits =
-          TraitCollectionSetForTraits(@[ UITraitUserInterfaceStyle.class ]);
-      [self registerForTraitChanges:traits
-                         withAction:@selector(selectAnimationForCurrentStyle)];
-    }
+    NSArray<UITrait>* traits =
+        TraitCollectionSetForTraits(@[ UITraitUserInterfaceStyle.class ]);
+    [self registerForTraitChanges:traits
+                       withAction:@selector(selectAnimationForCurrentStyle)];
   }
   return self;
 }
-
-#pragma mark - UIViewController
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  [self selectAnimationForCurrentStyle];
-}
-#endif
 
 #pragma mark - Private
 
@@ -189,7 +192,7 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
   LottieAnimationConfiguration* config =
       [[LottieAnimationConfiguration alloc] init];
   config.animationName = animationAssetName;
-  config.loopAnimationCount = -1;  // Always loop.
+  config.shouldLoop = YES;
   return ios::provider::GenerateLottieAnimation(config);
 }
 
@@ -250,18 +253,27 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
 
   // The view can have either instruction steps or subtitles.
   if (hasSteps) {
-    // TODO(crbug.com/435722549): Add strings for steps for the new Default Apps
-    // destination, and use thme heere if useDefaultAppsDestination is YES.
-    // Remove the CHECK when done.
-    CHECK(!useDefaultAppsDestination);
-    NSArray* defaultBrowserSteps = @[
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_FIRST_STEP),
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_SECOND_STEP),
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_THIRD_STEP)
-    ];
+    NSMutableArray* defaultBrowserSteps = [[NSMutableArray alloc] init];
+    if (useDefaultAppsDestination) {
+      [defaultBrowserSteps
+          addObject:
+              l10n_util::GetNSString(
+                  IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_DEFAULT_APPS_FIRST_STEP)];
+      [defaultBrowserSteps
+          addObject:
+              l10n_util::GetNSString(
+                  IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_DEFAULT_APPS_SECOND_STEP)];
+    } else {
+      [defaultBrowserSteps
+          addObject:l10n_util::GetNSString(
+                        IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_FIRST_STEP)];
+      [defaultBrowserSteps
+          addObject:l10n_util::GetNSString(
+                        IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_SECOND_STEP)];
+    }
+    [defaultBrowserSteps
+        addObject:l10n_util::GetNSString(
+                      IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_THIRD_STEP)];
 
     UIView* instructionView =
         [[InstructionView alloc] initWithList:defaultBrowserSteps];
@@ -315,6 +327,48 @@ NSString* const kDefaultBrowserInstructionsViewDarkAnimationViewId =
     return -kTabletCenterOffset;
   }
   return 0;
+}
+
+// Helper to create the navigation bar.
+- (void)addNavigationBarAndCloseButton {
+  UINavigationBar* navigationBar = [[UINavigationBar alloc] init];
+  self.navigationBar = navigationBar;
+  navigationBar.translucent = YES;
+
+  UIBarButtonSystemItem buttonType = UIBarButtonSystemItemDone;
+  if (@available(iOS 26, *)) {
+    buttonType = UIBarButtonSystemItemCancel;
+  }
+
+  UINavigationItem* navigationItem = [[UINavigationItem alloc] init];
+  UIBarButtonItem* dismissButton = [[UIBarButtonItem alloc]
+      initWithBarButtonSystemItem:buttonType
+                           target:self
+                           action:@selector(didTapNavigationBarCloseButton)];
+  navigationItem.rightBarButtonItem = dismissButton;
+
+  navigationBar.translatesAutoresizingMaskIntoConstraints = NO;
+  [navigationBar setItems:@[ navigationItem ]];
+
+  [self.view addSubview:self.navigationBar];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [self.navigationBar.topAnchor
+        constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor
+                       constant:kCloseButtonSpacing],
+    [navigationBar.leadingAnchor
+        constraintEqualToAnchor:self.view.leadingAnchor],
+    [navigationBar.trailingAnchor
+        constraintEqualToAnchor:self.view.trailingAnchor]
+  ]];
+}
+
+// Handle taps on the dismiss button.
+- (void)didTapNavigationBarCloseButton {
+  if ([self.actionHandler
+          respondsToSelector:@selector(confirmationAlertDismissAction)]) {
+    [self.actionHandler confirmationAlertDismissAction];
+  }
 }
 
 @end

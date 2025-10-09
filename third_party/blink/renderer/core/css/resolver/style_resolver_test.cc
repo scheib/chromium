@@ -3706,7 +3706,7 @@ TEST_F(StyleResolverTestCQ, ContainerUnitContext) {
   StyleResolverState state(GetDocument(), *div);
 
   // To make UpdateLengthConversionData happen.
-  state.SetStyle(div->ComputedStyleRef());
+  state.CreateNewClonedStyle(div->ComputedStyleRef());
 
   EXPECT_DOUBLE_EQ(200.0, state.CssToLengthConversionData().ContainerWidth());
   EXPECT_DOUBLE_EQ(200.0, state.CssToLengthConversionData().ContainerHeight());
@@ -4115,6 +4115,96 @@ TEST_F(StyleResolverTest, TextSizeAdjustUseCounter) {
 
   EXPECT_TRUE(IsUseCounted(WebFeature::kTextSizeAdjustNotAuto));
   EXPECT_TRUE(IsUseCounted(WebFeature::kTextSizeAdjustPercentNot100));
+}
+
+TEST_F(StyleResolverTest, UseCountPseudoElementImplicitAnchor) {
+  GetDocument().documentElement()->SetInnerHTMLWithoutTrustedTypes(R"HTML(
+    <style id=style></style>
+    <div id=div></div>
+  )HTML");
+
+  HTMLElement* style_element =
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("style")));
+
+  auto set_sheet_text = [this, style_element](const String& sheet_text) {
+    GetDocument().ClearUseCounterForTesting(
+        WebFeature::kCSSPseudoElementUsesImplicitAnchor);
+    style_element->setInnerText(sheet_text);
+    UpdateAllLifecyclePhasesForTest();
+  };
+
+  // Static positioned element can not be anchor positioned.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position-area: top left;
+      left: anchor(right);
+    }
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // Non-auto position-anchor means implicit anchor is not used.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position: absolute;
+      position-anchor: --a;
+      position-area: top left;
+      left: anchor(right);
+    }
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // ::before element not generated without content property.
+  set_sheet_text(R"HTML(
+    #div::before {
+      position: absolute;
+      position-area: top left;
+      left: anchor(right);
+    }
+  )HTML");
+  EXPECT_FALSE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // anchor-center using implicit anchor.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position: absolute;
+      justify-self: anchor-center;
+    }
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // position-area using implicit anchor.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position: fixed;
+      position-area: inline-start;
+    }
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // position-area using implicit anchor.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position: fixed;
+      top: anchor(bottom);
+    }
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
+
+  // Strictly not using implicit anchor, but too complicated to separate for use
+  // counting.
+  set_sheet_text(R"HTML(
+    #div::before {
+      content: "";
+      position: absolute;
+      top: anchor(--a bottom);
+    }
+  )HTML");
+  EXPECT_TRUE(IsUseCounted(WebFeature::kCSSPseudoElementUsesImplicitAnchor));
 }
 
 }  // namespace blink

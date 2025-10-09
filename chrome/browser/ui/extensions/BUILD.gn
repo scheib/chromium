@@ -20,14 +20,18 @@ source_set("extensions") {
 
   if (enable_extensions_core) {
     sources += [
+      "controlled_home_dialog_controller.h",
+      "controlled_home_dialog_controller_interface.h",
       "extension_dialog_utils.h",
       "extension_install_ui.h",
       "extensions_dialogs.h",
       "reload_page_dialog_controller.h",
+      "settings_overridden_dialog.h",
     ]
 
     if (is_android) {
       sources += [ "extension_install_ui_android.h" ]
+      public_deps += [ "//components/messages/android" ]
     }
 
     if (is_win || is_mac || is_linux || is_chromeos) {
@@ -35,8 +39,10 @@ source_set("extensions") {
     }
     public_deps += [
       "//base",
+      "//extensions/browser",
       "//extensions/common",
       "//ui/base:types",
+      "//ui/base/interaction",
       "//ui/base/mojom:ui_base_types",
     ]
   }
@@ -46,13 +52,11 @@ source_set("extensions") {
       "accelerator_priority.h",
       "app_launch_params.h",
       "application_launch.h",
-      "controlled_home_bubble_delegate.h",
       "extension_action_platform_delegate.h",
       "extension_action_view_controller.h",
       "extension_enable_flow.h",
       "extension_installed_bubble_model.h",
       "extension_installed_waiter.h",
-      "extension_settings_overridden_dialog.h",
       "extension_side_panel_utils.h",
       "extensions_container.h",
       "extensions_overrides/simple_overrides.h",
@@ -98,15 +102,20 @@ source_set("impl") {
 
   if (enable_extensions_core) {
     sources += [
+      "controlled_home_dialog.cc",
+      "controlled_home_dialog_controller.cc",
       "extension_install_blocked_dialog.cc",
+      "extension_install_friction_dialog.cc",
       "extension_install_ui.cc",
       "extension_multiple_uninstall_dialog.cc",
       "extension_uninstall_dialog_impl.cc",
       "reload_page_dialog_controller.cc",
+      "settings_overridden_dialog.cc",
     ]
     deps += [
       "//chrome/browser/extensions",
       "//chrome/browser/profiles:profile",
+      "//components/vector_icons",
     ]
 
     if (is_win || is_mac || is_linux || is_chromeos) {
@@ -145,7 +154,6 @@ source_set("impl") {
     sources += [
       "app_launch_params.cc",
       "application_launch.cc",
-      "controlled_home_bubble_delegate.cc",
       "extension_action_view_controller.cc",
       "extension_enable_flow.cc",
       "extension_installed_bubble_model.cc",
@@ -165,6 +173,7 @@ source_set("impl") {
       ":extension_enable_flow_delegate",
       ":extension_popup_types",
       "//apps",
+      "//chrome/browser/app_mode",
       "//chrome/browser/apps/app_service",
       "//chrome/browser/apps/app_service:constants",
       "//chrome/browser/apps/platform_apps",
@@ -207,9 +216,8 @@ source_set("unit_tests") {
 
   if (!is_android) {
     sources += [
-      "controlled_home_bubble_delegate_unittest.cc",
+      "controlled_home_dialog_controller_unittest.cc",
       "extension_installed_bubble_model_unittest.cc",
-      "extension_installed_waiter_unittest.cc",
       "extension_settings_overridden_dialog_unittest.cc",
       "extensions_overrides/simple_overrides_unittest.cc",
       "settings_api_bubble_helpers_unittest.cc",
@@ -228,6 +236,7 @@ source_set("unit_tests") {
       "//chrome/common/extensions",
       "//chrome/test:test_support",
       "//components/crx_file",
+      "//components/custom_handlers:test_support",
       "//components/proxy_config",
       "//components/search_engines",
       "//components/signin/public/base",
@@ -255,6 +264,7 @@ source_set("browser_tests") {
       "extension_enable_flow_test_delegate.cc",
       "extension_enable_flow_test_delegate.h",
       "extension_image_util_browsertest.cc",
+      "extension_installed_waiter_browsertest.cc",
       "hosted_app_browsertest.cc",
       "notifications_custom_bindings_browsertest.cc",
       "settings_overridden_params_providers_browsertest.cc",
@@ -317,6 +327,7 @@ source_set("browser_tests") {
       "//ui/color:color_headers",
       "//ui/gfx",
       "//ui/native_theme",
+      "//ui/native_theme:test_support",
     ]
 
     if (is_linux) {

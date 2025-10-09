@@ -94,15 +94,15 @@ class UserspaceSwapPolicy : public GraphOwned, public ProcessNodeObserver {
   base::ByteCount backing_store_available_bytes_;
 
  private:
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel new_level);
+  void OnMemoryPressure(base::MemoryPressureLevel new_level);
 
   // A helper method which sets the last trim time to the specified time.
   void SetLastSwapTime(const ProcessNode* process_node, base::TimeTicks time);
 
   void PrintAllSwapMetrics();
 
-  std::optional<base::MemoryPressureListener> memory_pressure_listener_;
+  std::optional<base::MemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   std::unique_ptr<base::RepeatingTimer> metrics_timer_ =
       std::make_unique<base::RepeatingTimer>();

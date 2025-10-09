@@ -52,7 +52,6 @@ namespace {
 // TODO(crbug.com/371904440): Clean up the feature after running the experiment,
 // no later than in M136.
 BASE_FEATURE(kGCOnArrayBufferAllocationFailure,
-             "GCOnArrayBufferAllocationFailure",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace

@@ -9,7 +9,6 @@ import android.content.Context;
 import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -29,11 +28,13 @@ import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonControl
 import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant;
 import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarFeatures;
 import org.chromium.chrome.browser.toolbar.adaptive.OptionalNewTabButtonController;
+import org.chromium.chrome.browser.toolbar.top.tab_strip.StripVisibilityState;
 import org.chromium.components.feature_engagement.Tracker;
 import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /** Implements tabbed browser-specific behavior of adaptive toolbar button. */
 @NullMarked
@@ -49,6 +50,7 @@ public class TabbedAdaptiveToolbarBehavior implements AdaptiveToolbarBehavior {
             mGroupSuggestionsButtonControllerSupplier;
     private final Supplier<TabModelSelector> mTabModelSelectorSupplier;
     private final Supplier<ModalDialogManager> mModalDialogManagerSupplier;
+    private final ObservableSupplier<@StripVisibilityState Integer> mTabStripVisibilitySupplier;
 
     public TabbedAdaptiveToolbarBehavior(
             Context context,
@@ -60,7 +62,8 @@ public class TabbedAdaptiveToolbarBehavior implements AdaptiveToolbarBehavior {
             Runnable registerVoiceSearchRunnable,
             Supplier<GroupSuggestionsButtonController> groupSuggestionsButtonController,
             Supplier<TabModelSelector> tabModelSelectorSupplier,
-            Supplier<ModalDialogManager> modalDialogManagerSupplier) {
+            Supplier<ModalDialogManager> modalDialogManagerSupplier,
+            ObservableSupplier<@StripVisibilityState Integer> tabStripVisibilitySupplier) {
         mContext = context;
         mActivityLifecycleDispatcher = activityLifecycleDispatcher;
         mTabCreatorManagerSupplier = tabCreatorManagerSupplier;
@@ -71,11 +74,13 @@ public class TabbedAdaptiveToolbarBehavior implements AdaptiveToolbarBehavior {
         mGroupSuggestionsButtonControllerSupplier = groupSuggestionsButtonController;
         mTabModelSelectorSupplier = tabModelSelectorSupplier;
         mModalDialogManagerSupplier = modalDialogManagerSupplier;
+        mTabStripVisibilitySupplier = tabStripVisibilitySupplier;
     }
 
     @Override
     public void registerPerSurfaceButtons(
-            AdaptiveToolbarButtonController controller, Supplier<Tracker> trackerSupplier) {
+            AdaptiveToolbarButtonController controller,
+            Supplier<@Nullable Tracker> trackerSupplier) {
         var newTabButton =
                 new OptionalNewTabButtonController(
                         mContext,
@@ -83,7 +88,8 @@ public class TabbedAdaptiveToolbarBehavior implements AdaptiveToolbarBehavior {
                         mActivityLifecycleDispatcher,
                         mTabCreatorManagerSupplier,
                         mActivityTabProvider,
-                        trackerSupplier);
+                        trackerSupplier,
+                        mTabStripVisibilitySupplier);
         controller.addButtonVariant(AdaptiveToolbarButtonVariant.NEW_TAB, newTabButton);
         var addToBookmarks =
                 new AddToBookmarksToolbarButtonController(

@@ -21,6 +21,7 @@
 #include "services/webnn/coreml/utils_coreml.h"
 #include "services/webnn/public/cpp/operand_descriptor.h"
 #include "services/webnn/public/cpp/webnn_trace.h"
+#include "services/webnn/public/mojom/webnn_tensor.mojom.h"
 #include "services/webnn/queueable_resource_state.h"
 #include "services/webnn/resource_task.h"
 
@@ -178,7 +179,8 @@ TensorImplCoreml::Create(
           std::move(buffer_content));
   return base::MakeRefCounted<TensorImplCoreml>(
       std::move(receiver), std::move(context), std::move(tensor_info),
-      std::move(buffer_state), base::PassKey<TensorImplCoreml>());
+      std::move(buffer_state), /*representation=*/nullptr,
+      base::PassKey<TensorImplCoreml>());
 }
 
 // static
@@ -245,7 +247,8 @@ TensorImplCoreml::Create(
           std::move(buffer_content));
   return base::MakeRefCounted<TensorImplCoreml>(
       std::move(receiver), std::move(context), std::move(tensor_info),
-      std::move(buffer_state), base::PassKey<TensorImplCoreml>());
+      std::move(buffer_state), std::move(representation),
+      base::PassKey<TensorImplCoreml>());
 }
 
 TensorImplCoreml::TensorImplCoreml(
@@ -253,19 +256,21 @@ TensorImplCoreml::TensorImplCoreml(
     base::WeakPtr<WebNNContextImpl> context,
     mojom::TensorInfoPtr tensor_info,
     scoped_refptr<QueueableResourceState<BufferContent>> buffer_state,
+    std::unique_ptr<gpu::WebNNTensorRepresentation> representation,
     base::PassKey<TensorImplCoreml> /*pass_key*/)
     : WebNNTensorImpl(std::move(receiver),
                       std::move(context),
-                      std::move(tensor_info)),
+                      std::move(tensor_info),
+                      std::move(representation)),
       buffer_state_(std::move(buffer_state)) {}
 
 TensorImplCoreml::~TensorImplCoreml() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 }
 
 void TensorImplCoreml::ReadTensorImpl(
     mojom::WebNNTensor::ReadTensorCallback callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 
   ScopedTrace scoped_trace("TensorImplCoreml::ReadTensorImpl");
 
@@ -308,7 +313,7 @@ void TensorImplCoreml::ReadTensorImpl(
 }
 
 void TensorImplCoreml::WriteTensorImpl(mojo_base::BigBuffer src_buffer) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 
   ScopedTrace scoped_trace("TensorImplCoreml::WriteTensorImpl");
 
@@ -344,8 +349,20 @@ void TensorImplCoreml::WriteTensorImpl(mojo_base::BigBuffer src_buffer) {
 
 const scoped_refptr<QueueableResourceState<BufferContent>>&
 TensorImplCoreml::GetBufferState() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
   return buffer_state_;
+}
+
+bool TensorImplCoreml::ImportTensorImpl(
+    std::unique_ptr<gpu::WebNNTensorRepresentation::ScopedAccess> access) {
+  representation_access_ = std::move(access);
+  // Always true since CoreML requires no device synchronization.
+  return true;
+}
+
+void TensorImplCoreml::ExportTensorImpl(
+    std::unique_ptr<gpu::WebNNTensorRepresentation::ScopedAccess> access) {
+  // Empty since CoreML requires no device synchronization.
 }
 
 }  // namespace webnn::coreml

@@ -35,14 +35,6 @@
 
 namespace em = enterprise_management;
 
-namespace features {
-
-BASE_FEATURE(kDeviceIdValidation,
-             "DeviceIdValidation",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-}  // namespace features
-
 namespace policy {
 
 namespace {
@@ -51,10 +43,6 @@ const char kDMTokenCheckHistogram[] = "Enterprise.EnrolledPolicyHasDMToken";
 const char kPolicyCheckHistogram[] = "Enterprise.EnrolledDevicePolicyPresent";
 
 bool CanUseDeviceIdValidation() {
-  if (!base::FeatureList::IsEnabled(features::kDeviceIdValidation)) {
-    return false;
-  }
-
   // The devices are storing the OS version in the local state at enrollment,
   // starting from version M122. For those devices the stats shows 100%
   // matching of device_id from policy with the value from install attributes.
@@ -268,6 +256,11 @@ void DeviceCloudPolicyStoreAsh::UpdateStatusFromService() {
     case ash::DeviceSettingsService::STORE_VALIDATION_ERROR:
       status_ = STATUS_LOAD_ERROR;
       return;
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_NOT_INITIALIZED:
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_NOT_LOCKED:
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_MANAGED:
+      status_ = STATUS_BAD_STATE;
+      return;
   }
   NOTREACHED();
 }
@@ -281,6 +274,9 @@ void DeviceCloudPolicyStoreAsh::CheckDMToken() {
     case ash::DeviceSettingsService::STORE_NO_POLICY:
     case ash::DeviceSettingsService::STORE_INVALID_POLICY:
     case ash::DeviceSettingsService::STORE_VALIDATION_ERROR:
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_NOT_INITIALIZED:
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_NOT_LOCKED:
+    case ash::DeviceSettingsService::STORE_KEY_UNAVAILABLE_MANAGED:
       // Continue with the check below.
       break;
     case ash::DeviceSettingsService::STORE_OPERATION_FAILED:

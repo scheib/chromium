@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/functional/callback_forward.h"
+#include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/strings/to_string.h"
 #include "base/test/bind.h"
@@ -20,8 +21,13 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "base/values.h"
+#include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_metadata.h"
+#include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/ip_protection/common/ip_protection_data_types.h"
 #include "components/ip_protection/common/ip_protection_probabilistic_reveal_token_fetcher.h"
+#include "components/ip_protection/common/ip_protection_probabilistic_reveal_token_manager.h"
 #include "components/ip_protection/common/ip_protection_proxy_config_manager.h"
 #include "components/ip_protection/common/ip_protection_proxy_config_manager_impl.h"
 #include "components/ip_protection/common/ip_protection_token_manager.h"
@@ -58,10 +64,6 @@ constexpr char kSunnyvaleGeoId[] = "US,US-CA,SUNNYVALE";
 
 class MockIpProtectionTokenManager : public IpProtectionTokenManager {
  public:
-  bool IsAuthTokenAvailable() override {
-    return IsAuthTokenAvailable(current_geo_id_);
-  }
-
   bool IsAuthTokenAvailable(const std::string& geo_id) override {
     return auth_tokens_.contains(geo_id);
   }
@@ -78,10 +80,6 @@ class MockIpProtectionTokenManager : public IpProtectionTokenManager {
     current_geo_id_ = geo_id;
   }
 
-  std::optional<BlindSignedAuthToken> GetAuthToken() override {
-    return GetAuthToken(current_geo_id_);
-  }
-
   std::optional<BlindSignedAuthToken> GetAuthToken(
       const std::string& geo_id) override {
     if (!auth_tokens_.contains(geo_id)) {
@@ -95,6 +93,8 @@ class MockIpProtectionTokenManager : public IpProtectionTokenManager {
     was_token_cache_ever_filled_ = true;
     auth_tokens_[GetGeoIdFromGeoHint(auth_token.geo_hint)] = auth_token;
   }
+
+  void RecordTokenDemand() override {}
 
  private:
   std::map<std::string, BlindSignedAuthToken> auth_tokens_;

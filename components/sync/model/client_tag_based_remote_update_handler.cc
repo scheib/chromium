@@ -24,6 +24,7 @@
 #include "components/sync/protocol/data_type_state_helper.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/unique_position.pb.h"
+#include "third_party/abseil-cpp/absl/container/flat_hash_set.h"
 
 namespace syncer {
 
@@ -68,7 +69,7 @@ ClientTagBasedRemoteUpdateHandler::ProcessIncrementalUpdate(
   // If new encryption requirements come from the server, the entities that are
   // in `updates` will be recorded here so they can be ignored during the
   // re-encryption phase at the end.
-  std::unordered_set<std::string> already_updated;
+  absl::flat_hash_set<std::string> already_updated;
 
   for (syncer::UpdateResponseData& update : updates) {
     std::string storage_key_to_clear;
@@ -200,17 +201,17 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
     return nullptr;
   }
 
-  // TODO(crbug.com/40889096): Remove the storage key check as storage keys
-  // should not be empty after IsEntityDataValid() has been implemented by all
-  // bridges.
-  if (!data.is_deleted() && (!bridge_->IsEntityDataValid(data) ||
-                             (bridge_->SupportsGetStorageKey() &&
-                              bridge_->GetStorageKey(data).empty()))) {
+  if (!data.is_deleted() && !bridge_->IsEntityDataValid(data)) {
     DLOG(WARNING) << "Received invalid remote update."
                   << " client_tag_hash: " << client_tag_hash << " for "
                   << DataTypeToDebugString(type_);
     return nullptr;
   }
+
+  // Valid entities (other than deletions) must have non-empty storage keys.
+  CHECK(data.is_deleted() || !bridge_->SupportsGetStorageKey() ||
+        !bridge_->GetStorageKey(data).empty())
+      << DataTypeToDebugString(type_);
 
   // Cache update encryption_key_name and is_deleted in case `update` will be
   // moved away into ResolveConflict().

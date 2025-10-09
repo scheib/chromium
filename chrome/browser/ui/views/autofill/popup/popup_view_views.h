@@ -76,11 +76,14 @@ class PopupViewViews : public PopupBaseView,
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(
       kAutofillCreditCardSuggestionEntryElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAutofillAiOptInIphElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAutofillAiValuablesElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(
       kAutofillStandaloneCvcSuggestionElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAutofillSuggestionElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAutofillHomeWorkSuggestionElementId);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAutofillEnableLoyaltyCardsElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(
+      kAutofillAccountNameEmailSuggestionElementId);
 
   using RowPointer = std::variant<PopupRowView*,
                                   PopupSeparatorView*,
@@ -172,6 +175,10 @@ class PopupViewViews : public PopupBaseView,
   // displays a feature promo bubble if the suggestion has associated IPH
   // metadata.
   void ShowIPHFeaturePromos();
+
+  // If the current suggestions are for password recovery, announces it to the
+  // user.
+  void MaybeAnnouncePasswordRecoveryPopup();
 
   // Returns the `PopupRowView` at line number `index`. Assumes that there is
   // such a view at that line number - otherwise the underlying variant will

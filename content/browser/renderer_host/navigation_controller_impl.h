@@ -46,11 +46,14 @@ struct NavigationDownloadPolicy;
 namespace content {
 class FrameTree;
 class FrameTreeNode;
-class NavigationEntryScreenshotCache;
 class NavigationRequest;
 class RenderFrameHostImpl;
 class SiteInstance;
 struct LoadCommittedDetails;
+
+#if BUILDFLAG(IS_ANDROID)
+class NavigationEntryScreenshotCache;
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // NavigationControllerImpl is 1:1 with FrameTree. See comments on the base
 // class.
@@ -135,6 +138,8 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   bool CanGoBack() override;
   bool CanGoForward() override;
   bool CanGoToOffset(int offset) override;
+  bool ShouldEnableBackButton() override;
+  bool ShouldEnableForwardButton() override;
   WeakNavigationHandleVector GoBack() override;
   WeakNavigationHandleVector GoForward() override;
   WeakNavigationHandleVector GoToIndex(int index) override;
@@ -157,6 +162,8 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   void DeleteNavigationEntries(
       const DeletionPredicate& deletionPredicate) override;
   BackForwardCacheImpl& GetBackForwardCache() override;
+  bool ShouldOverrideUserAgentInNextNavigation(
+      NavigationController::UserAgentOverrideOption option) override;
 
   // Discards the pending entry if any. If this is caused by a navigation
   // committing a new entry, `commit_details` will contain the committed
@@ -169,11 +176,13 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   // what this means.
   void CreateInitialEntry();
 
+#if BUILDFLAG(IS_ANDROID)
   // Gets the `NavigationEntryScreenshotCache` for this `NavigationController`.
   // Due to MPArch there can be multiple `FrameTree`s within a single tab. This
   // should only be called for the primary FrameTree.  This cache is
   // lazy-initialized when this method is first called.
   NavigationEntryScreenshotCache* GetNavigationEntryScreenshotCache();
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // Starts a navigation in a newly created subframe as part of a history
   // navigation. Returns true if the history navigation could start, false
@@ -1082,10 +1091,12 @@ class CONTENT_EXPORT NavigationControllerImpl : public NavigationController {
   // See BackForwardCache class documentation.
   BackForwardCacheImpl back_forward_cache_;
 
+#if BUILDFLAG(IS_ANDROID)
   // Stores captured screenshots for this `NavigationController`. The
   // screenshots are used to present the user with the previews of the
   // previously visited pages when the back/forward navigations occur.
   std::unique_ptr<NavigationEntryScreenshotCache> nav_entry_screenshot_cache_;
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // Holds the entry that was committed at the time an error page was triggered
   // due to a call to LoadPostCommitErrorPage. The error entry will take its

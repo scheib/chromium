@@ -153,10 +153,6 @@ void KAnonymityTrustTokenGetter::RequestAccessToken() {
   RecordTrustTokenGetterAction(
       KAnonymityTrustTokenGetterAction::kRequestAccessToken);
 
-  // Choose scopes to obtain for the access token.
-  signin::ScopeSet scopes;
-  scopes.insert(GaiaConstants::kKAnonymityServiceOAuth2Scope);
-
   // Choose the mode in which to fetch the access token:
   // see AccessTokenFetcher::Mode below for definitions.
   auto mode =
@@ -165,7 +161,7 @@ void KAnonymityTrustTokenGetter::RequestAccessToken() {
   // Create the fetcher.
   access_token_fetcher_ =
       std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
-          /*consumer_name=*/"KAnonymityService", identity_manager_, scopes,
+          signin::OAuthConsumerId::kKAnonymityService, identity_manager_,
           base::BindOnce(
               &KAnonymityTrustTokenGetter::OnAccessTokenRequestCompleted,
               weak_ptr_factory_.GetWeakPtr()),
@@ -441,8 +437,8 @@ void KAnonymityTrustTokenGetter::OnParsedTrustTokenKeyCommitment(
   base::Value::Dict outer_commitment;
   outer_commitment.Set(*maybe_version, std::move(key_commitment_value));
 
-  std::string key_commitment_str;
-  base::JSONWriter::Write(outer_commitment, &key_commitment_str);
+  std::string key_commitment_str =
+      base::WriteJson(outer_commitment).value_or("");
 
   KeyAndNonUniqueUserIdWithExpiration key_commitment{
       KeyAndNonUniqueUserId{key_commitment_str, non_unique_user_id},

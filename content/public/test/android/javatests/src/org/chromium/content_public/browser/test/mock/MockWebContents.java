@@ -148,6 +148,9 @@ public class MockWebContents implements WebContents, WebContentsObserver.Observa
     }
 
     @Override
+    public void discard(Runnable onDiscarded) {}
+
+    @Override
     public boolean isLoading() {
         return false;
     }
@@ -405,6 +408,9 @@ public class MockWebContents implements WebContents, WebContentsObserver.Observa
     public int getOriginalWindowOpenDisposition() {
         return 0;
     }
+
+    @Override
+    public void updateWindowControlsOverlay(Rect rect) {}
 
     @Override
     public <T extends UserData> @Nullable T getOrSetUserData(

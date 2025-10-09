@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.site_settings;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.when;
 
 import static org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge.SITE_WILDCARD;
 import static org.chromium.components.permissions.PermissionUtil.getGeolocationType;
@@ -64,7 +63,7 @@ import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
 import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridgeJni;
 import org.chromium.components.browsing_data.content.BrowsingDataInfo;
 import org.chromium.components.browsing_data.content.BrowsingDataModel;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.content_settings.ProviderType;
 import org.chromium.components.content_settings.SessionModel;
@@ -88,7 +87,6 @@ import java.util.concurrent.TimeoutException;
     ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
     WebsitePermissionsFetcherTest.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES,
     WebsitePermissionsFetcherTest.ENABLE_WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND,
-    WebsitePermissionsFetcherTest.ENABLE_BLUETOOTH_RFCOMM_ANDROID
 })
 @Batch(Batch.PER_CLASS)
 public class WebsitePermissionsFetcherTest {
@@ -105,12 +103,6 @@ public class WebsitePermissionsFetcherTest {
     /** Command line flag to enable the new Web Bluetooth permissions backend in tests. */
     public static final String ENABLE_WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND =
             "enable-features=WebBluetoothNewPermissionsBackend";
-
-    /**
-     * Command line flag to enable Bluetooth RFCOMM support for serial ports on Android in tests.
-     */
-    public static final String ENABLE_BLUETOOTH_RFCOMM_ANDROID =
-            "enable-features=BluetoothRfcommAndroid";
 
     private static final BrowserContextHandle UNUSED_BROWSER_CONTEXT_HANDLE = null;
 
@@ -441,42 +433,42 @@ public class WebsitePermissionsFetcherTest {
                                         ContentSettingsType.HAND_TRACKING,
                                         url,
                                         url,
-                                        ContentSettingValues.BLOCK);
+                                        ContentSetting.BLOCK);
                         WebsitePreferenceBridgeJni.get()
                                 .setPermissionSettingForOrigin(
                                         profile,
                                         ContentSettingsType.MIDI_SYSEX,
                                         url,
                                         url,
-                                        ContentSettingValues.ALLOW);
+                                        ContentSetting.ALLOW);
                         WebsitePreferenceBridgeJni.get()
                                 .setPermissionSettingForOrigin(
                                         profile,
                                         ContentSettingsType.PROTECTED_MEDIA_IDENTIFIER,
                                         url,
                                         url,
-                                        ContentSettingValues.BLOCK);
+                                        ContentSetting.BLOCK);
                         WebsitePreferenceBridgeJni.get()
                                 .setPermissionSettingForOrigin(
                                         profile,
                                         ContentSettingsType.NOTIFICATIONS,
                                         url,
                                         url,
-                                        ContentSettingValues.ALLOW);
+                                        ContentSetting.ALLOW);
                         WebsitePreferenceBridgeJni.get()
                                 .setPermissionSettingForOrigin(
                                         profile,
                                         ContentSettingsType.MEDIASTREAM_MIC,
                                         url,
                                         url,
-                                        ContentSettingValues.ALLOW);
+                                        ContentSetting.ALLOW);
                         WebsitePreferenceBridgeJni.get()
                                 .setPermissionSettingForOrigin(
                                         profile,
                                         ContentSettingsType.MEDIASTREAM_CAMERA,
                                         url,
                                         url,
-                                        ContentSettingValues.BLOCK);
+                                        ContentSetting.BLOCK);
                     }
 
                     // This should not time out. See crbug.com/732907.
@@ -610,6 +602,7 @@ public class WebsitePermissionsFetcherTest {
     @Test
     @SmallTest
     @UseMethodParameter(BrowsingDataModelEnabled.class)
+    @SuppressWarnings("DirectInvocationOnMock")
     public void testFetchAllPreferencesForSingleOrigin(boolean isBdmEnabled) {
         Mockito.doReturn(isBdmEnabled)
                 .when(mSiteSettingsDelegate)
@@ -723,110 +716,110 @@ public class WebsitePermissionsFetcherTest {
         // Otherwise, just update count in the assert.
         // TODO(https://b/332704817): Add test for Tracking Protection content setting after Android
         // integration.
-        assertEquals(121, ContentSettingsType.MAX_VALUE);
+        assertEquals(122, ContentSettingsType.MAX_VALUE);
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.COOKIES,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.POPUPS,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.ADS,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.JAVASCRIPT,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.SOUND,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.BACKGROUND_SYNC,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.AUTOMATIC_DOWNLOADS,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.JAVASCRIPT_JIT,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.JAVASCRIPT_OPTIMIZER,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.AUTO_DARK_WEB_CONTENT,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.REQUEST_DESKTOP_SITE,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.FEDERATED_IDENTITY_API,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.FEDERATED_IDENTITY_AUTO_REAUTHN_PERMISSION,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.ANTI_ABUSE,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
         websitePreferenceBridge.addContentSettingException(
                 new ContentSettingException(
                         ContentSettingsType.LOCAL_NETWORK_ACCESS,
                         ORIGIN,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         /* isEmbargoed= */ false));
 
@@ -909,62 +902,62 @@ public class WebsitePermissionsFetcherTest {
 
                     // Check content setting exception types.
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.COOKIES));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.POPUPS));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.ADS));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.JAVASCRIPT));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.SOUND));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.BACKGROUND_SYNC));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.AUTOMATIC_DOWNLOADS));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.JAVASCRIPT_JIT));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.JAVASCRIPT_OPTIMIZER));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.AUTO_DARK_WEB_CONTENT));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.REQUEST_DESKTOP_SITE));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE,
                                     ContentSettingsType.FEDERATED_IDENTITY_API));
                     assertEquals(
-                            Integer.valueOf(ContentSettingValues.DEFAULT),
+                            Integer.valueOf(ContentSetting.DEFAULT),
                             site.getContentSetting(
                                     UNUSED_BROWSER_CONTEXT_HANDLE, ContentSettingsType.ANTI_ABUSE));
 
@@ -1191,7 +1184,7 @@ public class WebsitePermissionsFetcherTest {
                         new ContentSettingException(
                                 type,
                                 ORIGIN,
-                                ContentSettingValues.DEFAULT,
+                                ContentSetting.DEFAULT,
                                 ProviderType.PREF_PROVIDER,
                                 isEmbargoed);
                 websitePreferenceBridge.addContentSettingException(fakeContentSettingException);
@@ -1215,7 +1208,7 @@ public class WebsitePermissionsFetcherTest {
                         new ContentSettingException(
                                 type,
                                 ORIGIN,
-                                ContentSettingValues.BLOCK,
+                                ContentSetting.BLOCK,
                                 ProviderType.PREF_PROVIDER,
                                 isEmbargoed);
                 websitePreferenceBridge.addContentSettingException(fakeContentSettingException);
@@ -1266,7 +1259,7 @@ public class WebsitePermissionsFetcherTest {
                                 contentSettingsType,
                                 pair.first,
                                 pair.second,
-                                ContentSettingValues.DEFAULT,
+                                ContentSetting.DEFAULT,
                                 ProviderType.PREF_PROVIDER,
                                 EXPIRATION_IN_DAYS,
                                 isEmbargoed);
@@ -1292,7 +1285,7 @@ public class WebsitePermissionsFetcherTest {
                                 contentSettingsType,
                                 pair.first,
                                 pair.second,
-                                ContentSettingValues.BLOCK,
+                                ContentSetting.BLOCK,
                                 ProviderType.PREF_PROVIDER,
                                 EXPIRATION_IN_DAYS,
                                 isEmbargoed);
@@ -1515,7 +1508,7 @@ public class WebsitePermissionsFetcherTest {
                     new ContentSettingException(
                             ContentSettingsType.COOKIES,
                             origin,
-                            ContentSettingValues.ALLOW,
+                            ContentSetting.ALLOW,
                             ProviderType.PREF_PROVIDER,
                             /* isEmbargoed= */ false));
         }
@@ -1577,7 +1570,7 @@ public class WebsitePermissionsFetcherTest {
                         ContentSettingsType.STORAGE_ACCESS,
                         origin,
                         origin,
-                        ContentSettingValues.ALLOW,
+                        ContentSetting.ALLOW,
                         ProviderType.NONE,
                         null,
                         false));
@@ -1586,7 +1579,7 @@ public class WebsitePermissionsFetcherTest {
                         ContentSettingsType.STORAGE_ACCESS,
                         origin,
                         origin,
-                        ContentSettingValues.ASK,
+                        ContentSetting.ASK,
                         ProviderType.NONE,
                         null,
                         false));
@@ -1598,14 +1591,12 @@ public class WebsitePermissionsFetcherTest {
         var site = waiter.getSites().iterator().next();
         var permission = site.getEmbeddedPermissions().get(ContentSettingsType.STORAGE_ACCESS);
         assertEquals(1, permission.size());
-        assertEquals(ContentSettingValues.ALLOW, (int) permission.get(0).getContentSetting());
+        assertEquals(ContentSetting.ALLOW, (int) permission.get(0).getContentSetting());
     }
 
     @Test
     @SmallTest
     public void testFetchAllSites() {
-        when(mSiteSettingsDelegate.isDisplayWildcardInContentSettingsEnabled()).thenReturn(true);
-
         WebsitePermissionsFetcher fetcher = new WebsitePermissionsFetcher(mSiteSettingsDelegate);
         FakeWebsitePreferenceBridge websitePreferenceBridge = new FakeWebsitePreferenceBridge();
         fetcher.setWebsitePreferenceBridgeForTesting(websitePreferenceBridge);
@@ -1629,7 +1620,7 @@ public class WebsitePermissionsFetcherTest {
                         ContentSettingsType.STORAGE_ACCESS,
                         ORIGIN,
                         EMBEDDER,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         EXPIRATION_IN_DAYS,
                         /* isEmbargoed= */ false));
@@ -1638,7 +1629,7 @@ public class WebsitePermissionsFetcherTest {
                         ContentSettingsType.STORAGE_ACCESS,
                         ORIGIN,
                         null,
-                        ContentSettingValues.DEFAULT,
+                        ContentSetting.DEFAULT,
                         ProviderType.PREF_PROVIDER,
                         EXPIRATION_IN_DAYS,
                         /* isEmbargoed= */ true));
@@ -1665,7 +1656,7 @@ public class WebsitePermissionsFetcherTest {
 
                             // Check that embargoed Storage Access is grouped by the origin.
                             Assert.assertEquals(
-                                    Integer.valueOf(ContentSettingValues.DEFAULT),
+                                    Integer.valueOf(ContentSetting.DEFAULT),
                                     site.getContentSetting(
                                             UNUSED_BROWSER_CONTEXT_HANDLE,
                                             ContentSettingsType.STORAGE_ACCESS));
@@ -1680,7 +1671,7 @@ public class WebsitePermissionsFetcherTest {
 
                             // Check that a normal Storage Access is grouped by the embedder.
                             Assert.assertEquals(
-                                    Integer.valueOf(ContentSettingValues.DEFAULT),
+                                    Integer.valueOf(ContentSetting.DEFAULT),
                                     site.getContentSetting(
                                             UNUSED_BROWSER_CONTEXT_HANDLE,
                                             ContentSettingsType.STORAGE_ACCESS));
@@ -1715,7 +1706,7 @@ public class WebsitePermissionsFetcherTest {
                             type,
                             ORIGIN,
                             embedder,
-                            ContentSettingValues.DEFAULT,
+                            ContentSetting.DEFAULT,
                             ProviderType.PREF_PROVIDER,
                             EXPIRATION_IN_DAYS,
                             isEmbargoed);

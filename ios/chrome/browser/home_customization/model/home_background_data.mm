@@ -44,15 +44,6 @@ base::Value::Dict FramingCoordinates::ToDict() const {
   return dict;
 }
 
-bool FramingCoordinates::operator==(const FramingCoordinates& other) const {
-  return x == other.x && y == other.y && width == other.width &&
-         height == other.height;
-}
-
-bool FramingCoordinates::operator!=(const FramingCoordinates& other) const {
-  return !(*this == other);
-}
-
 std::optional<HomeUserUploadedBackground> HomeUserUploadedBackground::FromDict(
     const base::Value::Dict& dict) {
   const std::string* image_path = dict.FindString(kImagePathKey);

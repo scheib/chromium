@@ -4,8 +4,6 @@
 
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_coordinator.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
-
 #import "base/check_op.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/uuid.h"
@@ -40,19 +38,20 @@
 #import "ios/chrome/browser/shared/public/commands/tab_groups_commands.h"
 #import "ios/chrome/browser/shared/public/commands/tab_strip_commands.h"
 #import "ios/chrome/browser/shared/public/commands/tab_strip_last_tab_dragged_alert_command.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message_action.h"
 #import "ios/chrome/browser/sharing/ui_bundled/sharing_coordinator.h"
 #import "ios/chrome/browser/sharing/ui_bundled/sharing_params.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_mediator.h"
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_mediator_delegate.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/context_menu/tab_strip_context_menu_helper.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/swift.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_grid/tab_groups/create_or_edit_tab_group_coordinator_delegate.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_grid/tab_groups/create_tab_group_coordinator.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_group_action_type.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_group_confirmation_coordinator.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/context_menu/tab_strip_context_menu_helper.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/swift.h"
 #import "ios/chrome/browser/tab_switcher/ui_bundled/tab_switcher_item.h"
 #import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -153,9 +152,8 @@ constexpr CGFloat kFacePileAvatarSize = 16;
                                  shareKitService:shareKitService
                             collaborationService:collaborationService
                                    faviconLoader:faviconLoader];
-  self.mediator.webStateList = self.browser->GetWebStateList();
-  self.mediator.profile = profile;
   self.mediator.browser = self.browser;
+  self.mediator.profile = profile;
   self.mediator.tabStripHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), TabStripCommands);
   self.mediator.URLLoader = UrlLoadingBrowserAgent::FromBrowser(self.browser);
@@ -363,8 +361,9 @@ constexpr CGFloat kFacePileAvatarSize = 16;
   NSString* messageLabel =
       base::SysUTF16ToNSString(l10n_util::GetPluralStringFUTF16(
           IDS_IOS_TAB_GROUP_SNACKBAR_LABEL, numberOfClosedGroups));
-  MDCSnackbarMessage* message = CreateSnackbarMessage(messageLabel);
-  MDCSnackbarMessageAction* action = [[MDCSnackbarMessageAction alloc] init];
+  SnackbarMessage* message =
+      [[SnackbarMessage alloc] initWithTitle:messageLabel];
+  SnackbarMessageAction* action = [[SnackbarMessageAction alloc] init];
   action.handler = openTabGroupPanelAction;
   action.title = l10n_util::GetNSString(IDS_IOS_TAB_GROUP_SNACKBAR_ACTION);
   message.action = action;

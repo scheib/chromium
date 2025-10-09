@@ -23,6 +23,7 @@
 #include "components/compose/buildflags.h"
 #include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/lens/buildflags.h"
+#include "components/lens/lens_overlay_invocation_source.h"
 #include "components/renderer_context_menu/context_menu_content_type.h"
 #include "components/renderer_context_menu/render_view_context_menu_base.h"
 #include "components/renderer_context_menu/render_view_context_menu_observer.h"
@@ -39,10 +40,6 @@
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/menus/simple_menu_model.h"
-
-#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
-#include "chrome/browser/lens/region_search/lens_region_search_controller.h"
-#endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/context_menu_matcher.h"
@@ -108,6 +105,7 @@ class RenderViewContextMenu
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kComposeMenuItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kGlicCloseMenuItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kGlicReloadMenuItem);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kGlicShareImageMenuItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kOpenLinkInSplitMenuItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kRegionSearchItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kSearchForImageItem);
@@ -148,11 +146,9 @@ class RenderViewContextMenu
       base::OnceCallback<void(content::RenderFrameHost*,
                               blink::mojom::PluginActionType)> cb);
 
-#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
-  lens::LensRegionSearchController* GetLensRegionSearchControllerForTesting() {
-    return lens_region_search_controller_.get();
+  bool lens_region_search_controller_started_for_testing() const {
+    return lens_region_search_controller_started_for_testing_;
   }
-#endif
 
   void AddObserverForTesting(RenderViewContextMenuObserver* observer);
   void RemoveObserverForTesting(RenderViewContextMenuObserver* observer);
@@ -306,7 +302,7 @@ class RenderViewContextMenu
   void AppendPartialTranslateItem();
   void AppendTranslateItem();
   void AppendMediaRouterItem();
-  void AppendReadingModeItem();
+  void AppendReadAnythingItem();
   void AppendGlicItems();
   void AppendRotationItems();
   void AppendSpellingAndSearchSuggestionItems();
@@ -321,8 +317,8 @@ class RenderViewContextMenu
   void AppendCurrentExtensionItems();
 #endif
   void AppendPrintPreviewItems();
-  void AppendSearchLensForImageItems();
   void AppendSearchWebForImageItems();
+  void AppendGlicShareImageItem();
   void AppendProtocolHandlerSubMenu();
   // TODO(b/316143236): Remove this method (along with the methods called by it)
   // once `kPasswordManualFallbackAvailable` is rolled out.
@@ -381,6 +377,7 @@ class RenderViewContextMenu
   void ExecInspectBackgroundPage();
   void ExecSaveLinkAs();
   void ExecSaveAs();
+  void ExecGlicShareImage();
   void ExecExitFullscreen();
   void ExecCopyLinkText();
   void ExecCopyImageAt();
@@ -455,6 +452,7 @@ class RenderViewContextMenu
   void OpenLensOverlayWithPreselectedRegion(
       mojo::AssociatedRemote<chrome::mojom::ChromeRenderFrame>
           chrome_render_frame,
+      lens::LensOverlayInvocationSource invocation_source,
       const gfx::Rect& tab_bounds,
       const gfx::Rect& view_bounds,
       float device_scale_factor,
@@ -557,16 +555,9 @@ class RenderViewContextMenu
   // executed from a given render frame.
   ExecutePluginActionCallback execute_plugin_action_callback_;
 
-#if BUILDFLAG(ENABLE_LENS_DESKTOP_GOOGLE_BRANDED_FEATURES)
-  // Controller for Lens Region Search feature. This controller will be
-  // destroyed as soon as the RenderViewContextMenu object is destroyed. The
-  // RenderViewContextMenu is reset every time it is shown, but persists between
-  // uses so that it doesn't go out of scope before finishing work. This means
-  // that when another context menu opens, the Lens Region Search feature will
-  // close if active.
-  std::unique_ptr<lens::LensRegionSearchController>
-      lens_region_search_controller_;
-#endif
+  // Used in testing to determine whether the lens region search controller has
+  // started due to interaction with the region search entrypoint in the menu.
+  bool lens_region_search_controller_started_for_testing_ = false;
 
   // Responsible for handling autofill related context menu items.
   autofill::AutofillContextMenuManager autofill_context_menu_manager_;

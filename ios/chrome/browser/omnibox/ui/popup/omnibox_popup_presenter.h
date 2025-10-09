@@ -7,6 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/omnibox/public/omnibox_presentation_context.h"
 #import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_omnibox_consumer.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_type.h"
@@ -53,6 +54,10 @@
 /// The container view for the popup.
 @property(nonatomic, readonly) UIView* popupContainerView;
 
+/// Stores the height of the bottom omnibox with respect to the keyboard
+/// height.
+@property(nonatomic, assign) CGFloat keyboardAttachedBottomOmniboxHeight;
+
 /// Uses the popup's intrinsic content size to add or remove the popup view
 /// if necessary. The animation changes depending on:
 /// `isFocusingOmnibox`: Omnibox is being focused.
@@ -68,7 +73,8 @@
                    (UIViewController<ContentProviding>*)viewController
                  layoutGuideCenter:(LayoutGuideCenter*)layoutGuideCenter
                          incognito:(BOOL)incognito
-                     isLensOverlay:(BOOL)isLensOverlay;
+               presentationContext:
+                   (OmniboxPresentationContext)presentationContext;
 
 @end
 

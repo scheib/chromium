@@ -7,9 +7,9 @@
 #include "base/containers/fixed_flat_set.h"
 #include "base/feature_list.h"
 #include "base/strings/string_number_conversions.h"
+#include "chrome/browser/enterprise/connectors/referrer_cache_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
-#include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/download/public/common/download_item.h"
 #include "components/enterprise/connectors/core/content_area_user_provider.h"
@@ -78,6 +78,10 @@ void ContentAnalysisInfo::InitializeRequest(
 }
 
 std::string ContentAnalysisInfo::GetContentAreaAccountEmail() const {
+  if (!CanRetrieveActiveUser(tab_url())) {
+    return "";
+  }
+
   std::string email = GetActiveContentAreaUser(identity_manager(), tab_url());
   if (!email.empty()) {
     return email;
@@ -117,10 +121,23 @@ std::string ContentAreaUserProvider::GetUser(Profile* profile,
                                              const GURL& tab_url) {
   return ContentAreaUserProvider(
              IdentityManagerFactory::GetForProfile(profile),
-             safe_browsing::SafeBrowsingNavigationObserverManagerFactory::
-                 GetForBrowserContext(profile),
              web_contents, tab_url)
       .GetContentAreaAccountEmail();
+}
+
+// static
+std::string ContentAreaUserProvider::GetUser(
+    const content::ClipboardEndpoint& endpoint) {
+  if (!endpoint.data_transfer_endpoint() ||
+      !endpoint.data_transfer_endpoint()->IsUrlType() ||
+      !endpoint.data_transfer_endpoint()->GetURL() ||
+      !endpoint.browser_context()) {
+    return "";
+  }
+
+  return GetUser(Profile::FromBrowserContext(endpoint.browser_context()),
+                 endpoint.web_contents(),
+                 *endpoint.data_transfer_endpoint()->GetURL());
 }
 
 const GURL& ContentAreaUserProvider::tab_url() const {
@@ -177,21 +194,21 @@ content::WebContents* ContentAreaUserProvider::web_contents() const {
 
 ContentAreaUserProvider::ContentAreaUserProvider(
     signin::IdentityManager* im,
-    safe_browsing::SafeBrowsingNavigationObserverManager* nav_observer_manager,
     content::WebContents* web_contents,
     const GURL& tab_url)
     : im_(im),
       web_contents_(web_contents ? web_contents->GetWeakPtr() : nullptr),
       tab_url_(tab_url) {
-  nav_observer_manager->IdentifyReferrerChainByEventURL(
-      tab_url, sessions::SessionTabHelper::IdForTab(web_contents),
-      enterprise_connectors::kReferrerUserGestureLimit, &referrer_chain_);
+  if (web_contents) {
+    referrer_chain_ =
+        enterprise_connectors::GetReferrerChain(tab_url, *web_contents);
+  }
 }
 
 ContentAreaUserProvider::~ContentAreaUserProvider() = default;
 
 DownloadContentAreaUserProvider::DownloadContentAreaUserProvider(
-    const download::DownloadItem& download_item)
+    download::DownloadItem& download_item)
     : url_(download_item.GetURL()),
       tab_url_(download_item.GetTabUrl()),
       im_(IdentityManagerFactory::GetForProfile(Profile::FromBrowserContext(
@@ -202,12 +219,8 @@ DownloadContentAreaUserProvider::DownloadContentAreaUserProvider(
                     &download_item)
                     ->GetWeakPtr()
               : nullptr) {
-  std::unique_ptr<safe_browsing::ReferrerChainData> referrer_chain_data =
-      safe_browsing::IdentifyReferrerChain(
-          download_item, enterprise_connectors::kReferrerUserGestureLimit);
-  if (referrer_chain_data && referrer_chain_data->GetReferrerChain()) {
-    referrer_chain_ = *referrer_chain_data->GetReferrerChain();
-  }
+  referrer_chain_ =
+      safe_browsing::GetOrIdentifyReferrerChainForEnterprise(download_item);
 }
 
 DownloadContentAreaUserProvider::~DownloadContentAreaUserProvider() = default;
@@ -262,7 +275,7 @@ DownloadContentAreaUserProvider::referrer_chain() const {
 
 google::protobuf::RepeatedPtrField<std::string>
 DownloadContentAreaUserProvider::frame_url_chain() const {
-  NOTREACHED();
+  return frame_url_chain_;
 }
 
 }  // namespace enterprise_connectors

@@ -12,14 +12,19 @@
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/frame/window_frame_util.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/features.h"
+#include "chrome/browser/ui/tabs/tab_menu_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/commerce/product_specifications_button.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/tab_search_bubble_host.h"
+#include "chrome/browser/ui/views/tabs/browser_tab_strip_controller.h"
 #include "chrome/browser/ui/views/tabs/dragging/tab_drag_controller.h"
 #include "chrome/browser/ui/views/tabs/glic_button.h"
 #include "chrome/browser/ui/views/tabs/new_tab_button.h"
@@ -68,6 +73,11 @@ class FrameGrabHandle : public views::View {
   METADATA_HEADER(FrameGrabHandle, views::View)
 
  public:
+  FrameGrabHandle() {
+    SetProperty(views::kElementIdentifierKey,
+                kTabStripFrameGrabHandleElementId);
+  }
+
   gfx::Size CalculatePreferredSize(
       const views::SizeBounds& available_size) const override {
     // Reserve some space for the frame to be grabbed by, even if the tabstrip
@@ -97,7 +107,79 @@ void UpdateBorderInsetsIfNeeded(views::View* view,
   }
 }
 
+std::unique_ptr<TabStrip> CreateTabStrip(BrowserView* browser_view) {
+  std::unique_ptr<TabMenuModelFactory> tab_menu_model_factory;
+  if (browser_view && browser_view->browser()->app_controller()) {
+    tab_menu_model_factory =
+        browser_view->browser()->app_controller()->GetTabMenuModelFactory();
+  }
+
+  auto tabstrip_controller = std::make_unique<BrowserTabStripController>(
+      browser_view->browser()->GetTabStripModel(), browser_view,
+      std::move(tab_menu_model_factory));
+  BrowserTabStripController* tabstrip_controller_ptr =
+      tabstrip_controller.get();
+  auto tab_strip = std::make_unique<TabStrip>(std::move(tabstrip_controller));
+  tabstrip_controller_ptr->InitFromModel(tab_strip.get());
+  return tab_strip;
+}
+
 }  // namespace
+
+// Logger that periodically saves the tab search position. There should be 1
+// instance per tabstrip.
+class TabSearchPositionMetricsLogger {
+ public:
+  explicit TabSearchPositionMetricsLogger(
+      const Profile* profile,
+      base::TimeDelta logging_interval = base::Hours(1))
+      : profile_(profile),
+        logging_interval_(logging_interval),
+        weak_ptr_factory_(this) {
+    LogMetrics();
+    ScheduleNextLog();
+  }
+
+  ~TabSearchPositionMetricsLogger() = default;
+
+  void LogMetricsForTesting() { LogMetrics(); }
+
+ private:
+  // Logs the UMA metric for the tab search position.
+  void LogMetrics() {
+    base::UmaHistogramEnumeration(
+        "Tabs.TabSearch.PositionInTabstrip",
+        tabs::GetTabSearchTrailingTabstrip(profile_)
+            ? TabStripRegionView::TabSearchPositionEnum::kTrailing
+            : TabStripRegionView::TabSearchPositionEnum::kLeading);
+  }
+
+  // Sets up a task runner that calls back into the logging data.
+  void ScheduleNextLog() {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&TabSearchPositionMetricsLogger::LogMetricAndReschedule,
+                       weak_ptr_factory_.GetWeakPtr()),
+        logging_interval_);
+  }
+
+  // Helper method for posting the task which logs and schedules the next log.
+  void LogMetricAndReschedule() {
+    LogMetrics();
+    ScheduleNextLog();
+  }
+
+  // Profile for checking the pref value.
+  const raw_ptr<const Profile> profile_;
+
+  // Time in which this metric should be logged. Default is hourly.
+  const base::TimeDelta logging_interval_;
+
+  base::WeakPtrFactory<TabSearchPositionMetricsLogger> weak_ptr_factory_;
+};
+
+TabStripRegionView::TabStripRegionView(BrowserView* browser_view)
+    : TabStripRegionView(CreateTabStrip(browser_view)) {}
 
 TabStripRegionView::TabStripRegionView(std::unique_ptr<TabStrip> tab_strip)
     : profile_(tab_strip->GetBrowserWindowInterface()
@@ -207,13 +289,11 @@ TabStripRegionView::TabStripRegionView(std::unique_ptr<TabStrip> tab_strip)
 
   if (ShouldShowNewTabButton(browser)) {
     std::unique_ptr<TabStripControlButton> tab_strip_control_button =
-        std::make_unique<TabStripControlButton>(
+        std::make_unique<NewTabButton>(
             tab_strip_->controller(),
             base::BindRepeating(&TabStrip::NewTabButtonPressed,
                                 base::Unretained(tab_strip_)),
-            vector_icons::kAddIcon, Edge::kNone);
-    tab_strip_control_button->SetProperty(views::kElementIdentifierKey,
-                                          kNewTabButtonElementId);
+            vector_icons::kAddIcon, Edge::kNone, Edge::kNone, browser);
 
     new_tab_button_ = AddChildView(std::move(tab_strip_control_button));
 
@@ -256,7 +336,6 @@ TabStripRegionView::TabStripRegionView(std::unique_ptr<TabStrip> tab_strip)
   }
   UpdateTabStripMargin();
 }
-
 TabStripRegionView::~TabStripRegionView() {
   // These objects have pointers to TabStripController, which is also destoroyed
   // by this class. Remove child views that hold raw_ptr to TabStripController.
@@ -479,8 +558,9 @@ gfx::Size TabStripRegionView::GetMinimumSize() const {
   return tab_strip_min_size;
 }
 
-gfx::Size TabStripRegionView::GetPreferredSizeForView() const {
-  return GetPreferredSize();
+gfx::Size TabStripRegionView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  return GetLayoutManager()->GetPreferredSize(this, available_size);
 }
 
 views::View* TabStripRegionView::GetDefaultFocusableChild() {
@@ -489,34 +569,15 @@ views::View* TabStripRegionView::GetDefaultFocusableChild() {
                          : AccessiblePaneView::GetDefaultFocusableChild();
 }
 
-TabSearchButton* TabStripRegionView::GetTabSearchButton() const {
-  if (tab_search_container_) {
-    // tab_search_container_ may be null if browser is not TYPE_NORMAL or
-    // ShouldShowNewTabButton(browser) otherwise returns false.
-    return tab_search_container_->tab_search_button();
-  } else {
-    return nullptr;
-  }
+bool TabStripRegionView::IsTabStripEditable() const {
+  return tab_strip_->IsTabStripEditable();
+}
+void TabStripRegionView::SetTabStripNotEditableForTesting() const {
+  tab_strip_->SetTabStripNotEditableForTesting();  // IN-TEST
 }
 
-TabStripActionContainer* TabStripRegionView::GetTabStripActionContainer()
-    const {
-  return tab_strip_action_container_;
-}
-
-ProductSpecificationsButton*
-TabStripRegionView::GetProductSpecificationsButton() const {
-  if (tab_strip_action_container_) {
-    return tab_strip_action_container_->GetProductSpecificationsButton();
-  }
-  return product_specifications_button_;
-}
-
-glic::GlicButton* TabStripRegionView::GetGlicButton() const {
-  if (tab_strip_action_container_) {
-    return tab_strip_action_container_->GetGlicButton();
-  }
-  return nullptr;
+bool TabStripRegionView::IsTabStripCloseable() const {
+  return tab_strip_->IsTabStripCloseable();
 }
 
 bool TabStripRegionView::IsAnimating() const {
@@ -525,6 +586,11 @@ bool TabStripRegionView::IsAnimating() const {
 
 void TabStripRegionView::StopAnimating() {
   return tab_strip_->StopAnimating();
+}
+
+void TabStripRegionView::UpdateLoadingAnimations(
+    const base::TimeDelta& elapsed_time) {
+  tab_strip_->UpdateLoadingAnimations(elapsed_time);
 }
 
 std::optional<int> TabStripRegionView::GetFocusedTabIndex() const {
@@ -545,16 +611,16 @@ views::View* TabStripRegionView::GetTabGroupAnchorView(
   return tab_strip_->group_header(group);
 }
 
-gfx::Rect TabStripRegionView::GetBoundsInScreenForView() {
-  return views::View::GetBoundsInScreen();
-}
-
 TabDragContext* TabStripRegionView::GetDragContext() {
   return tab_strip_->GetDragContext();
 }
 
 void TabStripRegionView::SetTabStripObserver(TabStripObserver* observer) {
   tab_strip_->SetTabStripObserver(observer);
+}
+
+void TabStripRegionView::LogTabSearchPositionForTesting() {
+  tab_search_position_metrics_logger_->LogMetricsForTesting();  // IN-TEST
 }
 
 void TabStripRegionView::UpdateButtonBorders() {
@@ -664,56 +730,6 @@ void TabStripRegionView::AdjustViewBoundsRect(View* view, int offset) {
   const gfx::Rect new_bounds = gfx::Rect(gfx::Point(x, 0), view_size);
   view->SetBoundsRect(new_bounds);
 }
-
-// Logger that periodically saves the tab search position. There should be 1
-// instance per tabstrip.
-class TabSearchPositionMetricsLogger {
- public:
-  explicit TabSearchPositionMetricsLogger(
-      const Profile* profile,
-      base::TimeDelta logging_interval = base::Hours(1))
-      : profile_(profile),
-        logging_interval_(logging_interval),
-        weak_ptr_factory_(this) {
-    LogMetrics();
-    ScheduleNextLog();
-  }
-
-  ~TabSearchPositionMetricsLogger() = default;
-
- private:
-  // Logs the UMA metric for the tab search position.
-  void LogMetrics() {
-    base::UmaHistogramEnumeration(
-        "Tabs.TabSearch.PositionInTabstrip",
-        tabs::GetTabSearchTrailingTabstrip(profile_)
-            ? TabStripRegionView::TabSearchPositionEnum::kTrailing
-            : TabStripRegionView::TabSearchPositionEnum::kLeading);
-  }
-
-  // Sets up a task runner that calls back into the logging data.
-  void ScheduleNextLog() {
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
-        FROM_HERE,
-        base::BindOnce(&TabSearchPositionMetricsLogger::LogMetricAndReschedule,
-                       weak_ptr_factory_.GetWeakPtr()),
-        logging_interval_);
-  }
-
-  // Helper method for posting the task which logs and schedules the next log.
-  void LogMetricAndReschedule() {
-    LogMetrics();
-    ScheduleNextLog();
-  }
-
-  // Profile for checking the pref value.
-  const raw_ptr<const Profile> profile_;
-
-  // Time in which this metric should be logged. Default is hourly.
-  const base::TimeDelta logging_interval_;
-
-  base::WeakPtrFactory<TabSearchPositionMetricsLogger> weak_ptr_factory_;
-};
 
 BEGIN_METADATA(TabStripRegionView)
 END_METADATA

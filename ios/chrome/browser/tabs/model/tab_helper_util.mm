@@ -48,8 +48,6 @@
 #import "ios/chrome/browser/drive/model/drive_tab_helper.h"
 #import "ios/chrome/browser/favicon/model/favicon_service_factory.h"
 #import "ios/chrome/browser/find_in_page/model/find_tab_helper.h"
-#import "ios/chrome/browser/find_in_page/model/java_script_find_tab_helper.h"
-#import "ios/chrome/browser/find_in_page/model/util.h"
 #import "ios/chrome/browser/follow/model/follow_tab_helper.h"
 #import "ios/chrome/browser/history/model/history_service_factory.h"
 #import "ios/chrome/browser/history/model/history_tab_helper.h"
@@ -99,6 +97,7 @@
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/sharing/model/share_file_download_tab_helper.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_source_tab_helper.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
 #import "ios/chrome/browser/ssl/model/captive_portal_tab_helper.h"
 #import "ios/chrome/browser/supervised_user/model/supervised_user_error_container.h"
@@ -108,6 +107,7 @@
 #import "ios/chrome/browser/voice/model/voice_search_navigations_tab_helper.h"
 #import "ios/chrome/browser/web/model/annotations/annotations_tab_helper.h"
 #import "ios/chrome/browser/web/model/blocked_popup_tab_helper.h"
+#import "ios/chrome/browser/web/model/choose_file/choose_file_tab_helper.h"
 #import "ios/chrome/browser/web/model/font_size/font_size_tab_helper.h"
 #import "ios/chrome/browser/web/model/image_fetch/image_fetch_tab_helper.h"
 #import "ios/chrome/browser/web/model/invalid_url_tab_helper.h"
@@ -133,7 +133,6 @@
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_unsafe_resource_container.h"
 #import "ios/public/provider/chrome/browser/text_zoom/text_zoom_api.h"
 #import "ios/web/common/annotations_utils.h"
-#import "ios/web/public/find_in_page/java_script_find_in_page_manager.h"
 #import "ios/web/public/web_state.h"
 
 namespace {
@@ -154,6 +153,8 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
       IsTabHelperFilterMaskSet(filter_flags, TabHelperFilter::kPrerender);
   const bool for_lens_overlay =
       IsTabHelperFilterMaskSet(filter_flags, TabHelperFilter::kLensOverlay);
+  const bool for_reader_mode =
+      IsTabHelperFilterMaskSet(filter_flags, TabHelperFilter::kReaderMode);
 
   // When adding a new tab helper, please consider whether it should be filtered
   // out when the web_state is presented in the following context:
@@ -171,31 +172,29 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
   VoiceSearchNavigationTabHelper::CreateForWebState(web_state);
   InfoBarManagerImpl::CreateForWebState(web_state);
 
-  if (IsNativeFindInPageAvailable()) {
-    FindTabHelper::CreateForWebState(web_state);
-  } else {
-    web::JavaScriptFindInPageManager::CreateForWebState(web_state);
-    JavaScriptFindTabHelper::CreateForWebState(web_state);
-  }
+  FindTabHelper::CreateForWebState(web_state);
 
-  if (!for_lens_overlay) {
-    HistoryTabHelper::CreateForWebState(web_state);
-  } else if (base::FeatureList::IsEnabled(kLensOverlayNavigationHistory)) {
-    HistoryTabHelper::CreateForWebState(web_state);
-    HistoryTabHelper::FromWebState(web_state)->EnableLensURLProcessing();
+  if (!for_reader_mode) {
+    if (!for_lens_overlay) {
+      HistoryTabHelper::CreateForWebState(web_state);
+    } else if (base::FeatureList::IsEnabled(kLensOverlayNavigationHistory)) {
+      HistoryTabHelper::CreateForWebState(web_state);
+      HistoryTabHelper::FromWebState(web_state)->EnableLensURLProcessing();
+    }
   }
 
   LoadTimingTabHelper::CreateForWebState(web_state);
   OverscrollActionsTabHelper::CreateForWebState(web_state);
   IOSTaskTabHelper::CreateForWebState(web_state);
-  if (!for_lens_overlay && IsPriceAlertsEligibleForWebState(web_state)) {
+  if (!for_lens_overlay && !for_reader_mode &&
+      IsPriceAlertsEligibleForWebState(web_state)) {
     ShoppingPersistedDataTabHelper::CreateForWebState(web_state);
   }
   commerce::CommerceTabHelper::CreateForWebState(
       web_state, is_off_the_record,
       commerce::ShoppingServiceFactory::GetForProfile(profile));
 
-  if (!for_lens_overlay && !for_prerender) {
+  if (!for_lens_overlay && !for_reader_mode && !for_prerender) {
     // Since LensTabHelper listens for a custom scheme, it needs to be
     // created before AppLauncherTabHelper, which will filter out
     // unhandled schemes.
@@ -218,7 +217,7 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
 
   InvalidUrlTabHelper::CreateForWebState(web_state);
 
-  if (!for_lens_overlay) {
+  if (!for_lens_overlay && !for_reader_mode) {
     InfobarOverlayRequestInserter::CreateForWebState(
         web_state, &DefaultInfobarOverlayRequestFactory);
     InfobarOverlayTabHelper::CreateForWebState(web_state);
@@ -235,12 +234,14 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
 
   AnnotationsTabHelper::CreateForWebState(web_state);
 
-  SafeBrowsingClient* client =
-      SafeBrowsingClientFactory::GetForProfile(profile);
-  SafeBrowsingQueryManager::CreateForWebState(web_state, client);
-  SafeBrowsingTabHelper::CreateForWebState(web_state, client);
-  SafeBrowsingUrlAllowList::CreateForWebState(web_state);
-  SafeBrowsingUnsafeResourceContainer::CreateForWebState(web_state);
+  if (!for_reader_mode) {
+    SafeBrowsingClient* client =
+        SafeBrowsingClientFactory::GetForProfile(profile);
+    SafeBrowsingQueryManager::CreateForWebState(web_state, client);
+    SafeBrowsingTabHelper::CreateForWebState(web_state, client);
+    SafeBrowsingUrlAllowList::CreateForWebState(web_state);
+    SafeBrowsingUnsafeResourceContainer::CreateForWebState(web_state);
+  }
 
   TailoredSecurityTabHelper::CreateForWebState(
       web_state, TailoredSecurityServiceFactory::GetForProfile(profile));
@@ -286,22 +287,25 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
 
   // TODO(crbug.com/41360476): pre-rendered WebState have lots of unnecessary
   // tab helpers for historical reasons. For the moment, AttachTabHelpers
-  // allows to inhibit the creation of some of them. Once PreloadController
-  // has been refactored to only create the necessary tab helpers, this
-  // condition can be removed.
-  if (!for_lens_overlay && !for_prerender) {
+  // allows to inhibit the creation of some of them.
+  if (!for_lens_overlay && !for_reader_mode && !for_prerender) {
     SadTabTabHelper::CreateForWebState(
         web_state, SadTabTabHelper::kDefaultRepeatFailureInterval);
     SnapshotTabHelper::CreateForWebState(web_state);
+    SnapshotSourceTabHelper::CreateForWebState(web_state);
     PagePlaceholderTabHelper::CreateForWebState(web_state);
-    ChromeIOSTranslateClient::CreateForWebState(web_state);
 
     PasswordTabHelper::CreateForWebState(web_state);
     AutofillBottomSheetTabHelper::CreateForWebState(web_state);
     AutofillTabHelper::CreateForWebState(web_state);
   }
 
-  if (!for_lens_overlay) {
+  if (!for_lens_overlay && !for_prerender && !for_reader_mode) {
+    ChromeIOSTranslateClient::CreateForWebState(
+        web_state, InfoBarManagerImpl::FromWebState(web_state));
+  }
+
+  if (!for_lens_overlay && !for_reader_mode) {
     InfobarBadgeTabHelper::GetOrCreateForWebState(web_state);
     if (base::FeatureList::IsEnabled(kIOSPasskeyShim)) {
       PasskeyTabHelper::CreateForWebState(
@@ -338,18 +342,24 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
     FollowTabHelper::CreateForWebState(web_state);
   }
 
-  if (!for_lens_overlay && !is_off_the_record) {
+  if (!for_lens_overlay && !for_reader_mode && !is_off_the_record) {
     PriceNotificationsTabHelper::CreateForWebState(web_state);
   }
 
-  if (!for_lens_overlay && IsContextualPanelEnabled()) {
+  if (!for_lens_overlay && !for_reader_mode && IsContextualPanelEnabled()) {
     ContextualPanelModelService* model_service =
         ContextualPanelModelServiceFactory::GetForProfile(profile);
-    ContextualPanelTabHelper::CreateForWebState(web_state,
-                                                model_service->models());
+    // Revert back to model_service->models() once DanglingUntriaged is removed.
+    std::map<ContextualPanelItemType,
+             raw_ptr<ContextualPanelModel, DanglingUntriaged>>
+        models;
+    for (auto const& [key, val] : model_service->models()) {
+      models.emplace(key, val);
+    }
+    ContextualPanelTabHelper::CreateForWebState(web_state, models);
   }
 
-  if (!for_lens_overlay && !is_off_the_record &&
+  if (!for_lens_overlay && !for_reader_mode && !is_off_the_record &&
       IsAboutThisSiteFeatureEnabled()) {
     if (auto* optimization_guide_decider =
             OptimizationGuideServiceFactory::GetForProfile(profile)) {
@@ -376,4 +386,10 @@ void AttachTabHelpers(web::WebState* web_state, TabHelperFilter filter_flags) {
   }
 
   WebViewProxyTabHelper::CreateForWebState(web_state);
+
+  if (!for_prerender && !for_reader_mode && !for_lens_overlay &&
+      (base::FeatureList::IsEnabled(kIOSChooseFromDrive) ||
+       base::FeatureList::IsEnabled(kIOSCustomFileUploadMenu))) {
+    ChooseFileTabHelper::CreateForWebState(web_state);
+  }
 }

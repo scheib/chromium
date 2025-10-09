@@ -3,28 +3,184 @@
 # found in the LICENSE file.
 """A promptfoo provider for the Gemini CLI."""
 
+import json
+import logging
 import os
+import pathlib
 import subprocess
 import sys
+import textwrap
 import threading
+import time
+from collections.abc import Collection
 from typing import Any
 
-FINAL_OUTPUT_TAG = 'final_output'
+import constants
+
+sys.path.append(str(constants.CHROMIUM_SRC))
+from agents.common import gemini_helpers
+from agents.testing import checkout_helpers
+
 DEFAULT_TIMEOUT_SECONDS = 600
-DEFAULT_COMMAND = ['gemini', '-y']
+DEFAULT_EXTENSIONS = [
+    'build-information',
+    'depot-tools',
+    'landmines',
+    'test-landmines',
+]
 
 
-def _stream_reader(stream, output_list: list[str]):
+def _stream_reader(stream, output_list: list[str], width):
     """Reads a stream line-by-line and appends to a list."""
     try:
         for line in iter(stream.readline, ''):
-            sys.stderr.write(line)
             output_list.append(line)
+            wrapped_text = '\n'.join(
+                textwrap.wrap(line.rstrip('\r\n'), width=width))
+            sys.stderr.write(wrapped_text + '\n')
     except OSError:
         # Stream may be closed unexpectedly
         pass
     finally:
         stream.close()
+
+
+def _get_sandbox_image_tag() -> str | None:
+    """Gets the full sandbox image tag."""
+    gemini_version = gemini_helpers.get_gemini_version()
+    if not gemini_version:
+        logging.error('Failed to get gemini version.')
+        return None
+    return f'{constants.GEMINI_SANDBOX_IMAGE_URL}:{gemini_version}'
+
+
+def _get_container_path(sandbox_image: str) -> str | None:
+    """Gets the default PATH from the sandbox container."""
+    if not sandbox_image:
+        return None
+
+    # This is a Go template that iterates over all environment variables in the
+    # image's configuration and prints each one on a new line.
+    command = [
+        'docker', 'inspect',
+        r'--format={{range .Config.Env}}{{printf "%s\n" .}}{{end}}',
+        sandbox_image
+    ]
+    try:
+        result = subprocess.run(command,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                check=True)
+        logging.debug('docker inspect output:\n%s', result.stdout)
+        for line in result.stdout.splitlines():
+            if line.startswith('PATH='):
+                return line.split('=', 1)[1]
+
+        logging.warning('PATH not found in environment of %s', sandbox_image)
+        return None
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        error_message = f'Failed to get container PATH for {sandbox_image}: {e}'
+        if hasattr(e, 'stderr') and e.stderr:
+            error_message += f'\nstderr:\n{e.stderr}'
+        logging.error(error_message)
+        return None
+
+
+def _get_env_with_overrides(
+        home: pathlib.Path | None = None,
+        sandbox_flags: list[str] | None = None,
+        sandbox_image: str | None = None) -> dict[str, str]:
+    """Returns a copy of the environment with the given overrides."""
+    env = os.environ.copy()
+    if home:
+        env['HOME'] = str(home)
+        logging.debug('HOME: %s', env.get('HOME'))
+    if sandbox_flags:
+        env['SANDBOX_FLAGS'] = ' '.join(sandbox_flags)
+        logging.debug('SANDBOX_FLAGS: %s', env.get('SANDBOX_FLAGS'))
+    if sandbox_image:
+        env['GEMINI_SANDBOX_IMAGE'] = sandbox_image
+        logging.debug('GEMINI_SANDBOX_IMAGE: %s',
+                      env.get('GEMINI_SANDBOX_IMAGE'))
+    return env
+
+
+def _install_extensions(extensions: Collection[str] | None = None,
+                        home_dir: pathlib.Path | None = None) -> None:
+    # The installation script should identify the working tree as the "repo
+    # root", so use the copy in the working tree with the CWD set
+    # appropriately for subprocesses like `git`.
+    if not extensions:
+        return
+
+    logging.info('Installing extensions: %s', extensions)
+    command = [
+        sys.executable,
+        pathlib.Path('agents', 'extensions', 'install.py'),
+        '--extra-extensions-dir',
+        pathlib.Path('agents', 'testing', 'extensions'),
+        'add',
+        '--copy',
+        '--skip-prompt',
+        *extensions,
+    ]
+    result = subprocess.run(command,
+                            env=_get_env_with_overrides(home=home_dir),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            check=False)
+    logging.debug('Extension install output:\n%s', result.stdout)
+    result.check_returncode()
+    logging.debug('Installed extensions:\n%s',
+                  _get_installed_extensions(home_dir))
+
+
+def _load_templates(templates: list[str]) -> str:
+    """Loads and combines system prompt templates."""
+    if not templates:
+        return ''
+
+    logging.info('Loading templates: %s', templates)
+    prompt_parts = []
+    for template in templates:
+        with open(template, encoding='utf-8') as t:
+            prompt_parts.append(t.read())
+    return '\n\n'.join(prompt_parts)
+
+
+def _apply_changes(changes: list[dict[str, str]]) -> None:
+    """Applies changes to the repository."""
+    if not changes:
+        return
+
+    logging.info('Applying changes: %s', changes)
+    for change in changes:
+        if len(change) != 1:
+            raise ValueError(
+                'Invalid change object: must have exactly one key.')
+
+        if 'apply' in change:
+            subprocess.check_call(['git', 'apply', change['apply']])
+        elif 'stage' in change:
+            subprocess.check_call(['git', 'add', change['stage']])
+        else:
+            raise ValueError(
+                'Invalid change object: key must be "apply" or "stage".')
+
+
+def _get_installed_extensions(home_dir: pathlib.Path | None) -> str:
+    """Returns a string listing the installed extensions."""
+    return subprocess.check_output(
+        [
+            sys.executable,
+            pathlib.Path('agents', 'extensions', 'install.py'),
+            'list',
+        ],
+        env=_get_env_with_overrides(home_dir),
+        text=True,
+    )
 
 
 def call_api(prompt: str, options: dict[str, Any],
@@ -35,19 +191,42 @@ def call_api(prompt: str, options: dict[str, Any],
     reliable timeout.
     """
     provider_config = options.get('config', {})
-    command = provider_config.get('command', DEFAULT_COMMAND)
+    provider_vars = context.get('vars', {})
+    logging.basicConfig(
+        level=logging.DEBUG
+        if provider_vars.get('verbose', False) else logging.INFO,
+        format='%(message)s',
+    )
+
+    gemini_cli_bin = provider_vars.get('gemini_cli_bin', 'gemini')
+    command = [gemini_cli_bin, '-y']
     if not isinstance(command, list):
         return {
             'error': f"'command' must be a list of strings, but got: {command}"
         }
+
+    sandbox_flags = []
+    sandbox_image = _get_sandbox_image_tag()
+    if provider_vars.get('sandbox', False):
+        command.append('--sandbox')
+        depot_tools_path = checkout_helpers.get_depot_tools_path()
+        if not depot_tools_path:
+            return {
+                'error':
+                'Sandbox requires depot_tools, but it could not be located.'
+            }
+        sandbox_flags.append(f'-v {depot_tools_path.as_posix()}:/depot_tools')
+
+        container_path = _get_container_path(sandbox_image)
+        if container_path:
+            sandbox_flags.append(f'-e PATH=/depot_tools:{container_path}')
+        else:
+            return {
+                'error': ('Could not determine container PATH. '
+                          'PATH will not be overridden.')
+            }
+
     system_prompt = provider_config.get('system_prompt', '')
-    final_output_tag = provider_config.get('final_output_tag',
-                                           FINAL_OUTPUT_TAG)
-    output_instruction = (
-        'IMPORTANT: After you have finished all your work, wrap your final '
-        f'output in <{final_output_tag}> tags. For example: '
-        f'<{final_output_tag}>your output here</{final_output_tag}>')
-    combined_input = f'{output_instruction}\n{system_prompt}\n\n{prompt}'
     try:
         timeout_seconds = int(
             provider_config.get('timeoutSeconds', DEFAULT_TIMEOUT_SECONDS))
@@ -55,37 +234,62 @@ def call_api(prompt: str, options: dict[str, Any],
         timeout_seconds = DEFAULT_TIMEOUT_SECONDS
     process = None
     combined_output: list[str] = []
+
+    logging.debug('options: %s', json.dumps(options, indent=2))
+    logging.debug('context: %s', json.dumps(context, indent=2))
+
+    home_dir_str = provider_vars.get('home_dir')
+    home_dir = pathlib.Path(home_dir_str) if home_dir_str else None
+
+    extensions = provider_config.get('extensions', DEFAULT_EXTENSIONS)
+    _install_extensions(extensions, home_dir=home_dir)
+
+    templates = provider_config.get('templates', [])
+    template_prompt = _load_templates(templates)
+    if template_prompt:
+        if system_prompt:
+            system_prompt = f'{system_prompt}\n\n{template_prompt}'
+        else:
+            system_prompt = template_prompt
+
+    changes = provider_config.get('changes', [])
+    _apply_changes(changes)
+
     try:
-        cwd = provider_config.get('cwd', os.getcwd())
-        process = subprocess.Popen(
+        start_time = time.time()
+        process = subprocess.Popen(  # pylint: disable=consider-using-with
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             universal_newlines=True,
-            cwd=cwd,
+            env=_get_env_with_overrides(home=home_dir,
+                                        sandbox_flags=sandbox_flags,
+                                        sandbox_image=sandbox_image),
         )
         if process.stdin:
-            process.stdin.write(combined_input)
+            process.stdin.write(f'{system_prompt}\n\n{prompt}')
             process.stdin.close()
-        print(
-            f'--- Streaming Output (Timeout: {timeout_seconds}s) ---',
-            file=sys.stderr,
+        logging.info('--- Streaming Output (Timeout: %ss) ---',
+                     timeout_seconds)
+        console_width = int(provider_vars.get('console_width', 80))
+        output_thread = threading.Thread(
+            target=_stream_reader,
+            args=(process.stdout, combined_output, console_width),
         )
-        output_thread = threading.Thread(target=_stream_reader,
-                                         args=(process.stdout,
-                                               combined_output))
         output_thread.start()
         process.wait(timeout=timeout_seconds)
         output_thread.join(timeout=5)
-        print('\n--- End of Stream ---', file=sys.stderr)
+        elapsed_time = time.time() - start_time
+        logging.info('\n--- End of Stream ---')
 
         full_output = ''.join(combined_output)
         metrics = {
             'system_prompt': system_prompt,
             'user_prompt': prompt,
             'full_output': full_output,
+            'duration': elapsed_time,
         }
         if process.returncode != 0:
             error_message = (
@@ -93,24 +297,10 @@ def call_api(prompt: str, options: dict[str, Any],
                 f'{process.returncode}.\n'
                 f'Output:\n{full_output}')
             return {'error': error_message, 'metrics': metrics}
-
-        start_tag = f'<{final_output_tag}>'
-        end_tag = f'</{final_output_tag}>'
-        start_index = full_output.rfind(start_tag)
-        end_index = -1
-        if start_index != -1:
-            end_index = full_output.find(end_tag, start_index)
-        if start_index != -1 and end_index != -1:
-            final_output = full_output[start_index +
-                                       len(start_tag):end_index].strip()
-        else:
-            print(
-                f"Warning: Could not find '{start_tag}' and '{end_tag}' in "
-                'output. Falling back to full output.',
-                file=sys.stderr,
-            )
-            final_output = full_output.strip()
-        return {'output': final_output, 'metrics': metrics}
+        return {
+            'output': full_output.strip(),
+            'metrics': metrics,
+        }
     except subprocess.TimeoutExpired:
         if process:
             process.kill()

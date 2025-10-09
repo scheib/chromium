@@ -325,8 +325,6 @@ try_.builder(
     # The size of the testing pool is limited.
     max_concurrent_builds = 3,
     tryjob = try_.job(
-        # TODO(https://crbug.com/433551587): win11-23h2->24h2 migration
-        experiment_percentage = 100,
         location_filters = [
             "sandbox/win/.+",
             "sandbox/policy/win/.+",
@@ -539,12 +537,16 @@ gpu.try_.optional_tests_builder(
     os = os.WINDOWS_DEFAULT,
     ssd = builders.with_expiration(True, expiration = 5 * time.minute),
     free_space = None,
+    alerts_enabled = False,
     contact_team_email = "chrome-gpu-infra@google.com",
     # default is 6 in _gpu_optional_tests_builder()
     execution_timeout = 5 * time.hour,
     main_list_view = "try",
-    # TODO(crbug.com/375244064): Switch this to 7 after builderful SSD capacity
-    # is merged into the builderless pool.
+    # This is higher than the default of 7 for optional GPU builders
+    # because Windows builds take longer than other platforms even
+    # when using SSDs. Increasing the max concurrent builds a bit
+    # allows us to avoid long pending times without risk of
+    # overloading the testing hardware.
     max_concurrent_builds = 9,
     siso_remote_jobs = siso.remote_jobs.HIGH_JOBS_FOR_CQ,
     tryjob = try_.job(

@@ -2,21 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "components/signin/public/base/consent_level.h"
 #import "components/signin/public/base/signin_pref_names.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/authentication/ui_bundled/authentication_constants.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
-#import "ios/chrome/browser/reading_list/model/reading_list_constants.h"
 #import "ios/chrome/browser/reading_list/ui_bundled/reading_list_app_interface.h"
 #import "ios/chrome/browser/reading_list/ui_bundled/reading_list_constants.h"
 #import "ios/chrome/browser/reading_list/ui_bundled/reading_list_egtest_utils.h"
 #import "ios/chrome/browser/settings/ui_bundled/settings_table_view_controller_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_constants.h"
 #import "ios/chrome/browser/shared/ui/elements/activity_overlay_egtest_util.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_navigation_controller_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
@@ -61,12 +62,8 @@ id<GREYMatcher> SignedInSnackbar(NSString* email) {
   return grey_text(snackbarMessage);
 }
 
-id<GREYMatcher> SignedInSnackbarUndoButton() {
-  return grey_accessibilityID(kSigninSnackbarUndo);
-}
-
-id<GREYMatcher> AddedToAccountReadingListSnackbarUndoButton() {
-  return grey_accessibilityID(kReadingListAddedToAccountSnackbarUndoID);
+id<GREYMatcher> SnackbarButton() {
+  return grey_accessibilityID(kSnackbarButtonAccessibilityId);
 }
 
 // Provides responses containing a custom title for fake URLs.
@@ -176,8 +173,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey
       waitForUIElementToAppearWithMatcher:SignedInSnackbar(
                                               fakeIdentity.userEmail)];
-  [ChromeEarlGrey
-      waitForUIElementToAppearWithMatcher:SignedInSnackbarUndoButton()];
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:SnackbarButton()];
 
   // Dismiss the snackbar.
   [[EarlGrey selectElementWithMatcher:SignedInSnackbar(fakeIdentity.userEmail)]
@@ -207,8 +203,12 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [SigninEarlGrey verifyPrimaryAccountWithEmail:fakeIdentity.userEmail];
   // Tap on "Undo".
   [[EarlGrey
-      selectElementWithMatcher:grey_allOf(SignedInSnackbarUndoButton(),
-                                          grey_sufficientlyVisible(), nil)]
+      selectElementWithMatcher:grey_allOf(
+                                   SnackbarButton(),
+                                   grey_accessibilityLabel(
+                                       l10n_util::GetNSString(
+                                           IDS_IOS_SIGNIN_SNACKBAR_UNDO)),
+                                   grey_sufficientlyVisible(), nil)]
       performAction:grey_tap()];
   // Verify that the snackbar disappears, the promo is shown, and the user is
   // signed-out.
@@ -398,9 +398,9 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // Verify that the right snackbar appears and there's no undo button on it.
   [ChromeEarlGrey
       waitForUIElementToAppearWithMatcher:AddedToLocalReadingListSnackbar()];
-  [[EarlGrey selectElementWithMatcher:
-                 grey_allOf(AddedToAccountReadingListSnackbarUndoButton(),
-                            grey_sufficientlyVisible(), nil)]
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(SnackbarButton(),
+                                          grey_sufficientlyVisible(), nil)]
       assertWithMatcher:grey_nil()];
 
   // Dismiss the snackbar.
@@ -488,7 +488,9 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   // Tap on undo when the snackbar appears.
   [ChromeEarlGrey
       waitForAndTapButton:grey_allOf(
-                              AddedToAccountReadingListSnackbarUndoButton(),
+                              SnackbarButton(),
+                              grey_accessibilityLabel(l10n_util::GetNSString(
+                                  IDS_IOS_READING_LIST_SNACKBAR_UNDO_ACTION)),
                               grey_sufficientlyVisible(), nil)];
   // Verify that Page 1 is not in the Reading List.
   OpenReadingList();
@@ -541,13 +543,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // and one is removed, then after a sign-out and a new sign-in with the Reading
 // List sign-in promo with the same account, the removed item is not visible.
 - (void)testRemoveItemAfterSignInThenRefreshSignin {
-  // TODO(crbug.com/436165941): Re-enable the test on iOS26.
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
-  if (iOS26_OR_ABOVE()) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
-  }
-#endif
-
   // Sign-in with the Reading List Promo.
   FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGrey addFakeIdentity:fakeIdentity];
@@ -573,6 +568,9 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                                          fakeIdentity.userEmail);
   // Remove Page 1 from the Reading List.
   OpenReadingList();
+  // TODO(crbug.com/446889046): Investigate if there is a better solution to fix
+  // flakiness on iOS26.
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(1));
   [[EarlGrey selectElementWithMatcher:VisibleReadingListItem(kPage1Title)]
       performAction:grey_longPressWithDuration(kLongPressDuration)];
   [[EarlGrey selectElementWithMatcher:DeleteButton()] performAction:grey_tap()];
@@ -605,6 +603,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // unread items sections should be shown correctly and remain so after a
 // sign-out & sign-in with the same account.
 - (void)testMoveItemThenRefreshSignIn {
+  // TODO(crbug.com/436556292): Re-enable the test on iOS26.
+  if (base::ios::IsRunningOnIOS26OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
+  }
   // Sign-in with the Reading List Promo.
   FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
   [SigninEarlGrey addFakeIdentity:fakeIdentity];
@@ -631,6 +633,9 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
   // Mark Page 1 as read.
   OpenReadingList();
+  // TODO(crbug.com/446889046): Investigate if there is a better solution to fix
+  // flakiness on iOS26.
+  base::test::ios::SpinRunLoopWithMinDelay(base::Seconds(1));
   [[EarlGrey selectElementWithMatcher:VisibleReadingListItem(kPage1Title)]
       performAction:grey_longPressWithDuration(kLongPressDuration)];
   [[EarlGrey selectElementWithMatcher:ReadingListMarkAsReadButton()]

@@ -1532,6 +1532,7 @@ Starting worker: resources/global-interface-listing-worker.js
 [Worker]     getter referrer
 [Worker]     getter referrerPolicy
 [Worker]     getter signal
+[Worker]     getter targetAddressSpace
 [Worker]     getter url
 [Worker]     method arrayBuffer
 [Worker]     method blob
@@ -1754,7 +1755,7 @@ Starting worker: resources/global-interface-listing-worker.js
 [Worker]     method createHTML
 [Worker]     method createScript
 [Worker]     method createScriptURL
-[Worker] interface TrustedTypePolicyFactory : EventTarget
+[Worker] interface TrustedTypePolicyFactory
 [Worker]     attribute @@toStringTag
 [Worker]     getter defaultPolicy
 [Worker]     getter emptyHTML

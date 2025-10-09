@@ -1912,6 +1912,101 @@ TEST_F(TiledDisplayGetDisplaysTest, ConfigureTileDisplayTileCompositeMode) {
   ExpectEqualRequestsWithExceptions(config_requests, out_requests);
 }
 
+TEST_F(DrmGpuDisplayManagerMockedDeviceTest,
+       ConfigureTileDisplayFailureNoFallback) {
+  auto drm = AddDrmDevice();
+  drm->ResetStateWithAllProperties();
+
+  // Primary tile at (0,0)
+  const TileProperty expected_primary_tile_prop = {
+      .group_id = 1,
+      .scale_to_fit_display = true,
+      .tile_size = gfx::Size(3840, 4320),
+      .tile_layout = gfx::Size(2, 1),
+      .location = gfx::Point(0, 0)};
+  ScopedDrmPropertyBlob primary_tile_property_blob =
+      CreateTilePropertyBlob(*drm, expected_primary_tile_prop);
+  {
+    drm->AddCrtcWithPrimaryAndCursorPlanes();
+
+    auto& primary_encoder = drm->AddEncoder();
+    primary_encoder.possible_crtcs = 0b1;
+
+    auto& primary_connector = drm->AddConnector();
+    primary_connector.connection = true;
+    primary_connector.modes = std::vector<ResolutionAndRefreshRate>{
+        {gfx::Size(3840, 4320), 60}, {gfx::Size(1920, 1080), 60}};
+    primary_connector.encoders = std::vector<uint32_t>{primary_encoder.id};
+    primary_connector.edid_blob = std::vector<uint8_t>(
+        kTiledDisplay, kTiledDisplay + kTiledDisplayLength);
+    drm->AddProperty(
+        primary_connector.id,
+        {.id = kTileBlobPropId, .value = primary_tile_property_blob->id()});
+  }
+
+  // Non-primary tile at (0,1) - Identical to the primary tile except for tile
+  // location.
+  TileProperty expected_nonprimary_tile_prop = expected_primary_tile_prop;
+  expected_nonprimary_tile_prop.location = gfx::Point(1, 0);
+  ScopedDrmPropertyBlob nonprimary_tile_property_blob =
+      CreateTilePropertyBlob(*drm, expected_nonprimary_tile_prop);
+  {
+    drm->AddCrtcWithPrimaryAndCursorPlanes();
+
+    auto& nonprimary_encoder = drm->AddEncoder();
+    nonprimary_encoder.possible_crtcs = 0b10;
+
+    auto& nonprimary_connector = drm->AddConnector();
+    nonprimary_connector.connection = true;
+    nonprimary_connector.modes = std::vector<ResolutionAndRefreshRate>{
+        {gfx::Size(3840, 4320), 60}, {gfx::Size(1920, 1080), 60}};
+    nonprimary_connector.encoders =
+        std::vector<uint32_t>{nonprimary_encoder.id};
+    nonprimary_connector.edid_blob = std::vector<uint8_t>(
+        kTiledDisplay, kTiledDisplay + kTiledDisplayLength);
+    drm->AddProperty(
+        nonprimary_connector.id,
+        {.id = kTileBlobPropId, .value = nonprimary_tile_property_blob->id()});
+  }
+
+  drm->InitializeState(/* use_atomic */ true);
+  MockDrmDevice* mock_drm = static_cast<MockDrmDevice*>(drm.get());
+
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(display::features::kTiledDisplaySupport);
+  ASSERT_TRUE(display::features::IsTiledDisplaySupportEnabled());
+
+  auto displays = drm_gpu_display_manager_->GetDisplays();
+  ASSERT_EQ(displays.size(), 1u);
+
+  const display::DisplayMode* native_tile_mode = displays[0]->native_mode();
+  EXPECT_EQ(native_tile_mode->size(), gfx::Size(7680, 4320));
+
+  std::vector<display::DisplayConfigurationParams> config_requests;
+  config_requests.emplace_back(displays[0]->display_id(), displays[0]->origin(),
+                               native_tile_mode);
+
+  // fail all commits.
+  EXPECT_CALL(*mock_drm, CommitProperties)
+      .Times(AtLeast(1))
+      .WillRepeatedly(Return(false));
+
+  std::vector<display::DisplayConfigurationParams> out_requests;
+  EXPECT_FALSE(drm_gpu_display_manager_->ConfigureDisplays(
+      config_requests,
+      {display::ModesetFlag::kTestModeset,
+       display::ModesetFlag::kCommitModeset},
+      out_requests));
+  ExpectEqualRequestsWithExceptions(config_requests, out_requests);
+
+  // Expect no sign of attempted fallback.
+  histogram_tester_.ExpectTotalCount(kTestOnlyModesetOutcomeTwoDisplays,
+                                     /*expected_count=*/0);
+  histogram_tester_.ExpectTotalCount(
+      kTestOnlyModesetFallbacksAttemptedTwoDisplaysMetric,
+      /*expected_count=*/0);
+}
+
 TEST_F(DrmGpuDisplayManagerTest, RelinquishDisplayControl) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndDisableFeature(display::features::kFastDrmMasterDrop);
@@ -1947,8 +2042,48 @@ TEST_F(DrmGpuDisplayManagerTest, RelinquishDisplayControl) {
                                  display::ModesetFlag::kCommitModeset}));
 
   EXPECT_TRUE(drm->has_master());
-  drm_gpu_display_manager_->RelinquishDisplayControl();
+  EXPECT_TRUE(drm_gpu_display_manager_->RelinquishDisplayControl());
   EXPECT_FALSE(drm->has_master());
+}
+
+TEST_F(DrmGpuDisplayManagerTest, RelinquishDisplayControlFail) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(display::features::kFastDrmMasterDrop);
+  ASSERT_FALSE(display::features::IsFastDrmMasterDropEnabled());
+
+  auto drm = AddDrmDevice();
+  drm->ResetStateWithAllProperties();
+
+  // Add 2 connectors, each with one active display.
+  for (size_t i = 0; i < 2; ++i) {
+    drm->AddCrtcWithPrimaryAndCursorPlanes();
+
+    auto& encoder = drm->AddEncoder();
+    encoder.possible_crtcs = 1 << i;
+
+    auto& connector = drm->AddConnector();
+    connector.connection = true;
+    connector.modes = std::vector<ResolutionAndRefreshRate>{
+        kStandardModes[i % kStandardModes.size()]};
+    connector.encoders = std::vector<uint32_t>{encoder.id};
+    connector.edid_blob =
+        std::vector<uint8_t>(kHPz32x, kHPz32x + kHPz32xLength);
+  }
+  drm->InitializeState(/* use_atomic */ true);
+
+  MovableDisplaySnapshots display_snapshots =
+      drm_gpu_display_manager_->GetDisplays();
+  ASSERT_EQ(display_snapshots.size(), 2u);
+
+  // Make sure configuration on the returned snapshots is possible.
+  ASSERT_TRUE(ConfigureDisplays(display_snapshots,
+                                {display::ModesetFlag::kTestModeset,
+                                 display::ModesetFlag::kCommitModeset}));
+
+  EXPECT_TRUE(drm->has_master());
+  drm->set_succeed_drm_master_drop(false);
+  EXPECT_FALSE(drm_gpu_display_manager_->RelinquishDisplayControl());
+  EXPECT_TRUE(drm->has_master());
 }
 
 TEST_F(DrmGpuDisplayManagerTest, RelinquishDisplayControlFastDrop) {
@@ -2005,7 +2140,7 @@ TEST_F(DrmGpuDisplayManagerTest, RelinquishDisplayControlFastDrop) {
 
   EXPECT_TRUE(drm->has_master());
   int modeset_count = drm->get_commit_modeset_count();
-  drm_gpu_display_manager_->RelinquishDisplayControl();
+  EXPECT_TRUE(drm_gpu_display_manager_->RelinquishDisplayControl());
 
   EXPECT_FALSE(drm->has_master());
   EXPECT_EQ(drm->get_commit_modeset_count(), modeset_count + 1);
@@ -2071,7 +2206,7 @@ TEST_F(DrmGpuDisplayManagerTest,
   EXPECT_TRUE(drm->has_master());
   int modeset_count = drm->get_commit_modeset_count();
   drm->set_modeset_expectation(false);
-  drm_gpu_display_manager_->RelinquishDisplayControl();
+  EXPECT_FALSE(drm_gpu_display_manager_->RelinquishDisplayControl());
 
   EXPECT_TRUE(drm->has_master());
   EXPECT_EQ(drm->get_commit_modeset_count(), modeset_count + 1);

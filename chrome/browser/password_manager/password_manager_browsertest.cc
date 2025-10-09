@@ -335,7 +335,7 @@ void SubmitInjectedPasswordForm(content::WebContents* web_contents,
       "document.getElementById('password_field').value = 'pa55w0rd';"
       "document.getElementById('testform').submit();";
   PasswordsNavigationObserver observer(web_contents);
-  observer.SetPathToWaitFor(action_url.path());
+  observer.SetPathToWaitFor(action_url.GetPath());
   ASSERT_TRUE(content::ExecJs(frame, submit_form));
   ASSERT_TRUE(observer.Wait());
 }
@@ -1306,7 +1306,7 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerBrowserTest,
   content::SimulateMouseClickOrTapElementWithId(WebContents(),
                                                 "input_submit_button");
   ASSERT_TRUE(submit_observer.Wait());
-  std::string query = WebContents()->GetLastCommittedURL().query();
+  std::string query = WebContents()->GetLastCommittedURL().GetQuery();
   EXPECT_THAT(query, testing::HasSubstr("random_secret"));
 }
 
@@ -1629,8 +1629,16 @@ IN_PROC_BROWSER_TEST_F(PasswordManagerBrowserTest,
 
 // Tests that obsolete HTTP credentials are moved when a site migrated to HTTPS
 // and has HSTS enabled.
+// TODO(crbug.com/440205556): Flaky on Win.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_ObsoleteHttpCredentialMovedOnMigrationToHstsSite \
+  DISABLED_ObsoleteHttpCredentialMovedOnMigrationToHstsSite
+#else
+#define MAYBE_ObsoleteHttpCredentialMovedOnMigrationToHstsSite \
+  ObsoleteHttpCredentialMovedOnMigrationToHstsSite
+#endif
 IN_PROC_BROWSER_TEST_F(PasswordManagerBrowserTest,
-                       ObsoleteHttpCredentialMovedOnMigrationToHstsSite) {
+                       MAYBE_ObsoleteHttpCredentialMovedOnMigrationToHstsSite) {
   // Add an http credential to the password store.
   GURL https_origin = https_test_server().base_url();
   ASSERT_TRUE(https_origin.SchemeIs(url::kHttpsScheme));

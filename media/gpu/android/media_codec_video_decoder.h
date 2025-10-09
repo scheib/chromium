@@ -270,6 +270,7 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
   OutputCB output_cb_;
   WaitingCB waiting_cb_;
   VideoDecoderConfig decoder_config_;
+  bool low_delay_ = false;
 
   // Codec specific data (SPS and PPS for H264). Some MediaCodecs initialize
   // more reliably if we explicitly pass these (http://crbug.com/649185).
@@ -345,11 +346,6 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
 
   // Optional crypto object from the Cdm.
   base::android::ScopedJavaGlobalRef<jobject> media_crypto_;
-
-  // For A/B power testing, this causes all non-L1 content to avoid overlays.
-  // This is only for A/B power testing, and can be removed after that.
-  // See https://crbug.com/1081346 .
-  bool allow_nonsecure_overlays_ = true;
 
   // If set, then the next call to `CodecConfig()` will be allowed to retry if
   // it fails to get a codec.  This is to work around b/191966399.

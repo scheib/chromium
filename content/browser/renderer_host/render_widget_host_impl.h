@@ -72,7 +72,7 @@
 #include "ui/base/ime/text_input_mode.h"
 #include "ui/base/ime/text_input_type.h"
 #include "ui/base/mojom/menu_source_type.mojom-forward.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/latency/latency_info.h"
 #include "url/origin.h"
 
@@ -110,6 +110,10 @@ class FlingSchedulerBase;
 namespace ui {
 enum class DomCode : uint32_t;
 }
+
+namespace viz {
+struct CopyOutputBitmapWithMetadata;
+}  // namespace viz
 
 namespace content {
 class FrameTree;
@@ -174,8 +178,7 @@ class CONTENT_EXPORT RenderWidgetHostImpl
       base::SafeRef<SiteInstanceGroup> site_instance_group,
       int32_t routing_id,
       bool hidden,
-      bool renderer_initiated_creation,
-      std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue);
+      bool renderer_initiated_creation);
 
   // Similar to `Create()`, but creates a self-owned `RenderWidgetHostImpl`. The
   // returned widget deletes itself when either:
@@ -187,8 +190,7 @@ class CONTENT_EXPORT RenderWidgetHostImpl
       RenderWidgetHostDelegate* delegate,
       base::SafeRef<SiteInstanceGroup> site_instance_group,
       int32_t routing_id,
-      bool hidden,
-      std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue);
+      bool hidden);
 
   RenderWidgetHostImpl(const RenderWidgetHostImpl&) = delete;
   RenderWidgetHostImpl& operator=(const RenderWidgetHostImpl&) = delete;
@@ -851,6 +853,9 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // FrameTokenMessageQueue::Client:
   void OnInvalidFrameToken(uint32_t frame_token) override;
 
+  // FrameTokenMessageQueue::Client:
+  std::string GetMainFrameLastCommittedURLSpec() override;
+
   void ProgressFlingIfNeeded(base::TimeTicks current_time);
   void StopFling();
 
@@ -1026,22 +1031,24 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // cpu-priority boosted to run discard logic.
   void SetIsDiscarding(bool is_discarding);
 
+  SyntheticGestureController* SyntheticGestureControllerForTesting() {
+    return synthetic_gesture_controller_.get();
+  }
+
  protected:
   // |routing_id| must not be IPC::mojom::kRoutingIdNone.
   // If this object outlives |delegate|, DetachDelegate() must be called when
   // |delegate| goes away. |site_instance_group| will outlive this
   // widget but we store it via a `base::SafeRef` instead of a scoped_refptr to
   // not create a cycle and keep alive the `SiteInstanceGroup`.
-  RenderWidgetHostImpl(
-      FrameTree* frame_tree,
-      bool self_owned,
-      viz::FrameSinkId frame_sink_id,
-      RenderWidgetHostDelegate* delegate,
-      base::SafeRef<SiteInstanceGroup> site_instance_group,
-      int32_t routing_id,
-      bool hidden,
-      bool renderer_initiated_creation,
-      std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue);
+  RenderWidgetHostImpl(FrameTree* frame_tree,
+                       bool self_owned,
+                       viz::FrameSinkId frame_sink_id,
+                       RenderWidgetHostDelegate* delegate,
+                       base::SafeRef<SiteInstanceGroup> site_instance_group,
+                       int32_t routing_id,
+                       bool hidden,
+                       bool renderer_initiated_creation);
   // ---------------------------------------------------------------------------
   // The following method is overridden by RenderViewHost to send upwards to
   // its delegate.
@@ -1080,6 +1087,8 @@ class CONTENT_EXPORT RenderWidgetHostImpl
                            AddAndRemoveImeInputEventObserver);
   FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostTest,
                            InputRouterReceivesHasTouchEventHandlers);
+  FRIEND_TEST_ALL_PREFIXES(OOPIFScrollBubblingTest,
+                           ScrollBubblingWithTouchMoveInjection);
   FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostTest, EventDispatchPostDetach);
   FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostTest, InputEventRWHLatencyComponent);
   FRIEND_TEST_ALL_PREFIXES(DevToolsAgentHostImplTest,
@@ -1172,9 +1181,10 @@ class CONTENT_EXPORT RenderWidgetHostImpl
 
   void WindowSnapshotReachedScreen(int snapshot_id);
 
-  void OnSnapshotFromSurfaceReceived(int snapshot_id,
-                                     int retry_count,
-                                     const SkBitmap& bitmap);
+  void OnSnapshotFromSurfaceReceived(
+      int snapshot_id,
+      int retry_count,
+      const viz::CopyOutputBitmapWithMetadata& result);
 
   void OnSnapshotReceived(int snapshot_id, gfx::Image image);
 
@@ -1514,8 +1524,6 @@ class CONTENT_EXPORT RenderWidgetHostImpl
   // have a view.
   base::OnceCallback<void(base::UnguessableToken, const viz::FrameSinkId&)>
       create_frame_sink_callback_;
-
-  std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue_;
 
   std::optional<uint16_t> screen_orientation_angle_for_testing_;
   std::optional<display::mojom::ScreenOrientation>

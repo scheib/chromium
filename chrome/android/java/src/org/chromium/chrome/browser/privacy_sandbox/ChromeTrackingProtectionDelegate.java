@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.privacy_sandbox;
 
 import android.content.Context;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -15,6 +16,7 @@ import org.chromium.components.privacy_sandbox.TrackingProtectionDelegate;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.content_public.browser.BrowserContextHandle;
 
+@NullMarked
 public class ChromeTrackingProtectionDelegate implements TrackingProtectionDelegate {
     private final Profile mProfile;
     private final TrackingProtectionSettingsBridge mTrackingProtectionSettingsBridge;
@@ -87,11 +89,6 @@ public class ChromeTrackingProtectionDelegate implements TrackingProtectionDeleg
     @Override
     public void setFingerprintingProtection(boolean enabled) {
         UserPrefs.get(mProfile).setBoolean(Pref.FINGERPRINTING_PROTECTION_ENABLED, enabled);
-    }
-
-    @Override
-    public boolean isDisplayWildcardInContentSettingsEnabled() {
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.DISPLAY_WILDCARD_CONTENT_SETTINGS);
     }
 
     @Override

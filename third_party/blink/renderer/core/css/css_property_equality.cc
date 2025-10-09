@@ -214,6 +214,8 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.BaselineShift() == b.BaselineShift();
     case CSSPropertyID::kBaselineSource:
       return a.BaselineSource() == b.BaselineSource();
+    case CSSPropertyID::kBlockEllipsis:
+      return a.BlockEllipsis() == b.BlockEllipsis();
     case CSSPropertyID::kBorderBottomColor:
       return a.BorderBottomColor() == b.BorderBottomColor() &&
              a.InternalVisitedBorderBottomColor() ==
@@ -383,6 +385,9 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
     case CSSPropertyID::kFontKerning:
       return a.GetFontDescription().GetKerning() ==
              b.GetFontDescription().GetKerning();
+    case CSSPropertyID::kFontLanguageOverride:
+      return a.GetFontDescription().FontLanguageOverride() ==
+             b.GetFontDescription().FontLanguageOverride();
     case CSSPropertyID::kFontOpticalSizing:
       return a.GetFontDescription().FontOpticalSizing() ==
              b.GetFontDescription().FontOpticalSizing();
@@ -467,10 +472,10 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.GridTemplateRows() == b.GridTemplateRows();
     case CSSPropertyID::kHeight:
       return a.Height() == b.Height();
-    case CSSPropertyID::kInterestShowDelay:
-      return a.InterestShowDelay() == b.InterestShowDelay();
-    case CSSPropertyID::kInterestHideDelay:
-      return a.InterestHideDelay() == b.InterestHideDelay();
+    case CSSPropertyID::kInterestDelayStart:
+      return a.InterestDelayStart() == b.InterestDelayStart();
+    case CSSPropertyID::kInterestDelayEnd:
+      return a.InterestDelayEnd() == b.InterestDelayEnd();
     case CSSPropertyID::kHyphenateCharacter:
       return a.HyphenationString() == b.HyphenationString();
     case CSSPropertyID::kHyphenateLimitChars:
@@ -596,10 +601,15 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.OverflowX() == b.OverflowX();
     case CSSPropertyID::kOverflowY:
       return a.OverflowY() == b.OverflowY();
+    case CSSPropertyID::kOverscrollArea:
+      return base::ValuesEquivalent(a.OverscrollArea(), b.OverscrollArea());
     case CSSPropertyID::kOverscrollBehaviorX:
       return a.OverscrollBehaviorX() == b.OverscrollBehaviorX();
     case CSSPropertyID::kOverscrollBehaviorY:
       return a.OverscrollBehaviorY() == b.OverscrollBehaviorY();
+    case CSSPropertyID::kOverscrollPosition:
+      return base::ValuesEquivalent(a.OverscrollPosition(),
+                                    b.OverscrollPosition());
     case CSSPropertyID::kPaddingBottom:
       return a.PaddingBottom() == b.PaddingBottom();
     case CSSPropertyID::kPaddingLeft:
@@ -630,6 +640,8 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
       return a.Right() == b.Right();
     case CSSPropertyID::kRubyAlign:
       return a.RubyAlign() == b.RubyAlign();
+    case CSSPropertyID::kRubyOverhang:
+      return a.RubyOverhang() == b.RubyOverhang();
     case CSSPropertyID::kRubyPosition:
       return a.GetRubyPosition() == b.GetRubyPosition();
     case CSSPropertyID::kScrollTargetGroup:
@@ -975,13 +987,12 @@ bool CSSPropertyEquality::PropertiesEqual(const PropertyHandle& property,
     case CSSPropertyID::kAnimationTrigger:
     case CSSPropertyID::kScrollTimelineAxis:
     case CSSPropertyID::kScrollTimelineName:
-    case CSSPropertyID::kTimelineTriggerBehavior:
     case CSSPropertyID::kTimelineTriggerName:
     case CSSPropertyID::kTimelineTriggerRangeStart:
     case CSSPropertyID::kTimelineTriggerRangeEnd:
     case CSSPropertyID::kTimelineTriggerExitRangeStart:
     case CSSPropertyID::kTimelineTriggerExitRangeEnd:
-    case CSSPropertyID::kTimelineTriggerTimeline:
+    case CSSPropertyID::kTimelineTriggerSource:
     case CSSPropertyID::kViewTimelineAxis:
     case CSSPropertyID::kViewTimelineInset:
     case CSSPropertyID::kViewTimelineName:

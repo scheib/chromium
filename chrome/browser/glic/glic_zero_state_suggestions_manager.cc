@@ -7,8 +7,8 @@
 #include "base/functional/bind.h"
 #include "chrome/browser/contextual_cueing/contextual_cueing_features.h"
 #include "chrome/browser/contextual_cueing/contextual_cueing_service.h"
-#include "chrome/browser/glic/host/context/glic_sharing_manager_impl.h"
 #include "chrome/browser/glic/host/host.h"
+#include "chrome/browser/glic/public/context/glic_sharing_manager.h"
 #include "chrome/browser/glic/widget/glic_window_controller.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 
@@ -28,16 +28,21 @@ mojom::ZeroStateSuggestionsV2Ptr MakePendingSuggestionsPtr() {
 }  // namespace
 
 GlicZeroStateSuggestionsManager::GlicZeroStateSuggestionsManager(
-    GlicSharingManagerImpl* sharing_manager,
+    GlicSharingManager* sharing_manager,
     GlicWindowController* window_controller,
-    contextual_cueing::ContextualCueingService* contextual_cueing_service,
-    Host* host)
+    contextual_cueing::ContextualCueingService* contextual_cueing_service)
     : sharing_manager_(sharing_manager),
       window_controller_(window_controller),
-      host_(host),
       contextual_cueing_service_(contextual_cueing_service) {}
 
 GlicZeroStateSuggestionsManager::~GlicZeroStateSuggestionsManager() = default;
+
+Host& GlicZeroStateSuggestionsManager::host() {
+  // TODO(refactor): Eventually GlicInstance should own a
+  // GlicZeroStateSuggestionsManager, and that GlicInstance's host should be
+  // used.
+  return window_controller_->GetInstances()[0]->host();
+}
 
 void GlicZeroStateSuggestionsManager::
     NotifyZeroStateSuggestionsOnFocusedTabDataChanged(
@@ -61,7 +66,7 @@ void GlicZeroStateSuggestionsManager::
 
   if (contextual_cueing_service_ && active_web_contents) {
     // Notify host that suggestions are pending.
-    host_->NotifyZeroStateSuggestion(
+    host().NotifyZeroStateSuggestion(
         MakePendingSuggestionsPtr(),
         mojom::ZeroStateSuggestionsOptions(is_first_run, supported_tools));
 
@@ -124,7 +129,7 @@ void GlicZeroStateSuggestionsManager::
 
     // Notify host that suggestions are pending in case there were suggestions
     // and we are posting an invalid state.
-    host_->NotifyZeroStateSuggestion(
+    host().NotifyZeroStateSuggestion(
         MakePendingSuggestionsPtr(),
         mojom::ZeroStateSuggestionsOptions(is_first_run, supported_tools));
 
@@ -142,7 +147,7 @@ void GlicZeroStateSuggestionsManager::
 
     if (suggestions_pending) {
       // Notify host that suggestions are pending.
-      host_->NotifyZeroStateSuggestion(
+      host().NotifyZeroStateSuggestion(
           MakePendingSuggestionsPtr(),
           mojom::ZeroStateSuggestionsOptions(is_first_run, supported_tools));
     }
@@ -153,7 +158,7 @@ void GlicZeroStateSuggestionsManager::
     NotifyZeroStateSuggestionsOnPinnedTabDataChanged(
         bool is_first_run,
         const std::vector<std::string>& supported_tools,
-        const mojom::TabData* data) {
+        const TabDataChange& tab_data_change) {
   NotifyZeroStateSuggestionsOnPinnedTabChanged(
       is_first_run, supported_tools, sharing_manager_->GetPinnedTabs());
 }
@@ -255,7 +260,7 @@ void GlicZeroStateSuggestionsManager::OnZeroStateSuggestionsNotify(
   }
   suggestions_v2->suggestions = std::move(output_suggestions);
   suggestions_v2->is_pending = false;
-  host_->NotifyZeroStateSuggestion(
+  host().NotifyZeroStateSuggestion(
       std::move(suggestions_v2),
       mojom::ZeroStateSuggestionsOptions(is_first_run, supported_tools));
 }

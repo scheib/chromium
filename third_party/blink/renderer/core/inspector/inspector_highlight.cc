@@ -623,7 +623,7 @@ LayoutUnit TranslateRTLCoordinate(const LayoutObject* layout_object,
                                   LayoutUnit position,
                                   const Vector<LayoutUnit>& column_positions) {
   // This should only be called on grid or masonry layout objects.
-  DCHECK(layout_object->IsLayoutGrid() || layout_object->IsLayoutMasonry());
+  DCHECK(layout_object->IsLayoutGridOrMasonry());
   DCHECK(!layout_object->StyleRef().IsLeftToRightDirection());
 
   LayoutUnit alignment_offset = column_positions.front();
@@ -1230,10 +1230,10 @@ Vector<String> GetAuthoredGridTrackSizes(const CSSValue* value,
 
   result.reserve(track_count);
 
-  for (auto list_value : *value_list) {
+  for (const auto& list_value : *value_list) {
     if (IsA<cssvalue::CSSGridAutoRepeatValue>(list_value.Get())) {
       Vector<String> repeated_track_sizes;
-      for (auto auto_repeat_value : To<CSSValueList>(*list_value)) {
+      for (const auto& auto_repeat_value : To<CSSValueList>(*list_value)) {
         if (!auto_repeat_value->IsGridLineNamesValue())
           repeated_track_sizes.push_back(auto_repeat_value->CssText());
       }
@@ -1250,7 +1250,7 @@ Vector<String> GetAuthoredGridTrackSizes(const CSSValue* value,
           repeated_values->GetRepetitionsIfKnown();
       if (repetitions.has_value()) {
         for (size_t i = 0; i < *repetitions; ++i) {
-          for (auto repeated_value : *repeated_values) {
+          for (const auto& repeated_value : *repeated_values) {
             if (repeated_value->IsGridLineNamesValue()) {
               continue;
             }
@@ -1721,8 +1721,8 @@ std::unique_ptr<protocol::DictionaryValue> BuildGridInfoForGrid(
   std::unique_ptr<protocol::DictionaryValue> grid_info =
       protocol::DictionaryValue::create();
   auto* grid = To<LayoutGrid>(element->GetLayoutObject());
-  const Vector<LayoutUnit> rows = grid->RowPositions();
-  const Vector<LayoutUnit> columns = grid->ColumnPositions();
+  const Vector<LayoutUnit> rows = grid->GridTrackPositions(kForRows);
+  const Vector<LayoutUnit> columns = grid->GridTrackPositions(kForColumns);
 
   grid_info->setInteger("rotationAngle", GetRotationAngle(grid));
 
@@ -2360,7 +2360,7 @@ void InspectorHighlight::AppendNodeHighlight(
   if (highlight_config.css_grid != Color::kTransparent ||
       highlight_config.grid_highlight_config) {
     grid_info_ = protocol::ListValue::create();
-    if (layout_object->IsLayoutGrid() || layout_object->IsLayoutMasonry()) {
+    if (layout_object->IsLayoutGridOrMasonry()) {
       grid_info_->pushValue(
           BuildGridInfo(To<Element>(node), highlight_config, scale_, true));
     }
@@ -2584,8 +2584,7 @@ std::unique_ptr<protocol::DictionaryValue> InspectorGridHighlight(
 
   float scale = DeviceScaleFromFrameView(frame_view);
   LayoutObject* layout_object = node->GetLayoutObject();
-  if (!layout_object ||
-      (!layout_object->IsLayoutGrid() && !layout_object->IsLayoutMasonry())) {
+  if (!layout_object || !layout_object->IsLayoutGridOrMasonry()) {
     return nullptr;
   }
 

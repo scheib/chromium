@@ -14,8 +14,8 @@
 #import "components/data_sharing/test_support/test_utils.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/base/command_line_switches.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/share_kit/model/test_constants.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
@@ -150,12 +150,12 @@ void AddSharedGroup(BOOL owner,
   NSString* url = base::SysUTF8ToNSString(
       GetQueryTitleURL(test_server, kSharedTabTitle).spec());
   [TabGroupAppInterface prepareFakeSharedTabGroups:1 asOwner:owner url:url];
-  // Sleep for 1 second to make sure that the shared group data are correctly
-  // fetched.
-  base::PlatformThread::Sleep(base::Seconds(1));
   [ChromeEarlGreyUI openTabGrid];
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::
-                                          TabGridCloseButtonForCellAtIndex(0)]
+  // Close the tab grid once the button is available.
+  id<GREYMatcher> closeButtonMatcher =
+      chrome_test_util::TabGridCloseButtonForCellAtIndex(0);
+  [ChromeEarlGrey waitForUIElementToAppearWithMatcher:closeButtonMatcher];
+  [[EarlGrey selectElementWithMatcher:closeButtonMatcher]
       performAction:grey_tap()];
 }
 
@@ -320,6 +320,11 @@ void WaitForFakeJoinFlowView() {
 // Checks opening the Share flow from the Tab Grid and actually sharing. Then
 // checks opening the Manage flow. Using the face pile.
 - (void)testShareGroupAndManageGroupUsingFacePile {
+  // TODO(crbug.com/441923004): Re-enable this test on iOS26.
+  if (base::ios::IsRunningOnIOS26OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
+  }
+
   // Open the tab grid.
   [ChromeEarlGreyUI openTabGrid];
 
@@ -454,8 +459,7 @@ void WaitForFakeJoinFlowView() {
 
 // Checks that the IPH is presented when the user foreground the app with a
 // shared tab group active.
-// TODO(crbug.com/411064928): This fails on simulator.
-// TODO(crbug.com/414607496): This fails on device.
+// TODO(crbug.com/411064928): Re-enable this test.
 - (void)DISABLED_testForegroundIPH {
   if ([ChromeEarlGrey isIPadIdiom]) {
     // Not available on iPad.
@@ -719,14 +723,6 @@ void WaitForFakeJoinFlowView() {
   [[EarlGrey selectElementWithMatcher:TabGridCellAtIndex(0)]
       performAction:grey_tap()];
   LongPressOn(chrome_test_util::ShowTabsButton());
-  if (@available(iOS 26, *)) {
-    // TODO(crbug.com/428928323): Investigate why the keyboard appears. Remove
-    // this workaround when it's not needed anymore.
-    // On iOS 26, the keyboard appears when the show tabs button is long pressed
-    // and it hides the elements behind. Close the keyboard by typing a return
-    // key.
-    [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-  }
   [[EarlGrey selectElementWithMatcher:
                  grey_allOf(chrome_test_util::ButtonWithAccessibilityLabelId(
                                 IDS_IOS_CONTENT_CONTEXT_CLOSETAB),
@@ -966,7 +962,8 @@ void WaitForFakeJoinFlowView() {
 }
 
 // Ensures new tab is added when moving the last tab of a shared group.
-- (void)testMoveLastTabInSharedGroup {
+// TODO(crbug.com/442448866): Re-enable this test.
+- (void)FLAKY_testMoveLastTabInSharedGroup {
   // Create 2 groups, one shared and one local.
   [ChromeEarlGreyUI openNewTab];
   [ChromeEarlGrey loadURL:GetQueryTitleURL(self.testServer, kTab2Title)];
@@ -1192,7 +1189,8 @@ void WaitForFakeJoinFlowView() {
 
 // Tests that tapping items on Recent Activity takes an action corresponded to
 // the item.
-- (void)testTapRecentActivityItems {
+// TODO(crbug.com/440612088): This test is flaky.
+- (void)FLAKY_testTapRecentActivityItems {
   AddSharedGroup(/*owner=*/YES, self.testServer);
   [ChromeEarlGrey waitForMainTabCount:1];
 
@@ -1324,6 +1322,12 @@ void WaitForFakeJoinFlowView() {
   if (base::ios::IsRunningOnIOS26OrLater()) {
     EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
   }
+#if !TARGET_IPHONE_SIMULATOR
+  // TODO(crbug.com/449204815): Re-enable the test on iPad device.
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iPad.");
+  }
+#endif
 
   AddSharedGroup(/*owner=*/YES, self.testServer);
   [ChromeEarlGrey waitForMainTabCount:1];
@@ -1372,6 +1376,12 @@ void WaitForFakeJoinFlowView() {
 // Tests that the badge on the tab switcher appears when a shared group is
 // updated and disappears when a user visits the updated page.
 - (void)testTabSwitcherBadge {
+#if !TARGET_IPHONE_SIMULATOR
+  // TODO(crbug.com/449204815): Re-enable the test on iPad device.
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iPad.");
+  }
+#endif
   AddSharedGroup(/*owner=*/YES, self.testServer);
   [ChromeEarlGrey waitForMainTabCount:1];
 

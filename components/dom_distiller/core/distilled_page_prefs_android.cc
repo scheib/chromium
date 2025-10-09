@@ -46,9 +46,14 @@ jint DistilledPagePrefsAndroid::GetTheme(JNIEnv* env) {
   return (int)distilled_page_prefs_->GetTheme();
 }
 
-void DistilledPagePrefsAndroid::SetFontScaling(JNIEnv* env,
-                                               jfloat scaling) {
-  distilled_page_prefs_->SetFontScaling(static_cast<float>(scaling));
+void DistilledPagePrefsAndroid::SetUserPrefFontScaling(JNIEnv* env,
+                                                       jfloat scaling) {
+  distilled_page_prefs_->SetUserPrefFontScaling(static_cast<float>(scaling));
+}
+
+void DistilledPagePrefsAndroid::SetDefaultFontScaling(JNIEnv* env,
+                                                      jfloat scaling) {
+  distilled_page_prefs_->SetDefaultFontScaling(static_cast<float>(scaling));
 }
 
 jfloat DistilledPagePrefsAndroid::GetFontScaling(JNIEnv* env) {
@@ -99,7 +104,9 @@ void DistilledPagePrefsObserverAndroid::OnChangeFontFamily(
       env, java_ref_, (int)new_font_family);
 }
 
-void DistilledPagePrefsObserverAndroid::OnChangeTheme(mojom::Theme new_theme) {
+void DistilledPagePrefsObserverAndroid::OnChangeTheme(
+    mojom::Theme new_theme,
+    ThemeSettingsUpdateSource source) {
   JNIEnv* env = jni_zero::AttachCurrentThread();
   Java_DistilledPagePrefsObserverWrapper_onChangeTheme(env, java_ref_,
                                                        (int)new_theme);

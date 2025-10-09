@@ -10,6 +10,7 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/strings/string_util_internal.h"
 #include "base/test/bind.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "base/types/expected.h"
@@ -18,6 +19,7 @@
 #include "components/unexportable_keys/unexportable_key_task_manager.h"
 #include "crypto/scoped_fake_unexportable_key_provider.h"
 #include "crypto/unexportable_key.h"
+#include "net/base/features.h"
 #include "net/base/schemeful_site.h"
 #include "net/device_bound_sessions/proto/storage.pb.h"
 #include "net/dns/public/secure_dns_mode.h"
@@ -70,7 +72,7 @@ std::unique_ptr<Session> CreateSessionHelper(
     const std::string& origin = "https://foo.test") {
   SessionParams::Scope scope;
   scope.origin = origin;
-  std::string cookie_attr = "Secure; Domain=" + GURL(url_string).host();
+  std::string cookie_attr = "Secure; Domain=" + GURL(url_string).GetHost();
   std::vector<SessionParams::Credential> cookie_credentials(
       {SessionParams::Credential{"test_cookie", cookie_attr}});
   SessionParams params{session_id,
@@ -199,6 +201,9 @@ class SessionStoreImplTest : public testing::Test {
             }));
     run_loop.Run();
   }
+
+ protected:
+  base::test::ScopedFeatureList feature_list_;
 
  private:
   base::test::TaskEnvironment task_environment_;
@@ -407,12 +412,61 @@ TEST_F(SessionStoreImplTest, LoadSavedSessions) {
   MimicRestart();
 
   SessionStore::SessionsMap loaded_sessions = LoadSessions();
+  EXPECT_FALSE(loaded_sessions.empty());
   // Restore the binding keys in the store session objects.
   for (auto& [key, session] : loaded_sessions) {
     RestoreSessionBindingKey(key.site, session.get());
   }
 
   EXPECT_TRUE(SessionMapsAreEqual(saved_sessions, loaded_sessions));
+}
+
+TEST_F(SessionStoreImplTest, DropLowerSchemaVersionSessions) {
+  feature_list_.InitAndEnableFeatureWithParameters(
+      features::kDeviceBoundSessions,
+      {{features::kDeviceBoundSessionsSchemaVersion.name, "1"}});
+  CreateStoreAndLoadSessions();
+  SessionCfgList cfgs = {
+      {"https://a.foo.test/index.html", "session0", "https://foo.test"},
+      {"https://b.foo.test/index.html", "session1", "https://foo.test"},
+      {"https://c.bar.test/index.html", "session2", "https://bar.test"},
+  };
+
+  SessionStore::SessionsMap saved_sessions =
+      CreateAndSaveSessions(cfgs, unexportable_key_service(), store());
+
+  feature_list_.Reset();
+  feature_list_.InitAndEnableFeatureWithParameters(
+      features::kDeviceBoundSessions,
+      {{features::kDeviceBoundSessionsSchemaVersion.name, "2"}});
+  MimicRestart();
+
+  SessionStore::SessionsMap loaded_sessions = LoadSessions();
+  EXPECT_TRUE(loaded_sessions.empty());
+}
+
+TEST_F(SessionStoreImplTest, DropHigherSchemaVersionSessions) {
+  feature_list_.InitAndEnableFeatureWithParameters(
+      features::kDeviceBoundSessions,
+      {{features::kDeviceBoundSessionsSchemaVersion.name, "2"}});
+  CreateStoreAndLoadSessions();
+  SessionCfgList cfgs = {
+      {"https://a.foo.test/index.html", "session0", "https://foo.test"},
+      {"https://b.foo.test/index.html", "session1", "https://foo.test"},
+      {"https://c.bar.test/index.html", "session2", "https://bar.test"},
+  };
+
+  SessionStore::SessionsMap saved_sessions =
+      CreateAndSaveSessions(cfgs, unexportable_key_service(), store());
+
+  feature_list_.Reset();
+  feature_list_.InitAndEnableFeatureWithParameters(
+      features::kDeviceBoundSessions,
+      {{features::kDeviceBoundSessionsSchemaVersion.name, "1"}});
+  MimicRestart();
+
+  SessionStore::SessionsMap loaded_sessions = LoadSessions();
+  EXPECT_TRUE(loaded_sessions.empty());
 }
 
 TEST_F(SessionStoreImplTest, PruneLoadedEntryWithInvalidSite) {

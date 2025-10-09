@@ -31,17 +31,13 @@ enum class NTPMIAEntrypointVariation {
   // The entrypoint is shown inside the enlarged fake omnibox without incognito
   // shortcut.
   kEnlargedFakeboxNoIncognito = 4,
-  kMaxValue = kEnlargedFakeboxNoIncognito,
+  // The entrypoint is shown as a quick actions button, with enlarged fake
+  // omnibox
+  kAIMInQuickAction = 5,
+  kMaxValue = kAIMInQuickAction,
 };
 
 #pragma mark - Feature declarations
-
-// Feature flag to enable static resource serving for the Discover feed.
-// TODO(crbug.com/40246814): Remove this.
-BASE_DECLARE_FEATURE(kEnableDiscoverFeedStaticResourceServing);
-
-// Feature flag to enable discofeed endpoint for the Discover feed.
-BASE_DECLARE_FEATURE(kEnableDiscoverFeedDiscoFeedEndpoint);
 
 // Feature flag to fix the NTP view hierarchy if it is broken before applying
 // constraints.
@@ -59,15 +55,8 @@ BASE_DECLARE_FEATURE(kOverrideFeedSettings);
 // Feature flag to enable sending discover feedback to an updated target
 BASE_DECLARE_FEATURE(kWebFeedFeedbackReroute);
 
-// Feature flag to enable signed out user view demotion.
-BASE_DECLARE_FEATURE(kEnableSignedOutViewDemotion);
-
 // Feature flag to enable ghost cards on the iPad feeds.
 BASE_DECLARE_FEATURE(kEnableiPadFeedGhostCards);
-
-// Feature flag to enable account-switching UI when tapping the NTP identity
-// disc.
-BASE_DECLARE_FEATURE(kIdentityDiscAccountMenu);
 
 // Feature flag to enable in-product help for swipe action on the Feed.
 BASE_DECLARE_FEATURE(kFeedSwipeInProductHelp);
@@ -135,9 +124,6 @@ bool IsContentSuggestionsForSupervisedUserEnabled(PrefService* pref_service);
 
 // YES if discover feedback is going to be sent to the updated target.
 bool IsWebFeedFeedbackRerouteEnabled();
-
-// YES if the signed out user view demotion is enabled.
-bool IsSignedOutViewDemotionEnabled();
 
 // Whether ghost cards are enabled on the iPad feeds.
 bool IsiPadFeedGhostCardsEnabled();

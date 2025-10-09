@@ -76,7 +76,6 @@ const gpu::SharedImageUsageSet kDefaultMappableSIUsage =
 
 // Killswitch for fixing SyncToken issue.
 BASE_FEATURE(kExoAlwaysUseSyncTokenFromTexture,
-             "ExoAlwaysUseSyncTokenFromTexture",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Gets the color type of |format| for creating bitmap. If it returns
@@ -519,6 +518,7 @@ std::unique_ptr<Buffer> Buffer::CreateBufferFromGMBHandle(
     bool use_zero_copy,
     bool is_overlay_candidate,
     bool y_invert) {
+  CHECK(viz::HasEquivalentBufferFormat(format));
   // If format is true multiplanar format, we prefer external sampler on
   // ChromeOS.
   if (format.is_multi_plane()) {
@@ -538,6 +538,7 @@ std::unique_ptr<Buffer> Buffer::CreateBuffer(
     gpu::SurfaceHandle surface_handle,
     base::WaitableEvent* shutdown_event,
     bool is_overlay_candidate) {
+  CHECK(viz::HasEquivalentBufferFormat(format));
   // If format is true multiplanar format, we prefer external sampler on
   // ChromeOS.
   if (format.is_multi_plane()) {

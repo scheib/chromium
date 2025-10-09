@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/web_app_id_constants.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
@@ -24,7 +23,6 @@
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
-#include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/shelf/arc_app_shelf_id.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_item_factory.h"
@@ -117,9 +115,6 @@ bool IsAppHiddenFromShelf(Profile* profile, const std::string& app_id) {
 
 bool IsPromiseAppReadyToShowInShelf(Profile* profile,
                                     const std::string& promise_package_id) {
-  if (!ash::features::ArePromiseIconsEnabled()) {
-    return false;
-  }
   CHECK(apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile));
   const apps::PromiseApp* promise_app =
       apps::AppServiceProxyFactory::GetForProfile(profile)
@@ -131,8 +126,7 @@ bool IsPromiseAppReadyToShowInShelf(Profile* profile,
 bool IsAppPinEditable(apps::AppType app_type,
                       const std::string& app_id,
                       Profile* profile) {
-  if (ash::features::ArePromiseIconsEnabled() &&
-      apps::AppServiceProxyFactory::GetForProfile(profile)
+  if (apps::AppServiceProxyFactory::GetForProfile(profile)
           ->PromiseAppRegistryCache()
           ->GetPromiseAppForStringPackageId(app_id)) {
     return true;

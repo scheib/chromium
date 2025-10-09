@@ -19,59 +19,81 @@
 #include "base/time/time.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
+#include "third_party/webrtc/modules/desktop_capture/desktop_region.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor.h"
 
 namespace remoting {
 
-PipewireCaptureStream::CallbackProxy::CallbackProxy() = default;
+// SharedScreenCastStream runs the pipewire loop, and invokes frame callbacks,
+// on a separate thread. This class is responsible for bouncing them back to
+// the corresponding methods of `parent_` on `callback_sequence`.
+class PipewireCaptureStream::CallbackProxy
+    : public webrtc::DesktopCapturer::Callback {
+ public:
+  explicit CallbackProxy(base::WeakPtr<PipewireCaptureStream> parent);
+  ~CallbackProxy() override;
+
+  void Start();
+  void Stop();
+
+  // Callback interface
+  void OnFrameCaptureStart() override;
+  void OnCaptureResult(webrtc::DesktopCapturer::Result result,
+                       std::unique_ptr<webrtc::DesktopFrame> frame) override;
+
+ private:
+  // Lock is needed since Initialize() and the callback methods are called
+  // from different threads. It also ensures that the initial frame is
+  // delivered before any frames received from the SharedScreenCastStream.
+  base::Lock lock_;
+  bool started_ GUARDED_BY(lock_);
+  scoped_refptr<base::SequencedTaskRunner> callback_sequence_ =
+      base::SequencedTaskRunner::GetCurrentDefault();
+  base::WeakPtr<PipewireCaptureStream> parent_;
+};
+
+PipewireCaptureStream::CallbackProxy::CallbackProxy(
+    base::WeakPtr<PipewireCaptureStream> parent)
+    : parent_(parent) {}
+
 PipewireCaptureStream::CallbackProxy::~CallbackProxy() = default;
 
-void PipewireCaptureStream::CallbackProxy::Initialize(
-    scoped_refptr<base::SequencedTaskRunner> callback_sequence,
-    base::WeakPtr<webrtc::DesktopCapturer::Callback> callback,
-    std::unique_ptr<webrtc::DesktopFrame> initial_frame) {
+void PipewireCaptureStream::CallbackProxy::Start() {
   base::AutoLock lock(lock_);
-  callback_sequence_ = callback_sequence;
-  callback_ = callback;
-  if (initial_frame) {
-    callback_sequence_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&webrtc::DesktopCapturer::Callback::OnFrameCaptureStart,
-                       callback_)
-            .Then(base::BindOnce(
-                &webrtc::DesktopCapturer::Callback::OnCaptureResult, callback_,
-                webrtc::DesktopCapturer::Result::SUCCESS,
-                std::move(initial_frame))));
-  }
+  started_ = true;
+}
+
+void PipewireCaptureStream::CallbackProxy::Stop() {
+  base::AutoLock lock(lock_);
+  started_ = false;
 }
 
 void PipewireCaptureStream::CallbackProxy::OnFrameCaptureStart() {
   base::AutoLock lock(lock_);
-  if (!callback_sequence_) {
-    // Not initialized yet.
+  if (!started_) {
     return;
   }
   callback_sequence_->PostTask(
       FROM_HERE,
-      base::BindOnce(&webrtc::DesktopCapturer::Callback::OnFrameCaptureStart,
-                     callback_));
+      base::BindOnce(&PipewireCaptureStream::OnFrameCaptureStart, parent_));
 }
 
 void PipewireCaptureStream::CallbackProxy::OnCaptureResult(
     webrtc::DesktopCapturer::Result result,
     std::unique_ptr<webrtc::DesktopFrame> frame) {
   base::AutoLock lock(lock_);
-  if (!callback_sequence_) {
-    // Not initialized yet.
+  if (!started_) {
     return;
   }
   callback_sequence_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&webrtc::DesktopCapturer::Callback::OnCaptureResult,
-                     callback_, result, std::move(frame)));
+      FROM_HERE, base::BindOnce(&PipewireCaptureStream::OnCaptureResult,
+                                parent_, result, std::move(frame)));
 }
 
-PipewireCaptureStream::PipewireCaptureStream() = default;
+PipewireCaptureStream::PipewireCaptureStream() {
+  callback_proxy_ =
+      std::make_unique<CallbackProxy>(weak_ptr_factory_.GetWeakPtr());
+}
 
 PipewireCaptureStream::~PipewireCaptureStream() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -80,12 +102,12 @@ PipewireCaptureStream::~PipewireCaptureStream() {
 void PipewireCaptureStream::SetPipeWireStream(
     std::uint32_t pipewire_node,
     const webrtc::DesktopSize& initial_resolution,
-    std::string mapping_id,
+    std::string_view mapping_id,
     int pipewire_fd) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   pipewire_node_ = pipewire_node;
   resolution_ = initial_resolution;
-  mapping_id_ = std::move(mapping_id);
+  mapping_id_ = mapping_id;
   pipewire_fd_ = pipewire_fd;
 }
 
@@ -93,15 +115,53 @@ void PipewireCaptureStream::StartVideoCapture() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   stream_->StartScreenCastStream(pipewire_node_, pipewire_fd_,
                                  resolution_.width(), resolution_.height(),
-                                 false, &callback_proxy_);
+                                 false, callback_proxy_.get());
 }
 
 void PipewireCaptureStream::SetCallback(
-    scoped_refptr<base::SequencedTaskRunner> callback_sequence,
     base::WeakPtr<webrtc::DesktopCapturer::Callback> callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callback_proxy_.Initialize(callback_sequence, callback,
-                             stream_->CaptureFrame());
+  callback_ = callback;
+  if (!callback_) {
+    // The current lifecycle of the pipewire stream and its virtual monitor is:
+    //
+    // 1. Call the org_gnome_Mutter_ScreenCast_Stream::Start API, which creates
+    //    the pipewire stream but doesn't actually create the virtual monitor.
+    // 2. Call stream_->StartScreenCastStream(), which creates the virtual
+    //    monitor.
+    // 3. Call stream_->StopScreenCastStream(), which stops the stream but
+    //    doesn't destroy the virtual monitor.
+    // 4. Call the org_gnome_Mutter_ScreenCast_Stream::Stop API, which destroys
+    //    the virtual monitor.
+    //
+    // Based on this, we could call StopScreenCastStream() here and call
+    // StartScreenCastStream() again when the callback is set to a non-null
+    // value. However, the lifecycle is not documented anywhere, and it's
+    // asymmetrical which doesn't sound right, so we don't do it in case the
+    // behavior gets changed in the future.
+    callback_proxy_->Stop();
+    is_capturing_frame_ = false;
+    return;
+  }
+
+  auto self = weak_ptr_factory_.GetWeakPtr();
+  // RecaptureLatestFrameAsDirty() must be called before
+  // callback_proxy_.Initialize(), since calling the latter will immediately
+  // start pumping frames to `PipewireCaptureStream` and can potentially cause
+  // race conditions (an old frame is delivered after the current frame).
+  RecaptureLatestFrameAsDirty();
+  // While unlikely, RecaptureLatestFrameAsDirty() runs `callback_` in the
+  // current stack frame and could potentially delete `this`, so we should only
+  // access class members if the weak pointer remains valid.
+  if (self) {
+    callback_proxy_->Start();
+  }
+}
+
+void PipewireCaptureStream::SetUseDamageRegion(bool use_damage_region) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  stream_->SetUseDamageRegion(use_damage_region);
+  RecaptureLatestFrameAsDirty();
 }
 
 void PipewireCaptureStream::SetResolution(
@@ -128,19 +188,105 @@ PipewireCaptureStream::CaptureCursorPosition() {
   return stream_->CaptureCursorPosition();
 }
 
-void PipewireCaptureStream::StopVideoCapture() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  stream_->StopScreenCastStream();
-}
-
-std::string_view PipewireCaptureStream::mapping_id() {
+std::string_view PipewireCaptureStream::mapping_id() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return mapping_id_;
 }
 
-base::WeakPtr<PipewireCaptureStream> PipewireCaptureStream::GetWeakPtr() {
+const webrtc::DesktopSize& PipewireCaptureStream::resolution() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return resolution_;
+}
+
+void PipewireCaptureStream::set_screen_id(webrtc::ScreenId screen_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  screen_id_ = screen_id;
+}
+
+webrtc::ScreenId PipewireCaptureStream::screen_id() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return screen_id_;
+}
+
+base::WeakPtr<CaptureStream> PipewireCaptureStream::GetWeakPtr() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return weak_ptr_factory_.GetWeakPtr();
+}
+
+void PipewireCaptureStream::RecaptureLatestFrameAsDirty() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (is_capturing_frame_) {
+    should_mark_current_frame_dirty_ = true;
+    return;
+  }
+  auto self = weak_ptr_factory_.GetWeakPtr();
+  OnFrameCaptureStart();
+  // While unlikely, OnFrameCaptureStart() runs `callback_` in the current stack
+  // frame and could potentially delete `this`, so we should only access class
+  // members if the weak pointer remains valid.
+  if (!self) {
+    return;
+  }
+  // Note: CaptureFrame() does not really capture a new frame. It just returns
+  // the latest available frame, or null if it's unavailable.
+  auto frame = stream_->CaptureFrame();
+  if (frame) {
+    // Mark the entire frame as dirty.
+    frame->mutable_updated_region()->SetRect(
+        webrtc::DesktopRect::MakeSize(frame->size()));
+    OnCaptureResult(webrtc::DesktopCapturer::Result::SUCCESS, std::move(frame));
+  } else {
+    OnCaptureResult(webrtc::DesktopCapturer::Result::ERROR_TEMPORARY, nullptr);
+  }
+}
+
+void PipewireCaptureStream::OnFrameCaptureStart() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  is_capturing_frame_ = true;
+  if (callback_) {
+    callback_->OnFrameCaptureStart();
+  }
+}
+
+void PipewireCaptureStream::OnCaptureResult(
+    webrtc::DesktopCapturer::Result result,
+    std::unique_ptr<webrtc::DesktopFrame> frame) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  is_capturing_frame_ = false;
+
+  if (frame) {
+    if (!should_mark_current_frame_dirty_) {
+      // Check to see if the updated region is invalid, which may happen if the
+      // frame with an invalid updated region is received before
+      // SetUseDamageRegion(false) is called. If this happens, we mark the
+      // entire frame dirty. Note that the updated region could still be invalid
+      // even if the check passes, e.g., the monitor offset changes slightly so
+      // the updated rectangles still remain in the desktop rectangle.
+      // SetUseDamageRegion() will call RecaptureLatestFrameAsDirty() to cover
+      // that.
+      auto updated_region_it =
+          webrtc::DesktopRegion::Iterator(frame->updated_region());
+      while (!updated_region_it.IsAtEnd()) {
+        if (updated_region_it.rect().left() < 0 ||
+            updated_region_it.rect().top() < 0 ||
+            updated_region_it.rect().right() > frame->size().width() ||
+            updated_region_it.rect().bottom() > frame->size().height()) {
+          should_mark_current_frame_dirty_ = true;
+          break;
+        }
+        updated_region_it.Advance();
+      }
+    }
+    if (should_mark_current_frame_dirty_) {
+      frame->mutable_updated_region()->SetRect(
+          webrtc::DesktopRect::MakeSize(frame->size()));
+    }
+  }
+
+  should_mark_current_frame_dirty_ = false;
+  if (callback_) {
+    callback_->OnCaptureResult(result, std::move(frame));
+  }
 }
 
 }  // namespace remoting

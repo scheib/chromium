@@ -13,7 +13,7 @@
 #include "ui/display/types/display_snapshot.h"
 #include "ui/events/platform/platform_event_dispatcher.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/ozone/platform/drm/host/gpu_thread_observer.h"
 #include "ui/platform_window/platform_window.h"
 #include "ui/platform_window/platform_window_delegate.h"
@@ -92,7 +92,7 @@ class DrmWindowHost : public PlatformWindow,
   void SizeConstraintsChanged() override;
 
   void OnCursorUpdate();
-  void GenerateMouseMove(const gfx::PointF& location);
+  void SynthesizeMouseMove(const gfx::PointF& location);
 
   // PlatformEventDispatcher:
   bool CanDispatchEvent(const PlatformEvent& event) override;

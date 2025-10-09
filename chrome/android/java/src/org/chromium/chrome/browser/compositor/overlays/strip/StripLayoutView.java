@@ -54,20 +54,6 @@ public abstract class StripLayoutView implements VirtualView {
         void onKeyboardFocus(boolean isFocused, StripLayoutView view);
     }
 
-    /** A property for animations to use for changing the drawX of the view. */
-    public static final FloatProperty<StripLayoutView> DRAW_X =
-            new FloatProperty<>("drawX") {
-                @Override
-                public void setValue(StripLayoutView object, float value) {
-                    object.setDrawX(value);
-                }
-
-                @Override
-                public Float get(StripLayoutView object) {
-                    return object.getDrawX();
-                }
-            };
-
     /** A property for animations to use for changing the X offset of the view. */
     public static final FloatProperty<StripLayoutView> X_OFFSET =
             new FloatProperty<>("offsetX") {
@@ -79,6 +65,20 @@ public abstract class StripLayoutView implements VirtualView {
                 @Override
                 public Float get(StripLayoutView object) {
                     return object.getOffsetX();
+                }
+            };
+
+    /** A property for animations to use for changing the width of the view. */
+    public static final FloatProperty<StripLayoutView> WIDTH =
+            new FloatProperty<>("width") {
+                @Override
+                public void setValue(StripLayoutView object, float value) {
+                    object.setWidth(value);
+                }
+
+                @Override
+                public Float get(StripLayoutView object) {
+                    return object.getWidth();
                 }
             };
 
@@ -121,6 +121,7 @@ public abstract class StripLayoutView implements VirtualView {
     private boolean mIsDraggedOffStrip;
     private boolean mIsNonDragReordering;
     private boolean mWillClose;
+    private boolean mIsDying;
 
     // A11y variables.
     private String mAccessibilityDescription = "";
@@ -378,6 +379,21 @@ public abstract class StripLayoutView implements VirtualView {
     /** Returns whether or not the view will be closed due to an incoming TabModel update. */
     public boolean willClose() {
         return mWillClose;
+    }
+
+    /**
+     * Mark this view as in the process of dying. This lets us track which views are closed after
+     * animations.
+     *
+     * @param isDying Whether or not the view is dying.
+     */
+    public void setIsDying(boolean isDying) {
+        mIsDying = isDying;
+    }
+
+    /** Returns whether or not the view is dying. */
+    public boolean isDying() {
+        return mIsDying;
     }
 
     /**

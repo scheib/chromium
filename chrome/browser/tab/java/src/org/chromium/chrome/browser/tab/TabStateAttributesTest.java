@@ -37,6 +37,8 @@ import org.chromium.base.Token;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.base.task.test.ShadowPostTask;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Features.EnableFeatures;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.TabStateAttributes.DirtinessState;
 import org.chromium.components.embedder_support.util.UrlConstants;
@@ -413,6 +415,7 @@ public class TabStateAttributesTest {
     }
 
     @Test
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
     public void testIsPinnedUpdates() {
         TabStateAttributes.createForTab(mTab, TabCreationState.FROZEN_ON_RESTORE);
         TabStateAttributes.from(mTab).addObserver(mAttributesObserver);
@@ -427,6 +430,20 @@ public class TabStateAttributesTest {
         assertEquals(DirtinessState.DIRTY, TabStateAttributes.from(mTab).getDirtinessState());
         TabStateAttributes.from(mTab).clearTabStateDirtiness();
         verify(mAttributesObserver, times(2))
+                .onTabStateDirtinessChanged(mTab, DirtinessState.DIRTY);
+
+        // Test for NTP.
+        mTab.setUrl(new GURL(UrlConstants.NTP_URL));
+        mTab.setIsPinned(true);
+        assertEquals(DirtinessState.DIRTY, TabStateAttributes.from(mTab).getDirtinessState());
+        TabStateAttributes.from(mTab).clearTabStateDirtiness();
+        verify(mAttributesObserver, times(3))
+                .onTabStateDirtinessChanged(mTab, DirtinessState.DIRTY);
+
+        mTab.setIsPinned(false);
+        assertEquals(DirtinessState.DIRTY, TabStateAttributes.from(mTab).getDirtinessState());
+        TabStateAttributes.from(mTab).clearTabStateDirtiness();
+        verify(mAttributesObserver, times(4))
                 .onTabStateDirtinessChanged(mTab, DirtinessState.DIRTY);
 
         verify(mAttributesObserver, never())

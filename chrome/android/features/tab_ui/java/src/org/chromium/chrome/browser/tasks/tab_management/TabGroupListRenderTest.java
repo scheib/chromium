@@ -41,13 +41,17 @@ import org.chromium.chrome.test.transit.hub.TabSwitcherAppMenuFacility;
 import org.chromium.chrome.test.transit.ntp.RegularNewTabPageStation;
 import org.chromium.chrome.test.transit.page.WebPageStation;
 import org.chromium.chrome.test.util.ChromeRenderTestRule;
+import org.chromium.components.omnibox.OmniboxFeatureList;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.test.util.RenderTestRule.Component;
 
 /** Render tests for {@link TabGroupListView}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @EnableFeatures(ChromeFeatureList.GRID_TAB_SWITCHER_SURFACE_COLOR_UPDATE)
-@DisableFeatures(ChromeFeatureList.TAB_GROUP_ENTRY_POINTS_ANDROID)
+@DisableFeatures({
+    ChromeFeatureList.TAB_GROUP_ENTRY_POINTS_ANDROID,
+    OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS
+})
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Batch(Batch.PER_CLASS)
 public class TabGroupListRenderTest {
@@ -73,7 +77,7 @@ public class TabGroupListRenderTest {
         RegularTabSwitcherStation tabSwitcher = firstPage.openRegularTabSwitcher();
         TabGroupPaneStation tabGroupPane = tabSwitcher.selectTabGroupsPane();
 
-        RecyclerView recyclerView = tabGroupPane.recyclerViewElement.get();
+        RecyclerView recyclerView = tabGroupPane.recyclerViewElement.value();
         mRenderTestRule.render(recyclerView, "1_group");
 
         createGroupProgrammatic("Group 2", /* wait= */ true);

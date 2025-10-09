@@ -17,7 +17,6 @@
 #include "content/public/browser/child_process_host.h"
 #include "content/public/browser/child_process_termination_info.h"
 #include "content/public/common/process_type.h"
-#include "ipc/ipc_sender.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -56,8 +55,7 @@ class CONTENT_EXPORT BrowserChildProcessHost {
   // Derived classes call this to launch the child process asynchronously.
   virtual void Launch(
       std::unique_ptr<SandboxedProcessLauncherDelegate> delegate,
-      std::unique_ptr<base::CommandLine> cmd_line,
-      bool terminate_on_shutdown) = 0;
+      std::unique_ptr<base::CommandLine> cmd_line) = 0;
 
   virtual const ChildProcessData& GetData() = 0;
 

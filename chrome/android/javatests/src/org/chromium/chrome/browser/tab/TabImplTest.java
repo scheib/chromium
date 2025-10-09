@@ -22,7 +22,9 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.tabmodel.TabClosureParams;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -56,7 +58,7 @@ public class TabImplTest {
     private TabImpl createFrozenTab() {
         String url = mActivityTestRule.getTestServer().getURL(TEST_PATH);
         WebPageStation testPage = mInitialPage.openFakeLinkToWebPage(url);
-        Tab tab = testPage.loadedTabElement.get();
+        Tab tab = testPage.loadedTabElement.value();
 
         return ThreadUtils.runOnUiThreadBlocking(
                 () -> {
@@ -121,7 +123,13 @@ public class TabImplTest {
                 });
 
         CriteriaHelper.pollUiThread(
-                () -> Criteria.checkThat(viewStructure.getChildCount(), Matchers.equalTo(1)),
+                () -> {
+                    if (viewStructure.getChildCount() != 1) return false;
+                    var rootNode = viewStructure.getChild(0);
+                    if (!rootNode.hasExtras()) return false;
+                    return rootNode.getExtras()
+                            .containsKey("org.chromium.chrome.browser.AnnotatedPageContents");
+                },
                 DEFAULT_MAX_TIME_TO_WAIT_IN_MS,
                 CriteriaHelper.DEFAULT_POLLING_INTERVAL);
 
@@ -131,5 +139,18 @@ public class TabImplTest {
         assertTrue(
                 rootNode.getExtras()
                         .containsKey("org.chromium.chrome.browser.AnnotatedPageContents"));
+    }
+
+    @Test
+    @SmallTest
+    @Feature({"Tab"})
+    @DisableFeatures({
+        ChromeFeatureList.ANDROID_PINNED_TABS,
+        ChromeFeatureList.ANDROID_PINNED_TABS_TABLET_TAB_STRIP
+    })
+    public void testSetIsPinned_TrueBecomesFalseWhenFeatureDisabled() {
+        TabImpl tab = (TabImpl) mActivityTestRule.getActivityTab();
+        ThreadUtils.runOnUiThreadBlocking(() -> tab.setIsPinned(true));
+        assertFalse("Tab should not be pinned when the feature is disabled.", tab.getIsPinned());
     }
 }

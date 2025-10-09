@@ -30,10 +30,12 @@
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/frame/tab_strip_view_interface.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_observer.h"
 #include "chrome/common/webui_url_constants.h"
@@ -210,15 +212,17 @@ IN_PROC_BROWSER_TEST_F(SnapGroupBrowserTest, RotatedSnapGroup) {
   ash::test::InstallSystemAppsForTesting(profile);
 
   ash::test::CreateSystemWebApp(profile, ash::SystemWebAppType::FILE_MANAGER);
-  aura::Window* w1 =
-      BrowserList::GetInstance()->GetLastActive()->window()->GetNativeWindow();
+  aura::Window* w1 = GetLastActiveBrowserWindowInterfaceWithAnyProfile()
+                         ->GetWindow()
+                         ->GetNativeWindow();
   ash::display_move_window_util::HandleMoveActiveWindowBetweenDisplays();
   auto* root2 = ash::Shell::GetAllRootWindows()[1].get();
   ASSERT_EQ(root2, w1->GetRootWindow());
 
   ash::test::CreateSystemWebApp(profile, ash::SystemWebAppType::SETTINGS);
-  aura::Window* w2 =
-      BrowserList::GetInstance()->GetLastActive()->window()->GetNativeWindow();
+  aura::Window* w2 = GetLastActiveBrowserWindowInterfaceWithAnyProfile()
+                         ->GetWindow()
+                         ->GetNativeWindow();
   ash::display_move_window_util::HandleMoveActiveWindowBetweenDisplays();
   ASSERT_EQ(root2, w1->GetRootWindow());
 
@@ -287,12 +291,12 @@ IN_PROC_BROWSER_TEST_F(SnapGroupBrowserTest, DoNotBreakGroupOnTabDragging) {
   ASSERT_TRUE(
       ash::SnapGroupController::Get()->AreWindowsInSnapGroup(window1, window2));
 
-  TabStrip* tap_strip =
-      BrowserView::GetBrowserViewForBrowser(browser())->tabstrip();
+  TabStripViewInterface* tab_strip_view =
+      BrowserView::GetBrowserViewForBrowser(browser())->tab_strip_view();
   const auto start_point =
-      tap_strip->tab_at(1)->GetBoundsInScreen().CenterPoint();
+      tab_strip_view->GetTabAnchorViewAt(1)->GetBoundsInScreen().CenterPoint();
   const auto end_point =
-      tap_strip->tab_at(0)->GetBoundsInScreen().left_center();
+      tab_strip_view->GetTabAnchorViewAt(0)->GetBoundsInScreen().left_center();
   event_generator.MoveMouseTo(start_point);
   event_generator.PressLeftButton();
   event_generator.MoveMouseTo(end_point);
@@ -321,10 +325,10 @@ IN_PROC_BROWSER_TEST_F(SnapGroupBrowserTest, DoNotBreakGroupOnTabDetaching) {
 
   ASSERT_EQ(2u, chrome::GetTotalBrowserCount());
 
-  TabStrip* tap_strip =
-      BrowserView::GetBrowserViewForBrowser(browser())->tabstrip();
+  TabStripViewInterface* tab_strip_view =
+      BrowserView::GetBrowserViewForBrowser(browser())->tab_strip_view();
   const gfx::Point start_point =
-      tap_strip->tab_at(1)->GetBoundsInScreen().CenterPoint();
+      tab_strip_view->GetTabAnchorViewAt(1)->GetBoundsInScreen().CenterPoint();
   const gfx::Point end_point = window2->GetBoundsInScreen().CenterPoint();
   event_generator.MoveMouseTo(start_point);
   event_generator.PressLeftButton();

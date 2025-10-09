@@ -77,7 +77,7 @@
 #include "ui/views/view_tracker.h"
 #include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 #include "chromeos/ash/resources/internal/strings/grit/ash_internal_strings.h"
@@ -113,9 +113,8 @@ gfx::Rect GetQuickInsertViewBoundsWithoutSelectedText(
     QuickInsertLayoutType layout_type,
     const gfx::Size& quick_insert_view_size,
     int quick_insert_view_search_field_vertical_offset) {
-  gfx::Rect screen_work_area = display::Screen::GetScreen()
-                                   ->GetDisplayMatching(anchor_bounds)
-                                   .work_area();
+  gfx::Rect screen_work_area =
+      display::Screen::Get()->GetDisplayMatching(anchor_bounds).work_area();
   screen_work_area.Inset(kPaddingFromScreenEdge);
   gfx::Rect quick_insert_view_bounds(quick_insert_view_size);
   if (anchor_bounds.right() + quick_insert_view_size.width() <=
@@ -161,9 +160,8 @@ gfx::Rect GetQuickInsertViewBoundsWithSelectedText(
     const gfx::Rect& anchor_bounds,
     QuickInsertLayoutType layout_type,
     const gfx::Size& quick_insert_view_size) {
-  gfx::Rect screen_work_area = display::Screen::GetScreen()
-                                   ->GetDisplayMatching(anchor_bounds)
-                                   .work_area();
+  gfx::Rect screen_work_area =
+      display::Screen::Get()->GetDisplayMatching(anchor_bounds).work_area();
   screen_work_area.Inset(kPaddingFromScreenEdge);
   gfx::Rect quick_insert_view_bounds(quick_insert_view_size);
   switch (layout_type) {
@@ -340,8 +338,8 @@ bool QuickInsertView::AcceleratorPressed(const ui::Accelerator& accelerator) {
   }
 }
 
-std::unique_ptr<views::NonClientFrameView>
-QuickInsertView::CreateNonClientFrameView(views::Widget* widget) {
+std::unique_ptr<views::FrameView> QuickInsertView::CreateFrameView(
+    views::Widget* widget) {
   auto frame =
       std::make_unique<views::BubbleFrameView>(gfx::Insets(), gfx::Insets());
   frame->SetBubbleBorder(CreateBorder());

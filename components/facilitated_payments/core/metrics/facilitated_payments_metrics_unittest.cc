@@ -40,10 +40,17 @@ std::string GetSchemeString(PaymentLinkValidator::Scheme scheme) {
       return "PromptPay";
     case PaymentLinkValidator::Scheme::kMomo:
       return "Momo";
+    case PaymentLinkValidator::Scheme::kDana:
+      return "Dana";
     case PaymentLinkValidator::Scheme::kInvalid:
       NOTREACHED();
   }
 }
+
+struct A2AInvokePaymentAppMetricsTestParam {
+  bool result;
+  PaymentLinkValidator::Scheme scheme;
+};
 
 }  // namespace
 
@@ -62,10 +69,9 @@ TEST(FacilitatedPaymentsMetricsTest, LogEwalletPaymentLinkDetected) {
 
   LogPaymentLinkDetected(ukm::UkmRecorder::GetNewSourceID());
 
-  histogram_tester.ExpectUniqueSample(
-      "FacilitatedPayments.Ewallet.PaymentLinkDetected",
-      /*sample=*/true,
-      /*expected_bucket_count=*/1);
+  histogram_tester.ExpectUniqueSample("FacilitatedPayments.PaymentLinkDetected",
+                                      /*sample=*/true,
+                                      /*expected_bucket_count=*/1);
 }
 
 TEST(FacilitatedPaymentsMetricsTest, LogPixFopSelectedAndLatency) {
@@ -363,11 +369,57 @@ INSTANTIATE_TEST_SUITE_P(
                         EwalletFlowExitedReason::kFopSelectorClosedNotByUser,
                         EwalletFlowExitedReason::kFopSelectorClosedByUser,
                         EwalletFlowExitedReason::kFoldableDevice,
-                        EwalletFlowExitedReason::kMaxStrikes),
+                        EwalletFlowExitedReason::kMaxStrikes,
+                        EwalletFlowExitedReason::kOtherFopSelected),
         testing::Values(PaymentLinkValidator::Scheme::kDuitNow,
                         PaymentLinkValidator::Scheme::kShopeePay,
                         PaymentLinkValidator::Scheme::kTngd,
-                        PaymentLinkValidator::Scheme::kMomo)));
+                        PaymentLinkValidator::Scheme::kMomo,
+                        PaymentLinkValidator::Scheme::kDana)));
+
+class FacilitatedPaymentsMetricsA2AExitedReasonTest
+    : public testing::TestWithParam<
+          std::tuple<A2AFlowExitedReason, PaymentLinkValidator::Scheme>> {
+ public:
+  A2AFlowExitedReason payflow_exit_reason() const {
+    return std::get<0>(GetParam());
+  }
+
+  PaymentLinkValidator::Scheme scheme() const {
+    return std::get<1>(GetParam());
+  }
+};
+
+TEST_P(FacilitatedPaymentsMetricsA2AExitedReasonTest,
+       LogA2APayflowExitedReason) {
+  base::HistogramTester histogram_tester;
+
+  LogA2APayflowExitedReason(payflow_exit_reason(), scheme());
+
+  histogram_tester.ExpectUniqueSample(
+      "FacilitatedPayments.A2A.PayflowExitedReason",
+      /*sample=*/payflow_exit_reason(),
+      /*expected_bucket_count=*/1);
+
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"FacilitatedPayments.A2A.PayflowExitedReason.",
+                    GetSchemeString(scheme())}),
+      /*sample=*/payflow_exit_reason(),
+      /*expected_bucket_count=*/1);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    FacilitatedPaymentsMetricsTest,
+    FacilitatedPaymentsMetricsA2AExitedReasonTest,
+    testing::Combine(
+        testing::Values(A2AFlowExitedReason::kNotInAllowlist,
+                        A2AFlowExitedReason::kUserOptedOut,
+                        A2AFlowExitedReason::kNoSupportedPaymentApp,
+                        A2AFlowExitedReason::kFopSelectorClosedNotByUser,
+                        A2AFlowExitedReason::kFopSelectorClosedByUser,
+                        A2AFlowExitedReason::kOtherFopSelected,
+                        A2AFlowExitedReason::kFlagNotEnabled),
+        testing::Values(PaymentLinkValidator::Scheme::kPromptPay)));
 
 class FacilitatedPaymentsMetricsPixExitedReasonTest
     : public testing::TestWithParam<PixFlowExitedReason> {};
@@ -440,7 +492,8 @@ TEST_F(FacilitatedPaymentsMetricsUkmTest, LogEwalletFopSelectorShownUkm) {
        {PaymentLinkValidator::Scheme::kDuitNow,
         PaymentLinkValidator::Scheme::kShopeePay,
         PaymentLinkValidator::Scheme::kTngd,
-        PaymentLinkValidator::Scheme::kMomo}) {
+        PaymentLinkValidator::Scheme::kMomo,
+        PaymentLinkValidator::Scheme::kDana}) {
     LogEwalletFopSelectorShownUkm(ukm::UkmRecorder::GetNewSourceID(), scheme);
 
     auto ukm_entries = ukm_recorder_.GetEntries(
@@ -487,7 +540,8 @@ TEST_F(FacilitatedPaymentsMetricsUkmTest, LogEwalletFopSelectorResult) {
          {PaymentLinkValidator::Scheme::kDuitNow,
           PaymentLinkValidator::Scheme::kShopeePay,
           PaymentLinkValidator::Scheme::kTngd,
-          PaymentLinkValidator::Scheme::kMomo}) {
+          PaymentLinkValidator::Scheme::kMomo,
+          PaymentLinkValidator::Scheme::kDana}) {
       LogEwalletFopSelectorResultUkm(
           accepted, ukm::UkmRecorder::GetNewSourceID(), scheme);
 
@@ -527,17 +581,22 @@ TEST_F(FacilitatedPaymentsMetricsUkmTest, LogInitiatePurchaseActionResultUkm) {
 
 class FacilitatedPaymentsFopSelectorTypesMetricsParameterizedTest
     : public testing::TestWithParam<std::tuple<PaymentLinkFopSelectorTypes,
+                                               PaymentLinkFopSelectorAction,
                                                PaymentLinkValidator::Scheme>> {
  public:
   PaymentLinkFopSelectorTypes payment_link_fop_selector_type() const {
     return std::get<0>(GetParam());
   }
 
-  PaymentLinkValidator::Scheme scheme() const {
+  PaymentLinkFopSelectorAction payment_link_fop_selector_action() const {
     return std::get<1>(GetParam());
   }
 
-  std::string GetPaymentLinkFopSelectorShownLatencyString() const {
+  PaymentLinkValidator::Scheme scheme() const {
+    return std::get<2>(GetParam());
+  }
+
+  std::string GetPaymentLinkFopSelectorTypeString() const {
     switch (payment_link_fop_selector_type()) {
       case PaymentLinkFopSelectorTypes::kEwalletOnly:
         return "EwalletOnly";
@@ -556,11 +615,34 @@ INSTANTIATE_TEST_SUITE_P(
         testing::Values(PaymentLinkFopSelectorTypes::kEwalletOnly,
                         PaymentLinkFopSelectorTypes::kA2AOnly,
                         PaymentLinkFopSelectorTypes::kEwalletAndA2A),
+        testing::Values(PaymentLinkFopSelectorAction::kEwalletSelected,
+                        PaymentLinkFopSelectorAction::kPaymentAppSelected),
         testing::Values(PaymentLinkValidator::Scheme::kDuitNow,
                         PaymentLinkValidator::Scheme::kShopeePay,
                         PaymentLinkValidator::Scheme::kTngd,
                         PaymentLinkValidator::Scheme::kMomo,
                         PaymentLinkValidator::Scheme::kPromptPay)));
+
+TEST_P(FacilitatedPaymentsFopSelectorTypesMetricsParameterizedTest,
+       LogNonCardPaymentMethodsFopSelected) {
+  base::HistogramTester histogram_tester;
+
+  LogNonCardPaymentMethodsFopSelected(payment_link_fop_selector_type(),
+                                      payment_link_fop_selector_action(),
+                                      scheme());
+  std::string type_string = GetPaymentLinkFopSelectorTypeString();
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat(
+          {"FacilitatedPayments.", type_string, ".FopSelector.UserAction"}),
+      payment_link_fop_selector_action(),
+      /*expected_bucket_count=*/1);
+
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"FacilitatedPayments.", type_string,
+                    ".FopSelector.UserAction.", GetSchemeString(scheme())}),
+      payment_link_fop_selector_action(),
+      /*expected_bucket_count=*/1);
+}
 
 TEST_P(FacilitatedPaymentsFopSelectorTypesMetricsParameterizedTest,
        LogPaymentLinkFopSelectorShownLatency) {
@@ -571,15 +653,58 @@ TEST_P(FacilitatedPaymentsFopSelectorTypesMetricsParameterizedTest,
 
   histogram_tester.ExpectUniqueSample(
       base::StrCat({"FacilitatedPayments.",
-                    GetPaymentLinkFopSelectorShownLatencyString(),
+                    GetPaymentLinkFopSelectorTypeString(),
                     ".FopSelectorShown.LatencyAfterDetectingPaymentLink"}),
       /*sample=*/10,
       /*expected_bucket_count=*/1);
 
   histogram_tester.ExpectUniqueSample(
       base::StrCat({"FacilitatedPayments.",
-                    GetPaymentLinkFopSelectorShownLatencyString(),
+                    GetPaymentLinkFopSelectorTypeString(),
                     ".FopSelectorShown.LatencyAfterDetectingPaymentLink.",
+                    GetSchemeString(scheme())}),
+      /*sample=*/10,
+      /*expected_bucket_count=*/1);
+}
+
+class FacilitatedPaymentsA2AInvokePaymentAppMetricsParameterizedTest
+    : public testing::TestWithParam<A2AInvokePaymentAppMetricsTestParam> {
+ public:
+  bool result() const { return GetParam().result; }
+
+  PaymentLinkValidator::Scheme scheme() const { return GetParam().scheme; }
+
+  std::string GetResultString() const {
+    return result() ? "Success" : "Failure";
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    FacilitatedPaymentsMetricsTest,
+    FacilitatedPaymentsA2AInvokePaymentAppMetricsParameterizedTest,
+    testing::Values(A2AInvokePaymentAppMetricsTestParam{
+                        /*result=*/true,
+                        /*scheme=*/PaymentLinkValidator::Scheme::kPromptPay},
+                    A2AInvokePaymentAppMetricsTestParam{
+                        /*result=*/false,
+                        /*scheme=*/PaymentLinkValidator::Scheme::kPromptPay}));
+
+TEST_P(FacilitatedPaymentsA2AInvokePaymentAppMetricsParameterizedTest,
+       LogInvokePaymentAppResultAndLatency) {
+  base::HistogramTester histogram_tester;
+
+  LogInvokePaymentAppResultAndLatency(result(), base::Milliseconds(10),
+                                      scheme());
+
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"FacilitatedPayments.A2A.InvokePaymentApp.",
+                    GetResultString(), ".LatencyAfterDetectingPaymentLink"}),
+      /*sample=*/10,
+      /*expected_bucket_count=*/1);
+
+  histogram_tester.ExpectUniqueSample(
+      base::StrCat({"FacilitatedPayments.A2A.InvokePaymentApp.",
+                    GetResultString(), ".LatencyAfterDetectingPaymentLink.",
                     GetSchemeString(scheme())}),
       /*sample=*/10,
       /*expected_bucket_count=*/1);
@@ -624,7 +749,8 @@ INSTANTIATE_TEST_SUITE_P(
                      testing::Values(PaymentLinkValidator::Scheme::kDuitNow,
                                      PaymentLinkValidator::Scheme::kShopeePay,
                                      PaymentLinkValidator::Scheme::kTngd,
-                                     PaymentLinkValidator::Scheme::kMomo)));
+                                     PaymentLinkValidator::Scheme::kMomo,
+                                     PaymentLinkValidator::Scheme::kDana)));
 
 TEST_P(FacilitatedPaymentsMetricsParameterizedTest,
        LogApiAvailabilityCheckResultAndLatency_Success) {
@@ -904,7 +1030,8 @@ INSTANTIATE_TEST_SUITE_P(
                      testing::Values(PaymentLinkValidator::Scheme::kDuitNow,
                                      PaymentLinkValidator::Scheme::kShopeePay,
                                      PaymentLinkValidator::Scheme::kTngd,
-                                     PaymentLinkValidator::Scheme::kMomo),
+                                     PaymentLinkValidator::Scheme::kMomo,
+                                     PaymentLinkValidator::Scheme::kDana),
                      testing::Values(UiState::kFopSelector,
                                      UiState::kProgressScreen,
                                      UiState::kErrorScreen)));

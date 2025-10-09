@@ -43,6 +43,7 @@ using PaymentsRpcCardType = PaymentsAutofillClient::PaymentsRpcCardType;
 using PaymentsRpcResult = PaymentsAutofillClient::PaymentsRpcResult;
 using UnmaskCardReason = payments::PaymentsAutofillClient::UnmaskCardReason;
 
+namespace {
 // The consumer of the full card request API.
 class MockResultDelegate : public FullCardRequest::ResultDelegate {
  public:
@@ -102,6 +103,7 @@ class MockPaymentsDataManager : public TestPaymentsDataManager {
               (const CreditCard& credit_card),
               (override));
 };
+}  // namespace
 
 // TODO(crbug.com/41412501): Simplify this test setup.
 // The test fixture for full card request.
@@ -204,7 +206,7 @@ class FullCardRequestTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   syncer::TestSyncService sync_service_;
   MockResultDelegate result_delegate_;
@@ -822,11 +824,13 @@ class FullCardRequestCardBenefitsTest
     if (IsCreditCardBenefitsSourceSyncEnabled()) {
       test::SetUpCreditCardAndBenefitData(
           card_, /*issuer_id=*/"", GetBenefit(), GetBenefitSource(),
-          personal_data(), autofill_client().GetAutofillOptimizationGuide());
+          personal_data(),
+          autofill_client().GetAutofillOptimizationGuideDecider());
     } else {
       test::SetUpCreditCardAndBenefitData(
           card_, GetIssuerId(), GetBenefit(), /*benefit_source=*/"",
-          personal_data(), autofill_client().GetAutofillOptimizationGuide());
+          personal_data(),
+          autofill_client().GetAutofillOptimizationGuideDecider());
     }
   }
 

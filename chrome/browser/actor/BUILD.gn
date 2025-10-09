@@ -12,8 +12,10 @@ source_set("actor") {
     ":browser_tests",
   ]
   public = [
+    "actor_features.h",
     "actor_keyed_service.h",
     "actor_keyed_service_factory.h",
+    "actor_metrics.h",
     "actor_navigation_throttle.h",
     "actor_switches.h",
     "actor_tab_data.h",
@@ -42,17 +44,21 @@ source_set("actor") {
     "tools/tool_request.h",
     "tools/type_tool_request.h",
     "tools/wait_tool_request.h",
+    "tools/window_management_tool_request.h",
   ]
   public_deps = [
     ":types",
     "//base",
+    "//chrome/browser/actor/resources:browser_resources",
     "//chrome/browser/actor/ui:states",
     "//chrome/browser/page_content_annotations:fetcher",
     "//chrome/browser/password_manager/actor_login:service",
     "//chrome/browser/profiles",
     "//chrome/common",
+    "//chrome/common:actor_webui_mojom",
     "//components/optimization_guide/content/browser",
     "//components/optimization_guide/proto:optimization_guide_proto",
+    "//components/password_manager/core/browser/actor_login:common",
     "//components/tabs:public",
     "//content/public/browser",
     "//ui/base/unowned_user_data",
@@ -65,9 +71,9 @@ source_set("actor") {
 source_set("impl") {
   sources = [
     "actor_features.cc",
-    "actor_features.h",
     "actor_keyed_service.cc",
     "actor_keyed_service_factory.cc",
+    "actor_metrics.cc",
     "actor_navigation_throttle.cc",
     "actor_switches.cc",
     "actor_tab_data.cc",
@@ -114,6 +120,9 @@ source_set("impl") {
     "tools/wait_tool.cc",
     "tools/wait_tool.h",
     "tools/wait_tool_request.cc",
+    "tools/window_management_tool.cc",
+    "tools/window_management_tool.h",
+    "tools/window_management_tool_request.cc",
   ]
 
   public_deps = [ "//chrome/browser:browser_public_dependencies" ]
@@ -124,6 +133,7 @@ source_set("impl") {
     "//chrome/browser/actor/ui",
     "//chrome/browser/actor/ui:event_dispatcher",
     "//chrome/browser/actor/ui:tool_request_variant",
+    "//chrome/browser/favicon",
     "//chrome/browser/optimization_guide",
     "//chrome/browser/page_content_annotations:fetcher",
     "//chrome/browser/profiles:profile",
@@ -132,10 +142,12 @@ source_set("impl") {
     "//chrome/browser/ui/browser_window",
     "//chrome/browser/ui/tabs:tabs_public",
     "//chrome/common",
+    "//components/favicon/core",
     "//components/lookalikes/core",
     "//components/password_manager/core/browser/features:password_features",
     "//components/safe_browsing:buildflags",
     "//components/safe_browsing/core/common:safe_browsing_prefs",
+    "//components/tracing:tracing_metrics",
     "//components/variations/service",
     "//content/public/browser",
     "//net",
@@ -163,7 +175,6 @@ source_set("types") {
   sources = [
     "shared_types.cc",
     "shared_types.h",
-    "task_id.h",
   ]
   public_deps = [
     "//base",
@@ -258,6 +269,7 @@ source_set("browser_tests") {
     "//chrome/browser/ui/zoom",
     "//chrome/test:test_support",
     "//chrome/test:test_support_ui",
+    "//components/favicon/core/test:test_support",
     "//components/optimization_guide/core:bloomfilter",
     "//components/safe_browsing:buildflags",
     "//components/safe_browsing/core/common:features",
@@ -267,6 +279,7 @@ source_set("browser_tests") {
 
   if (enable_glic) {
     sources += [
+      "actor_keyed_service_browsertest.cc",
       "execution_engine_browsertest.cc",
       "tools/attempt_login_tool_browsertest.cc",
       "tools/click_tool_browsertest.cc",
@@ -274,6 +287,7 @@ source_set("browser_tests") {
       "tools/history_tool_browsertest.cc",
       "tools/mouse_move_tool_browsertest.cc",
       "tools/navigate_tool_browsertest.cc",
+      "tools/observation_delay_controller_browsertest.cc",
       "tools/page_stability_browsertest.cc",
       "tools/script_tool_browsertest.cc",
       "tools/scroll_to_tool_browsertest.cc",
@@ -283,8 +297,12 @@ source_set("browser_tests") {
       "tools/tool_agnostic_browsertest.cc",
       "tools/type_tool_browsertest.cc",
       "tools/wait_tool_browsertest.cc",
+      "tools/window_management_tool_browsertest.cc",
     ]
-    deps += [ "//chrome/browser/glic" ]
+    deps += [
+      "//chrome/browser/glic",
+      "//ui/base:ozone_buildflags",
+    ]
   }
 }
 
@@ -296,10 +314,24 @@ source_set("interactive_ui_tests") {
     ":impl",
     ":test_support",
     ":tools_test_support",
+    "//cc:test_support",
+    "//chrome/browser/ui:ui_features",
+    "//components/favicon/core/test:test_support",
+    "//content/test:browsertest_support",
     "//testing/gtest",
+    "//ui/base/interaction:test_support",
+    "//ui/compositor",
+    "//ui/gfx/codec",
   ]
   if (enable_glic) {
-    sources = [ "tools/select_tool_interactive_ui_test.cc" ]
-    deps += [ "//chrome/browser/glic" ]
+    sources = [
+      "execution_engine_confirmation_dialog_interactive_ui_test.cc",
+      "tools/attempt_login_tool_interactive_ui_test.cc",
+      "tools/select_tool_interactive_ui_test.cc",
+    ]
+    deps += [
+      "//chrome/browser/glic",
+      "//chrome/browser/glic/test_support",
+    ]
   }
 }

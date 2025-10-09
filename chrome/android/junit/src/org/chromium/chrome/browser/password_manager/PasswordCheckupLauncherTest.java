@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.password_manager;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -34,21 +33,17 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
-import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper.PasswordCheckBackendException;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.safety_check.SafetyCheckSettingsFragment;
 import org.chromium.chrome.browser.safety_hub.SafetyHubFragment;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.browser.sync.SyncServiceFactory;
-import org.chromium.components.prefs.PrefService;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
 import org.chromium.components.signin.base.AccountInfo;
 import org.chromium.components.signin.test.util.FakeAccountManagerFacade;
 import org.chromium.components.signin.test.util.TestAccounts;
 import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.UserSelectableType;
-import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
@@ -71,10 +66,6 @@ public class PasswordCheckupLauncherTest {
     @Captor private ArgumentCaptor<Intent> mIntentCaptor;
 
     @Mock private Profile mProfile;
-
-    @Mock private PrefService mPrefService;
-
-    @Mock private UserPrefs.Natives mMockUserPrefsJni;
 
     @Mock private PasswordManagerUtilBridge.Natives mMockPasswordManagerUtilBridgeJni;
 
@@ -101,12 +92,10 @@ public class PasswordCheckupLauncherTest {
             new FakeAccountManagerFacade();
 
     @Before
-    public void setUp() throws PasswordCheckBackendException {
-        UserPrefsJni.setInstanceForTesting(mMockUserPrefsJni);
+    public void setUp() {
         PasswordManagerUtilBridgeJni.setInstanceForTesting(mMockPasswordManagerUtilBridgeJni);
 
         when(mProfile.getOriginalProfile()).thenReturn(mProfile);
-        when(mMockUserPrefsJni.get(mProfile)).thenReturn(mPrefService);
 
         SyncServiceFactory.setInstanceForTesting(mMockSyncService);
         when(mMockSyncService.isSyncFeatureEnabled()).thenReturn(true);
@@ -142,9 +131,7 @@ public class PasswordCheckupLauncherTest {
     public void testLaunchCheckupOnDeviceShowsAccountCheckup()
             throws PendingIntent.CanceledException {
         when(mMockSyncService.getSelectedTypes()).thenReturn(Set.of(UserSelectableType.PASSWORDS));
-        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(true);
+        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(true)).thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
                 mProfile, mMockWindowAndroid, LEAK_DIALOG, TestAccounts.ACCOUNT1.getEmail());
@@ -156,9 +143,7 @@ public class PasswordCheckupLauncherTest {
     public void testLaunchCheckupOnDeviceShowsLocalCheckup()
             throws PendingIntent.CanceledException {
         when(mMockSyncService.getSelectedTypes()).thenReturn(Collections.emptySet());
-        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(true);
+        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(true)).thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
                 mProfile, mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);
@@ -172,9 +157,7 @@ public class PasswordCheckupLauncherTest {
         // Local checkup will be launched from the leak detection dialog if the leaked credential is
         // stored only in the local store, even though the user is syncing passwords.
         when(mMockSyncService.getSelectedTypes()).thenReturn(Set.of(UserSelectableType.PASSWORDS));
-        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(
-                        eq(mPrefService), eq(true)))
-                .thenReturn(true);
+        when(mMockPasswordManagerUtilBridgeJni.isPasswordManagerAvailable(true)).thenReturn(true);
 
         PasswordCheckupLauncher.launchCheckupOnDevice(
                 mProfile, mMockWindowAndroid, LEAK_DIALOG, TEST_NO_EMAIL_ADDRESS);

@@ -7,9 +7,12 @@ package org.chromium.chrome.browser.tab;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.app.Activity;
+import android.graphics.Rect;
+import android.view.View;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.AconfigFlaggedApiDelegate;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.Callback;
@@ -17,10 +20,12 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.ObserverList;
 import org.chromium.base.ObserverList.RewindableIterator;
+import org.chromium.base.ServiceLoaderUtil;
 import org.chromium.base.TerminationStatus;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
+import org.chromium.blink.mojom.FocusType;
 import org.chromium.blink.mojom.ViewportFit;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -32,6 +37,7 @@ import org.chromium.chrome.browser.app.usb.UsbNotificationService;
 import org.chromium.chrome.browser.bluetooth.BluetoothNotificationManager;
 import org.chromium.chrome.browser.display_cutout.DisplayCutoutTabHelper;
 import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.media.MediaCaptureNotificationServiceImpl;
 import org.chromium.chrome.browser.pdf.PdfUtils;
 import org.chromium.chrome.browser.policy.PolicyAuditor;
@@ -44,6 +50,7 @@ import org.chromium.content_public.browser.GlobalRenderFrameHostId;
 import org.chromium.content_public.browser.LifecycleState;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.Page;
+import org.chromium.content_public.browser.RenderCoordinates;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.net.NetError;
@@ -128,6 +135,10 @@ public class TabWebContentsObserver extends TabWebContentsUserData {
         if (mObserver != null) {
             mObserver.primaryMainFrameRenderProcessGone(TerminationStatus.PROCESS_WAS_KILLED);
         }
+    }
+
+    public @Nullable WebContentsObserver getWebContentsObserverForTesting() {
+        return mObserver;
     }
 
     private void showSadTab(SadTab sadTab) {
@@ -417,14 +428,66 @@ public class TabWebContentsObserver extends TabWebContentsUserData {
         }
 
         @Override
+        public void onFocusChangedInPage(
+                boolean isEditableNode,
+                int leftInView,
+                int topInView,
+                int rightInView,
+                int bottomInView,
+                @FocusType.EnumType int focusType) {
+            // Request that the Android platform show the newly-focused element.
+            View view = mTab.getView();
+            if (view == null) return;
+
+            // Correct bounds for page scale and browser UI offset to place in view coordinates
+            WebContents webContents = mTab.getWebContents();
+            if (webContents == null) return;
+
+            RenderCoordinates coords = RenderCoordinates.fromWebContents(webContents);
+            final int topOffset = coords.getContentOffsetYPixInt();
+
+            Rect boundsInView =
+                    new Rect(
+                            (int) coords.fromLocalCssToPix(leftInView),
+                            ((int) coords.fromLocalCssToPix(topInView)) + topOffset,
+                            (int) coords.fromLocalCssToPix(rightInView),
+                            ((int) coords.fromLocalCssToPix(bottomInView)) + topOffset);
+            if (boundsInView.isEmpty()) return;
+
+            // TODO(aaronmoss): when Baklava 36.1 support lands in Clank, remove delegate
+            // indirection and inline `requestInputFocusOnScreen()` call.
+            AconfigFlaggedApiDelegate delegate =
+                    ServiceLoaderUtil.maybeCreate(AconfigFlaggedApiDelegate.class);
+            boolean called =
+                    delegate != null && delegate.requestInputFocusOnScreen(view, boundsInView);
+            if (!called
+                    && ChromeFeatureList.isEnabled(
+                            ChromeFeatureList.ACCESSIBILITY_MAGNIFICATION_FOLLOWS_INPUT_FOCUS)) {
+                view.requestRectangleOnScreen(boundsInView);
+            }
+        }
+
+        @Override
         public void mediaStartedPlaying() {
-            // TODO(crbug.com/430072416): Identify when audio is muted.
-            mTab.setMediaState(MediaState.AUDIBLE);
+            WebContents contents = mTab.getWebContents();
+            if (contents == null) {
+                mTab.setMediaState(MediaState.NONE);
+            } else {
+                mTab.setMediaState(contents.isAudioMuted() ? MediaState.MUTED : MediaState.AUDIBLE);
+            }
         }
 
         @Override
         public void mediaStoppedPlaying() {
             mTab.setMediaState(MediaState.NONE);
+        }
+
+        @Override
+        public void didUpdateAudioMutingState(boolean muted) {
+            @MediaState int state = mTab.getMediaState();
+            if (state == MediaState.AUDIBLE || state == MediaState.MUTED) {
+                mTab.setMediaState(muted ? MediaState.MUTED : MediaState.AUDIBLE);
+            }
         }
     }
 }

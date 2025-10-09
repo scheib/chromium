@@ -332,10 +332,12 @@ Tu je nekaj stvari, ki jih lahko poskusite za začetek.</translation>
 <translation id="2083190527011054446">Lahko noč, <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Odpiranje izbirnika emodžijev</translation>
 <translation id="2088116547584365419">tekme</translation>
+<translation id="2093792000875799555">Novice o aplikaciji Steam za Chromebook</translation>
 <translation id="209965399369889474">Ni povezave z omrežjem</translation>
 <translation id="2107581415810719320">Drug gumb <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Kabel USB-C ne podpira protokola Thunderbolt. Delovanje naprave bo morda omejeno.</translation>
 <translation id="2108303511227308752">Bližnjica na tipkovnici alt + preslednica je spremenjena. Če želite uporabiti tipko za brisanje, pritisnite tipko za <ph name="LAUNCHER_KEY_NAME" /> in vračalko.</translation>
+<translation id="2115680839221566783">Baterija je <ph name="PERCENTAGE" />-% napolnjena. Polnjenje je na čakanju.</translation>
 <translation id="2126242104232412123">Novo namizje</translation>
 <translation id="2132302418721800944">Snemanje celotnega zaslona</translation>
 <translation id="2135456203358955318">Zasidrana lupa</translation>
@@ -1588,6 +1590,7 @@ Nobena naprava ni povezana.</translation>
 <translation id="612734058257491180">Pomočnik Google ni na voljo v gostujoči seji.</translation>
 <translation id="6127395413317891856">Nimate vzpostavljene povezave. Preverite povezavo in poskusite znova.</translation>
 <translation id="6129953537138746214">Preslednica</translation>
+<translation id="6136872094979134163">Ni mogoče pridobiti novic o aplikaciji Steam za Chromebook.</translation>
 <translation id="6137566720514957455">Odpri pogovorno okno za odstranjevanje za <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Na kaj se želite osredotočiti?</translation>
 <translation id="6141988275892716286">Potrdi prenos</translation>
@@ -1677,6 +1680,7 @@ Nobena naprava ni povezana.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> na <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpe</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, dogodki (<ph name="NUMBER" />)</translation>
+<translation id="6448529022565414427">Polnjenje je na čakanju</translation>
 <translation id="6449483711453944360">Aplikacije za Linux in anonimna okna trenutno niso podprti.</translation>
 <translation id="6450245544201845082">Bližnjica, ki jo kliknete z desnim gumbom, je trenutno izklopljena</translation>
 <translation id="6452181791372256707">Zavrni</translation>

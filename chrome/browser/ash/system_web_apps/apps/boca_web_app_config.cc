@@ -72,6 +72,14 @@ class ChromeBocaUIDelegate : public ash::boca::BocaUIDelegate {
                        features::IsBocaSpotlightRobotRequesterEnabled());
     source->AddBoolean("userFeedbackAllowed",
                        pref_service->GetBoolean(::prefs::kUserFeedbackAllowed));
+    if (features::IsBocaConfigureMaxStudentsEnabled()) {
+      source->AddInteger("maxNumStudentsAllowed",
+                         features::kBocaMaxNumStudentsAllowed.Get());
+    }
+    source->AddBoolean("screenSharingTeacher",
+                       features::IsBocaScreenSharingTeacherEnabled());
+    source->AddBoolean("screenSharingStudent",
+                       features::IsBocaScreenSharingStudentEnabled());
   }
 
  private:

@@ -212,6 +212,7 @@ TARGET_DEVICES = {
         },
         'speedometer3.crossbench': 20,
         'speedometer3.1.crossbench': 20,
+        'speedometer3.a11y.crossbench': 20,
     },
     'linux-perf-calibration': {
         'jetstream2': {
@@ -310,5 +311,14 @@ TARGET_DEVICES = {
     },
     'mac-m3-pro-perf': {
         'speedometer3.1.crossbench': 4,
+    },
+    'mac-m4-mini-perf': {
+        'jetstream2': 6,
+        'jetstream2.crossbench': 6,
+        'speedometer2': 20,
+        'speedometer3': 20,
+        'speedometer3.crossbench': 20,
+        'rendering.desktop.notracing': 20,
+        'motionmark1.3.crossbench': 20,
     },
 }

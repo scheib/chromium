@@ -160,7 +160,7 @@ void UserInfoRequest::SetCallbackAndStart(
   }
 
   // ConfigFetcher is stored as a member so that it is destroyed when
-  // FederatedAuthRequestImpl is destroyed.
+  // RequestService is destroyed.
   config_fetcher_ = std::make_unique<ConfigFetcher>(*render_frame_host_,
                                                     network_manager_.get());
   // TODO(crbug.com/390626180): It seems ok to ignore the well-known checks in
@@ -254,10 +254,11 @@ void UserInfoRequest::MaybeReturnAccounts(
     }
   }
 
-  FedCmMetrics::NumAccounts num_accounts = FedCmMetrics::NumAccounts::kZero;
+  webid::Metrics::NumAccounts num_accounts = webid::Metrics::NumAccounts::kZero;
   if (has_returning_accounts) {
-    num_accounts = accounts.size() == 1u ? FedCmMetrics::NumAccounts::kOne
-                                         : FedCmMetrics::NumAccounts::kMultiple;
+    num_accounts = accounts.size() == 1u
+                       ? webid::Metrics::NumAccounts::kOne
+                       : webid::Metrics::NumAccounts::kMultiple;
   }
   base::UmaHistogramEnumeration("Blink.FedCm.UserInfo.NumAccounts",
                                 num_accounts);

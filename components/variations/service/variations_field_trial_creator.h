@@ -14,8 +14,8 @@
 
 #include "base/compiler_specific.h"
 #include "base/containers/flat_set.h"
+#include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
-#include "base/metrics/field_trial.h"
 #include "base/time/time.h"
 #include "base/version_info/channel.h"
 #include "build/build_config.h"
@@ -39,6 +39,10 @@ namespace variations {
 
 class EntropyProviders;
 
+// A testing feature that forces a crash during field trial creation
+// on developer and test builds.
+BASE_DECLARE_FEATURE(kForceFieldTrialSetupCrashForTesting);
+
 // TODO(crbug.com/424154785): Clean this up if low entropy source values are no
 // longer transmitted with VariationIDs.
 struct CreateTrialsResult {
@@ -46,10 +50,6 @@ struct CreateTrialsResult {
   std::optional<bool> seed_has_active_limited_layer;
   bool AppliedSeedHasActiveLimitedLayer() const;
 };
-
-// Just maps one set of enum values to another. Nothing to see here.
-Study::Channel ConvertProductChannelToStudyChannel(
-    version_info::Channel product_channel);
 
 // Denotes whether Chrome used a variations seed. Also captures (a) the kind of
 // seed and (b) the conditions under which the seed was used or failed to be
@@ -72,7 +72,9 @@ enum class SeedUsage {
   kSafeSeedForFutureMilestoneNotUsed = 10,
   kUnloadableSafeSeedNotUsed = 11,
   kNullSeedUsed = 12,
-  kMaxValue = kNullSeedUsed,
+  kMisconfiguredRegularSeedNotUsed = 13,
+  kMisconfiguredSafeSeedNotUsed = 14,
+  kMaxValue = kMisconfiguredSafeSeedNotUsed,
 };
 
 // Denotes a variations seed's expiry state. Exposed for testing.
@@ -86,23 +88,22 @@ enum class VariationsSeedExpiry {
   kMaxValue = kExpired,
 };
 
-enum LoadPermanentConsistencyCountryResult {
-  LOAD_COUNTRY_NO_PREF_NO_SEED = 0,
-  LOAD_COUNTRY_NO_PREF_HAS_SEED,
-  LOAD_COUNTRY_INVALID_PREF_NO_SEED,
-  LOAD_COUNTRY_INVALID_PREF_HAS_SEED,
-  LOAD_COUNTRY_HAS_PREF_NO_SEED_VERSION_EQ,
-  LOAD_COUNTRY_HAS_PREF_NO_SEED_VERSION_NEQ,
-  LOAD_COUNTRY_HAS_BOTH_VERSION_EQ_COUNTRY_EQ,
-  LOAD_COUNTRY_HAS_BOTH_VERSION_EQ_COUNTRY_NEQ,
-  LOAD_COUNTRY_HAS_BOTH_VERSION_NEQ_COUNTRY_EQ,
-  LOAD_COUNTRY_HAS_BOTH_VERSION_NEQ_COUNTRY_NEQ,
-  LOAD_COUNTRY_HAS_PERMANENT_OVERRIDDEN_COUNTRY,
-  LOAD_COUNTRY_MAX,
+enum class LoadPermanentConsistencyCountryResult {
+  kNoPrefNoSeed = 0,
+  kNoPrefHasSeed,
+  kInvalidPrefNoSeed,
+  kInvalidPrefHasSeed,
+  kHasPrefNoSeedVersionEq,
+  kHasPrefNoSeedVersionNeq,
+  kHasBothVersionEqCountryEq,
+  kHasBothVersionEqCountryNeq,
+  kHasBothVersionNeqCountryEq,
+  kHasBothVersionNeqCountryNeq,
+  kHasPermanentOverriddenCountry,
+  kMaxValue = kHasPermanentOverriddenCountry,
 };
 
 class PlatformFieldTrials;
-class SafeSeedManagerBase;
 class VariationsServiceClient;
 
 // Used to set up field trials based on stored variations seed data.
@@ -168,7 +169,7 @@ class VariationsFieldTrialCreator {
       std::unique_ptr<base::FeatureList> feature_list,
       metrics::MetricsStateManager* metrics_state_manager,
       PlatformFieldTrials* platform_field_trials,
-      SafeSeedManagerBase* safe_seed_manager,
+      SafeSeedManager* safe_seed_manager,
       bool add_entropy_source_to_variations_ids,
       const EntropyProviders& entropy_providers);
 
@@ -279,7 +280,7 @@ class VariationsFieldTrialCreator {
   CreateTrialsResult CreateTrialsFromSeed(
       const EntropyProviders& entropy_providers,
       base::FeatureList* feature_list,
-      SafeSeedManagerBase* safe_seed_manager,
+      SafeSeedManager* safe_seed_manager,
       std::unique_ptr<ClientFilterableState> client_state);
 
   // Reads a seed's data and signature from the file at |json_seed_path| and
@@ -332,10 +333,6 @@ class VariationsFieldTrialCreator {
 
   SEQUENCE_CHECKER(sequence_checker_);
 };
-
-// A testing feature that forces a crash during field trial creation
-// on developer and test builds.
-BASE_DECLARE_FEATURE(kForceFieldTrialSetupCrashForTesting);
 
 }  // namespace variations
 

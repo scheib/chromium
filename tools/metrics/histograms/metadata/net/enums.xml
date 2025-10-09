@@ -251,13 +251,38 @@ chromium-metrics-reviews@google.com.
   <int value="21" label="Missing scope"/>
   <int value="22" label="No credentials"/>
   <int value="23" label="Invalid include_site in scope"/>
-  <int value="24" label=".well-known unavailable"/>
+  <int value="24" label="Subdomain registration .well-known unavailable"/>
   <int value="25"
       label=".well-known did not authorize registration by subdomain"/>
-  <int value="26" label=".well-known content malformed"/>
+  <int value="26" label="Subdomain registration .well-known content malformed"/>
+  <int value="27" label="Federated session not authorized by .well-known"/>
+  <int value="28" label="Session provider .well-known unavailable"/>
+  <int value="29" label="Session provider .well-known content malformed"/>
+  <int value="30" label="Relying party .well-known unavailable"/>
+  <int value="31" label="Relying party .well-known content malformed"/>
+  <int value="32" label="Federated key had incorrect thumbprint"/>
+  <int value="33" label="Federated provider URL not valid"/>
+  <int value="34" label="Federated session invalid"/>
+  <int value="35" label="Federated key invalid"/>
+  <int value="36" label="Too many relying origin labels in .well-known"/>
+  <int value="37"
+      label="Registration in a context that cannot set bound cookies"/>
 </enum>
 
 <!-- LINT.ThenChange(//net/device_bound_sessions/session_error.h:DeviceBoundSessionError) -->
+
+<!-- LINT.IfChange(DeviceBoundSessionRefreshResult) -->
+
+<enum name="DeviceBoundSessionRefreshResult">
+  <int value="0" label="Refreshed"/>
+  <int value="1" label="Service initialized"/>
+  <int value="2" label="Endpoint unreachable"/>
+  <int value="3" label="Endpoint transient error"/>
+  <int value="4" label="Quota exceeded"/>
+  <int value="5" label="Fatal error"/>
+</enum>
+
+<!-- LINT.ThenChange(//net/device_bound_sessions/session_service.h:DeviceBoundSessionRefreshResult) -->
 
 <!-- LINT.IfChange(DeviceBoundSessionUsage) -->
 
@@ -295,29 +320,6 @@ chromium-metrics-reviews@google.com.
   <int value="3"
       label="Would be task-fatal transaction error but finch param disabled"/>
   <int value="4" label="Task-fatal transaction error"/>
-</enum>
-
-<enum name="DNS.TaskTypeMetadataAvailability">
-  <int value="0" label="SYSTEM, no metadata"/>
-  <int value="1" label="SYSTEM, with metadata"/>
-  <int value="2" label="DNS, no metadata"/>
-  <int value="3" label="DNS, with metadata"/>
-  <int value="4" label="SECURE_DNS, no metadata"/>
-  <int value="5" label="SECURE_DNS, with metadata"/>
-  <int value="6" label="MDNS, no metadata"/>
-  <int value="7" label="MDNS, with metadata"/>
-  <int value="8" label="CACHE_LOOKUP, no metadata"/>
-  <int value="9" label="CACHE_LOOKUP, with metadata"/>
-  <int value="10" label="INSECURE_CACHE_LOOKUP, no metadata"/>
-  <int value="11" label="INSECURE_CACHE_LOOKUP, with metadata"/>
-  <int value="12" label="SECURE_CACHE_LOOKUP, no metadata"/>
-  <int value="13" label="SECURE_CACHE_LOOKUP, with metadata"/>
-  <int value="14" label="CONFIG_PRESET, no metadata"/>
-  <int value="15" label="CONFIG_PRESET, with metadata"/>
-  <int value="16" label="NAT64, no metadata"/>
-  <int value="17" label="NAT64, with metadata"/>
-  <int value="18" label="HOSTS, no metadata"/>
-  <int value="19" label="HOSTS, with metadata"/>
 </enum>
 
 <enum name="DNS.UdpLowEntropyReason">
@@ -600,6 +602,28 @@ chromium-metrics-reviews@google.com.
   </int>
 </enum>
 
+<!-- LINT.IfChange(HttpsNotAttemptedReason) -->
+
+<enum name="HttpsNotAttemptedReason">
+  <int value="0" label="Unknown">The reason is unknown.</int>
+  <int value="1" label="QueryingHttpsDisabled">Querying HTTPS is disabled.</int>
+  <int value="2" label="BuiltInResolverDisabled">
+    Built-in DNS resolver is disabled.
+  </int>
+  <int value="3" label="NoDnsClient">No DnsClient.</int>
+  <int value="4" label="FallbackFromInsecureTransactionPreferred">
+    DnsTask wasn't scheduled because it hadn't been working for a while.
+  </int>
+  <int value="5" label="InsecureDnsTaskDisabled">
+    Insecure DnsTask was not allowed to query HTTPS.
+  </int>
+  <int value="6" label="FallbackToSystemTaskAfterDnsTask">
+    DnsTask was executed but fell back to the system task.
+  </int>
+</enum>
+
+<!-- LINT.ThenChange(//net/dns/host_resolver_manager_job.h:HttpsNotAttemptedReason) -->
+
 <enum name="HttpssvcDnsRcode">
   <summary>
     Tracks the result of querying for an INTEGRITY or HTTPSSVC record. This enum
@@ -642,14 +666,6 @@ chromium-metrics-reviews@google.com.
   <int value="1" label="Cached"/>
   <int value="2" label="2G"/>
   <int value="3" label="3G"/>
-</enum>
-
-<enum name="IpProtectionJobResult">
-  <int value="0" label="IP Protection was not attempted"/>
-  <int value="1"
-      label="The request was IP Protected and carried via IP Protection
-             proxies or, if the direct-only parameter is true, made directly"/>
-  <int value="2" label="The request was IP Protected, but fell back to direct"/>
 </enum>
 
 <enum name="JobProtocolErrorLocation">
@@ -2560,6 +2576,20 @@ Called by update_net_trust_anchors.py.-->
   <int value="204" label="QUIC_TOO_MANY_CONNECTION_ID_WAITING_TO_RETIRE"/>
   <int value="205" label="QUIC_HTTP_RECEIVE_SERVER_PUSH"/>
   <int value="206" label="QUIC_INVALID_CHARACTER_IN_FIELD_VALUE"/>
+  <int value="207" label="QUIC_HTTP_INVALID_SETTING_VALUE"/>
+  <int value="208" label="QUIC_TLS_UNEXPECTED_KEYING_MATERIAL_EXPORT_LABEL"/>
+  <int value="209" label="QUIC_TLS_KEYING_MATERIAL_EXPORTS_MISMATCH"/>
+  <int value="210" label="QUIC_TLS_KEYING_MATERIAL_EXPORT_NOT_AVAILABLE"/>
+  <int value="211" label="QUIC_UNEXPECTED_DATA_BEFORE_ENCRYPTION_ESTABLISHED"/>
+  <int value="212" label="QUIC_PACKET_WRONG_VERSION"/>
+  <int value="213" label="QUIC_SERVER_UNHEALTHY"/>
+  <int value="214" label="QUIC_HANDSHAKE_FAILED_PACKETS_BUFFERED_TOO_LONG"/>
+  <int value="215" label="QUIC_CLIENT_LOST_NETWORK_ACCESS"/>
+  <int value="216" label="QUIC_HANDSHAKE_FAILED_INVALID_HOSTNAME"/>
+  <int value="217" label="QUIC_HANDSHAKE_FAILED_REJECTING_ALL_CONNECTIONS"/>
+  <int value="218" label="QUIC_HANDSHAKE_FAILED_INVALID_CONNECTION"/>
+  <int value="219" label="QUIC_HANDSHAKE_FAILED_SYNTHETIC_CONNECTION_CLOSE"/>
+  <int value="220" label="QUIC_HANDSHAKE_FAILED_CID_COLLISION"/>
 </enum>
 
 <enum name="QuicFindMatchingIpSessionResult">
@@ -2973,6 +3003,19 @@ Called by update_net_trust_anchors.py.-->
 
 <!-- LINT.ThenChange(//net/disk_cache/sql/sql_backend_impl.h:FakeIndexFileError) -->
 
+<!-- LINT.IfChange(SqlDiskCacheIndexMismatchLocation) -->
+
+<enum name="SqlDiskCacheIndexMismatchLocation">
+  <int value="0" label="OpenOrCreateEntry"/>
+  <int value="1" label="CreateEntry"/>
+  <int value="2" label="DoomEntry"/>
+  <int value="3" label="StartEviction"/>
+  <int value="4" label="DeleteLiveEntry"/>
+  <int value="5" label="DeleteLiveEntriesBetween"/>
+</enum>
+
+<!-- LINT.ThenChange(//net/disk_cache/sql/sql_persistent_store.cc:IndexMismatchLocation) -->
+
 <!-- LINT.IfChange(SqlDiskCacheStoreError) -->
 
 <enum name="SqlDiskCacheStoreError">
@@ -2992,6 +3035,8 @@ Called by update_net_trust_anchors.py.-->
   <int value="13" label="NotFound"/>
   <int value="14" label="InvalidArgument"/>
   <int value="15" label="BodyEndMismatch"/>
+  <int value="16" label="FailedForTesting"/>
+  <int value="17" label="Aborted"/>
 </enum>
 
 <!-- LINT.ThenChange(//net/disk_cache/sql/sql_persistent_store.h:SqlDiskCacheStoreError) -->
@@ -3210,6 +3255,7 @@ Called by update_net_trust_anchors.py.-->
   <int value="4" label="No key provider"/>
   <int value="5" label="Algorithm not supported"/>
   <int value="6" label="Key not ready"/>
+  <int value="7" label="Verify signature failed"/>
 </enum>
 
 <enum name="UnsolicitedHttpsRecordStatus">

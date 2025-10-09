@@ -4,7 +4,10 @@
 
 package org.chromium.chrome.browser.tabmodel;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -38,9 +41,9 @@ import org.chromium.base.Token;
 import org.chromium.base.UserDataHost;
 import org.chromium.base.task.SequencedTaskRunner;
 import org.chromium.base.task.TaskRunner;
+import org.chromium.base.test.BaseRobolectricTestRule;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
@@ -64,6 +67,7 @@ import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.url.GURL;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -106,6 +110,8 @@ public class TabPersistentStoreUnitTest {
     @Before
     public void setUp() {
         when(mIncognitoTabModel.isIncognito()).thenReturn(true);
+        when(mIncognitoTabModel.iterator()).thenAnswer(inv -> Collections.emptyList().iterator());
+        when(mNormalTabModel.iterator()).thenAnswer(inv -> Collections.emptyList().iterator());
         when(mTabModelSelector.getModel(false)).thenReturn(mNormalTabModel);
         when(mTabModelSelector.getModel(true)).thenReturn(mIncognitoTabModel);
 
@@ -135,7 +141,8 @@ public class TabPersistentStoreUnitTest {
             SequencedTaskRunner runner = mPersistentStore.getTaskRunnerForTests();
             if (!mockingDetails(runner).isMock()) {
                 runner.execute(() -> flushed.set(true));
-                CriteriaHelper.pollUiThreadForJUnit(flushed::get);
+                BaseRobolectricTestRule.runAllBackgroundAndUi();
+                assertThat(flushed.get()).isTrue();
             }
         }
     }
@@ -579,6 +586,8 @@ public class TabPersistentStoreUnitTest {
         when(regularTab2.isClosing()).thenReturn(true);
         when(mNormalTabModel.getTabAtChecked(1)).thenReturn(regularTab2);
         when(mTabModelSelector.getTotalTabCount()).thenReturn(2);
+        when(mNormalTabModel.iterator())
+                .thenAnswer(inv -> List.of(regularTab1, regularTab2).iterator());
 
         TabModelSelectorMetadata metadata =
                 TabPersistentStore.extractTabMetadataFromSelector(mTabModelSelector, null);
@@ -833,6 +842,27 @@ public class TabPersistentStoreUnitTest {
         assertEquals(DirtinessState.CLEAN, TabStateAttributes.from(mTab).getDirtinessState());
     }
 
+    @Test
+    @Feature({"TabPersistentStore"})
+    public void testShouldSkipTab_PinnedNtpIsNotSkipped() {
+        GURL ntpGurl = new GURL(UrlConstants.NTP_URL);
+        GURL regularGurl = new GURL(REGULAR_TAB_STRING_1);
+
+        // Pinned NTPs should not be skipped.
+        when(mTab.getUrl()).thenReturn(ntpGurl);
+        when(mTab.isNativePage()).thenReturn(true);
+        when(mTab.getIsPinned()).thenReturn(true);
+        assertFalse("Pinned NTPs should not be skipped.", TabPersistentStore.shouldSkipTab(mTab));
+
+        // Pinned regular tabs should not be skipped.
+        when(mTab.getUrl()).thenReturn(regularGurl);
+        when(mTab.isNativePage()).thenReturn(false);
+        when(mTab.getIsPinned()).thenReturn(true);
+        assertFalse(
+                "Pinned regular tabs should not be skipped.",
+                TabPersistentStore.shouldSkipTab(mTab));
+    }
+
     private void setupSerializationTestMocks() {
         when(mNormalTabModel.getCount()).thenReturn(2);
         when(mNormalTabModel.index()).thenReturn(0);
@@ -846,6 +876,8 @@ public class TabPersistentStoreUnitTest {
         when(regularNtpTab1.getUrl()).thenReturn(ntpGurl);
         when(regularNtpTab1.isNativePage()).thenReturn(true);
         when(mNormalTabModel.getTabAtChecked(1)).thenReturn(regularNtpTab1);
+        when(mNormalTabModel.iterator())
+                .thenAnswer(inv -> List.of(regularTab1, regularNtpTab1).iterator());
 
         when(mIncognitoTabModel.getCount()).thenReturn(2);
         when(mIncognitoTabModel.index()).thenReturn(1);
@@ -860,6 +892,8 @@ public class TabPersistentStoreUnitTest {
         when(incognitoTab2.getUrl()).thenReturn(gurl);
         when(incognitoTab2.isIncognito()).thenReturn(true);
         when(mIncognitoTabModel.getTabAtChecked(1)).thenReturn(incognitoTab2);
+        when(mIncognitoTabModel.iterator())
+                .thenAnswer(inv -> List.of(incognitoTab1, incognitoTab2).iterator());
 
         when(mTabModelSelector.getTotalTabCount()).thenReturn(4);
     }
@@ -879,8 +913,11 @@ public class TabPersistentStoreUnitTest {
         GURL gurl = new GURL(REGULAR_TAB_STRING_1);
         when(regularTab1.getUrl()).thenReturn(gurl);
         when(mNormalTabModel.getTabAtChecked(1)).thenReturn(regularTab1);
+        when(mNormalTabModel.iterator())
+                .thenAnswer(inv -> List.of(regularNtpTab1, regularTab1).iterator());
 
         when(mIncognitoTabModel.getCount()).thenReturn(0);
+        when(mIncognitoTabModel.iterator()).thenAnswer(inv -> Collections.emptyList().iterator());
     }
 
     private void setupSerializationTestMocksWithGroupedAndNavigableNtps() {
@@ -909,8 +946,11 @@ public class TabPersistentStoreUnitTest {
         GURL gurl = new GURL(REGULAR_TAB_STRING_1);
         when(regularTab1.getUrl()).thenReturn(gurl);
         when(mNormalTabModel.getTabAtChecked(2)).thenReturn(regularTab1);
+        when(mNormalTabModel.iterator())
+                .thenAnswer(inv -> List.of(regularNtpTab1, regularNtpTab2, regularTab1).iterator());
 
         when(mIncognitoTabModel.getCount()).thenReturn(0);
+        when(mIncognitoTabModel.iterator()).thenAnswer(inv -> Collections.emptyList().iterator());
     }
 
     private static class LoadUrlParamsUrlMatcher implements ArgumentMatcher<LoadUrlParams> {

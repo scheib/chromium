@@ -19,7 +19,6 @@
 
 @protocol SnackbarCommands;
 @protocol ReaderModeCommands;
-class FullscreenController;
 
 // Observes changes to the web state to perform reader mode operations.
 class ReaderModeTabHelper : public web::WebStateObserver,
@@ -30,10 +29,12 @@ class ReaderModeTabHelper : public web::WebStateObserver,
    public:
     // Called when Reader mode content became available in this tab.
     virtual void ReaderModeWebStateDidLoadContent(
-        ReaderModeTabHelper* tab_helper) = 0;
+        ReaderModeTabHelper* tab_helper,
+        web::WebState* web_state) = 0;
     // Called when Reader mode content will become unavailable in this tab.
     virtual void ReaderModeWebStateWillBecomeUnavailable(
         ReaderModeTabHelper* tab_helper,
+        web::WebState* web_state,
         ReaderModeDeactivationReason reason) = 0;
 
     // Called when distillation fails.
@@ -98,14 +99,8 @@ class ReaderModeTabHelper : public web::WebStateObserver,
   // Sets the snackbar handler.
   void SetSnackbarHandler(id<SnackbarCommands> snackbar_handler);
 
-  // Processes the result of the Reader Mode heuristic trigger that was run on
-  // the `url` content.
-  void HandleReaderModeHeuristicResult(const GURL& url,
-                                       ReaderModeHeuristicResult result);
-
-  // Sets the full screen controller that will passed to the
-  // `ReaderModeContentTabHelper`.
-  void SetFullscreenController(FullscreenController* fullscreen_controller);
+  // Processes the result of the Reader Mode heuristic trigger.
+  void HandleReaderModeHeuristicResult(ReaderModeHeuristicResult result);
 
   // web::WebStateObserver overrides:
   void DidStartNavigation(web::WebState* web_state,
@@ -125,6 +120,10 @@ class ReaderModeTabHelper : public web::WebStateObserver,
       NSURLRequest* request,
       web::WebStatePolicyDecider::RequestInfo request_info) override;
 
+  // Sets the script to be used to initialise the scrolling position when the
+  // Reader mode content has loaded.
+  void SetScrollAnchorScript(std::string script);
+
   // Returns a weak pointer.
   base::WeakPtr<ReaderModeTabHelper> GetWeakPtr();
 
@@ -133,8 +132,7 @@ class ReaderModeTabHelper : public web::WebStateObserver,
 
   // Handles the result from the Readability JavaScript heuristic triggering
   // logic.
-  void HandleReadabilityHeuristicResult(const GURL& url,
-                                        const base::Value* result);
+  void HandleReadabilityHeuristicResult(const base::Value* result);
 
   // Trigger the heuristic to determine reader mode eligibility.
   void TriggerReaderModeHeuristic(const GURL& url);
@@ -175,6 +173,13 @@ class ReaderModeTabHelper : public web::WebStateObserver,
   // `distillation_already_failed_` is set to true.
   void RecordDistillationFailure();
 
+  // Applies the language settings from the original source page.
+  void ApplyLanguageSettingsFromSource();
+
+  // Script to be used to initialise the scrolling position when the Reader mode
+  // content has loaded.
+  std::string scroll_anchor_script_;
+
   // Whether Reader mode is active in this tab.
   bool active_ = false;
   // Whether the Reader mode WebState content was loaded.
@@ -192,6 +197,8 @@ class ReaderModeTabHelper : public web::WebStateObserver,
   base::OneShotTimer trigger_reader_mode_timer_;
   base::OneShotTimer reader_mode_distillation_timer_;
 
+  // URL on which we are triggering the eligibility heuristic.
+  std::optional<GURL> eligibility_heuristic_url_;
   // Last committed URL, ignoring ref.
   GURL last_committed_url_without_ref_;
   // Whether the last committed URL eligibility has been determined.
@@ -208,6 +215,14 @@ class ReaderModeTabHelper : public web::WebStateObserver,
   raw_ptr<DistillerService> distiller_service_;
 
   std::unique_ptr<ReaderModeDistillerViewer> distiller_viewer_;
+
+  // The state of translation prior to distilling the source page.
+  struct TranslationState {
+    std::string source_code;
+    std::string target_code;
+    bool is_original_source_translated = false;
+  };
+  TranslationState source_translation_state_;
 
   // Records metrics for the Reader mode with `web_state_`.
   ReaderModeMetricsHelper metrics_helper_;

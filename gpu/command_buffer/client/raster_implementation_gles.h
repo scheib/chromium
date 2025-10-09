@@ -65,6 +65,10 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                        GLint y,
                        GLsizei width,
                        GLsizei height) override;
+  void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                       const gpu::Mailbox& dest_mailbox,
+                       const gfx::Rect& source_rect,
+                       const gfx::Rect& dest_rect) override;
 
   void WritePixels(const gpu::Mailbox& dest_mailbox,
                    int dst_x_offset,
@@ -138,21 +142,6 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                            int src_y,
                            int plane_index,
                            void* dst_pixels) override;
-
-  // Raster via GrContext.
-  GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) override;
-  GLuint CreateAndConsumeForGpuRaster(
-      const scoped_refptr<gpu::ClientSharedImage>& shared_image) override;
-  void DeleteGpuRasterTexture(GLuint texture) override;
-  void BeginGpuRaster() override;
-  void EndGpuRaster() override;
-  void BeginSharedImageAccessDirectCHROMIUM(GLuint texture,
-                                            GLenum mode) override;
-  void EndSharedImageAccessDirectCHROMIUM(GLuint texture) override;
-
-  void InitializeDiscardableTextureCHROMIUM(GLuint texture) override;
-  void UnlockDiscardableTextureCHROMIUM(GLuint texture) override;
-  bool LockDiscardableTextureCHROMIUM(GLuint texture) override;
 
   void TraceBeginCHROMIUM(const char* category_name,
                           const char* trace_name) override;

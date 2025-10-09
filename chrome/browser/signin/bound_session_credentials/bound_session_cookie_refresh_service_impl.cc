@@ -46,6 +46,9 @@ constexpr std::string_view kGoogleSessionTerminationHeader =
     "Sec-Session-Google-Termination";
 constexpr std::string_view kGoogleSessionTerminationSessionIdKey = "session_id";
 
+BASE_FEATURE(kUseDeviceBoundSessionsStorageMaskForDeletion,
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 // Determines the precedence order of
 // `chrome::mojom::ResumeBlockedRequestsTrigger` when recording metrics.
 size_t GetResumeBlockedRequestsTriggerPriority(
@@ -121,6 +124,8 @@ GetRotationDebugTerminationReason(
                            : RotationDebugInfo::TERMINATION_REASON_OTHER;
     case kSessionOverride:
       return RotationDebugInfo::SESSION_OVERRIDE;
+    case kRotationStoppedTimeout:
+      return RotationDebugInfo::ROTATION_STOPPED_TIMEOUT;
     case kCookiesCleared:
       // `kCookiesCleared` should not be reported in the debug header.
       NOTREACHED();
@@ -142,7 +147,7 @@ GetThrottlerParamsForRequestCoverage(
   // Note: This is needed to ensure the correctness of metrics in case of
   // outages.
   return chrome::mojom::BoundSessionThrottlerParams::New(
-      controller->scope_url().host(), controller->scope_url().path(),
+      controller->scope_url().GetHost(), controller->scope_url().GetPath(),
       base::Time());
 }
 
@@ -164,7 +169,6 @@ bool IsSessionInitializationEnabled(const PrefService* profile_prefs,
 }  // namespace
 
 BASE_FEATURE(kEnableBoundSessionCredentialsWsbetaBypass,
-             "EnableBoundSessionCredentialsWsbetaBypass",
 #if BUILDFLAG(IS_WIN)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
@@ -173,7 +177,6 @@ BASE_FEATURE(kEnableBoundSessionCredentialsWsbetaBypass,
 );
 
 BASE_FEATURE(kEnableBoundSessionCredentialsContinuity,
-             "EnableBoundSessionCredentialsContinuity",
 #if BUILDFLAG(IS_WIN)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
@@ -227,7 +230,9 @@ void BoundSessionCookieRefreshServiceImpl::Initialize() {
 
 void BoundSessionCookieRefreshServiceImpl::RegisterNewBoundSession(
     const bound_session_credentials::BoundSessionParams& params) {
-  CHECK(IsNewSessionRegistrationEnabled(profile_prefs_, params.is_wsbeta()));
+  if (!IsNewSessionRegistrationEnabled(profile_prefs_, params.is_wsbeta())) {
+    return;
+  }
 
   if (!session_params_storage_->SaveParams(params)) {
     DVLOG(1) << "Invalid session params or failed to serialize session params.";
@@ -388,7 +393,7 @@ void BoundSessionCookieRefreshServiceImpl::CreateRegistrationRequest(
       switches::kEnableBoundSessionCredentialsExclusiveRegistrationPath.Get();
   if (!exclusive_registration_path.empty() &&
       !base::EqualsCaseInsensitiveASCII(
-          registration_params.registration_endpoint().path_piece(),
+          registration_params.registration_endpoint().path(),
           exclusive_registration_path)) {
     return;
   }
@@ -405,6 +410,15 @@ void BoundSessionCookieRefreshServiceImpl::CreateRegistrationRequest(
   if (registration_requests_.size() == 1U) {
     StartRegistrationRequest();
   }
+}
+
+void BoundSessionCookieRefreshServiceImpl::StopCookieRotation(
+    const BoundSessionKey& key) {
+  auto controller_it = cookie_controllers_.find(key);
+  if (controller_it == cookie_controllers_.end()) {
+    return;
+  }
+  controller_it->second->StopCookieRotation();
 }
 
 base::WeakPtr<BoundSessionCookieRefreshService>
@@ -466,6 +480,12 @@ void BoundSessionCookieRefreshServiceImpl::
   UpdateAllRenderers();
 }
 
+void BoundSessionCookieRefreshServiceImpl::OnCookieRotationStoppedTimeout(
+    BoundSessionCookieController* controller) {
+  TerminateSession(controller,
+                   SessionTerminationTrigger::kRotationStoppedTimeout);
+}
+
 void BoundSessionCookieRefreshServiceImpl::OnPersistentErrorEncountered(
     BoundSessionCookieController* controller,
     BoundSessionRefreshCookieFetcher::Result refresh_error) {
@@ -479,9 +499,14 @@ void BoundSessionCookieRefreshServiceImpl::OnStorageKeyDataCleared(
     content::StoragePartition::StorageKeyMatcherFunction storage_key_matcher,
     const base::Time begin,
     const base::Time end) {
-  // Only terminate a session if cookies are cleared.
-  // TODO(b/296372836): introduce a specific data type for bound sessions.
-  if (!(remove_mask & content::StoragePartition::REMOVE_DATA_MASK_COOKIES)) {
+  const uint32_t storage_mask =
+      base::FeatureList::IsEnabled(
+          kUseDeviceBoundSessionsStorageMaskForDeletion)
+          ? content::StoragePartition::REMOVE_DATA_MASK_DEVICE_BOUND_SESSIONS
+          : content::StoragePartition::REMOVE_DATA_MASK_COOKIES;
+
+  // Only terminate sessions if a relevant data type is cleared.
+  if (!(remove_mask & storage_mask)) {
     return;
   }
 
@@ -599,8 +624,9 @@ void BoundSessionCookieRefreshServiceImpl::MaybeReportTerminationReason(
     SessionTerminationTrigger trigger,
     std::optional<BoundSessionRefreshCookieFetcher::Result> refresh_error) {
   if (trigger == SessionTerminationTrigger::kCookiesCleared) {
-    // Do not send the debug report if cookies were cleared as the request won't
-    // be attributed to a user in any case.
+    // Do not send the debug report if cookies were cleared or the rotation was
+    // terminated due to a stopping timeout as the request won't be attributed
+    // to a user in any case.
     return;
   }
 

@@ -13,6 +13,7 @@
     flex-grow: 1;
     flex-basis: 0;
     max-width: 233px;
+    min-width: 0px;
 }
 
 .tab {
@@ -80,7 +81,6 @@ cr-icon {
     height: 12px;
     position: absolute;
     bottom: 0;
-    z-index: 10;
 }
 
 #leftCorner {

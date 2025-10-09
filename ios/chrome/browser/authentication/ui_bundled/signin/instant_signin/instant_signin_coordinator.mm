@@ -70,7 +70,6 @@
                               contextStyle:contextStyle
                                accessPoint:accessPoint];
   if (self) {
-    CHECK(browser, base::NotFatalUntil::M142);
     CHECK(viewController, base::NotFatalUntil::M142);
     CHECK(continuationProvider);
     _identity = identity;
@@ -312,6 +311,7 @@
                                           browser:self.browser
                                      contextStyle:self.contextStyle
                                       accessPoint:self.accessPoint
+                                   prefilledEmail:nil
                              continuationProvider:_continuationProvider];
   __weak __typeof(self) weakSelf = self;
   _addAccountSigninCoordinator.signinCompletion = ^(

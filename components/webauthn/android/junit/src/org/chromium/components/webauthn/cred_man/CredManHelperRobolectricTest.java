@@ -45,10 +45,10 @@ import org.robolectric.shadow.api.Shadow;
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.blink.mojom.AuthenticatorStatus;
+import org.chromium.blink.mojom.GetCredentialOptions;
 import org.chromium.blink.mojom.Mediation;
 import org.chromium.blink.mojom.PublicKeyCredentialCreationOptions;
 import org.chromium.blink.mojom.PublicKeyCredentialDescriptor;
-import org.chromium.blink.mojom.PublicKeyCredentialRequestOptions;
 import org.chromium.blink.mojom.ResidentKeyRequirement;
 import org.chromium.components.payments.test_support.ShadowWebContentsStatics;
 import org.chromium.components.webauthn.AuthenticationContextProvider;
@@ -62,7 +62,6 @@ import org.chromium.components.webauthn.cred_man.CredManMetricsHelper.CredManCre
 import org.chromium.components.webauthn.cred_man.CredManMetricsHelper.CredManGetRequestEnum;
 import org.chromium.components.webauthn.cred_man.CredManMetricsHelper.CredManPrepareRequestEnum;
 import org.chromium.content_public.browser.RenderFrameHost;
-import org.chromium.content_public.browser.WebContents;
 import org.chromium.mojo_base.mojom.String16;
 
 @RunWith(BaseRobolectricTestRunner.class)
@@ -88,7 +87,7 @@ public class CredManHelperRobolectricTest {
     private CredManHelper mCredManHelper;
     private Fido2ApiTestHelper.AuthenticatorCallback mCallback;
     private PublicKeyCredentialCreationOptions mCreationOptions;
-    private PublicKeyCredentialRequestOptions mRequestOptions;
+    private GetCredentialOptions mRequestOptions;
     private final String mOriginString = "https://subdomain.coolwebsitekayserispor.com";
     private final byte[] mClientDataHash = new byte[] {1, 2, 3};
 
@@ -96,7 +95,6 @@ public class CredManHelperRobolectricTest {
             Shadow.newInstanceOf(CredentialManager.class);
     @Mock private Context mContext;
     @Mock private RenderFrameHost mFrameHost;
-    @Mock private WebContents mWebContents;
     @Mock private CredManMetricsHelper mMetricsHelper;
     @Mock private WebauthnBrowserBridge mBrowserBridge;
     @Mock private CredManHelper.ErrorCallback mErrorCallback;
@@ -122,8 +120,9 @@ public class CredManHelperRobolectricTest {
 
         mCreationOptions = Fido2ApiTestHelper.createDefaultMakeCredentialOptions();
         mCreationOptions.authenticatorSelection.residentKey = ResidentKeyRequirement.REQUIRED;
-        mRequestOptions = Fido2ApiTestHelper.createDefaultGetAssertionOptions();
-        mRequestOptions.allowCredentials = new PublicKeyCredentialDescriptor[0];
+        mRequestOptions = new GetCredentialOptions();
+        mRequestOptions.publicKey = Fido2ApiTestHelper.createDefaultGetAssertionOptions();
+        mRequestOptions.publicKey.allowCredentials = new PublicKeyCredentialDescriptor[0];
 
         Fido2ApiTestHelper.mockFido2CredentialRequestJni();
         Fido2ApiTestHelper.mockClientDataJson("{}");

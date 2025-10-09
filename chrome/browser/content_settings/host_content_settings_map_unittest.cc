@@ -66,6 +66,8 @@
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "url/gurl.h"
 
+using content_settings::SettingSource;
+using content_settings::mojom::SessionModel;
 using ::testing::_;
 using ::testing::MockFunction;
 using ::testing::Return;
@@ -200,8 +202,7 @@ class TesterForType {
   }
 
   // Wrapper to query GetWebsiteSetting(), and only return the source.
-  content_settings::SettingSource GetSettingSourceForURL(
-      const std::string& url_str) {
+  SettingSource GetSettingSourceForURL(const std::string& url_str) {
     GURL url(url_str);
     content_settings::SettingInfo setting_info;
     base::Value result = host_content_settings_map_->GetWebsiteSetting(
@@ -1031,44 +1032,44 @@ TEST_F(HostContentSettingsMapTest, SetPermissionSettingWithContentSetting) {
   GURL url("https://example.com");
 
   // Check that default is ask.
-  EXPECT_EQ(CONTENT_SETTING_ASK,
-            std::get<ContentSetting>(map->GetPermissionSetting(
-                url, url, ContentSettingsType::GEOLOCATION)));
+  EXPECT_EQ(
+      PermissionSetting{CONTENT_SETTING_ASK},
+      map->GetPermissionSetting(url, url, ContentSettingsType::GEOLOCATION));
 
   // Set to allow.
   map->SetPermissionSettingDefaultScope(
       url, url, ContentSettingsType::GEOLOCATION, CONTENT_SETTING_ALLOW);
   content_settings::SettingInfo info;
-  EXPECT_EQ(CONTENT_SETTING_ALLOW,
-            std::get<ContentSetting>(map->GetPermissionSetting(
-                url, url, ContentSettingsType::GEOLOCATION, &info)));
-  EXPECT_EQ(info.source, content_settings::SettingSource::kUser);
+  EXPECT_EQ(PermissionSetting{CONTENT_SETTING_ALLOW},
+            map->GetPermissionSetting(url, url,
+                                      ContentSettingsType::GEOLOCATION, &info));
+  EXPECT_EQ(info.source, SettingSource::kUser);
   EXPECT_EQ(info.primary_pattern.ToString(), "https://example.com:443");
   EXPECT_EQ(info.secondary_pattern.ToString(), "*");
 
   // Reset with nullopt.
   map->SetPermissionSettingDefaultScope(
       url, url, ContentSettingsType::GEOLOCATION, std::nullopt);
-  EXPECT_EQ(CONTENT_SETTING_ASK,
-            std::get<ContentSetting>(map->GetPermissionSetting(
-                url, url, ContentSettingsType::GEOLOCATION, &info)));
-  EXPECT_EQ(info.source, content_settings::SettingSource::kUser);
+  EXPECT_EQ(PermissionSetting{CONTENT_SETTING_ASK},
+            map->GetPermissionSetting(url, url,
+                                      ContentSettingsType::GEOLOCATION, &info));
+  EXPECT_EQ(info.source, SettingSource::kUser);
   EXPECT_EQ(info.primary_pattern.ToString(), "*");
   EXPECT_EQ(info.secondary_pattern.ToString(), "*");
 
   // Set to block
   map->SetPermissionSettingDefaultScope(
       url, url, ContentSettingsType::GEOLOCATION, CONTENT_SETTING_BLOCK);
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
-            std::get<ContentSetting>(map->GetPermissionSetting(
-                url, url, ContentSettingsType::GEOLOCATION)));
+  EXPECT_EQ(
+      PermissionSetting{CONTENT_SETTING_BLOCK},
+      map->GetPermissionSetting(url, url, ContentSettingsType::GEOLOCATION));
 
   // Reset with DEFAULT.
   map->SetPermissionSettingDefaultScope(
       url, url, ContentSettingsType::GEOLOCATION, CONTENT_SETTING_DEFAULT);
-  EXPECT_EQ(CONTENT_SETTING_ASK,
-            std::get<ContentSetting>(map->GetPermissionSetting(
-                url, url, ContentSettingsType::GEOLOCATION)));
+  EXPECT_EQ(
+      PermissionSetting{CONTENT_SETTING_ASK},
+      map->GetPermissionSetting(url, url, ContentSettingsType::GEOLOCATION));
 }
 
 TEST_F(HostContentSettingsMapTest, SetPermissionSettingWithGeolocationSetting) {
@@ -1092,7 +1093,7 @@ TEST_F(HostContentSettingsMapTest, SetPermissionSettingWithGeolocationSetting) {
       GeolocationSetting(PermissionOption::kAllowed, PermissionOption::kDenied),
       std::get<GeolocationSetting>(map->GetPermissionSetting(
           url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS, &info)));
-  EXPECT_EQ(info.source, content_settings::SettingSource::kUser);
+  EXPECT_EQ(info.source, SettingSource::kUser);
   EXPECT_EQ(info.primary_pattern.ToString(), "https://example.com:443");
   EXPECT_EQ(info.secondary_pattern.ToString(), "*");
 
@@ -1103,7 +1104,42 @@ TEST_F(HostContentSettingsMapTest, SetPermissionSettingWithGeolocationSetting) {
       GeolocationSetting(PermissionOption::kAsk, PermissionOption::kAsk),
       std::get<GeolocationSetting>(map->GetPermissionSetting(
           url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS, &info)));
-  EXPECT_EQ(info.source, content_settings::SettingSource::kUser);
+  EXPECT_EQ(info.source, SettingSource::kUser);
+  EXPECT_EQ(info.primary_pattern.ToString(), "*");
+  EXPECT_EQ(info.secondary_pattern.ToString(), "*");
+}
+
+TEST_F(HostContentSettingsMapTest, SetOneTimeGeolocationSetting) {
+  TestingProfile profile;
+  auto* map = HostContentSettingsMapFactory::GetForProfile(&profile);
+  GURL url("https://example.com");
+
+  // Set one-time Allowed,Denied
+  content_settings::ContentSettingConstraints constraints;
+  constraints.set_session_model(SessionModel::ONE_TIME);
+  map->SetPermissionSettingDefaultScope(
+      url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS,
+      GeolocationSetting(PermissionOption::kAllowed, PermissionOption::kDenied),
+      constraints);
+
+  content_settings::SettingInfo info;
+  EXPECT_EQ(
+      GeolocationSetting(PermissionOption::kAllowed, PermissionOption::kDenied),
+      std::get<GeolocationSetting>(map->GetPermissionSetting(
+          url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS, &info)));
+  EXPECT_EQ(info.metadata.session_model(), SessionModel::ONE_TIME);
+  EXPECT_EQ(info.source, SettingSource::kUser);
+  EXPECT_EQ(info.primary_pattern.ToString(), "https://example.com:443");
+  EXPECT_EQ(info.secondary_pattern.ToString(), "*");
+
+  // Reset with nullopt.
+  map->SetPermissionSettingDefaultScope(
+      url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS, std::nullopt);
+  EXPECT_EQ(
+      GeolocationSetting(PermissionOption::kAsk, PermissionOption::kAsk),
+      std::get<GeolocationSetting>(map->GetPermissionSetting(
+          url, url, ContentSettingsType::GEOLOCATION_WITH_OPTIONS, &info)));
+  EXPECT_EQ(info.source, SettingSource::kUser);
   EXPECT_EQ(info.primary_pattern.ToString(), "*");
   EXPECT_EQ(info.secondary_pattern.ToString(), "*");
 }
@@ -1139,16 +1175,12 @@ TEST_F(HostContentSettingsMapTest,
                            PermissionOption::kDenied});
     // Confirm state
     EXPECT_EQ(host_content_settings_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{PermissionOption::kAllowed,
                                                    PermissionOption::kDenied}));
     // Should inherit partial block in incognito, but not allow.
     EXPECT_EQ(otr_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{PermissionOption::kAsk,
                                                    PermissionOption::kDenied}));
   }
@@ -1161,17 +1193,13 @@ TEST_F(HostContentSettingsMapTest,
 
     // Confirm state
     EXPECT_EQ(host_content_settings_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{
                   PermissionOption::kAllowed, PermissionOption::kAllowed}));
 
     // Should not inherit full allow in incognito
     EXPECT_EQ(otr_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{PermissionOption::kAsk,
                                                    PermissionOption::kAsk}));
   }
@@ -1184,17 +1212,13 @@ TEST_F(HostContentSettingsMapTest,
 
     // Confirm state
     EXPECT_EQ(host_content_settings_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{PermissionOption::kDenied,
                                                    PermissionOption::kDenied}));
 
     // Should  inherit full block in incognito
     EXPECT_EQ(otr_map->GetPermissionSetting(
-                  host, host,
-                  content_settings::mojom::ContentSettingsType::
-                      GEOLOCATION_WITH_OPTIONS),
+                  host, host, ContentSettingsType::GEOLOCATION_WITH_OPTIONS),
               PermissionSetting(GeolocationSetting{PermissionOption::kDenied,
                                                    PermissionOption::kDenied}));
   }
@@ -1342,8 +1366,8 @@ TEST_F(HostContentSettingsMapTest, IncognitoDontInheritWebsiteSetting) {
 
 TEST_F(HostContentSettingsMapTest, IncognitoDontInheritContentSetting) {
   // Content settings marked DONT_INHERIT_IN_INCOGNITO in
-  // ContentSettingsRegistry (e.g. top-level scoped 3pcd, which is a special
-  // case) don't inherit any values from from regular to incognito.
+  // ContentSettingsRegistry (e.g. Storage Access Header origin trial, which is
+  // a special case) don't inherit any values from from regular to incognito.
   TestingProfile profile;
   Profile* otr_profile =
       profile.GetPrimaryOTRProfile(/*create_if_needed=*/true);
@@ -1354,30 +1378,32 @@ TEST_F(HostContentSettingsMapTest, IncognitoDontInheritContentSetting) {
 
   GURL host("https://example.com/");
 
-  // top-level scoped 3pcd defaults to ALLOW.
-  EXPECT_EQ(CONTENT_SETTING_ALLOW,
-            map->GetContentSetting(
-                host, host, ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL));
-  EXPECT_EQ(CONTENT_SETTING_ALLOW,
-            otr_map->GetContentSetting(
-                host, host, ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL));
+  // Storage Access Header origin trial content settings defaults to BLOCK.
+  EXPECT_EQ(
+      CONTENT_SETTING_BLOCK,
+      map->GetContentSetting(
+          host, host, ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL));
+  EXPECT_EQ(
+      CONTENT_SETTING_BLOCK,
+      otr_map->GetContentSetting(
+          host, host, ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL));
 
   map->SetContentSettingDefaultScope(
-      host, GURL(), ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL,
-      CONTENT_SETTING_BLOCK);
+      host, host, ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL,
+      CONTENT_SETTING_ALLOW);
 
   // The setting is not inherited by |otr_map|.
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
-            map->GetContentSetting(
-                host, host, ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL));
-  EXPECT_EQ(CONTENT_SETTING_ALLOW,
-            otr_map->GetContentSetting(
-                host, host, ContentSettingsType::TOP_LEVEL_TPCD_ORIGIN_TRIAL));
+  EXPECT_EQ(
+      CONTENT_SETTING_ALLOW,
+      map->GetContentSetting(
+          host, host, ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL));
+  EXPECT_EQ(
+      CONTENT_SETTING_BLOCK,
+      otr_map->GetContentSetting(
+          host, host, ContentSettingsType::STORAGE_ACCESS_HEADER_ORIGIN_TRIAL));
 }
 
 TEST_F(HostContentSettingsMapTest, PrefExceptionsOperation) {
-  using content_settings::SettingSource;
-
   const char kUrl1[] = "http://user_exception_allow.com";
   const char kUrl2[] = "http://user_exception_block.com";
   const char kUrl3[] = "http://non_exception.com";
@@ -1463,7 +1489,7 @@ TEST_F(HostContentSettingsMapTest,
         CONTENT_SETTING_BLOCK,
         map->GetContentSetting(url, url, ContentSettingsType::COOKIES, &info));
     // Check that the setting came from ProviderType::kPolicyProvider.
-    EXPECT_EQ(content_settings::SettingSource::kPolicy, info.source);
+    EXPECT_EQ(SettingSource::kPolicy, info.source);
   }
 
   {
@@ -1493,7 +1519,7 @@ TEST_F(HostContentSettingsMapTest,
               map_tester.map->GetContentSetting(
                   url, url, ContentSettingsType::COOKIES, &info));
     // Check that the setting came from ProviderType::kProviderForTests.
-    EXPECT_EQ(content_settings::SettingSource::kTest, info.source);
+    EXPECT_EQ(SettingSource::kTest, info.source);
   }
 }
 
@@ -1529,13 +1555,15 @@ TEST_F(HostContentSettingsMapTest, CanonicalizeExceptionsUnicodeAndPunycode) {
   TestingProfile profile;
 
   base::Value value =
-      base::JSONReader::Read("{\"[*.]\\xC4\\x87ira.com,*\":{\"setting\":1}}")
+      base::JSONReader::Read("{\"[*.]\\xC4\\x87ira.com,*\":{\"setting\":1}}",
+                             base::JSON_PARSE_CHROMIUM_EXTENSIONS)
           .value();
   profile.GetPrefs()->Set(GetPrefName(ContentSettingsType::COOKIES), value);
 
   // Set punycode equivalent, with different setting.
   base::Value puny_value =
-      base::JSONReader::Read("{\"[*.]xn--ira-ppa.com,*\":{\"setting\":2}}")
+      base::JSONReader::Read("{\"[*.]xn--ira-ppa.com,*\":{\"setting\":2}}",
+                             base::JSON_PARSE_CHROMIUM_EXTENSIONS)
           .value();
   profile.GetPrefs()->Set(GetPrefName(ContentSettingsType::COOKIES),
                           puny_value);
@@ -1545,8 +1573,8 @@ TEST_F(HostContentSettingsMapTest, CanonicalizeExceptionsUnicodeAndPunycode) {
 
   const base::Value& content_setting_prefs =
       profile.GetPrefs()->GetValue(GetPrefName(ContentSettingsType::COOKIES));
-  std::string prefs_as_json;
-  base::JSONWriter::Write(content_setting_prefs, &prefs_as_json);
+  std::string prefs_as_json =
+      base::WriteJson(content_setting_prefs).value_or("");
   EXPECT_STREQ("{\"[*.]xn--ira-ppa.com,*\":{\"setting\":2}}",
                prefs_as_json.c_str());
 }
@@ -2396,8 +2424,7 @@ TEST_F(HostContentSettingsMapTest, MAYBE_MixedScopeSettings) {
   // Set a Session only permission for our second url and we expect it should
   // co-exist with the other permission just fine.
   content_settings::ContentSettingConstraints constraints;
-  constraints.set_session_model(
-      content_settings::mojom::SessionModel::USER_SESSION);
+  constraints.set_session_model(SessionModel::USER_SESSION);
   map->SetContentSettingDefaultScope(example_url2, example_url2,
                                      persistent_type, CONTENT_SETTING_ALLOW,
                                      constraints);
@@ -2461,12 +2488,11 @@ TEST_F(HostContentSettingsMapTest,
 
   // Set permissions in two different scopes.
   content_settings::ContentSettingConstraints constraints;
-  constraints.set_session_model(content_settings::mojom::SessionModel::DURABLE);
+  constraints.set_session_model(SessionModel::DURABLE);
   map->SetContentSettingDefaultScope(example_url1, example_url1,
                                      persistent_type, CONTENT_SETTING_BLOCK,
                                      constraints);
-  constraints.set_session_model(
-      content_settings::mojom::SessionModel::USER_SESSION);
+  constraints.set_session_model(SessionModel::USER_SESSION);
   map->SetContentSettingDefaultScope(example_url2, example_url2,
                                      persistent_type, CONTENT_SETTING_ALLOW,
                                      constraints);
@@ -2484,12 +2510,11 @@ TEST_F(HostContentSettingsMapTest,
   // Each one/type of settings we set should be retrievable by specifying the
   // specific scope without getting any of the other results. For Durable we
   // should see our set value and the default value.
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::DURABLE);
+  settings = map->GetSettingsForOneType(persistent_type, SessionModel::DURABLE);
   ASSERT_EQ(2u, settings.size());
 
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(1u, settings.size());
 
   // Reload to clear our session settings.
@@ -2497,8 +2522,8 @@ TEST_F(HostContentSettingsMapTest,
 
   // If a scope is specified that has no settings, we should get an empty set
   // returned.
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(0u, settings.size());
 }
 
@@ -2576,8 +2601,7 @@ TEST_P(HostContentSettingsMapActiveExpirationTest,
   // third with no expiration.
   content_settings::ContentSettingConstraints constraints;
   constraints.set_lifetime(base::Seconds(100));
-  constraints.set_session_model(
-      content_settings::mojom::SessionModel::USER_SESSION);
+  constraints.set_session_model(SessionModel::USER_SESSION);
   map->SetContentSettingDefaultScope(example_url1, example_url1,
                                      persistent_type, CONTENT_SETTING_BLOCK,
                                      constraints);
@@ -2592,8 +2616,8 @@ TEST_P(HostContentSettingsMapActiveExpirationTest,
 
   // Validate that we can retrieve all our settings and none of them are
   // expired.
-  ContentSettingsForOneType settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  ContentSettingsForOneType settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(3u, settings.size());
 
   // None of our current settings should be expired, but we'll keep each one to
@@ -2624,8 +2648,8 @@ TEST_P(HostContentSettingsMapActiveExpirationTest,
   ASSERT_TRUE(url1_setting.IsExpired());
   ASSERT_FALSE(url2_setting.IsExpired());
   ASSERT_FALSE(url3_setting.IsExpired());
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(2u, settings.size());
 
   // If we fast forward again we should expire our second setting and drop if
@@ -2636,8 +2660,8 @@ TEST_P(HostContentSettingsMapActiveExpirationTest,
   ASSERT_TRUE(url1_setting.IsExpired());
   ASSERT_TRUE(url2_setting.IsExpired());
   ASSERT_FALSE(url3_setting.IsExpired());
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(1u, settings.size());
 
   // If we fast forwarding much further it shouldn't make a difference as our
@@ -2648,8 +2672,8 @@ TEST_P(HostContentSettingsMapActiveExpirationTest,
   ASSERT_TRUE(url1_setting.IsExpired());
   ASSERT_TRUE(url2_setting.IsExpired());
   ASSERT_FALSE(url3_setting.IsExpired());
-  settings = map->GetSettingsForOneType(
-      persistent_type, content_settings::mojom::SessionModel::USER_SESSION);
+  settings =
+      map->GetSettingsForOneType(persistent_type, SessionModel::USER_SESSION);
   ASSERT_EQ(1u, settings.size());
 }
 

@@ -8,7 +8,7 @@
 #include <memory>
 #include <set>
 
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/views/cocoa/native_widget_mac_event_monitor.h"
 #include "ui/views/event_monitor.h"
 
@@ -37,6 +37,7 @@ class EventMonitorRemoteCocoa
  private:
   // views::NativeWidgetMacEventMonitor::Client
   void NativeWidgetMacEventMonitorOnEvent(ui::Event* event,
+                                          bool target_is_this_window,
                                           bool* event_handled) override;
 
   const std::set<ui::EventType> types_;

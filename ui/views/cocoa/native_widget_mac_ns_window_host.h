@@ -342,6 +342,7 @@ class VIEWS_EXPORT NativeWidgetMacNSWindowHost
                                               bool* event_swallowed,
                                               bool* event_handled) override;
   bool DispatchMonitorEvent(std::unique_ptr<ui::Event> event,
+                            bool target_is_this_window,
                             bool* event_handled) override;
   bool GetHasMenuController(bool* has_menu_controller) override;
   bool GetHitTestResult(
@@ -413,6 +414,7 @@ class VIEWS_EXPORT NativeWidgetMacNSWindowHost
       std::unique_ptr<ui::Event> event,
       DispatchKeyEventToMenuControllerRemoteCallback callback) override;
   void DispatchMonitorEvent(std::unique_ptr<ui::Event> event,
+                            bool target_is_this_window,
                             DispatchMonitorEventCallback callback) override;
   void GetHasMenuController(GetHasMenuControllerCallback callback) override;
   void GetHitTestResult(const gfx::Point& location_in_content,
@@ -547,7 +549,6 @@ class VIEWS_EXPORT NativeWidgetMacNSWindowHost
   bool is_miniaturized_ = false;
   bool is_window_key_ = false;
   bool is_mouse_capture_active_ = false;
-  bool is_headless_mode_window_ = false;
   bool is_zoomed_ = false;
   gfx::Rect window_bounds_before_fullscreen_;
 

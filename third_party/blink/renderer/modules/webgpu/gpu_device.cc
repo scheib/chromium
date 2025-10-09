@@ -46,6 +46,7 @@
 #include "third_party/blink/renderer/modules/webgpu/gpu_validation_error.h"
 #include "third_party/blink/renderer/modules/webgpu/string_utils.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
+#include "third_party/blink/renderer/platform/wtf/text/strcat.h"
 
 namespace blink {
 
@@ -118,12 +119,10 @@ std::optional<V8GPUFeatureName::Enum> RequiredFeatureForTextureFormat(
     case V8GPUTextureFormat::Enum::kR16Unorm:
     case V8GPUTextureFormat::Enum::kRg16Unorm:
     case V8GPUTextureFormat::Enum::kRgba16Unorm:
-      return V8GPUFeatureName::Enum::kChromiumExperimentalUnorm16TextureFormats;
-
     case V8GPUTextureFormat::Enum::kR16Snorm:
     case V8GPUTextureFormat::Enum::kRg16Snorm:
     case V8GPUTextureFormat::Enum::kRgba16Snorm:
-      return V8GPUFeatureName::Enum::kChromiumExperimentalSnorm16TextureFormats;
+      return V8GPUFeatureName::Enum::kTextureFormatsTier1;
 
     default:
       return std::nullopt;
@@ -247,11 +246,12 @@ void GPUDevice::AddSingletonWarning(GPUSingletonWarning type) {
     String message;
     switch (type) {
       case GPUSingletonWarning::kNonPreferredFormat:
-        message =
-            "WebGPU canvas configured with a different format than is "
-            "preferred by this device (\"" +
-            FromDawnEnum(GPU::GetPreferredCanvasFormat()).AsString() +
-            "\"). This requires an extra copy, which may impact performance.";
+        message = StrCat(
+            {"WebGPU canvas configured with a different format than is "
+             "preferred by this device (\"",
+             FromDawnEnum(GPU::GetPreferredCanvasFormat()).AsStringView(),
+             "\"). This requires an extra copy, which may impact "
+             "performance."});
         break;
       case GPUSingletonWarning::kDepthKey:
         message =
@@ -583,8 +583,8 @@ ScriptPromise<GPURenderPipeline> GPUDevice::createRenderPipelineAsync(
           script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
   auto* callback = MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(
-      WTF::BindOnce(&GPUDevice::OnCreateRenderPipelineAsyncCallback,
-                    WrapPersistent(this), descriptor->label())));
+      BindOnce(&GPUDevice::OnCreateRenderPipelineAsyncCallback,
+               WrapPersistent(this), descriptor->label())));
 
   GetHandle().CreateRenderPipelineAsync(
       &dawn_desc_info.dawn_desc, wgpu::CallbackMode::AllowSpontaneous,
@@ -610,8 +610,8 @@ ScriptPromise<GPUComputePipeline> GPUDevice::createComputePipelineAsync(
       AsDawnType(this, descriptor, &desc_label, &computeStage);
 
   auto* callback = MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(
-      WTF::BindOnce(&GPUDevice::OnCreateComputePipelineAsyncCallback,
-                    WrapPersistent(this), descriptor->label())));
+      BindOnce(&GPUDevice::OnCreateComputePipelineAsyncCallback,
+               WrapPersistent(this), descriptor->label())));
 
   GetHandle().CreateComputePipelineAsync(
       &dawn_desc, wgpu::CallbackMode::AllowSpontaneous,
@@ -664,9 +664,8 @@ ScriptPromise<IDLNullable<GPUError>> GPUDevice::popErrorScope(
           script_state);
   auto promise = resolver->Promise();
 
-  auto* callback =
-      MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(WTF::BindOnce(
-          &GPUDevice::OnPopErrorScopeCallback, WrapPersistent(this))));
+  auto* callback = MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(
+      BindOnce(&GPUDevice::OnPopErrorScopeCallback, WrapPersistent(this))));
 
   GetHandle().PopErrorScope(wgpu::CallbackMode::AllowSpontaneous,
                             callback->UnboundCallback(),
@@ -805,8 +804,8 @@ void GPUDevice::SetDescriptorCallbacks(wgpu::DeviceDescriptor& dawn_desc) {
                                        error_callback->AsUserdata());
 
   auto* lost_callback = MakeWGPUOnceCallback(
-      WTF::BindOnce(&GPUDevice::OnDeviceLost, WrapWeakPersistent(this),
-                    std::move(error_callback)));
+      BindOnce(&GPUDevice::OnDeviceLost, WrapWeakPersistent(this),
+               std::move(error_callback)));
   dawn_desc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
                                   lost_callback->UnboundCallback(),
                                   lost_callback->AsUserdata());

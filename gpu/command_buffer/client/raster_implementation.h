@@ -122,6 +122,11 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                        GLsizei width,
                        GLsizei height) override;
 
+  void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                       const gpu::Mailbox& dest_mailbox,
+                       const gfx::Rect& source_rect,
+                       const gfx::Rect& dest_rect) override;
+
   void WritePixels(const gpu::Mailbox& dest_mailbox,
                    int dst_x_offset,
                    int dst_y_offset,
@@ -188,30 +193,11 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                            int src_y,
                            int plane_index,
                            void* dst_pixels) override;
-  GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) override;
-  GLuint CreateAndConsumeForGpuRaster(
-      const scoped_refptr<gpu::ClientSharedImage>& shared_image) override;
-  void DeleteGpuRasterTexture(GLuint texture) override;
-  void BeginGpuRaster() override;
-  void EndGpuRaster() override;
-  void BeginSharedImageAccessDirectCHROMIUM(GLuint texture,
-                                            GLenum mode) override;
-  void EndSharedImageAccessDirectCHROMIUM(GLuint texture) override;
-
-  void InitializeDiscardableTextureCHROMIUM(GLuint texture) override;
-  void UnlockDiscardableTextureCHROMIUM(GLuint texture) override;
-  bool LockDiscardableTextureCHROMIUM(GLuint texture) override;
 
   // ContextSupport implementation.
   void SetAggressivelyFreeResources(bool aggressively_free_resources) override;
-  uint64_t ShareGroupTracingGUID() const override;
   void SetErrorMessageCallback(
       base::RepeatingCallback<void(const char*, int32_t)> callback) override;
-  bool ThreadSafeShallowLockDiscardableTexture(uint32_t texture_id) override;
-  void CompleteLockDiscardableTexureOnContextThread(
-      uint32_t texture_id) override;
-  bool ThreadsafeDiscardableTextureIsDeletedForTracing(
-      uint32_t texture_id) override;
   base::span<uint8_t> MapTransferCacheEntry(uint32_t serialized_size) override;
   void UnmapAndCreateTransferCacheEntry(uint32_t type, uint32_t id) override;
   bool ThreadsafeLockTransferCacheEntry(uint32_t type, uint32_t id) override;
@@ -237,7 +223,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                                  GLuint64* params);
 
   // ClientFontManager::Client implementation.
-  void* MapFontBuffer(uint32_t size) override;
+  base::span<uint8_t> MapFontBuffer(uint32_t size) override;
 
   void set_max_inlined_entry_size_for_testing(uint32_t max_size) {
     max_inlined_entry_size_ = max_size;

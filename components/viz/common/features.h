@@ -19,7 +19,7 @@
 namespace features {
 
 #if BUILDFLAG(IS_ANDROID)
-VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidAnimatedCompositedProgressBar);
+VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidAnimatedProgressBarInViz);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidBcivBottomControls);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidBrowserControlsInViz);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAndroidDumpForBadCompositedUiState);
@@ -33,8 +33,6 @@ VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAvoidDuplicateDelayBeginFrame);
 VIZ_COMMON_EXPORT extern const char kDrawQuadSplit[];
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(
-    kTransferableResourcePassAlphaTypeDirectly);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kDrawQuadSplitLimit);
 
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(
@@ -101,6 +99,8 @@ VIZ_COMMON_EXPORT extern const char kTargetForVSyncAnimation[];
 VIZ_COMMON_EXPORT extern const char kTargetForVSyncInteraction[];
 #endif
 
+VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kAckCopyOutputRequestEarlyForViewTransition);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kAllowUndamagedNonrootRenderPassToSkip);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(
     kAllowForceMergeRenderPassWithRequireOverlayQuads);
@@ -118,13 +118,15 @@ VIZ_COMMON_EXPORT extern const base::FeatureParam<double>
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kEnableInteractiveOnlyADPFRenderer);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kEnableADPFSeparateRendererMainSession);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kEnableADPFSetThreads);
+VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kEnableADPFWorkloadReset);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kUseDisplaySDRMaxLuminanceNits);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kHideDelegatedFrameHostMac);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kEvictionUnlocksResources);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kSingleVideoFrameRateThrottling);
-VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kBatchMainThreadReleaseCallbacks);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kLastVSyncArgsKillswitch);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kVizDirectCompositorThreadIpcNonRoot);
+VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(
+    kVizDirectCompositorThreadIpcFrameSinkManager);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kVizNullHypothesis);
 #if BUILDFLAG(IS_CHROMEOS)
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kCrosContentAdjustedRefreshRate);
@@ -148,11 +150,13 @@ VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kNoLateBeginFrames);
 VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kNoCompositorFrameAcks);
 VIZ_COMMON_EXPORT extern const base::FeatureParam<int>
     kNumberPendingFramesUntilThrottle;
+VIZ_COMMON_EXPORT BASE_DECLARE_FEATURE(kDisplaySchedulerAsClient);
 
 VIZ_COMMON_EXPORT int DrawQuadSplitLimit();
 VIZ_COMMON_EXPORT bool IsBackdropFiltersCullingOptimizationEnabled();
 VIZ_COMMON_EXPORT bool IsDelegatedCompositingEnabled();
 VIZ_COMMON_EXPORT bool IsVizDirectCompositorThreadIpcNonRootEnabled();
+VIZ_COMMON_EXPORT bool IsVizDirectCompositorThreadIpcFrameSinkManagerEnabled();
 #if BUILDFLAG(IS_WIN)
 VIZ_COMMON_EXPORT bool ShouldRemoveRedirectionBitmap();
 #endif
@@ -175,7 +179,7 @@ VIZ_COMMON_EXPORT bool Use90HzSwapChainCountFor72fps();
 VIZ_COMMON_EXPORT bool IsCrosContentAdjustedRefreshRateEnabled();
 #endif  // BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_ANDROID)
-VIZ_COMMON_EXPORT bool IsAndroidAnimatedCompositedProgressBarEnabled();
+VIZ_COMMON_EXPORT bool IsAndroidAnimatedProgressBarInVizEnabled();
 VIZ_COMMON_EXPORT bool IsBcivBottomControlsEnabled();
 VIZ_COMMON_EXPORT bool IsBrowserControlsInVizEnabled();
 
@@ -186,6 +190,8 @@ VIZ_COMMON_EXPORT bool ShouldUseAdpfForSoc(std::string_view soc_allowlist,
                                            std::string_view soc_blocklist,
                                            std::string_view soc);
 #endif  // BUILDFLAG(IS_ANDROID)
+
+VIZ_COMMON_EXPORT bool ShouldAckCOREarlyForViewTransition();
 
 }  // namespace features
 

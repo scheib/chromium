@@ -164,6 +164,7 @@ component("modules") {
     "//third_party/blink/renderer/modules/websockets",
     "//third_party/blink/renderer/modules/webtransport",
     "//third_party/blink/renderer/modules/webusb",
+    "//third_party/blink/renderer/modules/window_controls_overlay",
     "//third_party/blink/renderer/modules/worklet",
     "//third_party/blink/renderer/modules/xr",
   ]
@@ -180,7 +181,6 @@ component("modules") {
       "//third_party/blink/renderer/modules/direct_sockets",
       "//third_party/blink/renderer/modules/printing",
       "//third_party/blink/renderer/modules/smart_card",
-      "//third_party/blink/renderer/modules/window_controls_overlay",
     ]
   }
 
@@ -411,6 +411,7 @@ source_set("unit_tests") {
     "accessibility/testing/accessibility_test.h",
     "ai/ai_utils_test.cc",
     "ai/model_execution_responder_test.cc",
+    "ai/proofreader_test.cc",
     "animationworklet/animation_worklet_global_scope_test.cc",
     "animationworklet/animation_worklet_proxy_client_test.cc",
     "animationworklet/worklet_animation_test.cc",
@@ -432,6 +433,8 @@ source_set("unit_tests") {
     "canvas/canvas2d/canvas_style_test_utils.h",
     "canvas/canvas2d/identifiability_study_helper_test.cc",
     "canvas/canvas_noise_test.cc",
+    "canvas/canvas_noise_test_util.cc",
+    "canvas/canvas_noise_test_util.h",
     "canvas/htmlcanvas/html_canvas_element_module_test.cc",
     "canvas/offscreencanvas/offscreen_canvas_rendering_api_ukm_metrics_test.cc",
     "canvas/offscreencanvas/offscreen_canvas_test.cc",
@@ -555,7 +558,6 @@ source_set("unit_tests") {
     "payments/payment_test_helper.h",
     "payments/payments_validators_test.cc",
     "payments/secure_payment_confirmation_helper_test.cc",
-    "peerconnection/byte_buffer_queue_test.cc",
     "peerconnection/media_stream_remote_video_source_test.cc",
     "peerconnection/media_stream_track_metrics_test.cc",
     "peerconnection/media_stream_video_webrtc_sink_test.cc",
@@ -578,9 +580,9 @@ source_set("unit_tests") {
     "peerconnection/rtc_rtp_script_transformer_test.cc",
     "peerconnection/rtc_rtp_sender_impl_test.cc",
     "peerconnection/rtc_rtp_transceiver_impl_test.cc",
-    "peerconnection/rtc_rtp_transport_processor_test.cc",
-    "peerconnection/rtc_rtp_transport_test.cc",
     "peerconnection/rtc_sctp_transport_test.cc",
+    "peerconnection/rtc_transport/rtc_transport_dependencies_test.cc",
+    "peerconnection/rtc_transport/rtc_transport_test.cc",
     "peerconnection/thermal_resource_test.cc",
     "peerconnection/transceiver_state_surfacer_test.cc",
     "peerconnection/webrtc_audio_renderer_test.cc",

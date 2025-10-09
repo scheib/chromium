@@ -72,6 +72,7 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/scroll/scroll_into_view_util.h"
 #include "third_party/blink/renderer/platform/instrumentation/histogram.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/timer.h"
 
 namespace blink {
@@ -300,9 +301,8 @@ bool TextFinder::FindInternal(int identifier,
   if (options.run_synchronously_for_testing) {
     Scroll(std::move(scroll_context));
   } else {
-    scroll_task_.Reset(WTF::BindOnce(&TextFinder::Scroll,
-                                     WrapWeakPersistent(this),
-                                     std::move(scroll_context)));
+    scroll_task_.Reset(BindOnce(&TextFinder::Scroll, WrapWeakPersistent(this),
+                                std::move(scroll_context)));
     GetFrame()->GetDocument()->EnqueueAnimationFrameTask(
         scroll_task_.callback());
   }
@@ -399,7 +399,11 @@ void TextFinder::SetFindEndstateFocusAndSelection() {
       auto* element = DynamicTo<Element>(runner);
       if (!element)
         continue;
-      if (element->IsFocusable()) {
+      bool focusable =
+          RuntimeEnabledFeatures::KeyboardFocusabilityAfterFindInPageEnabled()
+              ? element->IsKeyboardFocusableSlow()
+              : element->IsFocusable();
+      if (focusable) {
         // Found a focusable parent node. Set the active match as the
         // selection and focus to the focusable node.
         GetFrame()->Selection().SetSelectionAndEndTyping(

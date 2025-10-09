@@ -373,6 +373,15 @@ TEST(CharacterTest, TestEmoji40Data) {
   EXPECT_TRUE(Character::IsEmojiModifierBase(0x1F933));
 }
 
+TEST(CharacterTest, EmojiReserved) {
+#if U_ICU_VERSION_MAJOR_NUM >= 78
+  EXPECT_TRUE(Character::IsEmoji(0x1FAEF));
+#else
+  EXPECT_TRUE(Character::IsEmojiReserved(0x1FAEF));
+#endif
+  EXPECT_TRUE(Character::IsEmojiReserved(0x1FFFD));
+}
+
 TEST(CharacterTest, LineBreakAndQuoteNotEmoji) {
   EXPECT_FALSE(Character::IsEmojiTextDefault('\n'));
   EXPECT_FALSE(Character::IsEmojiTextDefault('"'));
@@ -736,6 +745,68 @@ TEST(CharacterTest, TestEastAsianSpacingPropertyRule) {
         break;
     }
   }
+}
+
+static struct CanReceiveTextEmphasisTestData {
+  const UChar32 character;
+  bool expected;
+} can_receive_text_emphasis_test_data[] = {
+    {u'0', true},
+    {u'a', true},
+    {u'人', true},
+    {u'한', true},
+    // Additional word-separator characters.
+    {uchar::kEthiopicWordspace, false},
+    {uchar::kAegeanWordSeparatorLine, false},
+    {uchar::kAegeanWordSeparatorDot, false},
+    {uchar::kUgariticWordDivider, false},
+    {uchar::kTibetanMarkIntersyllabicTsheg, false},
+    {uchar::kTibetanMarkDelimiterTshegBstar, false},
+    // Punctuation.
+    {u'(', false},
+    {u']', false},
+    {u'!', false},
+    {u' ', false},
+    {u'，', false},
+    // A set of exceptions for punctuation.
+    {uchar::kNumberSign, true},
+    {uchar::kPercentSign, true},
+    {uchar::kAmpersand, true},
+    {uchar::kCommercialAt, true},
+    {uchar::kSectionSign, true},
+    {uchar::kPilcrowSign, true},
+    {uchar::kArabicIndicPerMilleSign, true},
+    {uchar::kArabicIndicPerTenThousandSign, true},
+    {uchar::kArabicPercentSign, true},
+    {uchar::kPerMilleSign, true},
+    {uchar::kPerTenThousandSign, true},
+    {uchar::kTironianSignEt, true},
+    {uchar::kReversedPilcrowSign, true},
+    {uchar::kSwungDash, true},
+    {uchar::kPartAlternationMark, true},
+    // Characters with NFKD equivalence to the above.
+    {uchar::kSmallNumberSign, true},
+    {uchar::kSmallAmpersand, true},
+    {uchar::kSmallPercentSign, true},
+    {uchar::kSmallCommercialAt, true},
+    {uchar::kFullwidthNumberSign, true},
+    {uchar::kFullwidthPercentSign, true},
+    {uchar::kFullwidthAmpersand, true},
+    {uchar::kFullwidthCommercialAt, true},
+};
+
+class CanReceiveTextEmphasisTest
+    : public testing::Test,
+      public testing::WithParamInterface<CanReceiveTextEmphasisTestData> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    CanReceiveTextEmphasisTest,
+    CanReceiveTextEmphasisTest,
+    testing::ValuesIn(can_receive_text_emphasis_test_data));
+
+TEST_P(CanReceiveTextEmphasisTest, ToLowerWithoutOffset) {
+  const auto data = GetParam();
+  EXPECT_EQ(Character::CanReceiveTextEmphasis(data.character), data.expected);
 }
 
 }  // namespace blink

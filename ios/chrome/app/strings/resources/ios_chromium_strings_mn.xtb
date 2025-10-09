@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">Та Lens-г энд нээх боломжтой.</translation>
 <translation id="1042296835509784301">Нууц үгний менежерийг Chromium-д нээнэ.</translation>
 <translation id="1047130070405668746">Chromium-г сонгоно уу</translation>
-<translation id="1086486568852410168">Google Lens-р хайх</translation>
 <translation id="1091252999271033193">Энэ нь Chromium тухай бүрд мобайл сайтын хүсэлт тавина гэсэн үг юм.</translation>
 <translation id="1115463765356382667">Chromium-г бүрэн ашиглахын тулд доорх санал болгосон эдгээр үйлдлийг гүйцэтгэнэ үү.</translation>
 <translation id="1185134272377778587">Chromium-ийн тухай</translation>
@@ -43,6 +42,7 @@
 <ph name="BEGIN_LINK" />Дэлгэрэнгүй үзэх<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">Chromium-н Газрын зураг</translation>
 <translation id="1867772173333403444">4. Chromium-г сонгоно уу</translation>
+<translation id="1965068424387304464">Chromium-н зөвлөгөө: Нууц үгийг хадгалаарай</translation>
 <translation id="2006345422933397527">Chromium-н шинэчлэлтийг шалгаж чадсангүй. Интернэт холболтоо шалгаж үзнэ үү.</translation>
 <translation id="2042889939382983733">Chromium-н түүхээ үзэх</translation>
 <translation id="2052320862053429062">Chrome нь таны нууц үгийг онлайнаар нийтэлсэн жагсаалтуудтай үе үе харьцуулж шалгадаг. Үүнийг хийх үед таны нууц үг болон хэрэглэгчийн нэр кодчилогдсон байх бөгөөд ингэснээр Google-г оролцуулаад хэн ч тэдгээрийг унших боломжгүй болно.</translation>
@@ -89,7 +89,6 @@
 <translation id="2977470724722393594">Chromium-г шинэчилсэн байна</translation>
 <translation id="3044857325852340337">Chromium-н өгөгдлийг устгалаа</translation>
 <translation id="3054480780637153380">iOS-т Chromium-н тохиргоог нээгээд, дараа нь "Өгөгдмөл хөтчийн апп"-ыг товшоод, Chromium-г сонгоно уу.</translation>
-<translation id="3102849287235003384">Бүх вебсайт дээр Google Бүртгэлээсээ гарахын тулд <ph name="BEGIN_LINK" />Chromium-с гарна уу<ph name="END_LINK" />.</translation>
 <translation id="3115956258722352278">Chromium-г таны өгөгдмөл хөтөч болгох уу?</translation>
 <translation id="3180939591219927904">"Таныг Chromium-г хаахад нууцлалтай табыг түгжих" тохиргоог асаана уу</translation>
 <translation id="328933489847748230">{count,plural, =1{Одоо Chromium-н 1 цонхыг харуулж байна}other{Одоо Chromium-н {count} цонхыг харуулж байна}}</translation>
@@ -119,6 +118,7 @@
 <translation id="3816686541346279443">Chromium танд нууц үгээ хадгалахыг санал болгоно.</translation>
 <translation id="3827545470516145620">Та энэ төхөөрөмжид аюулгүй байдлын стандарт хамгаалалтыг авч байна</translation>
 <translation id="3833326979834193417">Таныг өгөгдлийн зөрчлүүд, аюултай вебсайт болон бусад зүйлээс аюулгүй байлгахын тулд Chromium өдөр бүр Аюулгүй байдлын шалгалтыг автоматаар явуулдаг. Та Тохиргоонд Аюулгүй байдлын шалгалтын талаар илүү ихийг олох боломжтой.</translation>
+<translation id="3837584850181228767">Chromium-н зөвлөгөө: Сайжруулсан аюулгүй хөтөч</translation>
 <translation id="3845223911364528001">Файлаа байршуулахын тулд Chromium руу буцна уу</translation>
 <translation id="3855938650519180865">Chromium-д шинэ зүйл юу байна вэ?</translation>
 <translation id="3886689467633467988">Хавчуурга болон бусад зүйлээ бүх төхөөрөмждөө авахын тулд энэ сайт болон Chromium-д нэвтэрнэ үү.</translation>
@@ -199,6 +199,9 @@
 <translation id="5671188105328420281">Chromium-н зөвлөгөөнүүд</translation>
 <translation id="5688047395118852662">Энэ карт танд Chromium-г хэрхэн бүрэн ашиглах талаар зөвлөмжүүдийг харуулна.</translation>
 <translation id="5700709190537129682">Chromium таны нууц үгнүүдийг шалгах боломжгүй байна</translation>
+<translation id="5731004036450828399">Нэвтрэх түлхүүрээ аюулгүй байлгахын тулд та эхлээд сэргээх ПИН үүсгэх шаардлагатай болно.
+
+        Нэвтрэх түлхүүрийг Нууц үгний менежерт хадгалдаг ба эндээс та түлхүүрээ дурын төхөөрөмж дээр Chromium-д ашиглах боломжтой.</translation>
 <translation id="584550191241316896">Chromium-д нэвтэрсэн</translation>
 <translation id="5862307444128926510">Chromium-д тавтай морил</translation>
 <translation id="5889847953983052353">Асаалттай үед:
@@ -264,8 +267,8 @@
 <translation id="7269362888766543920">Зарим нэмэлт онцлог нь Chromium-г эвдрэхэд хүргэдэг. Тэдгээрийг устгана уу.</translation>
 <translation id="7285031092584344905">Бусад аппаас Chromium-н нууц үгнүүд болон бусад зүйлдээ хандаарай.</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">Сонгосон өгөгдлийг Chromium болон синк хийсэн төхөөрөмжөөс устгaлаа. Tаны Google Бүртгэл history.google.com-д Google-н бусад үйлчилгээнээс авсан үйл ажиллагаа, хайлт зэрэг өөр хэлбэрийн хайлтын түүхтэй байж болно.</translation>
 <translation id="7395825497086981028">Таны нууц үгийг <ph name="EMAIL" />-д зориулж Нууц үгний менежерт хадгална.</translation>
+<translation id="7434848749522628428">Энэ нэвтрэх түлхүүрийг <ph name="USER_EMAIL" />-н Нууц үгний менежерт хадгална</translation>
 <translation id="7504829997542308412">Chromium-г нээнэ үү</translation>
 <translation id="7531461704633548377">Chromium-с</translation>
 <translation id="7554983317097061001">Chromium-н зөвлөгөө: Chromium-г суурилуулагч руу зөөнө үү</translation>
@@ -299,6 +302,7 @@
 <translation id="8254729934443216898">Танд Chromium-г бүрэн ашиглахад туслах шинэ онцлогуудыг судална уу.</translation>
 <translation id="8293572045658095405">Та Chromium-н Нууцлалтай горимд байна</translation>
 <translation id="830951810931292870">Оруулсан URL-уудыг Chromium-н Нууцлалтай горимд нээнэ.</translation>
+<translation id="8385503371191508165">Нууц үгний менежерээр нэвтрэх түлхүүр хадгалж эхэлнэ үү</translation>
 <translation id="8390323835464055390">Автоматаар бөглөхөд Chromium-г ашиглан хадгалсан нууц үг, нэвтрэх түлхүүрээрээ дурын аппад нэвтрээрэй</translation>
 <translation id="8409374867500149834">Танд аюултай вебсайтуудын эсрэг Chromium-н хамгийн хүчирхэг өюулгүй байдлын хамгаалалт бий</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{Chromium-г {THRESHOLD} минутын турш ашиглаагүй үед ийм зүйл тохиолдоно. Таны нэвтэрсэн байхдаа зөвхөн энэ төхөөрөмжид хадгалсан өгөгдлийг устгана. Үүнд түүх болон нууц үг багтаж болно.}other{Chromium-г {THRESHOLD} минутын турш ашиглаагүй үед ийм зүйл тохиолдоно. Таны нэвтэрсэн байхдаа зөвхөн энэ төхөөрөмжид хадгалсан өгөгдлийг устгана. Үүнд түүх болон нууц үг багтаж болно.}}</translation>

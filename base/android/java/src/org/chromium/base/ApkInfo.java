@@ -117,6 +117,14 @@ public final class ApkInfo {
     }
 
     /**
+     * Check if this is either a debuggable build of Android or of the host app. Use this to enable
+     * developer-only features.
+     */
+    public static boolean isDebugAndroidOrApp() {
+        return AndroidInfo.isDebugAndroid() || isDebugApp();
+    }
+
+    /**
      * Checks if the application targets pre-release SDK B. This must be manually maintained as the
      * SDK goes through finalization.
      */
@@ -141,7 +149,7 @@ public final class ApkInfo {
     }
 
     public static ApkInfo getInstance() {
-        // Some tests mock out things BuildInfo is based on, so disable caching in tests to ensure
+        // Some tests mock out things ApkInfo is based on, so disable caching in tests to ensure
         // such mocking is not defeated by caching.
         if (BuildConfig.IS_FOR_TEST) {
             return new ApkInfo();
@@ -228,6 +236,7 @@ public final class ApkInfo {
             mIApkInfo.hostVersionCode = String.valueOf(assumeNonNull(providedHostVersionCode));
             mIApkInfo.packageVersionName = assumeNonNull(providedPackageVersionName);
             mIApkInfo.packageName = assumeNonNull(providedPackageName);
+            mBrowserApplicationInfo = appInfo;
         } else {
             // The SDK Qualified package name will retrieve the same information as
             // appInstalledPackageName but prefix it with the SDK Sandbox process so that we can
@@ -262,16 +271,16 @@ public final class ApkInfo {
                 mIApkInfo.hostVersionCode = String.valueOf(PackageUtils.packageVersionCode(pi));
                 mIApkInfo.packageName = sBrowserPackageInfo.packageName;
                 mIApkInfo.packageVersionName = nullToEmpty(sBrowserPackageInfo.versionName);
-                appInfo = sBrowserPackageInfo.applicationInfo;
+                mBrowserApplicationInfo = sBrowserPackageInfo.applicationInfo;
                 sBrowserPackageInfo = null;
             } else {
                 mIApkInfo.packageName = appContextPackageName;
                 mIApkInfo.hostVersionCode = String.valueOf(BuildConfig.VERSION_CODE);
                 mIApkInfo.packageVersionName = VersionInfo.getProductVersion();
+                mBrowserApplicationInfo = appInfo;
             }
         }
-        assert appInfo != null;
-        mBrowserApplicationInfo = appInfo;
+        assert mBrowserApplicationInfo != null;
 
         mIApkInfo.installerPackageName =
                 nullToEmpty(pm.getInstallerPackageName(appInstalledPackageName));
@@ -292,6 +301,9 @@ public final class ApkInfo {
             }
         }
         mIApkInfo.resourcesVersion = currentResourcesVersion;
+        // Important that we do not pull this from the Browser application info - if we are
+        // currently in WebView, the host application's targetSdk is what we care about, to enable
+        // compatibility modes.
         mIApkInfo.targetSdkVersion = appInfo.targetSdkVersion;
     }
 

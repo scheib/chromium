@@ -344,9 +344,6 @@ void V8Initializer::ExceptionPropagationCallback(
 
   v8::ExceptionContext context_type = v8_message.GetExceptionContext();
   String class_name = ToCoreString(isolate, v8_message.GetInterfaceName());
-  if (class_name == "global") {
-    class_name = "Window";
-  }
   String property_name = ToCoreString(isolate, v8_message.GetPropertyName());
   if ((context_type == v8::ExceptionContext::kAttributeGet &&
        property_name.StartsWith("get ")) ||
@@ -466,6 +463,19 @@ std::pair<bool, v8::MaybeLocal<v8::String>> TrustedTypesCodeGenerationCheck(
     return {false, v8::MaybeLocal<v8::String>()};
   }
 
+  if (RuntimeEnabledFeatures::TrustedTypesHTMLEnabled()) {
+    // This check implements steps 1.2.8 of
+    // https://w3c.github.io/webappsec-csp/#can-compile-strings
+    bool has_changed =
+        stringified_source !=
+        (string_or_trusted_script->IsString()
+             ? string_or_trusted_script->GetAsString()
+             : string_or_trusted_script->GetAsTrustedScript()->toString());
+    if (has_changed) {
+      return {false, v8::MaybeLocal<v8::String>()};
+    }
+  }
+
   return {true, V8String(isolate, stringified_source)};
 }
 
@@ -575,7 +585,6 @@ void ThrowRangeException(v8::Isolate* isolate, const char* message) {
 }
 
 BASE_FEATURE(kWebAssemblyUnlimitedSyncCompilation,
-             "WebAssemblyUnlimitedSyncCompilation",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool WasmModuleOverride(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -628,21 +637,12 @@ bool WasmInstanceOverride(const v8::FunctionCallbackInfo<v8::Value>& args) {
   return false;
 }
 
-bool WasmJSStringBuiltinsEnabledCallback(v8::Local<v8::Context> context) {
+bool WasmCustomDescriptorsEnabledCallback(v8::Local<v8::Context> context) {
   ExecutionContext* execution_context = ToExecutionContext(context);
   if (!execution_context) {
     return false;
   }
-  return RuntimeEnabledFeatures::WebAssemblyJSStringBuiltinsEnabled(
-      execution_context);
-}
-
-bool WasmJSPromiseIntegrationEnabledCallback(v8::Local<v8::Context> context) {
-  ExecutionContext* execution_context = ToExecutionContext(context);
-  if (!execution_context) {
-    return false;
-  }
-  return RuntimeEnabledFeatures::WebAssemblyJSPromiseIntegrationEnabled(
+  return RuntimeEnabledFeatures::WebAssemblyCustomDescriptorsEnabled(
       execution_context);
 }
 
@@ -804,9 +804,8 @@ void V8Initializer::InitializeV8Common(v8::Isolate* isolate) {
   isolate->SetUseCounterCallback(&UseCounterCallback);
   isolate->SetWasmModuleCallback(WasmModuleOverride);
   isolate->SetWasmInstanceCallback(WasmInstanceOverride);
-  isolate->SetWasmImportedStringsEnabledCallback(
-      WasmJSStringBuiltinsEnabledCallback);
-  isolate->SetWasmJSPIEnabledCallback(WasmJSPromiseIntegrationEnabledCallback);
+  isolate->SetWasmCustomDescriptorsEnabledCallback(
+      WasmCustomDescriptorsEnabledCallback);
   isolate->SetSharedArrayBufferConstructorEnabledCallback(
       SharedArrayBufferConstructorEnabledCallback);
   isolate->SetHostImportModuleDynamicallyCallback(HostImportModuleDynamically);
@@ -859,7 +858,8 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
   ArrayBufferAllocator() : total_allocation_(0) {
     // size_t may be equivalent to uint32_t or uint64_t, cast all values to
     // uint64_t to compare.
-    uint64_t virtual_size = base::SysInfo::AmountOfVirtualMemory();
+    uint64_t virtual_size =
+        base::SysInfo::AmountOfVirtualMemory().InBytesUnsigned();
     uint64_t size_t_max = std::numeric_limits<std::size_t>::max();
     DCHECK(virtual_size < size_t_max);
     // If AmountOfVirtualMemory() returns 0, there is no limit on virtual

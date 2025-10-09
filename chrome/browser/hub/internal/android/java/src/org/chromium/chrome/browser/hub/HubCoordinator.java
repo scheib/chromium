@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
@@ -30,10 +31,9 @@ import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonCoordinator;
 import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityClient;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgePadAdjuster;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.feature_engagement.Tracker;
-import org.chromium.ui.util.XrUtils;
+import org.chromium.ui.edge_to_edge.EdgeToEdgePadAdjuster;
 
 import java.util.function.Function;
 
@@ -82,6 +82,7 @@ public class HubCoordinator implements PaneHubController, BackPressHandler {
      * @param hubColorMixer Mixes the Hub Overview Color.
      * @param xrSpaceModeObservableSupplier Supplies current XR space mode status. True for XR full
      *     space mode, false otherwise.
+     * @param defaultPaneId The default pane's Id.
      */
     public HubCoordinator(
             Activity activity,
@@ -94,7 +95,8 @@ public class HubCoordinator implements PaneHubController, BackPressHandler {
             SearchActivityClient searchActivityClient,
             ObservableSupplier<EdgeToEdgeController> edgeToEdgeSupplier,
             HubColorMixer hubColorMixer,
-            @Nullable ObservableSupplier<Boolean> xrSpaceModeObservableSupplier) {
+            @Nullable ObservableSupplier<Boolean> xrSpaceModeObservableSupplier,
+            @PaneId int defaultPaneId) {
         Context context = containerView.getContext();
         mBackPressStateChangeCallback = (ignored) -> updateHandleBackPressSupplier();
         mPaneManager = paneManager;
@@ -106,7 +108,7 @@ public class HubCoordinator implements PaneHubController, BackPressHandler {
                 castCallback(mBackPressStateChangeCallback));
 
         mContainerView = containerView;
-        int layoutId = XrUtils.isXrDevice() ? R.layout.hub_xr_layout : R.layout.hub_layout;
+        int layoutId = DeviceInfo.isXr() ? R.layout.hub_xr_layout : R.layout.hub_layout;
         mMainHubParent = (ViewGroup) LayoutInflater.from(context).inflate(layoutId, null);
         mContainerView.addView(mMainHubParent);
 
@@ -166,7 +168,10 @@ public class HubCoordinator implements PaneHubController, BackPressHandler {
 
         mHubPaneHostCoordinator =
                 new HubPaneHostCoordinator(
-                        hubPaneHostView, paneManager.getFocusedPaneSupplier(), hubColorMixer);
+                        hubPaneHostView,
+                        paneManager.getFocusedPaneSupplier(),
+                        hubColorMixer,
+                        defaultPaneId);
 
         ObservableSupplier<@Nullable View> overlayViewSupplier =
                 new TransitiveObservableSupplier<Pane, @Nullable View>(

@@ -63,7 +63,6 @@ namespace content {
 // Do not enable by default until https://crbug.com/377749384 is fixed.
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 BASE_FEATURE(kReleaseVideoSourceProviderIfNotInUse,
-             "ReleaseVideoSourceProviderIfNotInUse",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<base::TimeDelta> kReleaseVideoSourceProviderTimeout{
@@ -72,7 +71,6 @@ const base::FeatureParam<base::TimeDelta> kReleaseVideoSourceProviderTimeout{
 #endif
 
 BASE_FEATURE(kEnumerateDevicesRelaxedCache,
-             "EnumerateDevicesRelaxedCache",
 #if BUILDFLAG(IS_WIN)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else

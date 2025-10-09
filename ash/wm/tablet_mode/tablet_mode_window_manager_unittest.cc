@@ -154,7 +154,7 @@ class TabletModeWindowManagerTest : public AshTestBase {
   // Resize our desktop.
   void ResizeDesktop(int width_delta) {
     gfx::Size size =
-        display::Screen::GetScreen()
+        display::Screen::Get()
             ->GetDisplayNearestWindow(Shell::GetPrimaryRootWindow())
             .size();
     size.Enlarge(0, width_delta);
@@ -171,8 +171,12 @@ class TabletModeWindowManagerTest : public AshTestBase {
       if (!params.max_size.IsEmpty())
         delegate->set_maximum_size(params.max_size);
     }
-    aura::Window* window = aura::test::CreateTestWindowWithDelegateAndType(
-        delegate, params.type, 0, params.bounds, NULL, params.show_on_creation);
+    aura::Window* window =
+        aura::test::CreateTestWindow({.delegate = delegate,
+                                      .bounds = params.bounds,
+                                      .window_type = params.type,
+                                      .show = params.show_on_creation})
+            .release();
     int32_t behavior = aura::client::kResizeBehaviorNone |
                        aura::client::kResizeBehaviorCanFullscreen;
     behavior |= params.can_resize ? aura::client::kResizeBehaviorCanResize : 0;
@@ -1583,7 +1587,7 @@ TEST_F(TabletModeWindowManagerTest, StateTypeChange) {
 TEST_F(TabletModeWindowManagerTest, SetPropertyOnUnmanagedWindow) {
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
   InitParams params(aura::client::WINDOW_TYPE_NORMAL);
-  params.bounds = gfx::Rect(10, 10, 100, 100);
+  params.bounds = {10, 10, 100, 100};
   params.show_on_creation = false;
   std::unique_ptr<aura::Window> window(CreateWindowInWatchedContainer(params));
   WindowState::Get(window.get())->set_allow_set_bounds_direct(true);
@@ -1825,7 +1829,7 @@ TEST_F(TabletModeWindowManagerTest, PartialClamshellTabletTransitionTest) {
   EXPECT_TRUE(overview_controller->InOverviewSession());
   EXPECT_TRUE(split_view_controller()->IsWindowInSplitView(window1.get()));
   const gfx::Rect work_area_bounds =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   int divider_origin_x = split_view_controller()
                              ->split_view_divider()
                              ->GetDividerBoundsInScreen(
@@ -1871,7 +1875,7 @@ TEST_F(TabletModeWindowManagerTest, PartialClamshellTabletTransitionTest) {
   // Exit tablet mode and verify the windows are still at 2/3, with allowance
   // for the divider width since it is only there in tablet mode.
   DestroyTabletModeWindowManager();
-  if (!display::Screen::GetScreen()->InTabletMode()) {
+  if (!display::Screen::Get()->InTabletMode()) {
     EXPECT_NEAR(
         std::round(work_area_bounds.width() * chromeos::kTwoThirdSnapRatio),
         window1->bounds().width(), divider_delta);

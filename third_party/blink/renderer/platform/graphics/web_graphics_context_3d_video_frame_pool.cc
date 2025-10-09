@@ -35,15 +35,6 @@ namespace blink {
 
 namespace {
 
-BASE_FEATURE(kUseCopyToGpuMemoryBufferAsync,
-             "UseCopyToGpuMemoryBufferAsync",
-#if BUILDFLAG(IS_WIN)
-             base::FEATURE_ENABLED_BY_DEFAULT
-#else
-             base::FEATURE_DISABLED_BY_DEFAULT
-#endif
-);
-
 class Context : public media::RenderableGpuMemoryBufferVideoFramePool::Context {
  public:
   explicit Context(base::WeakPtr<blink::WebGraphicsContext3DProviderWrapper>
@@ -224,6 +215,14 @@ void CopyToGpuMemoryBuffer(
 }
 }  // namespace
 
+BASE_FEATURE(kUseCopyToGpuMemoryBufferAsync,
+#if BUILDFLAG(IS_WIN)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
+
 std::optional<gpu::SyncToken>
 WebGraphicsContext3DVideoFramePool::CopyRGBATextureToVideoFrame(
     const gfx::Size& src_size,
@@ -339,7 +338,6 @@ void ApplyMetadataAndRunCallback(
 }
 
 BASE_FEATURE(kGpuMemoryBufferReadbackFromTexture,
-             "GpuMemoryBufferReadbackFromTexture",
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS) || \
     BUILDFLAG(IS_LINUX)
              base::FEATURE_ENABLED_BY_DEFAULT

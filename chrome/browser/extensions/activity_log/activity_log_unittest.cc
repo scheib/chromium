@@ -16,6 +16,7 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/extensions/activity_log/activity_action_constants.h"
 #include "chrome/browser/extensions/activity_log/activity_log_task_runner.h"
 #include "chrome/browser/extensions/test_extension_system.h"
@@ -24,8 +25,10 @@
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_handle.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
@@ -174,8 +177,12 @@ class ActivityLogTest : public ChromeRenderViewHostTestHarness {
 
   TestingProfile::TestingFactories GetTestingFactories() const override {
     return {TestingProfile::TestingFactory{
-        RendererStartupHelperFactory::GetInstance(),
-        base::BindRepeating(&BuildFakeRendererStartupHelper)}};
+                RendererStartupHelperFactory::GetInstance(),
+                base::BindRepeating(&BuildFakeRendererStartupHelper)},
+            TestingProfile::TestingFactory{
+                ProtocolHandlerRegistryFactory::GetInstance(),
+                custom_handlers::SimpleProtocolHandlerRegistryFactory::
+                    GetDefaultFactory()}};
   }
 
   void TearDown() override {

@@ -138,7 +138,7 @@ public final class PrivacySandboxDialogTest {
                                 ThreadUtils.runOnUiThreadBlocking(() -> RenderTestRule.sanitize(v));
                                 mRenderTestRule.render(v, renderId);
                             } catch (IOException e) {
-                                assert false : "Render test failed due to " + e;
+                                throw new AssertionError(e);
                             }
                         });
     }
@@ -704,7 +704,7 @@ public final class PrivacySandboxDialogTest {
         // page isn't actually shown, but covered .
         mFakePrivacySandboxBridge.setRequiredPromptType(PromptType.M1_NOTICE_ROW);
         // Launch a basic activity and click a button
-        mActivityTestRule.loadUrl(mTestPage);
+        mActivityTestRule.getActivityTestRule().loadUrlNoWaiting(mTestPage);
 
         onViewWaiting(withId(R.id.privacy_sandbox_dialog), true);
         tryClickOn(withId(R.id.ack_button));

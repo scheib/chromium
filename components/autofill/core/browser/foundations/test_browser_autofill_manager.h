@@ -25,7 +25,6 @@ namespace autofill {
 
 class MockBnplManager;
 class AutofillDriver;
-class FormStructure;
 class TestPersonalDataManager;
 
 class TestBrowserAutofillManager : public BrowserAutofillManager {
@@ -51,10 +50,12 @@ class TestBrowserAutofillManager : public BrowserAutofillManager {
   void OnTextFieldValueChanged(const FormData& form,
                                const FieldGlobalId& field_id,
                                const base::TimeTicks timestamp) override;
+  void OnDidEndTextFieldEditing() override;
   void OnTextFieldDidScroll(const FormData& form,
                             const FieldGlobalId& field_id) override;
   void OnSelectControlSelectionChanged(const FormData& form,
                                        const FieldGlobalId& field_id) override;
+  void OnSelectFieldOptionsDidChange(const FormData& form) override;
   void OnAskForValuesToFill(
       const FormData& form,
       const FieldGlobalId& field_id,
@@ -63,8 +64,8 @@ class TestBrowserAutofillManager : public BrowserAutofillManager {
       std::optional<PasswordSuggestionRequest> password_request) override;
   void OnFocusOnFormField(const FormData& form,
                           const FieldGlobalId& field_id) override;
-  void OnDidFillAutofillFormData(const FormData& form,
-                                 const base::TimeTicks timestamp) override;
+  void OnDidAutofillForm(const FormData& form,
+                         const base::TimeTicks timestamp) override;
   void OnJavaScriptChangedAutofilledValue(
       const FormData& form,
       const FieldGlobalId& field_id,
@@ -97,10 +98,6 @@ class TestBrowserAutofillManager : public BrowserAutofillManager {
           heuristic_types,
       const std::vector<FieldType>& server_types,
       bool preserve_values_in_form_structure = false);
-
-  void AddSeenFormStructure(std::unique_ptr<FormStructure> form_structure);
-
-  void ClearFormStructures();
 
   const std::string& GetSubmittedFormSignature();
 

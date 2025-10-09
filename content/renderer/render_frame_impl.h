@@ -557,7 +557,8 @@ class CONTENT_EXPORT RenderFrameImpl
   void DidFailAsyncSameDocumentCommit() override;
   void WillFreezePage() override;
   void DidOpenDocumentInputStream(const blink::WebURL& url) override;
-  void DidSetPageLifecycleState(bool restoring_from_bfcache) override;
+  void DidSetPageLifecycleState(
+      blink::BFCacheStateChange bfcache_change) override;
   void NotifyCurrentHistoryItemChanged() override;
   void DidUpdateCurrentHistoryItem() override;
   base::UnguessableToken GetDevToolsFrameToken() override;
@@ -569,9 +570,8 @@ class CONTENT_EXPORT RenderFrameImpl
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectangleChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
-  void OnMainFrameImageAdRectangleChanged(
-      int element_id,
-      const gfx::Rect& image_ad_rect) override;
+  void OnMainFrameAdRectangleChanged(int element_id,
+                                     const gfx::Rect& ad_rect) override;
   void FinalizeRequest(blink::WebURLRequest& request) override;
   std::optional<blink::WebURL> WillSendRequest(
       const blink::WebURL& target,
@@ -777,6 +777,14 @@ class CONTENT_EXPORT RenderFrameImpl
   blink::ChildURLLoaderFactoryBundle* GetLoaderFactoryBundle() override;
 
   void SetNewFeatureUsageCallback(NewFeatureUsageCallback callback) override;
+  void SetSubresourceLoadCallback(SubresourceLoadCallback callback) override;
+  void SetLoadFromMemoryCacheCallback(
+      LoadFromMemoryCacheCallback callback) override;
+  void SetDidStartResponseCallback(DidStartResponseCallback callback) override;
+  void SetDidCompleteResponseCallback(
+      DidCompleteResponseCallback callback) override;
+  void SetDidCancelResponseCallback(
+      DidCancelResponseCallback callback) override;
 
  protected:
   explicit RenderFrameImpl(CreateParams params);
@@ -952,7 +960,8 @@ class CONTENT_EXPORT RenderFrameImpl
   // see `MaybeInitializeWidget()` above.
   void InitializeWidgetAtSwap(blink::WebLocalFrame& previous_frame);
 
-  // Sends a FrameHostMsg_BeginNavigation to the browser
+  // Sends a `BeginNavigation()` mojo IPC via the mojom::FrameHost interface to
+  // the browser.
   void BeginNavigationInternal(std::unique_ptr<blink::WebNavigationInfo> info,
                                bool is_history_navigation_in_new_child_frame,
                                base::TimeTicks renderer_before_unload_start,
@@ -1250,6 +1259,17 @@ class CONTENT_EXPORT RenderFrameImpl
   // The callback to send the feature usage to the browser process through
   // PageLoadMetrics.
   NewFeatureUsageCallback new_feature_usage_callback_;
+  // The callback to send the loaded subresource info to the browser process
+  // through PageLoadMetrics.
+  SubresourceLoadCallback subresource_load_callback_;
+  // The callback to send the loaded resource info from memory cache to the
+  // browser process through PageLoadMetrics.
+  LoadFromMemoryCacheCallback load_from_memory_cache_callback_;
+  // The callback to handle response. These are used in `DidStartResponse()`,
+  // `DidCompleteResponse()`, and `DidCancelResponse()`, respectively.
+  DidStartResponseCallback did_start_response_callback_;
+  DidCompleteResponseCallback did_complete_response_callback_;
+  DidCancelResponseCallback did_cancel_response_callback_;
 
   // The text selection the last time DidChangeSelection got called. May contain
   // additional characters before and after the selected text, for IMEs. The

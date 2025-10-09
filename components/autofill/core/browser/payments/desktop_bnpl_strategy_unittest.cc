@@ -30,7 +30,15 @@ TEST_F(DesktopBnplStrategyTest, GetNextActionOnSuggestionShown) {
 TEST_F(DesktopBnplStrategyTest, GetNextActionOnBnplSuggestionAcceptance) {
   EXPECT_EQ(desktop_bnpl_strategy_.GetNextActionOnBnplSuggestionAcceptance(),
             BnplStrategy::BnplSuggestionAcceptedNextAction::
-                kShowSelectBnplIssuerDialog);
+                kShowSelectBnplIssuerUi);
+}
+
+// Verify that GetNextActionOnAmountExtractionReturned() returns the correct
+// action for the desktop platform.
+TEST_F(DesktopBnplStrategyTest, GetNextActionOnAmountExtractionReturned) {
+  EXPECT_EQ(desktop_bnpl_strategy_.GetNextActionOnAmountExtractionReturned(),
+            BnplStrategy::BnplAmountExtractionReturnedNextAction::
+                kNotifyUpdateCallbackOfAmountExtractionReturnedResponse);
 }
 
 }  // namespace autofill::payments

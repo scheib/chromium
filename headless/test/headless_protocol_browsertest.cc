@@ -17,6 +17,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
+#include "build/config/linux/dbus/buildflags.h"
 #include "components/headless/test/shared_test_util.h"
 #include "content/public/common/content_switches.h"
 #include "headless/lib/browser/headless_web_contents_impl.h"
@@ -156,8 +157,7 @@ void HeadlessProtocolBrowserTest::OnLoadEventFired(
   }
   test_params.Merge(GetPageUrlExtraParams());
 
-  std::string json_test_params;
-  base::JSONWriter::Write(test_params, &json_test_params);
+  std::string json_test_params = base::WriteJson(test_params).value_or("");
   std::string evaluate_script = "runTest(" + json_test_params + ")";
 
   base::Value::Dict evaluate_params;
@@ -323,6 +323,19 @@ HEADLESS_PROTOCOL_TEST(BrowserSetInitialProxyConfig,
 HEADLESS_PROTOCOL_TEST(BrowserUniversalNetworkAccess,
                        "sanity/universal-network-access.js")
 
+// TODO(445548057): the test actually passes on regular Linux
+// configurations that include D-Bus, however they take 25s
+// due to an unrelated problem. Once this is fixed, the tests
+// can be re-enabled on linux.
+#if BUILDFLAG(IS_LINUX) && BUILDFLAG(USE_DBUS)
+#define MAYBE_GetClientCapabilities DISABLED_GetClientCapabilities
+#else
+#define MAYBE_GetClientCapabilities GetClientCapabilities
+#endif
+
+HEADLESS_PROTOCOL_TEST(MAYBE_GetClientCapabilities,
+                       "sanity/get-client-capabilities.js")
+
 HEADLESS_PROTOCOL_TEST(ShowDirectoryPickerNoCrash,
                        "sanity/show-directory-picker-no-crash.js")
 
@@ -338,6 +351,8 @@ HEADLESS_PROTOCOL_TEST(WindowOuterSize, "shared/window-outer-size.js")
 HEADLESS_PROTOCOL_TEST(WindowInnerSize, "shared/window-inner-size.js")
 HEADLESS_PROTOCOL_TEST(WindowInnerSizeScaled,
                        "shared/window-inner-size-scaled.js")
+HEADLESS_PROTOCOL_TEST(WindowInnerSizeLargerThanScreen,
+                       "shared/window-inner-size-larger-than-screen.js")
 
 // This is not shared because Chrome Headless Mode window.resizeTo() only works
 // under certain conditions which are note currently satisfied by the test.
@@ -576,6 +591,9 @@ HEADLESS_PROTOCOL_TEST(ScreenOrientationLockNaturalPortrait,
 HEADLESS_PROTOCOL_TEST(ScreenDetailsMultipleScreens,
                        "shared/screen-details-multiple-screens.js")
 
+HEADLESS_PROTOCOL_TEST(ScreenDetailsMultipleScreensScaled,
+                       "shared/screen-details-multiple-screens-scaled.js")
+
 HEADLESS_PROTOCOL_TEST(ScreenDetailsPixelRatio,
                        "shared/screen-details-pixel-ratio.js")
 
@@ -584,6 +602,9 @@ HEADLESS_PROTOCOL_TEST(ScreenDetailsColorDepth,
 
 HEADLESS_PROTOCOL_TEST(ScreenDetailsWorkArea,
                        "shared/screen-details-work-area.js")
+
+HEADLESS_PROTOCOL_TEST(ScreenDetailsWorkAreaScaled,
+                       "shared/screen-details-work-area-scaled.js")
 
 HEADLESS_PROTOCOL_TEST(RequestFullscreen, "shared/request-fullscreen.js")
 
@@ -671,5 +692,18 @@ HEADLESS_PROTOCOL_TEST(RemoveScreenGetScreenDetails,
                        "shared/remove-screen-get-screen-details.js")
 
 HEADLESS_PROTOCOL_TEST(AddRemoveScreen, "shared/add-remove-screen.js")
+
+HEADLESS_PROTOCOL_TEST(DispatchMouseEventScreenCoordinates,
+                       "shared/dispatch-mouse-event-screen-coordinates.js")
+
+HEADLESS_PROTOCOL_TEST(DispatchTouchEventScreenCoordinates,
+                       "shared/dispatch-touch-event-screen-coordinates.js")
+
+HEADLESS_PROTOCOL_TEST(
+    EmulateTouchFromMouseEventScreenCoordinates,
+    "shared/emulate-touch-from-mouse-event-screen-coordinates.js")
+
+HEADLESS_PROTOCOL_TEST(SetZoomedWindowBounds,
+                       "shared/set-zoomed-window-bounds.js")
 
 }  // namespace headless

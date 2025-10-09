@@ -16,7 +16,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ui/gfx/buffer_types.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/platform_window/platform_window.h"
 #include "ui/platform_window/platform_window_delegate.h"
 
@@ -154,10 +154,6 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     // Whether the platform supports system/shell integrated color picker
     // dialog. An example is XDG Desktop Portal provided PickColor dialog.
     bool supports_color_picker_dialog = true;
-
-    // Whether the platform supports drag and drop as an entrypoint to create
-    // new Split Views.
-    bool supports_split_view_drag_and_drop = true;
   };
 
   // Groups platform properties that can only be known at run time.

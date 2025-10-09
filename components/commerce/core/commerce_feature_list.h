@@ -39,14 +39,13 @@ extern const base::FeatureParam<bool> kPriceInsightsShowFeedback;
 extern const char kPriceInsightsUseCacheParam[];
 extern const base::FeatureParam<bool> kPriceInsightsUseCache;
 BASE_DECLARE_FEATURE(kPriceTrackingPromo);
-BASE_DECLARE_FEATURE(kShopCard);
+BASE_DECLARE_FEATURE(kTabResumptionShopCard);
 BASE_DECLARE_FEATURE(kShopCardImpressionLimits);
 
 std::string ShopCardExperiment();
 
 BASE_DECLARE_FEATURE(kProductSpecifications);
 BASE_DECLARE_FEATURE(kProductSpecificationsClearMetadataOnNewlySupportedFields);
-BASE_DECLARE_FEATURE(kCompareConfirmationToast);
 BASE_DECLARE_FEATURE(kProductSpecificationsCache);
 
 BASE_DECLARE_FEATURE(kShoppingList);
@@ -55,16 +54,10 @@ BASE_DECLARE_FEATURE(kPriceTrackingSubscriptionServiceProductVersion);
 BASE_DECLARE_FEATURE(kShoppingPageTypes);
 BASE_DECLARE_FEATURE(kShoppingPDPMetrics);
 BASE_DECLARE_FEATURE(kSubscriptionsApi);
-BASE_DECLARE_FEATURE(kTrackByDefaultOnMobile);
 // Feature flag for showing discounts on checkout autofill.
 BASE_DECLARE_FEATURE(kDiscountAutofill);
 
 BASE_DECLARE_FEATURE(kShoppingAlternateServer);
-
-#if BUILDFLAG(IS_IOS)
-BASE_DECLARE_FEATURE(kPriceInsightsIos);
-BASE_DECLARE_FEATURE(kPriceInsightsHighPriceIos);
-#endif
 
 // Feature flag for Discounts on navigation.
 enum class DiscountDialogAutoPopupBehavior {
@@ -168,9 +161,9 @@ constexpr base::FeatureParam<std::string> kCheckoutPatternMapping{
     ""};
 
 inline constexpr base::FeatureParam<std::string> kShopCardVariation{
-    &kShopCard, "ShopCardVariant", ""};
+    &kTabResumptionShopCard, "ShopCardVariant", ""};
 inline constexpr base::FeatureParam<std::string> kShopCardPosition{
-    &kShopCard, "ShopCardPosition", ""};
+    &kTabResumptionShopCard, "ShopCardPosition", ""};
 
 extern const char kShopCardArm1[];
 extern const char kShopCardArm2[];

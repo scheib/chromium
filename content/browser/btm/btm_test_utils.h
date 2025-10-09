@@ -305,9 +305,6 @@ void SimulateUserActivation(WebContents* web_contents);
 // activation.
 void SimulateMouseClickAndWait(WebContents*);
 
-// Make a UrlAndSourceId with a randomly-generated UKM source id.
-UrlAndSourceId MakeUrlAndId(std::string_view url);
-
 // A ContentBrowserClient that supports third-party cookie blocking. Note that
 // this can only be used directly by unit tests; browser tests must use
 // ContentBrowserTestTpcBlockingBrowserClient instead.
@@ -369,8 +366,7 @@ class TpcBlockingBrowserClient : public ContentBrowserClient,
 
   bool MitigationsEnabledFor3pcd() const override;
 
-  bool IsThirdPartyCookiesAllowedScheme(
-      const std::string& scheme) const override;
+  bool IsThirdPartyCookiesAllowedScheme(std::string_view scheme) const override;
 
  private:
   bool block_3pcs_ = false;

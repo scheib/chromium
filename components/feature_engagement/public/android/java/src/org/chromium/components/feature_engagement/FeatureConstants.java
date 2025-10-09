@@ -32,6 +32,7 @@ import java.lang.annotation.RetentionPolicy;
     FeatureConstants.AUTO_DARK_OPT_OUT_FEATURE,
     FeatureConstants.AUTO_DARK_USER_EDUCATION_MESSAGE_FEATURE,
     FeatureConstants.AUTO_DARK_USER_EDUCATION_MESSAGE_OPT_IN_FEATURE,
+    FeatureConstants.BOOKMARKS_BAR_FEATURE,
     FeatureConstants.BOTTOM_TOOLBAR_FEATURE,
     FeatureConstants.CCT_HISTORY_FEATURE,
     FeatureConstants.CCT_MINIMIZED_FEATURE,
@@ -57,6 +58,7 @@ import java.lang.annotation.RetentionPolicy;
     FeatureConstants.KEYBOARD_ACCESSORY_ADDRESS_FILL_FEATURE,
     FeatureConstants.KEYBOARD_ACCESSORY_BAR_SWIPING_FEATURE,
     FeatureConstants.KEYBOARD_ACCESSORY_HOME_WORK_PROFILE_SUGGESTION_FEATURE,
+    FeatureConstants.KEYBOARD_ACCESSORY_ACCOUNT_NAME_EMAIL_SUGGESTION_FEATURE,
     FeatureConstants.KEYBOARD_ACCESSORY_ENABLE_LOYALTY_CARDS_FEATURE,
     FeatureConstants.KEYBOARD_ACCESSORY_PASSWORD_FILLING_FEATURE,
     FeatureConstants.KEYBOARD_ACCESSORY_PAYMENT_FILLING_FEATURE,
@@ -125,7 +127,6 @@ import java.lang.annotation.RetentionPolicy;
     FeatureConstants.VIDEO_TUTORIAL_NTP_VOICE_SEARCH_FEATURE,
     FeatureConstants.VIDEO_TUTORIAL_TRY_NOW_FEATURE,
     FeatureConstants.RESTORE_TABS_ON_FRE_FEATURE,
-    FeatureConstants.IPH_RTL_GESTURE_NAVIGATION,
     FeatureConstants.TAB_GROUP_CREATION_DIALOG_SYNC_TEXT_FEATURE,
     FeatureConstants.TAB_GROUP_SYNC_ON_STRIP_FEATURE,
     FeatureConstants.TAB_GROUP_SHARE_NOTIFICATION_BUBBLE_ON_STRIP_FEATURE,
@@ -165,6 +166,7 @@ public @interface FeatureConstants {
     String AUTO_DARK_USER_EDUCATION_MESSAGE_FEATURE = "IPH_AutoDarkUserEducationMessage";
     String AUTO_DARK_USER_EDUCATION_MESSAGE_OPT_IN_FEATURE =
             "IPH_AutoDarkUserEducationMessageOptIn";
+    String BOOKMARKS_BAR_FEATURE = "IPH_BookmarksBar";
     String BOTTOM_TOOLBAR_FEATURE = "IPH_BottomToolbarTip";
     String CCT_HISTORY_FEATURE = "IPH_CCTHistory";
     String CCT_MINIMIZED_FEATURE = "IPH_CCTMinimized";
@@ -188,6 +190,8 @@ public @interface FeatureConstants {
     String KEYBOARD_ACCESSORY_ENABLE_LOYALTY_CARDS_FEATURE = "IPH_AutofillEnableLoyaltyCards";
     String KEYBOARD_ACCESSORY_HOME_WORK_PROFILE_SUGGESTION_FEATURE =
             "IPH_AutofillHomeWorkProfileSuggestion";
+    String KEYBOARD_ACCESSORY_ACCOUNT_NAME_EMAIL_SUGGESTION_FEATURE =
+            "IPH_AutofillAccountNameEmailSuggestion";
     String KEYBOARD_ACCESSORY_PASSWORD_FILLING_FEATURE = "IPH_KeyboardAccessoryPasswordFilling";
     String KEYBOARD_ACCESSORY_PAYMENT_CARD_INFO_RETRIEVAL_FEATURE =
             "IPH_AutofillCardInfoRetrievalSuggestion";
@@ -415,9 +419,6 @@ public @interface FeatureConstants {
      * An IPH feature to inform users that tabs from another synced device can be restored on FRE.
      */
     String RESTORE_TABS_ON_FRE_FEATURE = "IPH_RestoreTabsOnFRE";
-
-    /** An IPH feature to inform users about the gesture navigation in RTL mode. */
-    String IPH_RTL_GESTURE_NAVIGATION = "IPH_RtlGestureNavigation";
 
     /** An IPH feature to inform users about the pdf download option in the app menu. */
     String IPH_PDF_PAGE_DOWNLOAD = "IPH_PdfPageDownload";

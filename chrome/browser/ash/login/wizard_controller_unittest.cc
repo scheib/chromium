@@ -18,6 +18,7 @@
 #include "base/test/test_future.h"
 #include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
 #include "chrome/browser/ash/input_method/input_method_configuration.h"
 #include "chrome/browser/ash/login/enrollment/mock_enrollment_launcher.h"
 #include "chrome/browser/ash/login/startup_utils.h"
@@ -34,6 +35,7 @@
 #include "chrome/browser/ash/wallpaper_handlers/test_wallpaper_fetcher_delegate.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
+#include "chrome/browser/global_features.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client_test_helper.h"
 #include "chrome/browser/ui/ash/login/fake_login_display_host.h"
@@ -72,6 +74,7 @@
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_web_contents_factory.h"
 #include "content/public/test/test_web_ui.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -200,7 +203,10 @@ class WizardControllerTestBase : public ::testing::Test {
     profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
     network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
-    input_method::Initialize();
+    input_method::Initialize(TestingBrowserProcess::GetGlobal()->local_state(),
+                             TestingBrowserProcess::GetGlobal()
+                                 ->GetFeatures()
+                                 ->application_locale_storage());
     AshTestHelper::InitParams params;
     params.start_session = false;
     params.local_state = TestingBrowserProcess::GetGlobal()->local_state();
@@ -305,7 +311,12 @@ class WizardControllerTestBase : public ::testing::Test {
       chrome_keyboard_controller_client_test_helper_;
   ash::ScopedTestDeviceSettingsService device_settings_service_;
   ScopedTestingCrosSettings settings_;
-  KioskChromeAppManager kiosk_chrome_app_manager_;
+  KioskCryptohomeRemover kiosk_cryptohome_remover_{
+      TestingBrowserProcess::GetGlobal()->local_state()};
+  KioskChromeAppManager kiosk_chrome_app_manager_{
+      TestingBrowserProcess::GetGlobal()->local_state(),
+      TestingBrowserProcess::GetGlobal()->shared_url_loader_factory(),
+      &kiosk_cryptohome_remover_};
   ScopedStubInstallAttributes scoped_stub_install_attributes_;
   ash::system::ScopedFakeStatisticsProvider statistics_provider_;
   std::unique_ptr<ScopedEnrollmentLauncherFactoryOverrideForTesting>

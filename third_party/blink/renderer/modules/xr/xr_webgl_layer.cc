@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/modules/xr/xr_utils.h"
 #include "third_party/blink/renderer/modules/xr/xr_view.h"
 #include "third_party/blink/renderer/modules/xr/xr_viewport.h"
+#include "third_party/blink/renderer/modules/xr/xr_webgl_frame_transport_context_impl.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/size.h"
@@ -164,6 +165,8 @@ XRWebGLLayer::XRWebGLLayer(XRSession* session,
       framebuffer_(framebuffer),
       framebuffer_scale_(framebuffer_scale),
       ignore_depth_values_(ignore_depth_values) {
+  transport_delegate_ = MakeGarbageCollected<XRWebGLFrameTransportDelegate>(
+      MakeGarbageCollected<XRWebGLFrameTransportContextImpl>(webgl_context));
   if (framebuffer) {
     // Must have a drawing buffer for immersive sessions.
     DCHECK(drawing_buffer);
@@ -180,6 +183,10 @@ XRWebGLLayer::~XRWebGLLayer() {
   if (drawing_buffer_) {
     drawing_buffer_->BeginDestruction();
   }
+}
+
+XRLayerType XRWebGLLayer::LayerType() const {
+  return XRLayerType::kWebGLLayer;
 }
 
 uint32_t XRWebGLLayer::framebufferWidth() const {
@@ -310,6 +317,10 @@ HTMLCanvasElement* XRWebGLLayer::output_canvas() const {
   return nullptr;
 }
 
+const XRSharedImageData& XRWebGLLayer::CameraSharedImage() const {
+  return session()->LayerSharedImageManager().CameraSharedImage();
+}
+
 WebGLTexture* XRWebGLLayer::GetCameraTexture() {
   DVLOG(1) << __func__;
 
@@ -336,11 +347,8 @@ void XRWebGLLayer::OnFrameStart() {
     framebuffer_->MarkOpaqueBufferComplete(true);
     framebuffer_->SetContentsChanged(false);
 
-    const XRLayerSharedImages& layer_shared_images = GetSharedImages();
-    const XRSharedImageData& content_image_data =
-        layer_shared_images.content_image_data;
-    const XRSharedImageData& camera_image_data =
-        layer_shared_images.camera_image_data;
+    const XRSharedImageData& content_image_data = SharedImage();
+    const XRSharedImageData& camera_image_data = CameraSharedImage();
 
     if (content_image_data.shared_image) {
       drawing_buffer_->UseSharedBuffer(content_image_data.shared_image,
@@ -432,12 +440,13 @@ void XRWebGLLayer::OnFrameEnd() {
       }
 
       // Need to stop accessing the camera image texture before calling
-      // `SubmitWebGLLayer` so that we stop using it before the sync token
-      // that `SubmitWebGLLayer` will generate.
+      // `SubmitLayer` so that we stop using it before the sync token
+      // that `SubmitLayer` will generate.
       if (camera_image_shared_image_texture_) {
-        const XRLayerSharedImages& layer_shared_images = GetSharedImages();
+        const XRSharedImageData& camera_image_data = CameraSharedImage();
+
         // We shouldn't ever have a camera texture if the holder wasn't present:
-        CHECK(layer_shared_images.camera_image_data.shared_image);
+        CHECK(camera_image_data.shared_image);
 
         DVLOG(3) << __func__
                  << ": deleting camera image texture, "
@@ -460,8 +469,7 @@ void XRWebGLLayer::OnFrameEnd() {
       }
 
       // Always call submit, but notify if the contents were changed or not.
-      session()->xr()->frameProvider()->SubmitWebGLLayer(this,
-                                                         framebuffer_dirty);
+      session()->xr()->frameProvider()->SubmitLayer(this, framebuffer_dirty);
     }
   }
 }
@@ -487,12 +495,21 @@ scoped_refptr<StaticBitmapImage> XRWebGLLayer::TransferToStaticBitmapImage() {
   return nullptr;
 }
 
+XRSession* XRWebGLLayer::session() const {
+  return XRLayer::session();
+}
+
+XRFrameTransportDelegate* XRWebGLLayer::GetTransportDelegate() {
+  return transport_delegate_;
+}
+
 void XRWebGLLayer::Trace(Visitor* visitor) const {
   visitor->Trace(left_viewport_);
   visitor->Trace(right_viewport_);
   visitor->Trace(webgl_context_);
   visitor->Trace(framebuffer_);
   visitor->Trace(camera_image_texture_);
+  visitor->Trace(transport_delegate_);
   XRLayer::Trace(visitor);
 }
 

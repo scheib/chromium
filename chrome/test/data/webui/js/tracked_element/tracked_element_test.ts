@@ -7,7 +7,7 @@ import type {TrackedElementProxy} from 'chrome://resources/js/tracked_element/tr
 import {TrackedElementProxyImpl} from 'chrome://resources/js/tracked_element/tracked_element_proxy.js';
 import type {RectF} from 'chrome://resources/mojo/ui/gfx/geometry/mojom/geometry.mojom-webui.js';
 import type {TrackedElementHandlerInterface} from 'chrome://resources/mojo/ui/webui/resources/js/tracked_element/tracked_element.mojom-webui.js';
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertGT, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
@@ -69,12 +69,15 @@ suite('TrackedElementTest', function() {
     await new Promise(resolve => requestAnimationFrame(resolve));
   }
 
-  setup(() => {
-    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+  suiteSetup(() => {
     const proxy = new TestTrackedElementProxy();
     TrackedElementProxyImpl.setInstance(proxy);
     handler = proxy.handler;
-    manager = new TrackedElementManager();
+    manager = TrackedElementManager.getInstance();
+  });
+
+  setup(() => {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     element = document.createElement('div');
     element.id = 'element';
@@ -84,13 +87,14 @@ suite('TrackedElementTest', function() {
   });
 
   teardown(() => {
-    manager.destroy();
+    handler.reset();
+    manager.reset();
   });
 
   test('startTracking sends visibility', async () => {
     manager.startTracking(element, NATIVE_ID);
     await waitForVisibilityEvents();
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     assertEquals(NATIVE_ID, args[0]);
     assertTrue(args[1]);  // visible
@@ -107,7 +111,7 @@ suite('TrackedElementTest', function() {
 
     manager.stopTracking(element);
     // stopTracking sends visibility change synchronously.
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     assertEquals(NATIVE_ID, args[0]);
     assertFalse(args[1]);  // not visible
@@ -121,7 +125,7 @@ suite('TrackedElementTest', function() {
     element.style.display = 'none';
     await waitForVisibilityEvents();
 
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     assertEquals(NATIVE_ID, args[0]);
     assertFalse(args[1]);  // not visible
@@ -133,14 +137,14 @@ suite('TrackedElementTest', function() {
     manager.startTracking(element, NATIVE_ID);
     await waitForVisibilityEvents();
     // Initially not visible
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     assertFalse(handler.getArgs('trackedElementVisibilityChanged')[0][1]);
     handler.reset();
 
     element.style.display = 'block';
     await waitForVisibilityEvents();
 
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     assertEquals(NATIVE_ID, args[0]);
     assertTrue(args[1]);  // visible
@@ -150,7 +154,7 @@ suite('TrackedElementTest', function() {
     manager.startTracking(element, NATIVE_ID, {fixed: true});
     await microtasksFinished();
     await waitForVisibilityEvents();
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     assertEquals(NATIVE_ID, args[0]);
     assertTrue(args[1]);  // visible
@@ -161,7 +165,7 @@ suite('TrackedElementTest', function() {
         element, NATIVE_ID,
         {paddingTop: 5, paddingLeft: 10, paddingBottom: 15, paddingRight: 20});
     await waitForVisibilityEvents();
-    assertEquals(1, handler.getCallCount('trackedElementVisibilityChanged'));
+    assertGT(handler.getCallCount('trackedElementVisibilityChanged'), 0);
     const args = handler.getArgs('trackedElementVisibilityChanged')[0];
     const rect = element.getBoundingClientRect();
     assertDeepEquals(

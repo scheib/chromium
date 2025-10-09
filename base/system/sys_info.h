@@ -87,8 +87,7 @@ class BASE_EXPORT SysInfo {
   // Return the number of bytes of virtual memory of this process. A return
   // value of zero means that there is no limit on the available virtual
   // memory.
-  // TODO(crbug.com/429140103): Convert the return type to ByteCount.
-  static uint64_t AmountOfVirtualMemory();
+  static ByteCount AmountOfVirtualMemory();
 
   // Return the available disk space in bytes on the volume containing |path|,
   // or -1 on failure.
@@ -229,7 +228,9 @@ class BASE_EXPORT SysInfo {
   static std::string CPUModelName();
 
   // Return the smallest amount of memory (in bytes) which the VM system will
-  // allocate.
+  // allocate. On some platforms, such as Windows, this may not match the page
+  // size (e.g. x86/x86-64 Windows use a 4KB page size but a 64KB allocation
+  // granularity).
   static size_t VMAllocationGranularity();
 
 #if BUILDFLAG(IS_CHROMEOS)

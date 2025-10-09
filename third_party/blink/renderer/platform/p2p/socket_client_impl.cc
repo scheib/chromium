@@ -9,11 +9,13 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "base/trace_event/common/trace_event_common.h"
+#include "base/trace_event/trace_event.h"
 #include "crypto/random.h"
 #include "services/network/public/cpp/p2p_param_traits.h"
 #include "third_party/blink/renderer/platform/p2p/socket_client_delegate.h"
 #include "third_party/blink/renderer/platform/p2p/socket_dispatcher.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "third_party/perfetto/include/perfetto/tracing/track.h"
 
 namespace {
 
@@ -56,8 +58,8 @@ void P2PSocketClientImpl::Init(blink::P2PSocketClientDelegate* delegate) {
 
   DCHECK_EQ(state_, kStateUninitialized);
   state_ = kStateOpening;
-  receiver_.set_disconnect_handler(WTF::BindOnce(
-      &P2PSocketClientImpl::OnConnectionError, WTF::Unretained(this)));
+  receiver_.set_disconnect_handler(
+      BindOnce(&P2PSocketClientImpl::OnConnectionError, Unretained(this)));
 }
 
 uint64_t P2PSocketClientImpl::Send(
@@ -83,7 +85,7 @@ void P2PSocketClientImpl::DoSendBatch() {
   TRACE_EVENT1("p2p", __func__, "num_packets", batched_send_packets_.size());
   awaiting_batch_complete_ = false;
   if (!batched_send_packets_.empty()) {
-    WTF::Vector<network::mojom::blink::P2PSendPacketPtr> batched_send_packets;
+    Vector<network::mojom::blink::P2PSendPacketPtr> batched_send_packets;
     batched_send_packets_.swap(batched_send_packets);
     RecordNumberOfPacketsInBatch(batched_send_packets.size());
     socket_->SendBatch(std::move(batched_send_packets));
@@ -96,7 +98,7 @@ void P2PSocketClientImpl::SendWithPacketId(
     base::span<const uint8_t> data,
     const webrtc::AsyncSocketPacketOptions& options,
     uint64_t packet_id) {
-  TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("p2p", "Send", packet_id);
+  TRACE_EVENT_BEGIN("p2p", "Send", perfetto::Track(packet_id));
 
   // Conditionally start or continue temporarily storing the packets of a batch.
   // We can't allow sending individual packets mid batch since we would receive
@@ -168,7 +170,7 @@ void P2PSocketClientImpl::SendComplete(
 }
 
 void P2PSocketClientImpl::SendBatchComplete(
-    const WTF::Vector<::network::P2PSendPacketMetrics>& in_send_metrics_batch) {
+    const Vector<::network::P2PSendPacketMetrics>& in_send_metrics_batch) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   TRACE_EVENT1("p2p", __func__, "num_packets", in_send_metrics_batch.size());
   if (delegate_) {
@@ -178,8 +180,7 @@ void P2PSocketClientImpl::SendBatchComplete(
   }
 }
 
-void P2PSocketClientImpl::DataReceived(
-    WTF::Vector<P2PReceivedPacketPtr> packets) {
+void P2PSocketClientImpl::DataReceived(Vector<P2PReceivedPacketPtr> packets) {
   DCHECK(!packets.empty());
   DCHECK_EQ(kStateOpen, state_);
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);

@@ -299,6 +299,7 @@ source_set("ip_protection_proxy_config_manager_impl_unittest") {
     ":ip_protection_telemetry",
     "//base",
     "//base/test:test_support",
+    "//components/content_settings/core/common",
     "//net",
     "//testing/gmock",
     "//testing/gtest",
@@ -355,6 +356,25 @@ source_set("ip_protection_proxy_delegate_unittest") {
   ]
 }
 
+source_set("ip_protection_url_request_http_job_unittest") {
+  testonly = true
+  sources = [ "ip_protection_url_request_http_job_unittest.cc" ]
+  deps = [
+    ":ip_protection_core",
+    ":ip_protection_data_types",
+    ":ip_protection_proxy_delegate",
+    ":ip_protection_telemetry",
+    "//base",
+    "//base/test:test_support",
+    "//net",
+    "//net:gtest_util",
+    "//net:test_support",
+    "//net/traffic_annotation:test_support",
+    "//testing/gmock",
+    "//testing/gtest",
+  ]
+}
+
 source_set("ip_protection_telemetry") {
   sources = [ "ip_protection_telemetry.h" ]
   public_deps = [
@@ -384,6 +404,7 @@ source_set("ip_protection_token_direct_fetcher") {
     ":ip_protection_token_fetcher",
     ":ip_protection_token_fetcher_helper",
     "//base",
+    "//net/third_party/quiche:blind_sign_auth",
     "//services/network/public/cpp",
   ]
   deps = [
@@ -392,7 +413,6 @@ source_set("ip_protection_token_direct_fetcher") {
     ":ip_protection_telemetry",
     ":ip_protection_token_fetcher_helper",
     "//components/signin/public/identity_manager",
-    "//net/third_party/quiche:blind_sign_auth",
   ]
 }
 
@@ -410,10 +430,6 @@ source_set("ip_protection_token_direct_fetcher_unittest") {
     "//services/network:test_support",
     "//testing/gtest",
   ]
-
-  # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
-  # enable the diagnostic by removing this line.
-  configs += [ "//build/config/compiler:no_exit_time_destructors" ]
 }
 
 source_set("ip_protection_token_fetcher") {
@@ -432,10 +448,36 @@ source_set("ip_protection_token_fetcher_helper") {
   ]
   public_deps = [
     ":ip_protection_data_types",
+    ":ip_protection_performance_hooks",
     "//base",
     "//net",
     "//net/third_party/quiche:blind_sign_auth",
     "//third_party/abseil-cpp:absl",
+  ]
+}
+
+source_set("ip_protection_performance_hooks") {
+  sources = [
+    "ip_protection_performance_hooks.cc",
+    "ip_protection_performance_hooks.h",
+  ]
+  public_deps = [
+    "//base",
+    "//net/third_party/quiche:blind_sign_auth",
+  ]
+  deps = [ ":ip_protection_telemetry" ]
+}
+
+source_set("ip_protection_performance_hooks_unittest") {
+  testonly = true
+  sources = [ "ip_protection_performance_hooks_unittest.cc" ]
+  deps = [
+    ":ip_protection_performance_hooks",
+    "//base",
+    "//base/test:test_support",
+    "//base/test:test_trace_processor",
+    "//testing/gmock",
+    "//testing/gtest",
   ]
 }
 
@@ -450,6 +492,7 @@ source_set("ip_protection_token_manager_impl") {
   ]
   public_deps = [
     ":ip_protection_core",
+    ":ip_protection_core_host_remote",
     ":ip_protection_token_manager",
     "//base",
   ]
@@ -475,10 +518,6 @@ source_set("ip_protection_token_manager_impl_unittest") {
     "//net",
     "//testing/gtest",
   ]
-
-  # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
-  # enable the diagnostic by removing this line.
-  configs += [ "//build/config/compiler:no_exit_time_destructors" ]
 }
 
 source_set("masked_domain_list_manager") {
@@ -515,10 +554,6 @@ source_set("masked_domain_list_manager_unittest") {
     "//testing/gtest",
     "//url",
   ]
-
-  # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
-  # enable the diagnostic by removing this line.
-  configs += [ "//build/config/compiler:no_exit_time_destructors" ]
 }
 
 source_set("masked_domain_list") {

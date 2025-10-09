@@ -21,6 +21,7 @@
 #include "base/version.h"
 #include "build/build_config.h"
 #include "chrome/updater/external_constants.h"
+#include "chrome/updater/registration_data.h"
 #include "chrome/updater/test/server.h"
 #include "chrome/updater/update_service.h"
 #include "chrome/updater/updater_version.h"
@@ -42,7 +43,6 @@ class TimeDelta;
 
 namespace updater {
 enum class UpdaterScope;
-struct RegistrationRequest;
 }  // namespace updater
 
 namespace wireless_android_enterprise_devicemanagement {
@@ -145,6 +145,11 @@ void PrintLog(UpdaterScope scope);
 // the test left the updater in an installed or partially installed state.
 void Clean(UpdaterScope scope);
 
+#if BUILDFLAG(IS_WIN)
+// Expects that the no temporary directories created by `update_client` remain.
+void ExpectCleanUpdateClientTempDirectories(UpdaterScope scope);
+#endif  // BUILDFLAG(IS_WIN)
+
 // Expects that the system is in a clean state, i.e. no updater is installed and
 // no traces of an updater exist. Should be run at the start and end of each
 // test.
@@ -234,6 +239,12 @@ void RunCrashMe(UpdaterScope scope);
 // Runs the server and waits for it to exit. Assert that it exits with
 // `exit_code`.
 void RunServer(UpdaterScope scope, int exit_code, bool internal);
+
+// Runs the UpdateApps client and wait for it to exit. Assert that it exits with
+// `exit_code`. The server should exit a few seconds after.
+void RunUpdateApps(UpdaterScope scope,
+                   int exit_code,
+                   const base::Version& version);
 
 // Invokes the active instance's UpdateService::Update (via RPC) for an app.
 void Update(UpdaterScope scope,
@@ -404,14 +415,11 @@ void InvokeTestServiceFunction(const std::string& function_name,
 void RunUninstallCmdLine(UpdaterScope scope);
 void RunHandoff(UpdaterScope scope, const std::string& app_id);
 
-void InstallScheduledTask(UpdaterScope scope,
-                          const std::string& task_name,
+void InstallScheduledTask(const std::string& task_name,
                           bool use_task_subfolders);
-void IsScheduledTaskRegisteredFromMedium(UpdaterScope scope,
-                                         const std::string& task_name,
-                                         bool use_task_subfolders);
-void DeleteScheduledTask(UpdaterScope scope,
-                         const std::string& task_name,
+void IsScheduledTaskRegistered(const std::string& task_name,
+                               bool use_task_subfolders);
+void DeleteScheduledTask(const std::string& task_name,
                          bool use_task_subfolders);
 #endif  // BUILDFLAG(IS_WIN)
 

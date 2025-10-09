@@ -20,13 +20,17 @@ namespace features {
 // chrome://flags/#enable-windows-gaming-input-data-fetcher and should not be
 // removed. See crbug.com/40287784.
 BASE_FEATURE(kEnableWindowsGamingInputDataFetcher,
-             "EnableWindowsGamingInputDataFetcher",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enables gamepad multitouch
-BASE_FEATURE(kEnableGamepadMultitouch,
-             "EnableGamepadMultitouch",
+BASE_FEATURE(kEnableGamepadMultitouch, base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables gamepad simulation in GamepadService.
+BASE_FEATURE(kEnableSimulatedGamepadDataFetcher,
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables gamepad raw input change events.
+BASE_FEATURE(kGamepadRawInputChangeEvent, base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsGamepadMultitouchEnabled() {
   if (base::FeatureList::IsEnabled(kEnableGamepadMultitouch)) {

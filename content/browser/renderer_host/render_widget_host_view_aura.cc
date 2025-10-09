@@ -155,9 +155,7 @@ namespace {
 // `RenderWidgetHost` is hidden.
 // TODO(crbug.com/330301468): Remove this once we determine the cause of failure
 // to reallocate an LSI for the UI compositor.
-BASE_FEATURE(kRenderWidgetHostHiddenCheck,
-             "RenderWidgetHostHiddenCheck",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kRenderWidgetHostHiddenCheck, base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace
 
 // We need to watch for mouse events outside a Web Popup or its parent
@@ -726,7 +724,7 @@ viz::SurfaceId RenderWidgetHostViewAura::GetFallbackSurfaceIdForTesting()
 bool RenderWidgetHostViewAura::ShouldSkipCursorUpdate() const {
   aura::Window* root_window = window_->GetRootWindow();
   CHECK(root_window);
-  display::Screen* screen = display::Screen::GetScreen();
+  display::Screen* screen = display::Screen::Get();
   CHECK(screen);
 
   // Ignore cursor update messages if the window under the cursor is not us.
@@ -808,7 +806,7 @@ void RenderWidgetHostViewAura::ComputeDisplayFeature() {
   }
 
   const display::Display display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(window_);
+      display::Screen::Get()->GetDisplayNearestWindow(window_);
   // Set the display feature only if the browser window is maximized or
   // fullscreen.
   if (window_->GetRootWindow()->GetBoundsInScreen() != display.work_area() &&
@@ -1031,7 +1029,8 @@ uint32_t RenderWidgetHostViewAura::GetCaptureSequenceNumber() const {
 void RenderWidgetHostViewAura::CopyFromSurface(
     const gfx::Rect& src_subrect,
     const gfx::Size& dst_size,
-    base::OnceCallback<void(const SkBitmap&)> callback) {
+    base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+        callback) {
   base::WeakPtr<RenderWidgetHostImpl> popup_host;
   base::WeakPtr<DelegatedFrameHost> popup_frame_host;
   if (popup_child_host_view_) {
@@ -1048,7 +1047,7 @@ void RenderWidgetHostViewAura::CopyFromSurface(
 #if BUILDFLAG(IS_WIN)
 void RenderWidgetHostViewAura::UpdateMouseLockRegion() {
   RECT window_rect =
-      display::Screen::GetScreen()
+      display::Screen::Get()
           ->DIPToScreenRectInWindow(window_, window_->GetBoundsInScreen())
           .ToRECT();
   ::ClipCursor(&window_rect);
@@ -1141,8 +1140,7 @@ gfx::Rect RenderWidgetHostViewAura::GetBoundsInRootWindow() {
 
     // Pixels come back from GetWindowHost, so we need to convert those back to
     // DIPs here.
-    bounds = display::Screen::GetScreen()->ScreenToDIPRectInWindow(top_level,
-                                                                   bounds);
+    bounds = display::Screen::Get()->ScreenToDIPRectInWindow(top_level, bounds);
   }
 
 #endif
@@ -2107,7 +2105,7 @@ void RenderWidgetHostViewAura::OnDisplayMetricsChanged(
     return;
   }
 #endif  // BUILDFLAG(IS_OZONE)
-  display::Screen* screen = display::Screen::GetScreen();
+  display::Screen* screen = display::Screen::Get();
   if (display.id() != screen->GetDisplayNearestWindow(window_).id())
     return;
 
@@ -2378,7 +2376,7 @@ void RenderWidgetHostViewAura::OnStartStylusWriting() {
   handwriting_controller->OnStartStylusWriting(
       base::BindRepeating(&RenderWidgetHostViewAura::OnFocusHandwritingTarget,
                           weak_ptr_factory_.GetWeakPtr()),
-      last_stylus_handwriting_properties_.value(), *this);
+      last_stylus_handwriting_properties_.value());
   last_stylus_handwriting_properties_.reset();
 }
 
@@ -2420,11 +2418,9 @@ void RenderWidgetHostViewAura::OnEditElementFocusedForStylusWriting(
   UpdateProximateCharacterBounds(
       focus_result ? std::move(focus_result->proximate_bounds) : nullptr);
 
-  if (focus_result) {
-    handwriting_controller->OnFocusHandled(*this);
-  } else {
-    handwriting_controller->OnFocusFailed(*this);
-  }
+  UMA_HISTOGRAM_BOOLEAN("Stylus.Handwriting.TSFFocus", !!focus_result);
+  focus_result ? handwriting_controller->OnFocusHandled()
+               : handwriting_controller->OnFocusFailed();
 }
 
 void RenderWidgetHostViewAura::OnFocusHandwritingTarget(
@@ -2705,7 +2701,7 @@ void RenderWidgetHostViewAura::UpdateCursorIfOverSelf() {
   if (ShouldSkipCursorUpdate())
     return;
 
-  display::Screen* screen = display::Screen::GetScreen();
+  display::Screen* screen = display::Screen::Get();
   CHECK(screen);
   gfx::Point root_window_point = screen->GetCursorScreenPoint();
   aura::client::ScreenPositionClient* screen_position_client =
@@ -3090,6 +3086,7 @@ void RenderWidgetHostViewAura::OnOldViewDidNavigatePreCommit() {
   // Invalidate the surface so that we don't attempt to evict it multiple times.
   window_->InvalidateLocalSurfaceId();
   delegated_frame_host_->DidNavigateMainFramePreCommit();
+  CancelActiveTouches();
 }
 
 void RenderWidgetHostViewAura::OnNewViewDidNavigatePostCommit() {

@@ -12,10 +12,13 @@
 #include "chrome/browser/extensions/extension_util.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "extensions/browser/pref_names.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/mojom/context_type.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -208,7 +211,8 @@ TEST_F(ChromeExtensionNavigationTest,
       })",
       extension_id.c_str());
 
-  std::optional<base::Value> settings = base::JSONReader::Read(json);
+  std::optional<base::Value> settings =
+      base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   testing_pref_service()->SetManagedPref(
       pref_names::kExtensionManagement,
       base::Value::ToUniquePtrValue(std::move(settings.value())));

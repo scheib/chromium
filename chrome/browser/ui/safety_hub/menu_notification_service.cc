@@ -29,7 +29,25 @@
 #else  // BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/ui/safety_hub/extensions_result.h"
 #endif  // BUILDFLAG(IS_ANDROID)
+
 namespace {
+
+// Interval to show notification for compromised password in Safety Hub
+// notifications.
+const base::TimeDelta kPasswordCheckNotificationInterval = base::Days(0);
+
+// Interval to show notification for revoked permissions in Safety Hub
+// notifications.
+const base::TimeDelta kRevokedPermissionsNotificationInterval = base::Days(10);
+
+// Interval to show notification for notification permissions in Safety Hub
+// notifications.
+const base::TimeDelta kNotificationPermissionsNotificationInterval =
+    base::Days(10);
+
+// Interval to show notification for safe browsing in Safety Hub notifications.
+const base::TimeDelta kSafeBrowsingNotificationInterval = base::Days(90);
+
 SafetyHubModuleInfoElement::SafetyHubModuleInfoElement() = default;
 SafetyHubModuleInfoElement::~SafetyHubModuleInfoElement() = default;
 
@@ -67,14 +85,11 @@ SafetyHubMenuNotificationService::SafetyHubMenuNotificationService(
       {safety_hub::SafetyHubModuleType::SAFE_BROWSING, "safe-browsing"},
   };
 
-  // TODO(crbug.com/40267370): Make the interval for each service finch
-  // configurable.
   // The Safety Hub services will be available whenever the |GetCachedResult|
   // method is called, so it is safe to use |base::Unretained| here.
   SetInfoElement(
       safety_hub::SafetyHubModuleType::UNUSED_SITE_PERMISSIONS,
-      MenuNotificationPriority::LOW,
-      features::kRevokedPermissionsNotificationInterval.Get(),
+      MenuNotificationPriority::LOW, kRevokedPermissionsNotificationInterval,
       base::BindRepeating(&SafetyHubService::GetCachedResult,
                           base::Unretained(revoked_permissions_service)),
       stored_notifications);
@@ -87,14 +102,14 @@ SafetyHubMenuNotificationService::SafetyHubMenuNotificationService(
     SetInfoElement(
         safety_hub::SafetyHubModuleType::NOTIFICATION_PERMISSIONS,
         MenuNotificationPriority::LOW,
-        features::kNotificationPermissionsNotificationInterval.Get(),
+        kNotificationPermissionsNotificationInterval,
         base::BindRepeating(&SafetyHubService::GetCachedResult,
                             base::Unretained(notification_permissions_service)),
         stored_notifications);
   }
   SetInfoElement(safety_hub::SafetyHubModuleType::SAFE_BROWSING,
                  MenuNotificationPriority::MEDIUM,
-                 features::kSafeBrowsingNotificationInterval.Get(),
+                 kSafeBrowsingNotificationInterval,
                  base::BindRepeating(&SafetyHubSafeBrowsingResult::GetResult,
                                      base::Unretained(pref_service)),
                  stored_notifications);
@@ -118,24 +133,20 @@ SafetyHubMenuNotificationService::SafetyHubMenuNotificationService(
                                "passwords");
     SetInfoElement(
         safety_hub::SafetyHubModuleType::PASSWORDS,
-        MenuNotificationPriority::HIGH,
-        features::kPasswordCheckNotificationInterval.Get(),
+        MenuNotificationPriority::HIGH, kPasswordCheckNotificationInterval,
         base::BindRepeating(&PasswordStatusCheckService::GetCachedResult,
                             base::Unretained(password_check_service)),
         stored_notifications);
   }
 #else   // !BUILDFLAG(IS_ANDROID)
-  if (base::FeatureList::IsEnabled(features::kSafetyHubFollowup)) {
-    pref_dict_key_map_.emplace(safety_hub::SafetyHubModuleType::PASSWORDS,
-                               "passwords");
-    SetInfoElement(
-        safety_hub::SafetyHubModuleType::PASSWORDS,
-        MenuNotificationPriority::HIGH,
-        features::kPasswordCheckNotificationInterval.Get(),
-        base::BindRepeating(&PasswordStatusCheckResultAndroid::GetResult,
-                            base::Unretained(pref_service)),
-        stored_notifications);
-  }
+  pref_dict_key_map_.emplace(safety_hub::SafetyHubModuleType::PASSWORDS,
+                             "passwords");
+  SetInfoElement(
+      safety_hub::SafetyHubModuleType::PASSWORDS,
+      MenuNotificationPriority::HIGH, kPasswordCheckNotificationInterval,
+      base::BindRepeating(&PasswordStatusCheckResultAndroid::GetResult,
+                          base::Unretained(pref_service)),
+      stored_notifications);
 #endif  // !BUILDFLAG(IS_ANDROID)
 
   // Listen for changes to the Safe Browsing pref to accommodate the trigger

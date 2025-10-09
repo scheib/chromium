@@ -16,17 +16,19 @@
           "--platform",
           "Apple TV 4K (3rd generation)",
           "--version",
-          "18.5",
+          "26.0",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
           "--xcode-build-version",
-          "16f6",
+          "17a324",
           "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
-        "name": "base_unittests Apple TV 4K (3rd generation) 18.5",
+        "module_name": "//base:base_unittests",
+        "module_scheme": "gtest",
+        "name": "base_unittests Apple TV 4K (3rd generation) 26.0",
         "resultdb": {
           "enable": true,
           "has_native_resultdb_integration": true
@@ -45,11 +47,11 @@
           },
           "named_caches": [
             {
-              "name": "runtime_tvos_18_5",
-              "path": "Runtime-tvos-18.5"
+              "name": "runtime_tvos_26_0",
+              "path": "Runtime-tvos-26.0"
             },
             {
-              "name": "xcode_ios_16f6",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],
@@ -57,7 +59,7 @@
         },
         "test": "base_unittests",
         "test_id_prefix": "ninja://base:base_unittests/",
-        "variant_id": "Apple TV 4K (3rd generation) 18.5"
+        "variant_id": "Apple TV 4K (3rd generation) 26.0"
       },
       {
         "args": [
@@ -66,17 +68,19 @@
           "--platform",
           "Apple TV 4K (3rd generation)",
           "--version",
-          "18.5",
+          "26.0",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
           "--xcode-build-version",
-          "16f6",
+          "17a324",
           "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
-        "name": "components_browsertests Apple TV 4K (3rd generation) 18.5",
+        "module_name": "//components:components_browsertests",
+        "module_scheme": "gtest",
+        "name": "components_browsertests Apple TV 4K (3rd generation) 26.0",
         "resultdb": {
           "enable": true,
           "has_native_resultdb_integration": true
@@ -95,11 +99,11 @@
           },
           "named_caches": [
             {
-              "name": "runtime_tvos_18_5",
-              "path": "Runtime-tvos-18.5"
+              "name": "runtime_tvos_26_0",
+              "path": "Runtime-tvos-26.0"
             },
             {
-              "name": "xcode_ios_16f6",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],
@@ -107,7 +111,7 @@
         },
         "test": "components_browsertests",
         "test_id_prefix": "ninja://components:components_browsertests/",
-        "variant_id": "Apple TV 4K (3rd generation) 18.5"
+        "variant_id": "Apple TV 4K (3rd generation) 26.0"
       },
       {
         "args": [
@@ -116,17 +120,19 @@
           "--platform",
           "Apple TV 4K (3rd generation)",
           "--version",
-          "18.5",
+          "26.0",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
           "--xcode-build-version",
-          "16f6",
+          "17a324",
           "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
-        "name": "components_unittests Apple TV 4K (3rd generation) 18.5",
+        "module_name": "//components:components_unittests",
+        "module_scheme": "gtest",
+        "name": "components_unittests Apple TV 4K (3rd generation) 26.0",
         "resultdb": {
           "enable": true,
           "has_native_resultdb_integration": true
@@ -145,11 +151,11 @@
           },
           "named_caches": [
             {
-              "name": "runtime_tvos_18_5",
-              "path": "Runtime-tvos-18.5"
+              "name": "runtime_tvos_26_0",
+              "path": "Runtime-tvos-26.0"
             },
             {
-              "name": "xcode_ios_16f6",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],
@@ -157,26 +163,28 @@
         },
         "test": "components_unittests",
         "test_id_prefix": "ninja://components:components_unittests/",
-        "variant_id": "Apple TV 4K (3rd generation) 18.5"
+        "variant_id": "Apple TV 4K (3rd generation) 26.0"
       },
       {
         "args": [
           "--test-launcher-bot-mode",
-          "--test-launcher-filter-file=testing/buildbot/filters/ios.content_unittests.filter",
+          "--test-launcher-filter-file=testing/buildbot/filters/ios.content_unittests.filter;testing/buildbot/filters/tvos.content_unittests.filter",
           "--platform",
           "Apple TV 4K (3rd generation)",
           "--version",
-          "18.5",
+          "26.0",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
           "--xcode-build-version",
-          "16f6",
+          "17a324",
           "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
-        "name": "content_unittests Apple TV 4K (3rd generation) 18.5",
+        "module_name": "//content/test:content_unittests",
+        "module_scheme": "gtest",
+        "name": "content_unittests Apple TV 4K (3rd generation) 26.0",
         "resultdb": {
           "enable": true,
           "has_native_resultdb_integration": true
@@ -195,11 +203,11 @@
           },
           "named_caches": [
             {
-              "name": "runtime_tvos_18_5",
-              "path": "Runtime-tvos-18.5"
+              "name": "runtime_tvos_26_0",
+              "path": "Runtime-tvos-26.0"
             },
             {
-              "name": "xcode_ios_16f6",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],
@@ -207,7 +215,7 @@
         },
         "test": "content_unittests",
         "test_id_prefix": "ninja://content/test:content_unittests/",
-        "variant_id": "Apple TV 4K (3rd generation) 18.5"
+        "variant_id": "Apple TV 4K (3rd generation) 26.0"
       },
       {
         "args": [
@@ -216,17 +224,19 @@
           "--platform",
           "Apple TV 4K (3rd generation)",
           "--version",
-          "18.5",
+          "26.0",
           "--out-dir",
           "${ISOLATED_OUTDIR}",
           "--xcode-build-version",
-          "16f6",
+          "17a324",
           "--xctest"
         ],
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
-        "name": "media_unittests Apple TV 4K (3rd generation) 18.5",
+        "module_name": "//media:media_unittests",
+        "module_scheme": "gtest",
+        "name": "media_unittests Apple TV 4K (3rd generation) 26.0",
         "resultdb": {
           "enable": true,
           "has_native_resultdb_integration": true
@@ -245,11 +255,11 @@
           },
           "named_caches": [
             {
-              "name": "runtime_tvos_18_5",
-              "path": "Runtime-tvos-18.5"
+              "name": "runtime_tvos_26_0",
+              "path": "Runtime-tvos-26.0"
             },
             {
-              "name": "xcode_ios_16f6",
+              "name": "xcode_ios_17a324",
               "path": "Xcode.app"
             }
           ],
@@ -257,7 +267,7 @@
         },
         "test": "media_unittests",
         "test_id_prefix": "ninja://media:media_unittests/",
-        "variant_id": "Apple TV 4K (3rd generation) 18.5"
+        "variant_id": "Apple TV 4K (3rd generation) 26.0"
       }
     ]
   }

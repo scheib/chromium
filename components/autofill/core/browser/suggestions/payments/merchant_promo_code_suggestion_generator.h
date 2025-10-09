@@ -16,22 +16,22 @@ class MerchantPromoCodeSuggestionGenerator : public SuggestionGenerator {
   ~MerchantPromoCodeSuggestionGenerator() override;
 
   void FetchSuggestionData(
-      const FormData& form_data,
-      const FormFieldData& field_data,
-      const FormStructure* form,
-      const AutofillField* field,
+      const FormData& form,
+      const FormFieldData& trigger_field,
+      const FormStructure* form_structure,
+      const AutofillField* trigger_autofill_field,
       const AutofillClient& client,
       base::OnceCallback<
-          void(std::pair<FillingProduct,
+          void(std::pair<SuggestionDataSource,
                          std::vector<SuggestionGenerator::SuggestionData>>)>
           callback) override;
 
   void GenerateSuggestions(
-      const FormData& form_data,
-      const FormFieldData& field_data,
-      const FormStructure* form,
-      const AutofillField* field,
-      const std::vector<std::pair<FillingProduct, std::vector<SuggestionData>>>&
+      const FormData& form,
+      const FormFieldData& trigger_field,
+      const FormStructure* form_structure,
+      const AutofillField* trigger_autofill_field,
+      const base::flat_map<SuggestionDataSource, std::vector<SuggestionData>>&
           all_suggestion_data,
       base::OnceCallback<void(ReturnedSuggestions)> callback) override;
 
@@ -40,13 +40,13 @@ class MerchantPromoCodeSuggestionGenerator : public SuggestionGenerator {
   // TODO(crbug.com/409962888): Remove when MerchantPromoCodeManager doesn't
   // call it anymore.
   void FetchSuggestionData(
-      const FormData& form_data,
-      const FormFieldData& field_data,
-      const FormStructure* form,
-      const AutofillField* field,
+      const FormData& form,
+      const FormFieldData& trigger_field,
+      const FormStructure* form_structure,
+      const AutofillField* trigger_autofill_field,
       const AutofillClient& client,
       base::FunctionRef<
-          void(std::pair<FillingProduct,
+          void(std::pair<SuggestionDataSource,
                          std::vector<SuggestionGenerator::SuggestionData>>)>
           callback);
 
@@ -55,11 +55,11 @@ class MerchantPromoCodeSuggestionGenerator : public SuggestionGenerator {
   // TODO(crbug.com/409962888): Remove when MerchantPromoCodeManager doesn't
   // call it anymore.
   void GenerateSuggestions(
-      const FormData& form_data,
-      const FormFieldData& field_data,
-      const FormStructure* form,
-      const AutofillField* field,
-      const std::vector<std::pair<FillingProduct, std::vector<SuggestionData>>>&
+      const FormData& form,
+      const FormFieldData& trigger_field,
+      const FormStructure* form_structure,
+      const AutofillField* trigger_autofill_field,
+      const base::flat_map<SuggestionDataSource, std::vector<SuggestionData>>&
           all_suggestion_data,
       base::FunctionRef<void(ReturnedSuggestions)> callback);
 

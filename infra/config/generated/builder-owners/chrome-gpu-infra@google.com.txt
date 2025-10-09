@@ -1,5 +1,6 @@
 ci/Android FYI Experimental Release (Pixel 6)
 ci/Android FYI Release (NVIDIA Shield TV)
+ci/Android FYI Release (Pixel 10)
 ci/Android FYI Release (Pixel 2)
 ci/Android FYI Release (Pixel 4)
 ci/Android FYI Release (Pixel 6)
@@ -16,6 +17,7 @@ ci/Dawn Android arm64 Builder
 ci/Dawn Android arm64 DEPS Builder
 ci/Dawn Android arm64 DEPS Release (Pixel 6)
 ci/Dawn Android arm64 Experimental Release (Pixel 6)
+ci/Dawn Android arm64 Release (Pixel 10)
 ci/Dawn Android arm64 Release (Pixel 6)
 ci/Dawn Android arm64 Release (Samsung S24)
 ci/Dawn Chromium Presubmit
@@ -88,6 +90,9 @@ ci/GPU Win x64 Builder
 ci/GPU Win x64 Builder (dbg)
 ci/Linux Debug (NVIDIA)
 ci/Linux FYI Debug (NVIDIA)
+ci/Linux FYI Experimental Release (AMD 780M)
+ci/Linux FYI Experimental Release (AMD 890M)
+ci/Linux FYI Experimental Release (Intel Arc 140V)
 ci/Linux FYI Experimental Release (Intel UHD 630)
 ci/Linux FYI Experimental Release (NVIDIA)
 ci/Linux FYI GPU TSAN Release
@@ -131,6 +136,8 @@ ci/Win10 FYI x86 Release (NVIDIA)
 ci/Win10 x64 Debug (NVIDIA)
 ci/Win10 x64 Release (NVIDIA)
 ci/Win11 FYI arm64 Release (Qualcomm Adreno 690)
+ci/Win11 FYI x64 Experimental Release (AMD 780M)
+ci/Win11 FYI x64 Experimental Release (AMD 890M)
 ci/Win11 FYI x64 Experimental Release (Intel Arc 140V)
 ci/Win11 FYI x64 Experimental Release (NVIDIA RTX 4070 Super)
 ci/Win11 FYI x64 Release (AMD RX 7600)
@@ -148,6 +155,7 @@ ci/win-swangle-x64
 ci/win-swangle-x86
 try/android-dawn-arm-rel
 try/android-dawn-arm64-exp-rel
+try/android-dawn-arm64-p10-rel
 try/android-dawn-arm64-rel
 try/android-dawn-arm64-s24-rel
 try/android_optional_gpu_tests_rel
@@ -179,14 +187,18 @@ try/gpu-fyi-cq-android-arm64
 try/gpu-fyi-try-android-a13-32
 try/gpu-fyi-try-android-a23-32
 try/gpu-fyi-try-android-nvidia-shield-tv
+try/gpu-fyi-try-android-pixel-10-64
 try/gpu-fyi-try-android-pixel-6-64
 try/gpu-fyi-try-android-pixel-6-64-exp
 try/gpu-fyi-try-android-q-pixel-2-32
 try/gpu-fyi-try-android-r-pixel-4-32
 try/gpu-fyi-try-android-s23-64
 try/gpu-fyi-try-chromeos-amd64-generic
+try/gpu-fyi-try-linux-amd-780m-exp
+try/gpu-fyi-try-linux-amd-890m-exp
 try/gpu-fyi-try-linux-amd-rel
 try/gpu-fyi-try-linux-amd-rx-7600-rel
+try/gpu-fyi-try-linux-intel-arc-140v-exp
 try/gpu-fyi-try-linux-intel-exp
 try/gpu-fyi-try-linux-intel-rel
 try/gpu-fyi-try-linux-intel-uhd770-rel
@@ -224,6 +236,8 @@ try/gpu-fyi-try-win11-amd-rel-64
 try/gpu-fyi-try-win11-nvidia-4070-exp-64
 try/gpu-fyi-try-win11-nvidia-4070-rel-64
 try/gpu-fyi-try-win11-qualcomm-rel-64
+try/gpu-fyi-try-win11-x64-amd-780m-exp
+try/gpu-fyi-try-win11-x64-amd-890m-exp
 try/gpu-fyi-try-win11-x64-intel-arc-140v-exp
 try/gpu-try-android-pixel-2-64
 try/gpu-try-linux-nvidia-dbg

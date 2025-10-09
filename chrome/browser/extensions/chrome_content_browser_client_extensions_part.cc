@@ -56,6 +56,7 @@
 #include "extensions/browser/url_loader_factory_manager.h"
 #include "extensions/browser/url_request_util.h"
 #include "extensions/browser/view_type_utils.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/sockets/sockets_manifest_data.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension_id.h"
@@ -97,6 +98,8 @@
 #include "pdf/pdf_features.h"
 #endif  // BUILDFLAG(ENABLE_PDF)
 
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
+
 using blink::web_pref::WebPreferences;
 using content::BrowserContext;
 using content::BrowserThread;
@@ -121,13 +124,14 @@ const Extension* GetEnabledExtensionFromSiteURL(BrowserContext* context,
   if (!registry)
     return nullptr;
 
-  return registry->enabled_extensions().GetByID(site_url.host());
+  return registry->enabled_extensions().GetByID(site_url.GetHost());
 }
 
 bool HasEffectiveUrl(content::BrowserContext* browser_context,
                      const GURL& url) {
   return ChromeContentBrowserClientExtensionsPart::GetEffectiveURL(
-             Profile::FromBrowserContext(browser_context), url) != url;
+             Profile::FromBrowserContext(browser_context), url)
+      .has_value();
 }
 
 bool AllowServiceWorker(const GURL& scope,
@@ -219,7 +223,7 @@ ChromeContentBrowserClientExtensionsPart::
     ~ChromeContentBrowserClientExtensionsPart() = default;
 
 // static
-GURL ChromeContentBrowserClientExtensionsPart::GetEffectiveURL(
+std::optional<GURL> ChromeContentBrowserClientExtensionsPart::GetEffectiveURL(
     Profile* profile,
     const GURL& url) {
   ExtensionRegistry* registry = ExtensionRegistry::Get(profile);
@@ -256,7 +260,7 @@ GURL ChromeContentBrowserClientExtensionsPart::GetEffectiveURL(
   }
 
   // Don't translate to effective URLs in all other cases.
-  return url;
+  return std::nullopt;
 }
 
 // static
@@ -374,7 +378,7 @@ bool ChromeContentBrowserClientExtensionsPart::
   }
 
   // Determine whether the URL is manifest-sandboxed.
-  return SandboxedPageInfo::IsSandboxedPage(extension, url.path());
+  return SandboxedPageInfo::IsSandboxedPage(extension, url.GetPath());
 }
 
 // static
@@ -415,7 +419,7 @@ bool ChromeContentBrowserClientExtensionsPart::CanCommitURL(
   // separately) to verify that the ProcessLock matches the extension's origin.
   // TODO(https://crbug.com/346264217): Also ensure the process is sandboxed, if
   // that does not cause problems for pushState cases.
-  if (SandboxedPageInfo::IsSandboxedPage(extension, url.path())) {
+  if (SandboxedPageInfo::IsSandboxedPage(extension, url.GetPath())) {
     return true;
   }
 
@@ -838,7 +842,7 @@ bool ChromeContentBrowserClientExtensionsPart::
 
 #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   const Extension* extension = registry->enabled_extensions().GetByID(
-      main_frame_site.GetSiteURL().host());
+      main_frame_site.GetSiteURL().GetHost());
   extension_webkit_preferences::SetPreferences(extension, web_prefs);
 #endif
   return true;

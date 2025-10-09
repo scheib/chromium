@@ -47,7 +47,7 @@
 #include "ui/gfx/switches.h"
 #include "ui/gl/gl_switches.h"
 #include "ui/native_theme/features/native_theme_features.h"
-#include "ui/native_theme/native_theme_utils.h"
+#include "ui/native_theme/native_theme.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/android_info.h"
@@ -196,6 +196,8 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
           {wf::EnableAudioOutputDevices,
            raw_ref(features::kAAudioPerStreamDeviceSelection)},
 #endif
+          {wf::EnableAuthenticatorPasswordsOnlyImmediateRequests,
+           raw_ref(device::kAuthenticatorPasswordsOnlyImmediateRequests)},
           {wf::EnableBackgroundFetch, raw_ref(features::kBackgroundFetch)},
           {wf::EnableBoundaryEventDispatchTracksNodeRemoval,
            raw_ref(blink::features::kBoundaryEventDispatchTracksNodeRemoval)},
@@ -216,6 +218,8 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
            raw_ref(features::kFedCmIdPRegistration), kDefault},
           {wf::EnableFedCmLightweightMode,
            raw_ref(features::kFedCmLightweightMode), kDefault},
+          {wf::EnableFedCmErrorAttribute,
+           raw_ref(features::kFedCmErrorAttribute), kDefault},
           {wf::EnableGamepadMultitouch,
            raw_ref(features::kEnableGamepadMultitouch)},
           {wf::EnableSharedStorageAPI,
@@ -239,17 +243,16 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
            raw_ref(features::kUserMediaScreenCapturing)},
           {wf::EnableRegionCapture,
            raw_ref(features::kUserMediaScreenCapturing)},
+          {wf::EnableElementCapture,
+           raw_ref(features::kUserMediaScreenCapturing)},
+
 #endif
           {wf::EnableInstalledApp, raw_ref(features::kInstalledApp)},
           {wf::EnableIntegrityPolicyScript,
            raw_ref(network::features::kIntegrityPolicyScript)},
-          {wf::EnableLazyInitializeMediaControls,
-           raw_ref(features::kLazyInitializeMediaControls)},
 #if BUILDFLAG(IS_CHROMEOS)
           {wf::EnableLockedMode, raw_ref(blink::features::kLockedMode)},
 #endif
-          {wf::EnableMediaCastOverlayButton,
-           raw_ref(media::kMediaCastOverlayButton)},
           {wf::EnableMediaEngagementBypassAutoplayPolicies,
            raw_ref(media::kMediaEngagementBypassAutoplayPolicies)},
           {wf::EnablePaymentApp, raw_ref(features::kServiceWorkerPaymentApps)},
@@ -283,8 +286,7 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
            raw_ref(features::kWebBluetoothNewPermissionsBackend),
            kSetOnlyIfOverridden},
           {wf::EnableWebIdentityDigitalCredentials,
-           raw_ref(features::kWebIdentityDigitalCredentials),
-           kSetOnlyIfOverridden},
+           raw_ref(features::kWebIdentityDigitalCredentials), kDefault},
           {wf::EnableWebIdentityDigitalCredentialsCreation,
            raw_ref(features::kWebIdentityDigitalCredentialsCreation),
            kSetOnlyIfOverridden},
@@ -296,20 +298,20 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
           {wf::EnableWebXR, raw_ref(features::kWebXr)},
 #if BUILDFLAG(ENABLE_VR)
           {wf::EnableWebXRFrontFacing,
-           raw_ref(device::features::kWebXrIncubations)},
+           raw_ref(device::features::kWebXRIncubations)},
           {wf::EnableWebXRFrameRate,
-           raw_ref(device::features::kWebXrIncubations)},
+           raw_ref(device::features::kWebXRIncubations)},
           {wf::EnableWebXRGPUBinding,
-           raw_ref(device::features::kWebXrWebGpuBinding)},
+           raw_ref(device::features::kWebXRWebGPUBinding)},
           {wf::EnableWebXRImageTracking,
-           raw_ref(device::features::kWebXrIncubations)},
-          {wf::EnableWebXRLayers, raw_ref(device::features::kWebXrLayers)},
+           raw_ref(device::features::kWebXRIncubations)},
+          {wf::EnableWebXRLayers, raw_ref(device::features::kWebXRLayers)},
           {wf::EnableWebXRPlaneDetection,
-           raw_ref(device::features::kWebXrIncubations)},
+           raw_ref(device::features::kWebXRIncubations)},
           {wf::EnableWebXRPoseMotionData,
-           raw_ref(device::features::kWebXrIncubations)},
+           raw_ref(device::features::kWebXRIncubations)},
           {wf::EnableWebXRSpecParity,
-           raw_ref(device::features::kWebXrIncubations)},
+           raw_ref(device::features::kWebXRIncubations)},
 #endif
           {wf::EnablePermissions, raw_ref(features::kWebPermissionsApi),
            kSetOnlyIfOverridden},
@@ -351,11 +353,8 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
 #endif
           {"CompressionDictionaryTransport",
            raw_ref(network::features::kCompressionDictionaryTransport)},
-          {"CompressionDictionaryTransportBackend",
-           raw_ref(network::features::kCompressionDictionaryTransportBackend)},
           {"CookieDeprecationFacilitatedTesting",
            raw_ref(features::kCookieDeprecationFacilitatedTesting)},
-          {"CSPHashesV1", raw_ref(network::features::kCSPScriptSrcHashesInV1)},
           {"DocumentPolicyIncludeJSCallStacksInCrashReports",
            raw_ref(blink::features::
                        kDocumentPolicyIncludeJSCallStacksInCrashReports),
@@ -378,12 +377,13 @@ void SetRuntimeFeaturesFromChromiumFeatures() {
            raw_ref(network::features::kReduceAcceptLanguage)},
           {"RelatedWebsitePartitionAPI",
            raw_ref(net::features::kRelatedWebsitePartitionAPI)},
-#if BUILDFLAG(IS_ANDROID)
-          {"Serial", raw_ref(device::features::kBluetoothRfcommAndroid)},
-#endif
           {"SerialPortConnected", raw_ref(features::kSerialPortConnected)},
           {"SignatureBasedIntegrity",
            raw_ref(network::features::kSRIMessageSignatureEnforcement)},
+#if BUILDFLAG(IS_MAC)
+          {"SystemDefaultAccentColors",
+           raw_ref(features::kUseSystemDefaultAccentColors)},
+#endif
           {"TopicsAPI", raw_ref(features::kPrivacySandboxAdsAPIsOverride),
            kSetOnlyIfOverridden},
           {"TopicsAPI", raw_ref(features::kPrivacySandboxAdsAPIsM1Override)},
@@ -518,7 +518,8 @@ void SetCustomizedRuntimeFeaturesFromCombinedArgs(
   // These checks are custom wrappers around base::FeatureList::IsEnabled
   // They're moved here to distinguish them from actual base checks
 #if !BUILDFLAG(IS_CHROMEOS)
-  WebRuntimeFeatures::EnableOverlayScrollbars(ui::IsOverlayScrollbarEnabled());
+  WebRuntimeFeatures::EnableOverlayScrollbars(
+      ui::NativeTheme::GetInstanceForWeb()->use_overlay_scrollbar());
 #endif
   WebRuntimeFeatures::EnableFluentScrollbars(ui::IsFluentScrollbarEnabled());
   WebRuntimeFeatures::EnableFluentOverlayScrollbars(
@@ -636,6 +637,13 @@ void ResolveInvalidConfigurations() {
         << switches::kEnableFeatures << "="
         << blink::features::kPermissionElement.name << " instead.";
     WebRuntimeFeatures::EnablePermissionElement(false);
+  }
+
+  // CSP Hashes in V1 cannot be enabled without the support of the network
+  // service.
+  if (!base::FeatureList::IsEnabled(
+          network::features::kCSPScriptSrcHashesInV1)) {
+    WebRuntimeFeatures::EnableCSPHashesV1(false);
   }
 }
 

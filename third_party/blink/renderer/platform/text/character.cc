@@ -38,6 +38,7 @@
 #include <algorithm>
 
 #include "base/synchronization/lock.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/text/character_property_data.h"
 #include "third_party/blink/renderer/platform/text/icu_error.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -58,10 +59,11 @@ UCPTrie* CreateTrie() {
   return trie;
 }
 
-unsigned GetProperty(UChar32 c, CharacterProperty property) {
+inline CharacterProperty GetProperty(UChar32 c) {
   static const UCPTrie* trie = CreateTrie();
-  return UNSAFE_TODO(UCPTRIE_FAST_GET(trie, UCPTRIE_16, c)) &
-         static_cast<CharacterPropertyType>(property);
+  static_assert(sizeof(CharacterProperty) == 2);
+  const auto value = UNSAFE_TODO(UCPTRIE_FAST_GET(trie, UCPTRIE_16, c));
+  return CharacterProperty(value);
 }
 
 base::Lock& GetFreezePatternLock() {
@@ -91,34 +93,29 @@ bool Character::IsUprightInMixedVertical(UChar32 character) {
 }
 
 bool Character::IsCJKIdeographOrSymbolSlow(UChar32 c) {
-  return GetProperty(c, CharacterProperty::kIsCJKIdeographOrSymbol);
+  return GetProperty(c).is_cjk_ideograph_or_symbol;
 }
 
 bool Character::IsPotentialCustomElementNameChar(UChar32 character) {
-  return GetProperty(character,
-                     CharacterProperty::kIsPotentialCustomElementNameChar);
+  return GetProperty(character).is_potential_custom_element_name_char;
 }
 
 bool Character::IsBidiControl(UChar32 character) {
-  return GetProperty(character, CharacterProperty::kIsBidiControl);
+  return GetProperty(character).is_bidi_control;
 }
 
 bool Character::IsHangulSlow(UChar32 character) {
-  return GetProperty(character, CharacterProperty::kIsHangul);
+  return GetProperty(character).is_hangul;
 }
 
 // static
 HanKerningCharType Character::GetHanKerningCharType(UChar32 character) {
-  return static_cast<HanKerningCharType>(
-      GetProperty(character, CharacterProperty::kHanKerningShiftedMask) >>
-      static_cast<unsigned>(CharacterProperty::kHanKerningShift));
+  return GetProperty(character).han_kerning;
 }
 
 // static
 EastAsianSpacingType Character::GetEastAsianSpacingType(UChar32 character) {
-  return static_cast<EastAsianSpacingType>(
-      GetProperty(character, CharacterProperty::kEastAsianSpacingShiftedMask) >>
-      static_cast<unsigned>(CharacterProperty::kEastAsianSpacingShift));
+  return GetProperty(character).east_asian_spacing;
 }
 
 bool Character::MaybeHanKerningOpenSlow(UChar32 ch) {
@@ -260,6 +257,41 @@ bool Character::CanReceiveTextEmphasis(UChar32 c) {
     return false;
   }
 
+  if (RuntimeEnabledFeatures::TextEmphasisPunctuationExceptionsEnabled()) {
+    // A set of exceptions for punctuation.
+    switch (c) {
+      // List from
+      // https://drafts.csswg.org/css-text-decor/#text-emphasis-style-property
+      case uchar::kNumberSign:
+      case uchar::kPercentSign:
+      case uchar::kAmpersand:
+      case uchar::kCommercialAt:
+      case uchar::kSectionSign:
+      case uchar::kPilcrowSign:
+      case uchar::kArabicIndicPerMilleSign:
+      case uchar::kArabicIndicPerTenThousandSign:
+      case uchar::kArabicPercentSign:
+      case uchar::kPerMilleSign:
+      case uchar::kPerTenThousandSign:
+      case uchar::kTironianSignEt:
+      case uchar::kReversedPilcrowSign:
+      case uchar::kSwungDash:
+      case uchar::kPartAlternationMark:
+      // Characters with NFKD equivalence to the above.
+      case uchar::kSmallNumberSign:
+      case uchar::kSmallAmpersand:
+      case uchar::kSmallPercentSign:
+      case uchar::kSmallCommercialAt:
+      case uchar::kFullwidthNumberSign:
+      case uchar::kFullwidthPercentSign:
+      case uchar::kFullwidthAmpersand:
+      case uchar::kFullwidthCommercialAt:
+        return true;
+      default:
+        break;
+    }
+  }
+
   // Punctuation
   if (category &
       (unicode::kPunctuation_Dash | unicode::kPunctuation_Open |
@@ -268,9 +300,6 @@ bool Character::CanReceiveTextEmphasis(UChar32 c) {
        unicode::kPunctuation_FinalQuote)) {
     return false;
   }
-  // TODO(layout-dev): css/css-text-decor/text-emphasis-punctuation-3.html
-  // requires implementation for the following rule in the specification:
-  // > do not NFKD normalize to any of the following symbols:
 
   return true;
 }

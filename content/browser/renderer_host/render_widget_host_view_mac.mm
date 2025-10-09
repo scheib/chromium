@@ -82,7 +82,7 @@
 #include "ui/gfx/geometry/dip_util.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/mac/coordinate_conversion.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/menus/cocoa/text_services_context_menu.h"
 
 using blink::WebInputEvent;
@@ -99,7 +99,6 @@ namespace {
 // costly, and if the text input state is changing rapidly there is no need to
 // update it immediately.
 BASE_FEATURE(kDelayUpdateWindowsAfterTextInputStateChanged,
-             "DelayUpdateWindowsAfterTextInputStateChanged",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace
@@ -219,7 +218,7 @@ RenderWidgetHostViewMac::RenderWidgetHostViewMac(RenderWidgetHost* widget)
   // Guess that the initial screen we will be on is the screen of the current
   // window (since that's the best guess that we have, and is usually right).
   // https://crbug.com/357443
-  auto* screen = display::Screen::GetScreen();
+  auto* screen = display::Screen::Get();
   screen_infos_ = screen->GetScreenInfosNearestDisplay(
       screen->GetDisplayNearestWindow(gfx::NativeWindow(NSApp.keyWindow)).id());
   original_screen_infos_ = screen_infos_;
@@ -305,9 +304,8 @@ void RenderWidgetHostViewMac::MigrateNSViewBridge(
     // To workaround that case, this code removes the observer first, which is a
     // safe no-op if the bridge is already not an observer.
     // TODO(crbug.com/40179941): Maybe recreate `in_process_ns_view_bridge_`?
-    display::Screen::GetScreen()->RemoveObserver(
-        in_process_ns_view_bridge_.get());
-    display::Screen::GetScreen()->AddObserver(in_process_ns_view_bridge_.get());
+    display::Screen::Get()->RemoveObserver(in_process_ns_view_bridge_.get());
+    display::Screen::Get()->AddObserver(in_process_ns_view_bridge_.get());
     return;
   }
 
@@ -339,8 +337,7 @@ void RenderWidgetHostViewMac::MigrateNSViewBridge(
   // End local display::Screen observation via `in_process_ns_view_bridge_`;
   // the remote NSWindow's display::Screen information will be sent by Mojo.
   // TODO(crbug.com/40179941): Maybe just destroy `in_process_ns_view_bridge_`?
-  display::Screen::GetScreen()->RemoveObserver(
-      in_process_ns_view_bridge_.get());
+  display::Screen::Get()->RemoveObserver(in_process_ns_view_bridge_.get());
 
   // Popup windows will specify an invalid |parent_ns_view_id|, because popups
   // have their own NSWindows (of which they are the content NSView).
@@ -569,6 +566,13 @@ void RenderWidgetHostViewMac::SetSize(const gfx::Size& size) {
 
 void RenderWidgetHostViewMac::SetBounds(const gfx::Rect& rect) {
   ns_view_->SetBounds(rect);
+
+  // Check if running with no associated NSWindow and force bounds change
+  // propagation. This occurs while running headless and causes problems with
+  // RenderDocument. See more details here: http://crbug.com/444226873.
+  if (IsHeadless()) {
+    OnWindowFrameInScreenChanged(rect);
+  }
 }
 
 gfx::NativeView RenderWidgetHostViewMac::GetNativeView() {
@@ -587,6 +591,20 @@ void RenderWidgetHostViewMac::Focus() {
 
   base::AutoReset<bool> is_getting_focus_bit(&is_getting_focus_, true);
   ns_view_->MakeFirstResponder();
+
+  // Check if running with no associated NSWindow and force focus change
+  // propagation. This occurs while running headless and causes problems with
+  // RenderDocument. See more details here: http://crbug.com/444244102.
+  // Here notification callback is invoked asynchronously because focus and
+  // activation notifications are nested so synchronous invocation does not
+  // always result in the correct state.
+  if (IsHeadless()) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&RenderWidgetHostViewMac::OnFirstResponderChanged,
+                       weak_factory_.GetWeakPtr(),
+                       /*is_first_responder=*/true));
+  }
 }
 
 bool RenderWidgetHostViewMac::HasFocus() {
@@ -626,6 +644,7 @@ input::CursorManager* RenderWidgetHostViewMac::GetCursorManager() {
 void RenderWidgetHostViewMac::OnOldViewDidNavigatePreCommit() {
   CHECK(browser_compositor_) << "Shouldn't be called during destruction!";
   browser_compositor_->DidNavigateMainFramePreCommit();
+  gesture_provider_.ResetDetection();
 }
 
 void RenderWidgetHostViewMac::OnNewViewDidNavigatePostCommit() {
@@ -997,7 +1016,7 @@ void RenderWidgetHostViewMac::SpeakSelection() {
 }
 
 void RenderWidgetHostViewMac::SetWindowFrameInScreen(const gfx::Rect& rect) {
-  DCHECK(GetInProcessNSView() && ![GetInProcessNSView() window])
+  DCHECK(IsHeadless())
       << "This method should only be called in headless browser!";
   OnWindowFrameInScreenChanged(rect);
 
@@ -1024,7 +1043,8 @@ uint32_t RenderWidgetHostViewMac::GetCaptureSequenceNumber() const {
 void RenderWidgetHostViewMac::CopyFromSurface(
     const gfx::Rect& src_subrect,
     const gfx::Size& dst_size,
-    base::OnceCallback<void(const SkBitmap&)> callback) {
+    base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+        callback) {
   base::WeakPtr<RenderWidgetHostImpl> popup_host;
   base::WeakPtr<DelegatedFrameHost> popup_frame_host;
   if (popup_child_host_view_) {
@@ -1452,7 +1472,7 @@ void RenderWidgetHostViewMac::DidOverscroll(
   ns_view_->DidOverscroll(blink::mojom::DidOverscrollParams::New(
       params.accumulated_overscroll, params.latest_overscroll_delta,
       params.current_fling_velocity, params.causal_event_viewport_point,
-      params.overscroll_behavior));
+      params.overscroll_behavior, params.source_device));
 }
 
 std::unique_ptr<SyntheticGestureTarget>
@@ -2404,6 +2424,10 @@ RenderWidgetHostViewMac::MaybeUpdateScreenInfosForHiDPI() {
     return {true, current_display_changed};
   }
   return {false, false};
+}
+
+bool RenderWidgetHostViewMac::IsHeadless() const {
+  return GetInProcessNSView() && ![GetInProcessNSView() window];
 }
 
 Class GetRenderWidgetHostViewCocoaClassForTesting() {

@@ -1,5 +1,9 @@
 # Orderfile
 
+[TOC]
+
+## Background
+
 An orderfile is a list of symbols that defines an ordering of functions. One can
 make a static linker, such as LLD, respect this ordering when generating a
 binary.
@@ -50,10 +54,6 @@ tools/cygprofile/check_orderfile.py --target-arch=arm64 \
 
 Alternatively, you can use the `--verify` flag with `generate_orderfile_full.py`
 to build and verify in one step.
-
-```
-
-
 
 ## Orderfile Performance Testing
 

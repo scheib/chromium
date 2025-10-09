@@ -23,12 +23,14 @@
 #import "ios/chrome/browser/infobars/model/overlays/browser_agent/infobar_overlay_browser_agent_util.h"
 #import "ios/chrome/browser/intelligence/bwg/model/bwg_browser_agent.h"
 #import "ios/chrome/browser/intelligence/features/features.h"
+#import "ios/chrome/browser/intelligence/persist_tab_context/model/persist_tab_context_browser_agent.h"
 #import "ios/chrome/browser/intents/model/user_activity_browser_agent.h"
 #import "ios/chrome/browser/lens/model/lens_browser_agent.h"
 #import "ios/chrome/browser/metrics/model/tab_usage_recorder_browser_agent.h"
 #import "ios/chrome/browser/metrics/model/web_state_list_metrics_browser_agent.h"
 #import "ios/chrome/browser/omnibox/model/omnibox_position/omnibox_position_browser_agent.h"
 #import "ios/chrome/browser/policy/model/policy_watcher_browser_agent.h"
+#import "ios/chrome/browser/prerender/model/prerender_browser_agent.h"
 #import "ios/chrome/browser/reader_mode/model/features.h"
 #import "ios/chrome/browser/reader_mode/model/reader_mode_browser_agent.h"
 #import "ios/chrome/browser/reading_list/model/reading_list_browser_agent.h"
@@ -65,7 +67,6 @@ namespace {
 
 // Feature controlling for which Browser to create agents.
 BASE_FEATURE(kLimitBrowserAgentsForInactiveBrowser,
-             "LimitBrowserAgentsForInactiveBrowser",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Attach agents for a regular, incognito or inactive Browser.
@@ -209,6 +210,14 @@ void AttachBrowserAgentsForActiveBrowser(Browser* browser) {
                                                   collaboration_service);
       }
     }
+  }
+
+  if (!browser_is_inactive && !browser_is_temporary && !browser_is_off_record) {
+    PrerenderBrowserAgent::CreateForBrowser(browser);
+  }
+
+  if (IsPersistTabContextEnabled() && !browser_is_off_record) {
+    PersistTabContextBrowserAgent::CreateForBrowser(browser);
   }
 
   // This needs to be called last in case any downstream browser agents need to

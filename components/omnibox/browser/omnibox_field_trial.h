@@ -15,6 +15,7 @@
 
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
+#include "components/omnibox/browser/aim_eligibility_service.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/common/omnibox_features.h"
@@ -409,11 +410,18 @@ bool IsOnFocusZeroSuggestEnabledInContext(
 bool IsHideSuggestionGroupHeadersEnabledInContext(
     metrics::OmniboxEventProto::PageClassification page_classification);
 
-// Returns whether the deterministic AIM shortcut action in typed state is enabled.
-bool IsDeterministicAimActionInTypedStateEnabled(AutocompleteProviderClient* client);
+// Returns whether the deterministic AIM shortcut action in typed state is
+// enabled.
+bool IsDeterministicAimActionInTypedStateEnabled(
+    AutocompleteProviderClient* client);
 
 // Returns whether AIM page action in Omnibox is enabled.
-bool IsAimOmniboxEntrypointEnabled(const AutocompleteProviderClient* client);
+bool IsAimOmniboxEntrypointEnabled(
+    const AimEligibilityService* aim_eligibility_service);
+
+// Returns whether AIM starter pack is enabled.
+bool IsAimStarterPackEnabled(
+    const AimEligibilityService* aim_eligibility_service);
 
 // Rich autocompletion.
 bool IsRichAutocompletionEnabled();
@@ -645,25 +653,6 @@ std::vector<std::pair<double, int>> GetPiecewiseMappingBreakPoints(
 // ---------------------------------------------------------
 // Actions In Suggest ->
 
-constexpr base::FeatureParam<bool> kAnswerActionsCounterfactual(
-    &omnibox::kOmniboxAnswerActions,
-    "AnswerActionsCounterfactual",
-    false);
-constexpr base::FeatureParam<bool> kAnswerActionsShowAboveKeyboard(
-    &omnibox::kOmniboxAnswerActions,
-    "ShowAboveKeyboard",
-    false);
-
-constexpr base::FeatureParam<bool> kAnswerActionsShowIfUrlsPresent(
-    &omnibox::kOmniboxAnswerActions,
-    "ShowIfUrlsPresent",
-    false);
-
-constexpr base::FeatureParam<bool> kAnswerActionsShowRichCard(
-    &omnibox::kOmniboxAnswerActions,
-    "ShowRichCard",
-    false);
-
 // <- Actions In Suggest
 // ---------------------------------------------------------
 // Touch Down Trigger For Prefetch ->
@@ -720,8 +709,7 @@ inline constexpr base::FeatureParam<bool> kAndroidDiagInputConnection{
 // ---------------------------------------------------------
 // Mobile Parity update -->
 inline constexpr base::FeatureParam<bool> kMobileParityRetrieveBuiltinFavicon{
-    &omnibox::kOmniboxMobileParityUpdateV2, "retrieve_builtin_favicon", false};
-
+    &omnibox::kOmniboxMobileParityUpdateV2, "retrieve_builtin_favicon", true};
 
 inline constexpr base::FeatureParam<bool> kMobileParityEnableFeedForGoogleOnly{
     &omnibox::kOmniboxMobileParityUpdate, "enable_feed_for_google_only", true};
@@ -735,6 +723,16 @@ constexpr base::FeatureParam<int> kMinimumTypedCharactersToInvokeAimShortcut(
     1);
 
 // <- Aim shortcut for typed state
+
+#if BUILDFLAG(IS_ANDROID)
+// Omnibox Improvement for Large Form Factors
+
+inline constexpr base::FeatureParam<bool>
+    kOmniboxImprovementForLFFSwitchToTabChip{
+        &omnibox::kOmniboxImprovementForLFF, "switch_to_tab_chip", false};
+
+// <-- Omnibox Improvement for Large Form Factors
+#endif
 
 // New params should be inserted above this comment. They should be ordered
 // consistently with `omnibox_features.h`. They should be formatted as:

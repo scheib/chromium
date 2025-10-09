@@ -4,18 +4,17 @@
 
 #include "content/browser/preloading/prefetch/prefetch_response_reader.h"
 
-#include <algorithm>
-
 #include "base/debug/alias.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "content/browser/preloading/prefetch/prefetch_features.h"
+#include "content/browser/preloading/prefetch/prefetch_data_pipe_tee.h"
 #include "content/browser/preloading/prefetch/prefetch_params.h"
 #include "content/browser/preloading/prefetch/prefetch_streaming_url_loader.h"
 #include "content/browser/service_worker/service_worker_main_resource_handle.h"
 #include "net/http/http_cookie_indices.h"
+#include "net/http/http_response_headers.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/network/public/mojom/early_hints.mojom.h"

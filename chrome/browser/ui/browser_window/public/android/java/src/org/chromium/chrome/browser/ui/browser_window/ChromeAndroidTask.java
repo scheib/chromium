@@ -8,6 +8,8 @@ import android.graphics.Rect;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.ui.base.ActivityWindowAndroid;
 
 import java.util.List;
@@ -47,10 +49,27 @@ import java.util.List;
 public interface ChromeAndroidTask {
 
     /**
-     * Returns the ID of this {@link ChromeAndroidTask}, which is the same as defined by {@link
-     * android.app.TaskInfo#taskId}.
+     * Returns an {@link Integer} holding the the ID of this {@link ChromeAndroidTask}, which is the
+     * same as defined by {@link android.app.TaskInfo#taskId}, if the {@link Integer} is non-null.
+     * The {@link Integer} will be null for a {@code State.PENDING} {@link ChromeAndroidTask} that
+     * is not yet associated with a live {@code ChromeActivity}.
      */
-    int getId();
+    @Nullable Integer getId();
+
+    /**
+     * Returns an {@link Integer} holding the the pending task ID of this {@link ChromeAndroidTask}.
+     * The {@link Integer} will be null for a {@link ChromeAndroidTask} that is not in a {@code
+     * State.PENDING} state.
+     */
+    @Nullable Integer getPendingId();
+
+    /**
+     * Returns the browser window type of this {@link ChromeAndroidTask}.
+     *
+     * <p>The types are defined in the native {@code BrowserWindowInterface::Type} enum.
+     */
+    @BrowserWindowType
+    int getBrowserWindowType();
 
     /**
      * Sets the current {@link ActivityWindowAndroid} in this Task.
@@ -65,7 +84,7 @@ public interface ChromeAndroidTask {
      *
      * @see #clearActivityWindowAndroid()
      */
-    void setActivityWindowAndroid(ActivityWindowAndroid activityWindowAndroid);
+    void setActivityWindowAndroid(ActivityWindowAndroid activityWindowAndroid, TabModel tabModel);
 
     /**
      * Returns the current {@link ActivityWindowAndroid} in this Task, or {@code null} if there is
@@ -79,7 +98,7 @@ public interface ChromeAndroidTask {
      * <p>This method should be called when the current {@link ActivityWindowAndroid} is about to be
      * destroyed.
      *
-     * @see #setActivityWindowAndroid(ActivityWindowAndroid)
+     * @see #setActivityWindowAndroid()
      */
     void clearActivityWindowAndroid();
 
@@ -115,6 +134,18 @@ public interface ChromeAndroidTask {
      */
     boolean isActive();
 
+    /** Returns whether this {@link ChromeAndroidTask} is currently maximized. */
+    boolean isMaximized();
+
+    /** Returns true if the window is minimized. */
+    boolean isMinimized();
+
+    /** Returns whether this {@link ChromeAndroidTask} is currently in fullscreen mode. */
+    boolean isFullscreen();
+
+    /** Non-maximized bounds of the task even when currently maximized or minimized. */
+    Rect getRestoredBoundsInDp();
+
     /**
      * Returns the most recent timestamp when this {@link ChromeAndroidTask} became active, i.e.,
      * when its state changed from nonexistent or inactive (minimized/unfocused), to the active
@@ -124,8 +155,20 @@ public interface ChromeAndroidTask {
      */
     long getLastActivatedTimeMillis();
 
+    /** Returns the {@link Profile} associated with this task. */
+    Profile getProfile();
+
     /** Returns current bounds of the window. */
-    Rect getBounds();
+    Rect getBoundsInDp();
+
+    /** Shows this {@link ChromeAndroidTask} or activates it if it's already visible. */
+    void show();
+
+    /** Returns true if the window is visible. */
+    boolean isVisible();
+
+    /** Shows this {@link ChromeAndroidTask} but does not activate it. */
+    void showInactive();
 
     /** Closes this {@link ChromeAndroidTask}. */
     void close();
@@ -136,6 +179,36 @@ public interface ChromeAndroidTask {
      */
     void activate();
 
+    /**
+     * Unfocus this {@link ChromeAndroidTask} by making the last focused task, if any, as the active
+     * window.
+     */
+    void deactivate();
+
+    /** Maximize this {@link ChromeAndroidTask}. */
+    void maximize();
+
+    /** Minimizes this {@link ChromeAndroidTask}. */
+    void minimize();
+
+    /**
+     * Restores this {@link ChromeAndroidTask}. This positions the window to the last known position
+     * and size before it was maximized, minimized or fullscreen.
+     */
+    void restore();
+
+    /**
+     * Sets the {@link ChromeAndroidTask}'s size and position to the specified values.
+     *
+     * @param boundsInDp The new bounds of the {@link ChromeAndroidTask}.
+     */
+    void setBoundsInDp(Rect boundsInDp);
+
     /** Returns all {@link ChromeAndroidTaskFeature}s for testing. */
     List<ChromeAndroidTaskFeature> getAllFeaturesForTesting();
+
+    /**
+     * Returns the {@code SessionID} as returned by {@code BrowserWindowInterface::GetSessionID()}.
+     */
+    @Nullable Integer getSessionIdForTesting();
 }

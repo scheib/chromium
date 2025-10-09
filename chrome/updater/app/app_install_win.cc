@@ -517,7 +517,7 @@ void AppInstallControllerImpl::InstallApp(
 
   RegistrationRequest request;
   request.app_id = app_id_;
-  request.version = base::Version(kNullVersion);
+  request.version = kNullVersion;
   std::optional<tagging::AppArgs> app_args = GetAppArgs(app_id_);
   std::optional<tagging::TagArgs> tag_args = GetTagArgs().tag_args;
   if (app_args) {
@@ -653,8 +653,8 @@ void AppInstallControllerImpl::DoInstallAppOffline(
   request.app_id = app_id_;
   const base::Version installed_version =
       LookupVersion(GetUpdaterScope(), app_id_, {}, {}, {});
-  request.version = installed_version.IsValid() ? installed_version
-                                                : base::Version(kNullVersion);
+  request.version = installed_version.IsValid() ? installed_version.GetString()
+                                                : kNullVersion;
 
   std::optional<tagging::AppArgs> app_args = GetAppArgs(app_id_);
   if (app_args) {
@@ -780,7 +780,7 @@ void AppInstallControllerImpl::StateChange(
 
     case UpdateService::UpdateState::State::kUpdateAvailable:
       install_progress_observer_ipc_->OnUpdateAvailable(
-          app_id_, app_name_, update_state.next_version);
+          app_id_, app_name_, base::Version(update_state.next_version));
       break;
 
     case UpdateService::UpdateState::State::kDownloading: {
@@ -800,6 +800,15 @@ void AppInstallControllerImpl::StateChange(
       }
       break;
     }
+
+    case UpdateService::UpdateState::State::kDecompressing:
+    case UpdateService::UpdateState::State::kPatching:
+      // TODO(crbug.com/439625645): Treat decompression / patching differently
+      // from installation.
+      install_progress_observer_ipc_->OnInstalling(
+          app_id_, app_name_, install_progress_sampler_.GetRemainingTime(100),
+          0);
+      break;
 
     case UpdateService::UpdateState::State::kInstalling: {
       const int pos = update_state.install_progress;  // [0..100]

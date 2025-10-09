@@ -15,6 +15,7 @@
 #include "chrome/browser/web_applications/web_app_provider_factory.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
+#include "components/webapps/isolated_web_apps/service/isolated_web_app_browser_context_service_factory.h"
 #include "content/public/browser/isolated_web_apps_policy.h"
 #include "content/public/common/content_features.h"
 
@@ -23,7 +24,6 @@ namespace web_app {
 namespace {
 
 BASE_FEATURE(kIsolatedWebAppsOpenedTabsCounterServiceNotification,
-             "IsolatedWebAppsOpenedTabsCounterServiceNotification",
              base::FEATURE_ENABLED_BY_DEFAULT);
 }
 
@@ -44,8 +44,9 @@ IsolatedWebAppsOpenedTabsCounterServiceFactory::GetForProfile(
 
 IsolatedWebAppsOpenedTabsCounterServiceFactory::
     IsolatedWebAppsOpenedTabsCounterServiceFactory()
-    : ProfileKeyedServiceFactory("IsolatedWebAppsOpenedTabsCounterService") {
-  DependsOn(web_app::WebAppProviderFactory::GetInstance());
+    : IsolatedWebAppBrowserContextServiceFactory(
+          "IsolatedWebAppsOpenedTabsCounterService") {
+  DependsOn(WebAppProviderFactory::GetInstance());
   DependsOn(NotificationDisplayServiceFactory::GetInstance());
 }
 
@@ -58,8 +59,7 @@ bool IsolatedWebAppsOpenedTabsCounterServiceFactory::
 std::unique_ptr<KeyedService> IsolatedWebAppsOpenedTabsCounterServiceFactory::
     BuildServiceInstanceForBrowserContext(
         content::BrowserContext* browser_context) const {
-  if (!content::AreIsolatedWebAppsEnabled(browser_context) ||
-      !base::FeatureList::IsEnabled(
+  if (!base::FeatureList::IsEnabled(
           kIsolatedWebAppsOpenedTabsCounterServiceNotification)) {
     return nullptr;
   }

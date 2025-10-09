@@ -7,6 +7,7 @@
 #include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/system/sys_info.h"
+#include "chrome/browser/autocomplete/aim_eligibility_service_factory.h"
 #include "chrome/browser/command_updater.h"
 #include "chrome/browser/lens/region_search/lens_region_search_controller.h"
 #include "chrome/browser/profiles/profile.h"
@@ -18,6 +19,7 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/lens/lens_overlay_controller.h"
+#include "chrome/browser/ui/lens/lens_overlay_side_panel_coordinator.h"
 #include "chrome/browser/ui/lens/lens_search_controller.h"
 #include "chrome/browser/ui/lens/lens_url_matcher.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
@@ -34,6 +36,7 @@
 #include "chrome/grit/branded_strings.h"
 #include "components/lens/lens_features.h"
 #include "components/lens/lens_overlay_permission_utils.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/omnibox_prefs.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/tabs/public/tab_interface.h"
@@ -205,8 +208,6 @@ void LensOverlayEntryPointController::InvokeAction(
     const actions::ActionInvocationContext& context) {
   LensSearchController* search_controller =
       LensSearchController::From(active_tab);
-  LensOverlayController* overlay_controller =
-      active_tab->GetTabFeatures()->lens_overlay_controller();
 
   std::underlying_type_t<page_actions::PageActionTrigger> page_action_trigger =
       context.GetProperty(page_actions::kPageActionTriggerKey);
@@ -239,7 +240,11 @@ void LensOverlayEntryPointController::InvokeAction(
 
   // Toggle the Lens overlay. There's no need to show or hide the side
   // panel as the overlay controller will handle that.
-  if (overlay_controller->IsOverlayActive()) {
+  const auto* entry_point_controller =
+      active_tab->GetBrowserWindowInterface()
+          ->GetFeatures()
+          .lens_overlay_entry_point_controller();
+  if (entry_point_controller->IsOverlayActive()) {
     search_controller->CloseLensAsync(
         lens::LensOverlayDismissalSource::kToolbar);
   } else {
@@ -338,18 +343,38 @@ void LensOverlayEntryPointController::UpdatePageActionState() {
 }
 
 bool LensOverlayEntryPointController::IsOverlayActive() const {
-  const auto* active_tab = browser_window_interface_->GetActiveTabInterface();
+  // TODO(crbug.com/404941800): Rename this function to make it clear that it
+  // checks both the overlay and the side panel being active.
+  auto* active_tab = browser_window_interface_->GetActiveTabInterface();
   if (!active_tab) {
     return false;
   }
-  const auto* controller =
-      active_tab->GetTabFeatures()->lens_overlay_controller();
+
+  LensSearchController* search_controller =
+      LensSearchController::From(active_tab);
+  LensOverlaySidePanelCoordinator* side_panel_coordinator =
+      search_controller->lens_overlay_side_panel_coordinator();
+  if (side_panel_coordinator && side_panel_coordinator->IsEntryShowing()) {
+    return true;
+  }
+
+  const auto* controller = search_controller->lens_overlay_controller();
   return controller && controller->IsOverlayActive();
 }
 
 bool LensOverlayEntryPointController::ShouldShowPageAction(
     tabs::TabInterface* active_tab) const {
   if (!AreVisible()) {
+    return false;
+  }
+
+  // When the AIM page action is enabled, the Lens overlay entrypoint
+  // in the Omnibox should be suppressed.
+  const auto* aim_eligibility_service =
+      AimEligibilityServiceFactory::GetForProfile(
+          browser_window_interface_->GetProfile());
+  if (OmniboxFieldTrial::IsAimOmniboxEntrypointEnabled(
+          aim_eligibility_service)) {
     return false;
   }
 

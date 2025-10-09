@@ -107,20 +107,17 @@ void ShowCustomizationBubble(std::optional<SkColor> new_profile_color,
     return;
   }
 
+  BrowserWindowFeatures& features = browser->GetFeatures();
   if (ProfileCustomizationBubbleSyncController::CanThemeSyncStart(
           browser->profile())) {
     // For sync users, their profile color has not been applied yet. Call a
     // helper class that applies the color and shows the bubble only if there is
     // no conflict with a synced theme / color.
-    ProfileCustomizationBubbleSyncController::
-        ApplyColorAndShowBubbleWhenNoValueSynced(
-            browser,
-            /*suggested_profile_color=*/new_profile_color.value());
+    features.profile_customization_bubble_sync_controller()
+        ->ShowOnSyncFailedOrDefaultTheme(new_profile_color.value());
   } else {
     // For non syncing users, simply show the bubble.
-    browser->GetFeatures()
-        .signin_view_controller()
-        ->ShowModalProfileCustomizationDialog();
+    features.signin_view_controller()->ShowModalProfileCustomizationDialog();
   }
 }
 
@@ -179,6 +176,12 @@ class ProfileCreationPostSignInAdapter : public ProfilePickerPostSignInAdapter {
 
   // ProfilePickerPostSignInAdapter:
   void Init(StepSwitchFinishedCallback step_switch_callback) override {
+    // Listen for extended account info getting fetched.
+    signin::IdentityManager* identity_manager =
+        IdentityManagerFactory::GetForProfile(profile());
+    profile_name_resolver_ =
+        std::make_unique<ProfileNameResolver>(identity_manager, account_info());
+
     // Stop with the sign-in navigation and show a spinner instead. The spinner
     // will be shown until TurnSyncOnHelper figures out whether it's a
     // managed account and whether sync is disabled by policies (which in some
@@ -187,12 +190,6 @@ class ProfileCreationPostSignInAdapter : public ProfilePickerPostSignInAdapter {
                        base::OnceClosure());
 
     ProfilePickerPostSignInAdapter::Init(std::move(step_switch_callback));
-
-    // Listen for extended account info getting fetched.
-    signin::IdentityManager* identity_manager =
-        IdentityManagerFactory::GetForProfile(profile());
-    profile_name_resolver_ =
-        std::make_unique<ProfileNameResolver>(identity_manager, account_info());
   }
 
   void Cancel() override {
@@ -589,17 +586,12 @@ void ProfilePickerFlowController::OnProfilePickerStepShownReauthError(
   std::move(on_error_callback).Run(error);
 }
 
-base::FilePath ProfilePickerFlowController::GetSwitchProfilePathOrEmpty()
-    const {
-  if (weak_post_sign_in_adapter_) {
-    return weak_post_sign_in_adapter_->switch_profile_path();
-  }
-  return base::FilePath();
-}
-
+// TODO(crbug.com/447585139): Rename this function as it is not longer
+// only in PostSigin flow
 void ProfilePickerFlowController::CancelPostSignInFlow() {
   // Triggered from either entreprise welcome or profile switch screens.
-  DCHECK_EQ(Step::kPostSignInFlow, current_step());
+  DCHECK(current_step() == Step::kPostSignInFlow ||
+         current_step() == Step::kAccountSelection);
 
   switch (entry_point_) {
     case ProfilePicker::EntryPoint::kAppMenuProfileSubMenuManageProfiles:
@@ -685,11 +677,15 @@ void ProfilePickerFlowController::PickProfile(
     profile_picked_time_on_startup_ = base::TimeTicks::Now();
   }
 
+  bool open_command_line_urls = ProfilePicker::GetOpenCommandLineUrlsInNextProfileOpened();
+  ProfilePicker::SetOpenCommandLineUrlsInNextProfileOpened(false);
+
   profiles::SwitchToProfile(
       profile_path, /*always_create=*/false,
       base::BindOnce(&ProfilePickerFlowController::OnSwitchToProfileComplete,
                      weak_ptr_factory_.GetWeakPtr(), args.open_settings,
-                     std::move(pick_profile_complete_callback)));
+                     std::move(pick_profile_complete_callback)),
+      open_command_line_urls);
 }
 
 void ProfilePickerFlowController::OnSwitchToProfileComplete(

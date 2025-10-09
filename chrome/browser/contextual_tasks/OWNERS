@@ -1,0 +1,8 @@
+ayman@chromium.org
+mdjones@chromium.org
+nyquist@chromium.org
+
+file://components/contextual_tasks/OWNERS
+
+per-file *.mojom=set noparent
+per-file *.mojom=file://ipc/SECURITY_OWNERS

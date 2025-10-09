@@ -44,13 +44,6 @@ bool AwVariationsServiceClient::IsEnterprise() {
 void AwVariationsServiceClient::RemoveGoogleGroupsFromPrefsForDeletedProfiles(
     PrefService* local_state) {}
 
-bool AwVariationsServiceClient::IsStickyActivationEnabled() {
-  // TODO: crbug.com/435630455 - Roll out to later channels once ready.
-  const auto channel = GetChannelForVariations();
-  return channel == version_info::Channel::UNKNOWN ||
-         channel == version_info::Channel::CANARY;
-}
-
 Channel AwVariationsServiceClient::GetChannel() {
   return version_info::android::GetChannel();
 }

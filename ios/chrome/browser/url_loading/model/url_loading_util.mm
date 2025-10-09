@@ -7,10 +7,10 @@
 #import "base/strings/string_number_conversions.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/sessions/core/tab_restore_service_helper.h"
-#import "ios/chrome/browser/prerender/model/prerender_service.h"
-#import "ios/chrome/browser/prerender/model/prerender_service_factory.h"
+#import "ios/chrome/browser/prerender/model/prerender_browser_agent.h"
 #import "ios/chrome/browser/sessions/model/ios_chrome_tab_restore_service_factory.h"
 #import "ios/chrome/browser/sessions/model/live_tab_context_browser_agent.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
@@ -22,18 +22,19 @@
 
 bool IsURLAllowedInIncognito(const GURL& url) {
   // Most URLs are allowed in incognito; the following is an exception.
-  return !(url.SchemeIs(kChromeUIScheme) && url.host() == kChromeUIHistoryHost);
+  return !(url.SchemeIs(kChromeUIScheme) &&
+           url.GetHost() == kChromeUIHistoryHost);
 }
 
 void LoadJavaScriptURL(const GURL& url,
-                       ProfileIOS* profile,
+                       Browser* browser,
                        web::WebState* web_state) {
   DCHECK(url.SchemeIs(url::kJavaScriptScheme));
   DCHECK(web_state);
-  PrerenderService* prerenderService =
-      PrerenderServiceFactory::GetForProfile(profile);
-  if (prerenderService) {
-    prerenderService->CancelAllPrerenders();
+  PrerenderBrowserAgent* prerender_browser_agent =
+      PrerenderBrowserAgent::FromBrowser(browser);
+  if (prerender_browser_agent) {
+    prerender_browser_agent->CancelPrerender();
   }
   NSString* jsToEval = [base::SysUTF8ToNSString(url.GetContent())
       stringByRemovingPercentEncoding];

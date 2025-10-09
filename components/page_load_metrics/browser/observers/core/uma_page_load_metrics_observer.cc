@@ -29,6 +29,7 @@
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/preloading_data.h"
 #include "content/public/common/process_type.h"
+#include "net/base/load_timing_info.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/request_destination.h"
 #include "third_party/blink/public/common/features.h"
@@ -109,6 +110,9 @@ const char kHistogramFirstContentfulPaint[] =
     "PageLoad.PaintTiming.NavigationToFirstContentfulPaint";
 const char kBackgroundHistogramFirstContentfulPaint[] =
     "PageLoad.PaintTiming.NavigationToFirstContentfulPaint.Background";
+const char kHistogramFirstContentfulPaintExcludeReloadAfterDiscard[] =
+    "PageLoad.PaintTiming.NavigationToFirstContentfulPaint."
+    "ExcludeReloadAfterDiscard";
 const char kHistogramFirstContentfulPaintInitiatingProcess[] =
     "PageLoad.Internal.PaintTiming.NavigationToFirstContentfulPaint."
     "InitiatingProcess";
@@ -117,6 +121,9 @@ const char kHistogramLargestContentfulPaint[] =
 const char kBackgroundHttpsOrDataOrFileSchemeHistogramLargestContentfulPaint[] =
     "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2.Background."
     "HttpsOrDataOrFileScheme";
+const char kHistogramLargestContentfulPaintExcludeReloadAfterDiscard[] =
+    "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2."
+    "ExcludeReloadAfterDiscard";
 const char kHistogramLargestContentfulPaintContentType[] =
     "PageLoad.Internal.PaintTiming.LargestContentfulPaint.ContentType";
 const char kHistogramLargestContentfulPaintMainFrame[] =
@@ -448,6 +455,12 @@ void UmaPageLoadMetricsObserver::OnFirstContentfulPaintInPage(
     if (is_incognito_) {
       PAGE_LOAD_HISTOGRAM(internal::kHistogramFirstContentfulPaintIncognito,
                           timing.paint_timing->first_contentful_paint.value());
+    }
+
+    if (!GetDelegate().IsReloadAfterDiscard()) {
+      PAGE_LOAD_HISTOGRAM(
+          internal::kHistogramFirstContentfulPaintExcludeReloadAfterDiscard,
+          timing.paint_timing->first_contentful_paint.value());
     }
 
     PAGE_LOAD_HISTOGRAM(
@@ -939,6 +952,12 @@ void UmaPageLoadMetricsObserver::RecordTimingHistograms(
       if (is_incognito_) {
         PAGE_LOAD_HISTOGRAM(internal::kHistogramLargestContentfulPaintIncognito,
                             lcp_time);
+      }
+
+      if (!GetDelegate().IsReloadAfterDiscard()) {
+        PAGE_LOAD_HISTOGRAM(
+            internal::kHistogramLargestContentfulPaintExcludeReloadAfterDiscard,
+            lcp_time);
       }
 
       if (content::WebContents* web_contents = GetDelegate().GetWebContents()) {

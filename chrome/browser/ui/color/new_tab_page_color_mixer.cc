@@ -233,46 +233,6 @@ void AddGeneratedThemeComprehensiveColors(ui::ColorMixer& mixer) {
   mixer[kColorNewTabPageDoodleShareButtonIcon] = primary_foreground_color;
 }
 
-// Dialog colors currently track the native theme and not the browser theme.
-void AddNewTabPageDialogColors(ui::ColorMixer& mixer, bool dark_mode) {
-  // TODO(crbug.com/40061402): Colors defined below should come from core color
-  // mixer definitions to be inline with how other browser surfaces look. For
-  // now, until 'Customize Chrome' UI is refined, we rely on colors that match
-  // other WebUI surfaces.
-  const SkColor accent_color =
-      dark_mode ? gfx::kGoogleBlue300 : gfx::kGoogleBlue600;
-  const SkColor background_inverse =
-      dark_mode ? gfx::kGoogleGrey200 : gfx::kGoogleGrey900;
-  const SkColor border_color =
-      dark_mode ? gfx::kGoogleGrey700 : gfx::kGoogleGrey300;
-
-  mixer[kColorNewTabPageActionButtonBorder] = {border_color};
-  mixer[kColorNewTabPageActionButtonBorderHovered] = {
-      dark_mode ? gfx::kGoogleGrey700 : gfx::kGoogleBlue100};
-  mixer[kColorNewTabPageControlBackgroundSelected] =
-      ui::SetAlpha(accent_color,
-                   /* 24% opacity */ 0.24 * SK_AlphaOPAQUE);
-  mixer[kColorNewTabPageDialogBackgroundActive] =
-      ui::SetAlpha(background_inverse,
-                   /* 16% opacity */ 0.16 * SK_AlphaOPAQUE);
-  mixer[kColorNewTabPageDialogBackground] = {
-      kColorNewTabPageBackgroundOverride};
-  mixer[kColorNewTabPageDialogBorder] = {border_color};
-  mixer[kColorNewTabPageDialogBorderSelected] = {accent_color};
-  mixer[kColorNewTabPageDialogControlBackgroundHovered] =
-      ui::SetAlpha(background_inverse,
-                   /* 10% opacity */ 0.1 * SK_AlphaOPAQUE);
-  mixer[kColorNewTabPageDialogForeground] = {dark_mode ? gfx::kGoogleGrey200
-                                                       : gfx::kGoogleGrey900};
-  mixer[kColorNewTabPageDialogSecondaryForeground] = {
-      dark_mode ? gfx::kGoogleGrey500 : gfx::kGoogleGrey700};
-  mixer[kColorNewTabPageSelectedBackground] =
-      ui::SetAlpha(dark_mode ? gfx::kGoogleBlue300 : gfx::kGoogleBlue700,
-                   /* 16% opacity */ 0.16 * SK_AlphaOPAQUE);
-  mixer[kColorNewTabPageSelectedForeground] = {dark_mode ? gfx::kGoogleBlue300
-                                                         : gfx::kGoogleBlue700};
-}
-
 }  // namespace
 
 void AddNewTabPageColorMixer(ui::ColorProvider* provider,
@@ -313,43 +273,55 @@ void AddNewTabPageColorMixer(ui::ColorProvider* provider,
       ui::SelectBasedOnDarkInput(kColorNewTabPageAddShortcutBackground,
                                  SK_ColorWHITE, gfx::kGoogleGrey900);
 
-  mixer[kColorNewTabPageComposeboxBackground] = {
-      dark_mode ? SkColorSetRGB(0x1D, 0x1E, 0x26)
-                : SkColorSetRGB(0xF0, 0xF2, 0xF5)};
+  mixer[kColorNewTabPageComposeboxBackground] = {SK_ColorWHITE};
   mixer[kColorNewTabPageComposeboxFont] = {
       dark_mode ? SkColorSetRGB(0xE6, 0xE8, 0xF0)
                 : SkColorSetRGB(0x0A, 0x0A, 0x0A)};
+  mixer[kColorNewTabPageComposeboxFontLight] = {
+      SkColorSetRGB(0x1F, 0x1F, 0x1F)};
   mixer[kColorNewTabPageComposeboxCancelButton] = {
       dark_mode ? SkColorSetRGB(0xAD, 0xAF, 0xB8)
                 : SkColorSetRGB(0x0A, 0x0A, 0x0A)};
+  mixer[kColorNewTabPageComposeboxCancelButtonLight] = {
+      ui::kColorRefNeutralVariant30};
   mixer[kColorNewTabPageComposeboxHover] = {
       dark_mode ? SkColorSetRGB(0x25, 0x26, 0x2E)
                 : SkColorSetRGB(0xE9, 0xEB, 0xF0)};
+  mixer[kColorNewTabPageComposeboxInputIcon] = {ui::kColorRefNeutral30};
+  mixer[kColorNewTabPageComposeboxLensButton] = {
+      dark_mode ? SkColorSetRGB(0xAD, 0xAF, 0xB8)
+                : SkColorSetRGB(0x0A, 0x0A, 0x0A)};
   mixer[kColorNewTabPageComposeboxOutlineHcm] = {
       dark_mode ? SkColorSetRGB(0xFF, 0xFF, 0xFF)
                 : SkColorSetRGB(0x00, 0x00, 0x00)};
-  mixer[kColorNewTabPageComposeboxScrimBackground] = {
-      dark_mode ? SkColorSetRGB(0x10, 0x12, 0x18)
-                : SkColorSetRGB(0xFF, 0xFF, 0xFF)};
+  mixer[kColorNewTabPageComposeboxScrimBackground] = {ui::kColorSysBase};
   mixer[kColorNewTabPageComposeboxSubmitButton] = {
       SkColorSetRGB(0x0B, 0x50, 0xD0)};
-  mixer[kColorNewTabPageComposeboxUploadButton] = {
-      dark_mode ? SkColorSetRGB(0xE6, 0xE8, 0xF0)
-                : SkColorSetRGB(0x0A, 0x0A, 0x0A)};
+  mixer[kColorNewTabPageComposeboxSuggestionActivity] = {
+      ui::kColorSysOnSurfaceSubtle};
+  mixer[kColorNewTabPageComposeboxTypeAhead] = {
+      ui::SetAlpha({ui::kColorRefNeutral10}, 0x60)};
+  mixer[kColorNewTabPageComposeboxTypeAheadChip] = {
+      ui::SetAlpha({ui::kColorRefNeutral10}, 0x1E)};
+  mixer[kColorNewTabPageComposeboxUploadButton] = {ui::kColorRefNeutral10};
   mixer[kColorNewTabPageComposeboxUploadButtonDisabled] = {
       dark_mode ? SkColorSetRGB(0x56, 0x59, 0x5E)
                 : SkColorSetRGB(0xAD, 0xAF, 0xB8)};
   mixer[kColorNewTabPageComposeboxFileChipBackground] = {
-      dark_mode ? SkColorSetRGB(0x2A, 0x2B, 0x36)
-                : SkColorSetRGB(0xE1, 0xE3, 0xE8)};
+      SkColorSetRGB(0xED, 0xF2, 0xFA)};
   mixer[kColorNewTabPageComposeboxFileChipText] = {
-      dark_mode ? SkColorSetRGB(0xE6, 0xE8, 0xF0)
-                : SkColorSetRGB(0x0A, 0x0A, 0x0A)};
+      SkColorSetRGB(0x1F, 0x1F, 0x1F)};
   mixer[kColorNewTabPageComposeboxPdfChipIcon] = {
       dark_mode ? SkColorSetRGB(0xAD, 0xAF, 0xB8)
                 : SkColorSetRGB(0x56, 0x59, 0x5E)};
   mixer[kColorNewTabPageComposeboxFileImageOverlay] = {
       SkColorSetARGB(0x99, 0x00, 0x00, 0x00)};
+  mixer[kColorNewTabPageComposeboxFileCarouselDivider] = {
+      SkColorSetRGB(0xD3, 0xE3, 0xFD)};
+  mixer[kColorNewTabPageComposeboxContextEntrypointTextDisabled] = {
+      SkColorSetARGB(0x60, 0x1F, 0x1F, 0x1F)};
+  mixer[kColorNewTabPageComposeboxContextEntrypointHoverBackground] = {
+      SkColorSetARGB(0x06, 0x1F, 0x1F, 0x1F)};
   mixer[kColorNewTabPageComposeboxErrorScrimBackground] = {
       ui::kColorSysStateScrim};
   mixer[kColorNewTabPageComposeboxErrorScrimButtonBackground] = {
@@ -540,14 +512,43 @@ void AddWebThemeNewTabPageColors(ui::ColorMixer& mixer, bool dark_mode) {
   mixer[kColorNewTabPageOverlayForeground] = {primary_foreground_color};
   mixer[kColorNewTabPageOverlaySecondaryForeground] = {
       secondary_foreground_color};
-  mixer[kColorNewTabPageSelectedBorder] = {accent_color};
   mixer[kColorNewTabPageTagBackground] =
       ui::SetAlpha(kColorNewTabPageBackgroundOverride,
                    /* 90% opacity */ 0.9 * SK_AlphaOPAQUE);
   mixer[kColorNewTabPageDoodleShareButtonBackground] = {
       kColorNewTabPageBackgroundOverride};
   mixer[kColorNewTabPageDoodleShareButtonIcon] = {primary_foreground_color};
-  // LINT.ThenChange(chrome/browser/ui/color/material_new_tab_page_color_mixer.cc)
 
-  AddNewTabPageDialogColors(mixer, dark_mode);
+  // Tab group colors.
+  mixer[kColorNewTabPageModuleTabGroupsGrey] = {kColorTabGroupBookmarkBarGrey};
+  mixer[kColorNewTabPageModuleTabGroupsBlue] = {kColorTabGroupBookmarkBarBlue};
+  mixer[kColorNewTabPageModuleTabGroupsRed] = {kColorTabGroupBookmarkBarRed};
+  mixer[kColorNewTabPageModuleTabGroupsYellow] = {
+      kColorTabGroupBookmarkBarYellow};
+  mixer[kColorNewTabPageModuleTabGroupsGreen] = {
+      kColorTabGroupBookmarkBarGreen};
+  mixer[kColorNewTabPageModuleTabGroupsPink] = {kColorTabGroupBookmarkBarPink};
+  mixer[kColorNewTabPageModuleTabGroupsPurple] = {
+      kColorTabGroupBookmarkBarPurple};
+  mixer[kColorNewTabPageModuleTabGroupsCyan] = {kColorTabGroupBookmarkBarCyan};
+  mixer[kColorNewTabPageModuleTabGroupsOrange] = {
+      kColorTabGroupBookmarkBarOrange};
+
+  mixer[kColorNewTabPageModuleTabGroupsDotGrey] = {
+      kColorTabGroupTabStripFrameActiveGrey};
+  mixer[kColorNewTabPageModuleTabGroupsDotBlue] = {
+      kColorTabGroupTabStripFrameActiveBlue};
+  mixer[kColorNewTabPageModuleTabGroupsDotRed] = {
+      kColorTabGroupTabStripFrameActiveRed};
+  mixer[kColorNewTabPageModuleTabGroupsDotYellow] = {
+      kColorTabGroupTabStripFrameActiveYellow};
+  mixer[kColorNewTabPageModuleTabGroupsDotGreen] = {
+      kColorTabGroupTabStripFrameActiveGreen};
+  mixer[kColorNewTabPageModuleTabGroupsDotPink] = {
+      kColorTabGroupTabStripFrameActivePink};
+  mixer[kColorNewTabPageModuleTabGroupsDotPurple] = {
+      kColorTabGroupTabStripFrameActivePurple};
+  mixer[kColorNewTabPageModuleTabGroupsDotOrange] = {
+      kColorTabGroupTabStripFrameActiveOrange};
+  // LINT.ThenChange(//chrome/browser/ui/color/material_new_tab_page_color_mixer.cc)
 }

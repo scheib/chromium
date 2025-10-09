@@ -8,9 +8,8 @@ import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.view.ViewGroup;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.EnsuresNonNull;
 import org.chromium.build.annotations.Initializer;
 import org.chromium.build.annotations.MonotonicNonNull;
@@ -34,6 +33,8 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.insets.InsetObserver;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
+
+import java.util.function.Supplier;
 
 /** Coordinator object for gesture navigation. */
 @NullMarked
@@ -160,7 +161,7 @@ public class HistoryNavigationCoordinator
 
         mInsetObserver = insetObserver;
         insetObserver.addObserver(this);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             mFullscreenObserver =
                     new FullscreenManager.Observer() {
                         @Override
@@ -208,7 +209,7 @@ public class HistoryNavigationCoordinator
             return mForceFeatureEnabledForTesting;
         }
 
-        if (BuildInfo.getInstance().isAutomotive && mIsFullscreen) {
+        if (DeviceInfo.isAutomotive() && mIsFullscreen) {
             return false;
         }
 

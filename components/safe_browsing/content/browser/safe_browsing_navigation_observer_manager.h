@@ -32,6 +32,10 @@ class NavigationHandle;
 struct GlobalRenderFrameHostId;
 }
 
+namespace enterprise_data_protection {
+class DataProtectionNavigationControllerTest;
+}
+
 namespace safe_browsing {
 
 class SafeBrowsingNavigationObserver;
@@ -58,7 +62,6 @@ class ReferrerChainData : public base::SupportsUserData::Data {
   // Unique user data key used to get and set referrer chain data in
   // DownloadItem.
   static const char kDownloadReferrerChainDataKey[];
-  static const char kDownloadReferrerChainDataKeyForEnterprise[];
 
  private:
   // Result of trying to get the referrer chain. Referrer chains are
@@ -372,6 +375,8 @@ class SafeBrowsingNavigationObserverManager
   friend class SBNavigationObserverBrowserTest;
   friend class SBNavigationObserverTest;
   friend class ChromeClientSideDetectionHostDelegateTest;
+  friend class enterprise_data_protection::
+      DataProtectionNavigationControllerTest;
 
   struct GurlHash {
     std::size_t operator()(const GURL& url) const {

@@ -24,7 +24,6 @@ namespace blink {
 
 // Allow all fields to be set when calling RTCEncodedVideoFrame.setMetadata.
 BASE_FEATURE(kAllowRTCEncodedVideoFrameSetMetadataAllFields,
-             "AllowRTCEncodedVideoFrameSetMetadataAllFields",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 namespace {
@@ -173,7 +172,7 @@ RTCEncodedVideoFrameMetadata* RTCEncodedVideoFrame::getMetadata(
     metadata->setPayloadType(*delegate_->PayloadType());
   }
   if (delegate_->MimeType()) {
-    metadata->setMimeType(WTF::String::FromUTF8(*delegate_->MimeType()));
+    metadata->setMimeType(String::FromUTF8(*delegate_->MimeType()));
   }
 
   if (RuntimeEnabledFeatures::RTCEncodedVideoFrameAdditionalMetadataEnabled()) {

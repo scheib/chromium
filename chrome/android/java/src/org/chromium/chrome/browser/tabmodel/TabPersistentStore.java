@@ -74,7 +74,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -540,7 +539,7 @@ public class TabPersistentStore {
      */
     @VisibleForTesting
     protected void updateMigratedFiles() {
-        List<Tab> updatedMigrations = new LinkedList<>();
+        List<Tab> updatedMigrations = new ArrayList<>();
         for (Tab tab : mTabsToMigrate) {
             int id = tab.getId();
             boolean incognito = tab.isIncognito();
@@ -1307,7 +1306,7 @@ public class TabPersistentStore {
         if (mLegacyTabStateFilesToDelete.isEmpty()) {
             return;
         }
-        List<File> filesToDelete = new LinkedList<>();
+        List<File> filesToDelete = new ArrayList<>();
         for (int i = 0;
                 !mLegacyTabStateFilesToDelete.isEmpty()
                         && i < ChromeFeatureList.sCleanupLegacyTabStateBatchSize.getValue();
@@ -1599,6 +1598,7 @@ public class TabPersistentStore {
 
             recordLegacyTabCountMetrics();
             recordTabCountMetrics();
+            recordPinnedTabCountMetrics();
             recordRestoreDuration();
             recordUniqueTabUrlMetrics();
             cleanUpPersistentData();
@@ -1617,7 +1617,7 @@ public class TabPersistentStore {
                 saveState();
             }
         } else {
-            LinkedList<TabRestoreDetails> details = new LinkedList<>();
+            ArrayList<TabRestoreDetails> details = new ArrayList<>();
             if (ChromeFeatureList.sBatchTabRestore.isEnabled()) {
                 int batchSize = ChromeFeatureList.sBatchTabRestoreBatchSize.getValue();
                 for (int i = 0; i < batchSize && !mTabsToRestore.isEmpty(); i++) {
@@ -1652,6 +1652,15 @@ public class TabPersistentStore {
                 mTabModelSelector.getModel(true).getCount());
     }
 
+    private void recordPinnedTabCountMetrics() {
+        RecordHistogram.recordCount1MHistogram(
+                "Tabs.Startup.PinnedTabCount." + mClientTag + ".Regular",
+                mTabModelSelector.getModel(false).getPinnedTabsCount());
+        RecordHistogram.recordCount1MHistogram(
+                "Tabs.Startup.PinnedTabCount." + mClientTag + ".Incognito",
+                mTabModelSelector.getModel(true).getPinnedTabsCount());
+    }
+
     private void recordRestoreDuration() {
         if (mTabRestoreStartTime == INVALID_TIME) return;
 
@@ -1680,14 +1689,14 @@ public class TabPersistentStore {
      * details of that load. TODO(b/298058408) deprecate TabLoader
      */
     private class TabBatchLoader {
-        private final LinkedList<TabRestoreDetails> mBatchedTabsToRestore;
+        private final List<TabRestoreDetails> mBatchedTabsToRestore;
         private @Nullable LoadTabsTask mLoadTabsTask;
         private boolean mCancelled;
 
         /**
          * @param tabsToRestore details of {@link Tab}s which will be read from storage
          */
-        TabBatchLoader(LinkedList<TabRestoreDetails> tabsToRestore) {
+        TabBatchLoader(List<TabRestoreDetails> tabsToRestore) {
             mBatchedTabsToRestore = tabsToRestore;
         }
 
@@ -2086,20 +2095,21 @@ public class TabPersistentStore {
         TabModelMetadata modelInfo = new TabModelMetadata(tabModel.index());
 
         int activeIndex = tabModel.index();
-        for (int i = 0; i < tabModel.getCount(); i++) {
-            Tab tab = tabModel.getTabAtChecked(i);
+        int index = -1;
+        for (Tab tab : tabModel) {
+            index++;
             // This tab has likely just been deleted, and it's possible we're being notified before
             // hand because undo is not allowed. This shouldn't be persisted.
             if (tab.isClosing()) {
                 // Select the previous tab if there is one. 0 should be fine even if there are no
                 // tabs left.
-                if (i == activeIndex) {
+                if (index == activeIndex) {
                     modelInfo.index = Math.max(0, modelInfo.ids.size() - 1);
                 }
                 continue;
             }
 
-            if (i == activeIndex) {
+            if (index == activeIndex) {
                 // If any non-active NTPs have been skipped, the serialized tab model index
                 // needs to be adjusted.
                 modelInfo.index = modelInfo.ids.size();
@@ -2113,6 +2123,9 @@ public class TabPersistentStore {
     }
 
     public static boolean shouldSkipTab(Tab tab) {
+        // Don't skip the tab if it is pinned.
+        if (tab.getIsPinned()) return false;
+
         boolean isNtp = tab.isNativePage() && UrlUtilities.isNtpUrl(tab.getUrl());
         if (!isNtp) return false;
 

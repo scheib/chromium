@@ -41,7 +41,7 @@ namespace {
 //       experimentIds: ["`experiment_id`"]
 //     }
 std::string BuildRequestBody(std::u16string query,
-                             std::vector<int>& suggestion_types) {
+                             const std::vector<int>& suggestion_types) {
   base::Value::Dict root;
   root.Set("query", query);
 
@@ -55,9 +55,7 @@ std::string BuildRequestBody(std::u16string query,
   experiment_ids_list.Append(kEnterpriseSearchAggregatorExperimentId);
   root.Set("experimentIds", std::move(experiment_ids_list));
 
-  std::string result;
-  base::JSONWriter::Write(root, &result);
-  return result;
+  return base::WriteJson(root).value_or("");
 }
 }  // namespace
 
@@ -137,18 +135,8 @@ void EnterpriseSearchAggregatorSuggestionsService::
         }
       })");
 
-  // Create and fetch an OAuth2 token.
-  signin::ScopeSet scopes;
-
-  if (omnibox_feature_configs::SearchAggregatorProvider::Get()
-          .use_discovery_engine_oauth_scope) {
-    scopes.insert(GaiaConstants::kDiscoveryEngineCompleteQueryOAuth2Scope);
-  } else {
-    scopes.insert(GaiaConstants::kCloudSearchQueryOAuth2Scope);
-  }
   token_fetcher_ = std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
-      "enterprise_search_aggregator_suggestions_service", identity_manager_,
-      scopes,
+      signin::OAuthConsumerId::kEnterpriseSearchAggregator, identity_manager_,
       base::BindOnce(
           &EnterpriseSearchAggregatorSuggestionsService::AccessTokenAvailable,
           base::Unretained(this), std::move(requests), std::move(query),
@@ -178,7 +166,7 @@ void EnterpriseSearchAggregatorSuggestionsService::AccessTokenAvailable(
   token_fetcher_.reset();
 
   auto request_bodies = std::vector<std::string>{};
-  for (auto suggestion_type : suggestion_types) {
+  for (const auto& suggestion_type : suggestion_types) {
     const std::string& request_body = BuildRequestBody(query, suggestion_type);
     request_bodies.push_back(request_body);
   }

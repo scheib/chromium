@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_SAVE_TO_DRIVE_ACCOUNT_CHOOSER_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_SAVE_TO_DRIVE_ACCOUNT_CHOOSER_VIEW_H_
 
-#include "chrome/browser/ui/save_to_drive/account_chooser_controller_delegate.h"
-#include "chrome/browser/ui/save_to_drive/account_chooser_view_delegate.h"
+#include "chrome/browser/ui/views/save_to_drive/account_chooser_view_delegate.h"
 #include "components/signin/public/identity_manager/account_info.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/styled_label.h"
@@ -21,11 +21,14 @@ class AccountChooserView : public views::FlexLayoutView {
   METADATA_HEADER(AccountChooserView, views::FlexLayoutView)
 
  public:
-  explicit AccountChooserView(
-      AccountChooserControllerDelegate* account_chooser_controller_delegate,
-      AccountChooserViewDelegate* parent_dialog,
-      const std::vector<AccountInfo>& accounts,
-      std::optional<CoreAccountId> primary_account_id);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kTopViewId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kAddAccountButtonId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kCancelButtonId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kSaveButtonId);
+
+  AccountChooserView(AccountChooserViewDelegate* parent_dialog,
+                              const std::vector<AccountInfo>& accounts,
+                              std::optional<CoreAccountId> primary_account_id);
   ~AccountChooserView() override;
   // Updates the view with the new accounts and primary account id.
   void UpdateView(const std::vector<AccountInfo>& accounts,
@@ -71,8 +74,6 @@ class AccountChooserView : public views::FlexLayoutView {
   // Updates the header view with the new accounts.
   void UpdateHeaderView(const std::vector<AccountInfo>& accounts);
 
-  raw_ptr<AccountChooserControllerDelegate>
-      account_chooser_controller_delegate_ = nullptr;
   raw_ptr<AccountChooserViewDelegate> parent_dialog_ = nullptr;
 
   // View containing the logo of the identity provider and the title.

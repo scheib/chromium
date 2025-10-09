@@ -82,6 +82,7 @@ class AdsPageLoadMetricsObserver
       heavy_ad_intervention::HeavyAdService* heavy_ad_service,
       history::HistoryService* history_service,
       const ApplicationLocaleGetter& application_local_getter,
+      bool is_in_foreground,
       bool is_incognito);
 
   // For a given frame, returns whether or not the frame's url would be
@@ -95,6 +96,7 @@ class AdsPageLoadMetricsObserver
       heavy_ad_intervention::HeavyAdService* heavy_ad_service,
       history::HistoryService* history_service,
       const ApplicationLocaleGetter& application_local_getter,
+      bool is_in_foreground,
       bool is_incognito,
       base::TickClock* clock = nullptr,
       heavy_ad_intervention::HeavyAdBlocklist* blocklist = nullptr);
@@ -124,6 +126,8 @@ class AdsPageLoadMetricsObserver
       content::NavigationHandle* navigation_handle) override;
   void OnDidFinishSubFrameNavigation(
       content::NavigationHandle* navigation_handle) override;
+  ObservePolicy OnHidden(const mojom::PageLoadTiming& timing) override;
+  ObservePolicy OnShown() override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const mojom::PageLoadTiming& timing) override;
   void OnComplete(const mojom::PageLoadTiming& timing) override;
@@ -143,8 +147,8 @@ class AdsPageLoadMetricsObserver
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
-  void OnMainFrameImageAdRectsChanged(
-      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) override;
+  void OnMainFrameAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_ad_rects) override;
   void OnSubFrameDeleted(content::FrameTreeNodeId frame_tree_node_id) override;
   void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates) override;

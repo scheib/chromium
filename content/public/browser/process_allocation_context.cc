@@ -15,7 +15,6 @@ namespace {
 // The renderer taken by RFHInitRoot() may benefit subsequent navigations
 // in that new frame.
 BASE_FEATURE(kTreatRFHInitRootAsForNavigation,
-             "TreatRFHInitRootAsForNavigation",
              base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace
 
@@ -44,8 +43,9 @@ ProcessAllocationContext ProcessAllocationContext::CreateForNavigationRequest(
     bool is_outermost_main_frame) {
   return ProcessAllocationContext{
       ProcessAllocationSource::kNavigationRequest,
-      NavigationProcessAllocationContext{stage, navigation_id,
-                                         is_outermost_main_frame}};
+      NavigationProcessAllocationContext{
+          stage, navigation_id, RequiresNewProcessForCoop(false),
+          IsOutermostMainFrame(is_outermost_main_frame)}};
 }
 
 }  // namespace content

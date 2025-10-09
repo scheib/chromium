@@ -12,8 +12,10 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/numerics/math_constants.h"
+#include "device/vr/openxr/openxr_api_wrapper.h"
 #include "device/vr/openxr/openxr_extension_helper.h"
 #include "device/vr/openxr/openxr_util.h"
 #include "device/vr/public/mojom/xr_session.mojom-shared.h"
@@ -44,6 +46,11 @@ OpenXRSceneUnderstandingManagerMSFT::OpenXRSceneUnderstandingManagerMSFT(
 
 OpenXRSceneUnderstandingManagerMSFT::~OpenXRSceneUnderstandingManagerMSFT() =
     default;
+
+OpenXrSceneUnderstandingManagerType
+OpenXRSceneUnderstandingManagerMSFT::GetType() const {
+  return OpenXrSceneUnderstandingManagerType::kMsft;
+}
 
 OpenXrPlaneManager* OpenXRSceneUnderstandingManagerMSFT::GetPlaneManager() {
   return plane_manager_.get();
@@ -91,19 +98,22 @@ void OpenXrSceneUnderstandingManagerMsftFactory::CheckAndUpdateEnabledState(
     supported_features_.insert(device::mojom::XRSessionFeature::ANCHORS);
   }
 
-  SetEnabled(!supported_features_.empty());
+  bool enabled = !supported_features_.empty();
+  UMA_HISTOGRAM_BOOLEAN("XR.OpenXR.SceneUnderstandingMSFTAvailability",
+                        enabled);
+  SetEnabled(enabled);
 }
 
 std::unique_ptr<OpenXRSceneUnderstandingManager>
 OpenXrSceneUnderstandingManagerMsftFactory::CreateSceneUnderstandingManager(
     const OpenXrExtensionHelper& extension_helper,
-    XrSession session,
+    OpenXrApiWrapper* openxr,
     XrSpace mojo_space) const {
   bool is_supported = IsEnabled();
   DVLOG(2) << __func__ << " is_supported=" << is_supported;
   if (is_supported) {
     return std::make_unique<OpenXRSceneUnderstandingManagerMSFT>(
-        extension_helper, session, mojo_space);
+        extension_helper, openxr->session(), mojo_space);
   }
 
   return nullptr;

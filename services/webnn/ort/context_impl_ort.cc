@@ -12,32 +12,68 @@
 #include "services/webnn/public/mojom/webnn_graph.mojom.h"
 #include "services/webnn/public/mojom/webnn_tensor.mojom.h"
 #include "services/webnn/queueable_resource_state.h"
+#include "services/webnn/scoped_sequence.h"
 #include "services/webnn/webnn_constant_operand.h"
 #include "services/webnn/webnn_context_impl.h"
 #include "services/webnn/webnn_graph_impl.h"
 
 namespace webnn::ort {
 
-ContextImplOrt::ContextImplOrt(
-    mojo::PendingAssociatedReceiver<mojom::WebNNContext> receiver,
-    WebNNContextProviderImpl* context_provider,
+// static
+scoped_refptr<WebNNContextImpl> ContextImplOrt::Create(
+    mojo::PendingReceiver<mojom::WebNNContext> receiver,
+    base::WeakPtr<WebNNContextProviderImpl> context_provider,
     const EpWorkarounds& ep_workarounds,
     mojom::CreateContextOptionsPtr options,
+    mojo::ScopedDataPipeConsumerHandle write_tensor_consumer,
+    mojo::ScopedDataPipeProducerHandle read_tensor_producer,
     scoped_refptr<Environment> env,
     gpu::CommandBufferId command_buffer_id,
     std::unique_ptr<ScopedSequence> sequence,
-    scoped_refptr<gpu::SchedulerTaskRunner> task_runner)
+    scoped_refptr<gpu::MemoryTracker> memory_tracker,
+    scoped_refptr<base::SingleThreadTaskRunner> owning_task_runner,
+    gpu::SharedImageManager* shared_image_manager,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
+    ScopedTrace scoped_trace) {
+  DCHECK(owning_task_runner->RunsTasksInCurrentSequence());
+  return base::MakeRefCounted<ContextImplOrt>(
+      std::move(receiver), std::move(context_provider),
+      std::move(ep_workarounds), std::move(options),
+      std::move(write_tensor_consumer), std::move(read_tensor_producer),
+      std::move(env), command_buffer_id, std::move(sequence),
+      std::move(memory_tracker), std::move(owning_task_runner),
+      shared_image_manager, std::move(main_task_runner));
+}
+
+ContextImplOrt::ContextImplOrt(
+    mojo::PendingReceiver<mojom::WebNNContext> receiver,
+    base::WeakPtr<WebNNContextProviderImpl> context_provider,
+    const EpWorkarounds& ep_workarounds,
+    mojom::CreateContextOptionsPtr options,
+    mojo::ScopedDataPipeConsumerHandle write_tensor_consumer,
+    mojo::ScopedDataPipeProducerHandle write_tensor_producer,
+    scoped_refptr<Environment> env,
+    gpu::CommandBufferId command_buffer_id,
+    std::unique_ptr<ScopedSequence> sequence,
+    scoped_refptr<gpu::MemoryTracker> memory_tracker,
+    scoped_refptr<base::SingleThreadTaskRunner> owning_task_runner,
+    gpu::SharedImageManager* shared_image_manager,
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner)
     : WebNNContextImpl(
           std::move(receiver),
-          context_provider,
+          std::move(context_provider),
           GetContextProperties(ep_workarounds.resample2d_limit_to_nchw),
           std::move(options),
+          std::move(write_tensor_consumer),
+          std::move(write_tensor_producer),
           command_buffer_id,
           std::move(sequence),
-          std::move(task_runner)),
+          std::move(memory_tracker),
+          std::move(owning_task_runner),
+          shared_image_manager,
+          std::move(main_task_runner)),
       env_(std::move(env)),
-      session_options_(SessionOptions::Create(this->options().device)),
-      is_external_data_supported_(!ep_workarounds.disable_external_data) {}
+      session_options_(SessionOptions::Create(this->options().device, env_)) {}
 
 ContextImplOrt::~ContextImplOrt() = default;
 
@@ -88,13 +124,13 @@ ContextProperties ContextImplOrt::GetContextProperties(
                                : Resample2DAxes::kAny,
       BatchNormalizationAxis::kChannelsFirst,
       /*tensor_byte_length_limit=*/kTensorByteLengthLimit,
-      {/*input=*/SupportedDataTypes::All(),
-       /*constant=*/SupportedDataTypes::All(),
+      {/*input=*/{SupportedDataTypes::All(), kMaxRank},
+       /*constant=*/{SupportedDataTypes::All(), kMaxRank},
        /*arg_min_max_input=*/
        {DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxNonScalarRank},
        // ONNX ArgMin/Max only supports int64 output, int32 output is supported
        // by inserting a cast operator.
-       /*arg_min_max_output=*/DataTypeConstraint::kInt32To64,
+       /*arg_min_max_output=*/{DataTypeConstraint::kInt32To64, kMaxRank},
        /*batch_normalization_input=*/
        {DataTypeConstraint::kFloat16To32, kMaxNonScalarRank},
        /*batch_normalization_mean=*/
@@ -146,6 +182,8 @@ ContextProperties ContextImplOrt::GetContextProperties(
        /*logical_xor_input=*/
        {DataTypeConstraint::kUint8, kMaxRank},
        /*logical_not_input=*/{DataTypeConstraint::kUint8, kMaxRank},
+       /*is_nan_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
+       /*is_infinite_input*/ {DataTypeConstraint::kFloat16To32, kMaxRank},
        /*logical_output=*/DataTypeConstraint::kUint8,
        /*abs_input=*/{DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxRank},
        /*ceil_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
@@ -157,6 +195,7 @@ ContextProperties ContextImplOrt::GetContextProperties(
        /*log_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*neg_input=*/{DataTypeConstraint::kFloat16To32Int8To64, kMaxRank},
        /*reciprocal_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
+       /*round_even_input*/ {DataTypeConstraint::kFloat16To32, kMaxRank},
        /*sign_input=*/{DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxRank},
        /*sin_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*sqrt_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
@@ -185,6 +224,8 @@ ContextProperties ContextImplOrt::GetContextProperties(
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*gru_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*gru_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        /*gru_cell_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
        /*gru_cell_bias=*/
@@ -203,13 +244,15 @@ ContextProperties ContextImplOrt::GetContextProperties(
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(3)},
        /*lstm_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
+       /*lstm_output_sequence=*/
+       {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(4)},
        /*lstm_cell_input=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(2)},
        /*lstm_cell_bias=*/
        {DataTypeConstraint::kFloat16To32, SupportedRanks::Exactly(1)},
        /*matmul_input=*/{DataTypeConstraint::kFloat16To32Ints32To64, kMaxRank},
        /*pad_input=*/
-       {DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxNonScalarRank},
+       {DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxRank},
        /*average_pool2d_input=*/{DataTypeConstraint::kFloat16To32, {3, 8}},
        /*l2_pool2d_input=*/{DataTypeConstraint::kFloat16To32, {3, 8}},
        /*max_pool2d_input=*/{kInts8Float16To32, {3, 8}},
@@ -260,7 +303,7 @@ ContextProperties ContextImplOrt::GetContextProperties(
        /*sigmoid_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*slice_input=*/
        {DataTypeConstraint::kAllDataTypesAtLeast8bits, kMaxRank},
-       /*softmax_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
+       /*softmax_input=*/{DataTypeConstraint::kFloat16To32, kMaxNonScalarRank},
        /*softplus_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*softsign_input=*/{DataTypeConstraint::kFloat16To32, kMaxRank},
        /*split_input=*/
@@ -277,7 +320,7 @@ ContextProperties ContextImplOrt::GetContextProperties(
 }
 
 base::WeakPtr<WebNNContextImpl> ContextImplOrt::AsWeakPtr() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
   return weak_factory_.GetWeakPtr();
 }
 
@@ -317,10 +360,10 @@ ContextImplOrt::CreateTensorImpl(
 }
 
 base::expected<scoped_refptr<WebNNTensorImpl>, mojom::ErrorPtr>
-ContextImplOrt::CreateTensorFromMailboxImpl(
+ContextImplOrt::CreateTensorFromSharedImageImpl(
     mojo::PendingAssociatedReceiver<mojom::WebNNTensor> receiver,
     mojom::TensorInfoPtr tensor_info,
-    gpu::Mailbox mailbox) {
+    std::unique_ptr<gpu::WebNNTensorRepresentation> representation) {
   return base::unexpected(
       mojom::Error::New(mojom::Error::Code::kNotSupportedError,
                         "WebGPU Interop is not supported."));

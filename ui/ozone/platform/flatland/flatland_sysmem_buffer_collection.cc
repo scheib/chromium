@@ -14,9 +14,9 @@
 #include "base/fuchsia/koid.h"
 #include "base/task/current_thread.h"
 #include "build/build_config.h"
+#include "flatland_sysmem_buffer_collection.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
-#include "ui/gfx/buffer_format_util.h"
 #include "ui/ozone/platform/flatland/flatland_surface_factory.h"
 #include "ui/ozone/platform/flatland/flatland_sysmem_native_pixmap.h"
 
@@ -225,8 +225,6 @@ bool FlatlandSysmemBufferCollection::IsNativePixmapConfigSupported(
   switch (usage) {
     case gfx::BufferUsage::SCANOUT:
     case gfx::BufferUsage::GPU_READ:
-      break;
-
     case gfx::BufferUsage::SCANOUT_CPU_READ_WRITE:
     case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE:
       break;
@@ -237,7 +235,36 @@ bool FlatlandSysmemBufferCollection::IsNativePixmapConfigSupported(
   return true;
 }
 
-FlatlandSysmemBufferCollection::FlatlandSysmemBufferCollection() = default;
+// static
+bool FlatlandSysmemBufferCollection::IsNativePixmapConfigSupported(
+    gfx::BufferFormat format,
+    NativePixmapUsageSet usage) {
+  switch (format) {
+    case gfx::BufferFormat::YUV_420_BIPLANAR:
+    case gfx::BufferFormat::R_8:
+    case gfx::BufferFormat::RG_88:
+    case gfx::BufferFormat::RGBA_8888:
+    case gfx::BufferFormat::RGBX_8888:
+    case gfx::BufferFormat::BGRA_8888:
+    case gfx::BufferFormat::BGRX_8888:
+      break;
+
+    default:
+      return false;
+  }
+  // Only supported native pixmap usages.
+  if (usage == NativePixmapBufferUsage::kScanout ||
+      usage == NativePixmapBufferUsage::kGpuRead ||
+      usage == NativePixmapBufferUsage::kScanoutCpuReadWrite ||
+      usage == NativePixmapBufferUsage::kGpuReadCpuReadWrite) {
+    return true;
+  }
+  return false;
+}
+
+FlatlandSysmemBufferCollection::FlatlandSysmemBufferCollection()
+    : base::RefCountedDeleteOnSequence<FlatlandSysmemBufferCollection>(
+          base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 bool FlatlandSysmemBufferCollection::Initialize(
     fuchsia::sysmem2::Allocator_Sync* sysmem_allocator,
@@ -247,7 +274,7 @@ bool FlatlandSysmemBufferCollection::Initialize(
     zx::channel sysmem_token,
     gfx::Size size,
     gfx::BufferFormat format,
-    gfx::BufferUsage usage,
+    NativePixmapUsageSet usage,
     VkDevice vk_device,
     size_t min_buffer_count,
     bool register_with_flatland_allocator) {
@@ -307,11 +334,11 @@ bool FlatlandSysmemBufferCollection::Initialize(
 
 void FlatlandSysmemBufferCollection::InitializeForTesting(
     zx::eventpair handle,
-    gfx::BufferUsage usage) {
+    NativePixmapUsageSet usage) {
   handle_ = std::move(handle);
   id_ = base::GetKoid(handle_).value();
 
-  if (usage == gfx::BufferUsage::SCANOUT) {
+  if (usage == NativePixmapBufferUsage::kScanout) {
     // Scanout buffers need to be registered with flatland.
     fuchsia::ui::composition::BufferCollectionExportToken export_token;
     zx::eventpair::create(0, &export_token.value,
@@ -681,7 +708,7 @@ void FlatlandSysmemBufferCollection::InitializeImageCreateInfo(
   vk_image_info->usage = VK_IMAGE_USAGE_SAMPLED_BIT |
                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                          VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  if (usage_ == gfx::BufferUsage::SCANOUT) {
+  if (usage_.Has(NativePixmapUsage::kRendering)) {
     vk_image_info->usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   }
 

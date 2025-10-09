@@ -240,6 +240,8 @@ std::wstring GetTextForDownloadError(int error, const std::wstring& language) {
 
     case static_cast<int>(update_client::CrxDownloaderError::BAD_HASH):
       return GetLocalizedString(IDS_DOWNLOAD_HASH_MISMATCH_BASE);
+    case static_cast<int>(update_client::CrxDownloaderError::DISK_FULL):
+      return GetLocalizedString(IDS_UPDATER_DISK_FULL_BASE);
 
     default:
       return GetLocalizedStringF(IDS_GENERIC_DOWNLOAD_ERROR_BASE,
@@ -502,14 +504,18 @@ UpdateService::UpdateState::State ToUpdateState(
       return UpdateService::UpdateState::State::kCheckingForUpdates;
 
     case update_client::ComponentState::kDownloading:
-    case update_client::ComponentState::kDownloadingDiff:
       return UpdateService::UpdateState::State::kDownloading;
 
     case update_client::ComponentState::kCanUpdate:
       return UpdateService::UpdateState::State::kUpdateAvailable;
 
+    case update_client::ComponentState::kDecompressing:
+      return UpdateService::UpdateState::State::kDecompressing;
+
+    case update_client::ComponentState::kPatching:
+      return UpdateService::UpdateState::State::kPatching;
+
     case update_client::ComponentState::kUpdating:
-    case update_client::ComponentState::kUpdatingDiff:
       return UpdateService::UpdateState::State::kInstalling;
 
     case update_client::ComponentState::kUpdated:
@@ -522,7 +528,6 @@ UpdateService::UpdateState::State ToUpdateState(
       return UpdateService::UpdateState::State::kUpdateError;
 
     case update_client::ComponentState::kRun:
-    case update_client::ComponentState::kLastStatus:
       NOTREACHED();
   }
 }
@@ -564,7 +569,7 @@ MakeUpdateClientCrxStateChangeCallback(
         UpdateService::UpdateState update_state;
         update_state.app_id = crx_update_item.id;
         update_state.state = ToUpdateState(crx_update_item.state);
-        update_state.next_version = crx_update_item.next_version;
+        update_state.next_version = crx_update_item.next_version.GetString();
         update_state.downloaded_bytes = crx_update_item.downloaded_bytes;
         update_state.total_bytes = crx_update_item.total_bytes;
         update_state.install_progress = crx_update_item.install_progress;
@@ -683,7 +688,7 @@ void UpdateServiceImplImpl::MaybeInstallEnterpriseCompanionAppOTA(
   VLOG(1) << "Starting an OTA installation of the enterprise companion app.";
   RegistrationRequest registration;
   registration.app_id = enterprise_companion::kCompanionAppId;
-  registration.version = base::Version(kNullVersion);
+  registration.version = kNullVersion;
   RegisterApp(
       registration,
       base::BindOnce([](int registration_result) {})
@@ -758,26 +763,34 @@ void UpdateServiceImplImpl::RegisterApp(
     return;
   }
 
+  if (request.app_id.empty()) {
+    VLOG(1) << "Refusing to register an empty app ID.";
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), kRegistrationError));
+    return;
+  }
+
   if (!IsUpdaterOrCompanionApp(request.app_id)) {
     config_->GetUpdaterPersistedData()->SetHadApps();
   }
-  bool send_event = !config_->GetUpdaterPersistedData()
-                         ->GetProductVersion(request.app_id)
-                         .IsValid() &&
-                    request.version.IsValid() &&
-                    request.version > base::Version(kNullVersion) &&
-                    !config_->GetUpdaterPersistedData()->GetEulaRequired() &&
-                    !base::EqualsCaseInsensitiveASCII(
-                        request.app_id, enterprise_companion::kCompanionAppId);
+  bool send_event =
+      !config_->GetUpdaterPersistedData()
+           ->GetProductVersion(request.app_id)
+           .IsValid() &&
+      base::Version(request.version).IsValid() &&
+      base::Version(request.version) > base::Version(kNullVersion) &&
+      !config_->GetUpdaterPersistedData()->GetEulaRequired() &&
+      !base::EqualsCaseInsensitiveASCII(request.app_id,
+                                        enterprise_companion::kCompanionAppId);
   config_->GetUpdaterPersistedData()->RegisterApp(request);
   if (send_event) {
     update_client::CrxComponent install_data;
     install_data.ap = request.ap;
     install_data.app_id = request.app_id;
     install_data.brand = request.brand_code;
-    install_data.lang = request.lang;
+    install_data.lang = request.lang.value_or("");
     install_data.requires_network_encryption = false;
-    install_data.version = request.version;
+    install_data.version = base::Version(request.version);
     update_client_->SendPing(
         install_data,
         {.event_type = update_client::protocol_request::kEventInstall,
@@ -813,7 +826,7 @@ void UpdateServiceImplImpl::GetAppStatesImpl(
   for (const std::string& app_id : app_ids) {
     AppState app_state;
     app_state.app_id = app_id;
-    app_state.version = persisted_data->GetProductVersion(app_id);
+    app_state.version = persisted_data->GetProductVersion(app_id).GetString();
     app_state.version_path = persisted_data->GetProductVersionPath(app_id);
     app_state.version_key = persisted_data->GetProductVersionKey(app_id);
     app_state.ap = persisted_data->GetAP(app_id);
@@ -845,7 +858,7 @@ void UpdateServiceImplImpl::RunPeriodicTasks(base::OnceClosure callback) {
       base::Version(kUpdaterVersion) > registered_updater_version) {
     RegistrationRequest updater_request;
     updater_request.app_id = kUpdaterAppId;
-    updater_request.version = base::Version(kUpdaterVersion);
+    updater_request.version = kUpdaterVersion;
     RegisterApp(updater_request, base::DoNothing());
   }
 

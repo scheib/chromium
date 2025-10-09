@@ -12,9 +12,10 @@
 #include "ash/wm/window_state.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view_chromeos.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view_chromeos.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/webui_tab_strip_container_view.h"
 #include "chrome/test/base/ash/util/ash_test_util.h"
@@ -29,7 +30,7 @@ namespace {
 
 // Tuck a window to the bottom right corner by generating a fling.
 void TuckWindow(aura::Window* window) {
-  auto* frame_view = static_cast<BrowserNonClientFrameViewChromeOS*>(
+  auto* frame_view = static_cast<BrowserFrameViewChromeOS*>(
       views::Widget::GetWidgetForNativeView(window)
           ->non_client_view()
           ->frame_view());
@@ -58,12 +59,16 @@ IN_PROC_BROWSER_TEST_F(FloatControllerBrowserTest,
   ash::test::CreateSystemWebApp(browser()->profile(),
                                 ash::SystemWebAppType::FILE_MANAGER);
   aura::Window* browser_window1 =
-      BrowserList::GetInstance()->GetLastActive()->window()->GetNativeWindow();
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile()
+          ->GetWindow()
+          ->GetNativeWindow();
 
   ash::test::CreateSystemWebApp(browser()->profile(),
                                 ash::SystemWebAppType::SETTINGS);
   aura::Window* browser_window2 =
-      BrowserList::GetInstance()->GetLastActive()->window()->GetNativeWindow();
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile()
+          ->GetWindow()
+          ->GetNativeWindow();
 
   ASSERT_NE(browser()->window()->GetNativeWindow(), browser_window1);
   ASSERT_NE(browser()->window()->GetNativeWindow(), browser_window2);

@@ -15,13 +15,14 @@
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/ui_base_types.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "base/files/safe_base_name.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 class Browser;
+class ControlledHomeDialogControllerInterface;
 class SettingsOverriddenDialogController;
 class Profile;
 
@@ -41,6 +42,7 @@ namespace extensions {
 
 class Extension;
 
+DECLARE_ELEMENT_IDENTIFIER_VALUE(kControlledHomeDialogCancelButtonElementId);
 DECLARE_ELEMENT_IDENTIFIER_VALUE(kExtensionInstallFrictionLearnMoreLink);
 DECLARE_ELEMENT_IDENTIFIER_VALUE(kMv2DisabledDialogManageButtonElementId);
 DECLARE_ELEMENT_IDENTIFIER_VALUE(kMv2DisabledDialogParagraphElementId);
@@ -62,6 +64,13 @@ void ShowExtensionInstallBlockedDialog(
     const gfx::ImageSkia& icon,
     content::WebContents* web_contents,
     base::OnceClosure done_callback);
+
+// Shows a dialog to notify the user when an extension has changed the home
+// page.
+void ShowControlledHomeDialog(
+    Profile* profile,
+    gfx::NativeWindow parent,
+    std::unique_ptr<ControlledHomeDialogControllerInterface> controller);
 
 // Shows a modal dialog to Enhanced Safe Browsing users before the extension
 // install dialog if the extension is not included in the Safe Browsing CRX
@@ -109,7 +118,7 @@ void ShowMv2DeprecationReEnableDialog(
 // overridden by an extension.
 void ShowSettingsOverriddenDialog(
     std::unique_ptr<SettingsOverriddenDialogController> controller,
-    Browser* browser);
+    gfx::NativeWindow parent);
 
 // The type of action that the ExtensionInstalledBlockedByParentDialog
 // is being shown in reaction to.

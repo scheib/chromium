@@ -45,7 +45,6 @@
 #include "ui/compositor/test/direct_layer_tree_frame_sink.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/types/display_constants.h"
-#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gfx/switches.h"
@@ -78,7 +77,6 @@ class StandaloneBeginFrameObserver : public viz::BeginFrameObserverBase {
     return true;
   }
   void OnBeginFrameSourcePausedChanged(bool paused) override {}
-  bool IsRoot() const override { return true; }
 
   void SetBeginFrameSource(viz::BeginFrameSource* begin_frame_source) {
     TearDownObservation();

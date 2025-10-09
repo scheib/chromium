@@ -11,7 +11,9 @@ found in the LICENSE file.
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@macro/default_bg_color"
-    android:minHeight="@dimen/web_app_header_min_height">
+    android:minHeight="@dimen/web_app_header_min_height"
+    android:elevation="1dp"
+    android:outlineProvider="none" >
 
     <org.chromium.ui.widget.ChromeImageButton
         android:id="@+id/back_button"
@@ -33,4 +35,16 @@ found in the LICENSE file.
         android:visibility="gone"
         android:layout_gravity="start|center_vertical"
         app:tint="@color/default_icon_color_tint_list" />
+
+
+    <FrameLayout
+        android:id="@+id/web_app_menu_button_wrapper"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:visibility="gone">
+        <include
+            android:id="@+id/web_app_menu_button"
+            layout="@layout/menu_button" />
+    </FrameLayout>
 </org.chromium.chrome.browser.ui.web_app_header.WebAppHeaderLayout>

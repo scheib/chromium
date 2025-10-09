@@ -28,13 +28,18 @@ _gclient_path = "//third_party/depot_tools/gclient.py"
 _gn_path = "//buildtools/linux64/gn"
 _ninja_path = "//third_party/ninja/ninja"
 
-assert(!is_component_build)
 assert(is_cronet_build)
+
+assert(!is_component_build)
+assert(use_platform_icu_alternatives,
+       "Cronet only supports being built with ICU alternatives")
 
 generate_jni("cronet_jni_headers") {
   sources = [
+    "java/src/org/chromium/net/impl/CompletionOnceCallback.java",
     "java/src/org/chromium/net/impl/CronetBidirectionalStream.java",
     "java/src/org/chromium/net/impl/CronetLibraryLoader.java",
+    "java/src/org/chromium/net/impl/CronetMetrics.java",
     "java/src/org/chromium/net/impl/CronetUploadDataStream.java",
     "java/src/org/chromium/net/impl/CronetUrlRequest.java",
     "java/src/org/chromium/net/impl/CronetUrlRequestContext.java",
@@ -196,12 +201,13 @@ source_set("cronet_static") {
     "//net",
     "//third_party/zlib",
     "//url",
-    "//url:buildflags",
   ]
   if (!is_cronet_for_aosp_build) {
     deps += [ "//components/cronet/native:cronet_native_impl" ]
   }
   sources = [
+    "//components/cronet/android/completion_once_callback_adapter.cc",
+    "//components/cronet/android/completion_once_callback_adapter.h",
     "//components/cronet/android/cronet_bidirectional_stream_adapter.cc",
     "//components/cronet/android/cronet_bidirectional_stream_adapter.h",
     "//components/cronet/android/cronet_context_adapter.cc",
@@ -235,10 +241,6 @@ source_set("cronet_static") {
     "android",
     "log",
   ]
-
-  if (!use_platform_icu_alternatives) {
-    deps += [ "//base:i18n" ]
-  }
 
   # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
   # enable the diagnostic by removing this line.
@@ -465,6 +467,7 @@ android_library("cronet_impl_common_java") {
     "//third_party/android_deps:protobuf_lite_runtime_java",
     "//third_party/androidx:androidx_annotation_annotation_experimental_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
   deps += cronet_impl_common_java_deps_to_package
 
@@ -574,6 +577,7 @@ android_library("cronet_impl_native_java") {
   sources = [
     "java/src/org/chromium/net/impl/AndroidOsBuild.java",
     "java/src/org/chromium/net/impl/BidirectionalStreamNetworkException.java",
+    "java/src/org/chromium/net/impl/CompletionOnceCallback.java",
     "java/src/org/chromium/net/impl/CronetBidirectionalStream.java",
     "java/src/org/chromium/net/impl/CronetLibraryLoader.java",
     "java/src/org/chromium/net/impl/CronetRequestCommon.java",
@@ -1184,7 +1188,6 @@ shared_library("cronet_tests") {
     ":cronet_test_apk_jni",
     ":cronet_tests_jni_headers",
     "//base",
-    "//base:i18n",
     "//base/test:test_support",
     "//components/cronet:cronet_common",
     "//components/cronet:cronet_version_header",
@@ -1255,6 +1258,7 @@ android_library("cronet_test_apk_java") {
     ":cronet_all_java",
     "//base:base_java",
     "//base:base_java_test_support",
+    "//net/android:net_java",
     "//net/android:net_java_test_support",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/google-truth:google_truth_java",
@@ -1292,6 +1296,7 @@ android_library("cronet_common_javatests") {
   sources = [
     "test/javatests/src/org/chromium/net/ContextInterceptor.java",
     "test/javatests/src/org/chromium/net/CronetLoggerTestRule.java",
+    "test/javatests/src/org/chromium/net/CronetTestFramework.java",
     "test/javatests/src/org/chromium/net/CronetTestRule.java",
     "test/javatests/src/org/chromium/net/TestRequestFinishedListener.java",
     "test/javatests/src/org/chromium/net/TestUploadDataProvider.java",
@@ -1347,8 +1352,6 @@ android_library("cronet_fake_javatests") {
 # third_party/jni_zero is an exception because it started as a
 # chromium first-party library and later switched to being a
 # third-party and we don't want to deal with version skews.
-# This must not contain buildInfo as `cronet_perf_tests` APK generates
-# another buildInfo and both of them starts colliding showing buildError.
 cronet_javatests_deps_to_package = [
   ":cronet_android_os_system_properties_java",
   ":cronet_common_javatests",
@@ -1423,6 +1426,8 @@ android_library("cronet_javatests") {
     "test/javatests/src/org/chromium/net/NetworkChangesTest.java",
     "test/javatests/src/org/chromium/net/NetworkErrorLoggingTest.java",
     "test/javatests/src/org/chromium/net/PkpTest.java",
+    "test/javatests/src/org/chromium/net/ProxyNoExecutorBackwardCompatibilityTest.java",
+    "test/javatests/src/org/chromium/net/ProxyOnBeforeTunnelRequestWithoutRequestBackwardCompatibilityTest.java",
     "test/javatests/src/org/chromium/net/ProxyTest.java",
     "test/javatests/src/org/chromium/net/QuicTest.java",
     "test/javatests/src/org/chromium/net/RequestFinishedInfoTest.java",
@@ -1687,52 +1692,6 @@ cronet_instrumentation_test_apk("cronet_smoketests_apk") {
   data = [ "//net/data/ssl/" ]
   proguard_enabled = true
   proguard_configs = [ "test/proguard.cfg" ]
-  srcjar_deps = [
-    ":cronet_jni_registration",
-    ":cronet_tests_jni_registration",
-  ]
-}
-
-android_apk("cronet_perf_test_apk") {
-  testonly = true
-  apk_name = "CronetPerfTest"
-  android_manifest = "test/javaperftests/AndroidManifest.xml"
-
-  shared_libraries = [ ":cronet_tests" ]
-
-  # Make sure not to depend on :cronet so we don't accidentally load it in the
-  # tests, this is especially tricky because we manipulate a global state in the
-  # CronetLibraryLoader to load a different shared library, adding this assert_no_deps
-  # will ensure that there'll only be a single shared library and any mistake will be
-  # caught immediately when trying to load the libraries.
-  assert_no_deps = [ ":cronet" ]
-  sources =
-      [ "test/javaperftests/src/org/chromium/net/CronetPerfTestActivity.java" ]
-
-  deps = [
-    ":cronet_all_java",
-    ":cronet_combine_proguard_flags",
-    ":cronet_javatests",
-    ":cronet_test_apk_java",
-    "//base:base_java",
-    "//third_party/android_sdk:android_test_mock_java",
-    "//third_party/jni_zero:jni_zero_java",
-    "//third_party/junit",
-  ]
-
-  if (!is_java_debug) {
-    proguard_enabled = true
-    proguard_configs = [
-      "$target_gen_dir/cronet_impl_native_proguard.cfg",
-      "cronet_shared_proguard.cfg",
-      "cronet_impl_common_proguard.cfg",
-      "httpengine_native_provider_proguard.cfg",
-      "test/proguard.cfg",
-      "//testing/android/proguard_for_test.flags",
-      "//third_party/jni_zero/proguard_for_test.flags",
-    ]
-    enable_proguard_checks = false
-  }
   srcjar_deps = [
     ":cronet_jni_registration",
     ":cronet_tests_jni_registration",
@@ -2014,11 +1973,13 @@ copy("cronet_package_copy_test_files") {
     "//net/data/ssl/certificates/cronet-quic-chain.pem",
     "//net/data/ssl/certificates/cronet-quic-leaf-cert.key",
     "//net/data/ssl/certificates/cronet-quic-leaf-cert.key.pkcs8.pem",
+    "//net/data/ssl/certificates/cronet-quic-root.pem",
     "//net/data/ssl/certificates/expired_cert.pem",
     "//net/data/ssl/certificates/ok_cert.pem",
     "//net/data/ssl/certificates/quic-chain.pem",
     "//net/data/ssl/certificates/quic-leaf-cert.key",
     "//net/data/ssl/certificates/quic-leaf-cert.key.pkcs8.pem",
+    "//net/data/ssl/certificates/quic-root.pem",
     "//net/data/ssl/certificates/root_ca_cert.pem",
   ]
   outputs = [ "$_test_package_dir/assets/test_files/net/data/ssl/certificates/{{source_file_part}}" ]
@@ -2034,9 +1995,9 @@ copy("cronet_package_copy_resources") {
   outputs = [ "$_package_dir/res/raw/{{source_file_part}}" ]
 }
 
-# Enforce that ARM Neon is not used when building for ARMv7
-if (target_cpu == "arm" && arm_version == 7 && !arm_use_neon) {
-  action("enforce_no_neon") {
+# Enforce that ARM Neon is not used when building for ARMv7.
+if (target_cpu == "arm" && arm_version == 7) {
+  action("enforce_no_neon_on_armv7") {
     script = "//components/cronet/tools/check_no_neon.py"
     outputs = [ "$target_gen_dir/$target_name.stamp" ]
     args = [
@@ -2051,6 +2012,9 @@ if (target_cpu == "arm" && arm_version == 7 && !arm_use_neon) {
       rebase_path(outputs[0], root_build_dir),
     ]
     deps = [ "//base" ]
+  }
+} else {
+  group("enforce_no_neon_on_armv7") {
   }
 }
 
@@ -2182,38 +2146,29 @@ if (!using_sanitizer) {
 }
 
 group("cronet_non_test_package") {
-  # Target containing all of cronet's non-test targets.
-  # Enforce building with ICU alternatives, crbug.com/611621.
-  # Enforce that arm_use_neon==false when building for ARMv7 by
-  # not including any deps in cronet_package target otherwise.
-  if (use_platform_icu_alternatives &&
-      (!(target_cpu == "arm" && arm_version == 7) || !arm_use_neon)) {
-    deps = [
-      ":cronet_package_copy",
-      ":cronet_package_copy_native_headers",
-      ":cronet_package_copy_native_lib",
-      ":cronet_package_copy_native_lib_unstripped",
-      ":cronet_package_copy_resources",
-      ":jar_cronet_api_source",
-      ":jar_cronet_impl_common_java_source",
-      ":jar_cronet_impl_fake_java_source",
-      ":jar_cronet_impl_native_java_source",
-      ":jar_cronet_impl_platform_java_source",
-      ":jar_cronet_sample_source",
-      ":jar_cronet_shared_source",
-      ":jar_httpengine_native_provider_java_source",
-      ":repackage_api",
-      ":repackage_fake",
-      ":repackage_httpengine_native_provider",
-      ":repackage_impl_common",
-      ":repackage_native",
-      ":repackage_platform",
-      ":repackage_shared",
-    ]
-    if (current_cpu == "arm" && arm_version == 7) {
-      deps += [ ":enforce_no_neon" ]
-    }
-  }
+  deps = [
+    ":cronet_package_copy",
+    ":cronet_package_copy_native_headers",
+    ":cronet_package_copy_native_lib",
+    ":cronet_package_copy_native_lib_unstripped",
+    ":cronet_package_copy_resources",
+    ":enforce_no_neon_on_armv7",
+    ":jar_cronet_api_source",
+    ":jar_cronet_impl_common_java_source",
+    ":jar_cronet_impl_fake_java_source",
+    ":jar_cronet_impl_native_java_source",
+    ":jar_cronet_impl_platform_java_source",
+    ":jar_cronet_sample_source",
+    ":jar_cronet_shared_source",
+    ":jar_httpengine_native_provider_java_source",
+    ":repackage_api",
+    ":repackage_fake",
+    ":repackage_httpengine_native_provider",
+    ":repackage_impl_common",
+    ":repackage_native",
+    ":repackage_platform",
+    ":repackage_shared",
+  ]
 }
 
 group("cronet_test_package") {
@@ -2259,32 +2214,5 @@ group("cronet_package_android") {
 # Everything added here will be executed in the CI.
 group("cronet_package_ci") {
   testonly = true
-  deps = [
-    ":generate_build_script_test",
-    "//components/cronet/gn2bp/tests/test_rlib_crate:rust_test_targets",
-    "//components/cronet/license/tests/target_a",
-  ]
-}
-
-group("cronet_android_mainline") {
-  # Target for android mainline which removed unnecessary deps from
-  # "cronet_package_android"
-
-  # Enforce building with ICU alternatives, crbug.com/611621.
-  # Enforce that arm_use_neon==false when building for ARMv7 by
-  # not including any deps in cronet_package target otherwise.
-  if (use_platform_icu_alternatives &&
-      (!(target_cpu == "arm" && arm_version == 7) || !arm_use_neon)) {
-    deps = [
-      ":cronet_package_copy_native_lib",
-      ":jar_cronet_api_source",
-      ":repackage_api",
-      ":repackage_impl_common",
-      ":repackage_native",
-      ":repackage_shared",
-    ]
-    if (current_cpu == "arm" && arm_version == 7) {
-      deps += [ ":enforce_no_neon" ]
-    }
-  }
+  deps = [ "//components/cronet/license/tests/target_a" ]
 }

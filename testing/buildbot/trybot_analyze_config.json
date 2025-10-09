@@ -37,10 +37,10 @@
   },
   "chromium": {
     "exclusions": [
+      ".*/README.chromium",
       "build/config/siso/.*",
       "buildtools/checkdeps/.*",
       "chrome/android/profiles/newest.txt",
-      "chrome/build/.*.pgo.txt",
       "chrome/browser/resources/.*(css|html|js)",
       "chrome/browser/ui/webui/.*browsertest.*js",
       "chrome/test/data/.*",

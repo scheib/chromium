@@ -316,9 +316,7 @@ void AddInputMethodOptionsLoadTimeData(
   html_source->AddBoolean(
       "autocorrectEnableByDefault",
       base::FeatureList::IsEnabled(features::kAutocorrectByDefault));
-  html_source->AddBoolean(
-      "allowFirstPartyVietnameseInput",
-      base::FeatureList::IsEnabled(features::kFirstPartyVietnameseInput));
+  html_source->AddBoolean("allowFirstPartyVietnameseInput", true);
 }
 
 void AddSuggestionsLoadTimeData(content::WebUIDataSource* html_source,
@@ -508,9 +506,6 @@ void InputsSection::AddLoadTimeData(content::WebUIDataSource* html_source) {
       base::FeatureList::IsEnabled(features::kOnDeviceGrammarCheck));
 
   html_source->AddBoolean(
-      "systemJapanesePhysicalTyping",
-      base::FeatureList::IsEnabled(features::kSystemJapanesePhysicalTyping));
-  html_source->AddBoolean(
       "languagePacksInSettingsEnabled",
       base::FeatureList::IsEnabled(features::kLanguagePacksInSettings));
   // TODO(b/290861003): Update the settings code and remove this.
@@ -639,7 +634,7 @@ void InputsSection::InputMethodChanged(
 }
 
 bool InputsSection::ShouldShowEmojiSuggestionsSettings() const {
-  return pref_service_->GetBoolean(prefs::kEmojiSuggestionEnterpriseAllowed);
+  return false;
 }
 
 bool InputsSection::IsSpellCheckEnabled() const {

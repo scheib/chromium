@@ -18,9 +18,8 @@ FakeMouseCursorMonitor::FakeMouseCursorMonitor() : callback_(nullptr) {}
 
 FakeMouseCursorMonitor::~FakeMouseCursorMonitor() = default;
 
-void FakeMouseCursorMonitor::Init(
-    webrtc::MouseCursorMonitor::Callback* callback,
-    webrtc::MouseCursorMonitor::Mode mode) {
+void FakeMouseCursorMonitor::Init(MouseCursorMonitor::Callback* callback,
+                                  MouseCursorMonitor::Mode mode) {
   DCHECK(!callback_);
   DCHECK(callback);
 
@@ -33,8 +32,8 @@ void FakeMouseCursorMonitor::Capture() {
   const int kWidth = 32;
   const int kHeight = 32;
 
-  std::unique_ptr<webrtc::DesktopFrame> desktop_frame(
-      new webrtc::BasicDesktopFrame(webrtc::DesktopSize(kWidth, kHeight)));
+  auto desktop_frame = std::make_unique<webrtc::BasicDesktopFrame>(
+      webrtc::DesktopSize(kWidth, kHeight), webrtc::FOURCC_ARGB);
   UNSAFE_TODO(memset(desktop_frame->data(), 0xFF,
                      webrtc::DesktopFrame::kBytesPerPixel * kWidth * kHeight));
 

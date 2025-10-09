@@ -102,14 +102,6 @@ of FieldType, and similarly for FieldTypeGroupSet and HtmlFieldTypeSet."""
           input_api.re.compile(r'\bDenseSet<HtmlFieldType>'),
           'Use HtmlFieldTypeSet instead of DenseSet<HtmlFieldType>',
       ),
-      (
-          input_api.re.compile(r'\bFieldTypeSet::all()'),
-          'Use kAllFieldTypes instead of FieldTypeSet::all()',
-      ),
-      (
-          input_api.re.compile(r'\bHtmlFieldTypeSet::all()'),
-          'Use kAllHtmlFieldTypes instead of HtmlFieldTypeSet::all()',
-      ),
   ]
   warnings = []
   file_filter = lambda f: (
@@ -236,4 +228,16 @@ def CheckRegexTranspilerGoldenFiles(input_api, output_api):
     return [output_api.PresubmitError(
       "Regex transpiler golden files don't match. "
       "Regenerate the outputs at {}.".format(relative_test_dir))]
+  return []
+
+def CheckAutofillAiSchema(input_api, output_api):
+  """Reminds to run update_autofill_enums.py when the schema changes."""
+  if (IsComponentsAutofillFileAffected(input_api, "entity_schema.json")):
+    return [
+        output_api.PresubmitPromptWarning(
+            'You modified the Autofill AI schema. If you added an entity,'
+            ' re-run `tools/metrics/histograms/update_autofill_enums.py`.'
+        )
+    ]
+
   return []

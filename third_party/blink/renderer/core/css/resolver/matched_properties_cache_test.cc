@@ -32,7 +32,8 @@ class MatchedPropertiesCacheTestKey {
                                 const TreeScope& tree_scope) {
     auto* set = css_test_helpers::ParseDeclarationBlock(block_text);
     result_.BeginAddingAuthorRulesForTreeScope(tree_scope);
-    result_.AddMatchedProperties(set, {.origin = CascadeOrigin::kAuthor});
+    result_.AddMatchedProperties(set, /*env_bindings=*/nullptr,
+                                 {.origin = CascadeOrigin::kAuthor});
     return result_;
   }
 
@@ -67,7 +68,7 @@ class MatchedPropertiesCacheTestCache {
       const StyleRecalcContext* style_recalc_context = nullptr) {
     StyleResolverState state(document_, *document_.body(), style_recalc_context,
                              StyleRequest(&parent_style));
-    state.SetStyle(style);
+    state.CreateNewClonedStyle(style);
     return cache_.Find(key.InnerKey(), state);
   }
 

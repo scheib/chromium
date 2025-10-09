@@ -8,8 +8,11 @@
 #include "base/time/time.h"
 #include "base/types/optional_ref.h"
 #include "base/uuid.h"
+#include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/data_model/addresses/autofill_structured_address_component.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_type.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/proto/server.pb.h"
 #include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -24,16 +27,13 @@ constexpr char kAppLocaleUS[] = "en-US";
 
 struct GetInfoParams {
   std::string app_locale = "";
-  const char16_t* format_string = nullptr;
+  std::optional<AutofillFormatString> format_string;
 };
 
 std::u16string GetInfo(const AttributeInstance& a,
                        FieldType field_type,
                        GetInfoParams params = {}) {
-  return a.GetInfo(field_type, params.app_locale,
-                   params.format_string
-                       ? std::optional(std::u16string(params.format_string))
-                       : std::nullopt);
+  return a.GetInfo(field_type, params.app_locale, params.format_string);
 }
 
 TEST(AutofillEntityInstanceTest, Attributes) {
@@ -56,17 +56,15 @@ TEST(AutofillEntityInstanceTest, Attributes) {
 // subtype (as per AttributeType::field_subtypes()) and defaults to the overall
 // type (AttributeType::field_type()).
 TEST(AutofillEntityInstanceTest, Attributes_NormalizedType) {
-  base::test::ScopedFeatureList scoped_feature_list{
-      features::kAutofillAiNoTagTypes};
   AttributeInstance passport_name((AttributeType(kPassportName)));
   passport_name.SetInfo(NAME_FULL, u"John Doe",
-                        /*app_locale=*/"", /*format_string=*/u"",
+                        /*app_locale=*/"", /*format_string=*/std::nullopt,
                         VerificationStatus::kObserved);
   passport_name.FinalizeInfo();
 
   AttributeInstance passport_number((AttributeType(kPassportNumber)));
   passport_number.SetInfo(PASSPORT_NUMBER, u"LR0123456",
-                          /*app_locale=*/"", /*format_string=*/u"",
+                          /*app_locale=*/"", /*format_string=*/std::nullopt,
                           VerificationStatus::kObserved);
 
   EXPECT_EQ(GetInfo(passport_name, NAME_FULL), u"John Doe");
@@ -84,7 +82,7 @@ TEST(AutofillEntityInstanceTest, Attributes_NormalizedType) {
 TEST(AutofillEntityInstanceTest, Attributes_CountryLocalization) {
   AttributeInstance passport_country((AttributeType(kPassportCountry)));
   passport_country.SetInfo(PASSPORT_ISSUING_COUNTRY, u"SE",
-                           /*app_locale=*/"", /*format_string=*/u"",
+                           /*app_locale=*/"", /*format_string=*/std::nullopt,
                            VerificationStatus::kObserved);
 
   EXPECT_EQ(GetInfo(passport_country, PASSPORT_ISSUING_COUNTRY,
@@ -111,7 +109,7 @@ TEST(AutofillEntityInstanceTest, Attributes_CountryLocalization) {
 TEST(AutofillEntityInstanceTest, Attributes_StructuredName) {
   AttributeInstance passport_name((AttributeType(kPassportName)));
   passport_name.SetInfo(NAME_FULL, u"Some Name",
-                        /*app_locale=*/"", /*format_string=*/u"",
+                        /*app_locale=*/"", /*format_string=*/std::nullopt,
                         VerificationStatus::kObserved);
   passport_name.FinalizeInfo();
 
@@ -123,35 +121,89 @@ TEST(AutofillEntityInstanceTest, Attributes_StructuredName) {
 
 // Tests that AttributeInstance honors the affix formats.
 TEST(AutofillEntityInstanceTest, Attributes_IdentificationNumbers) {
+  auto from_affix = [](std::u16string fs) {
+    return AutofillFormatString(std::move(fs), FormatString_Type_AFFIX);
+  };
+
   AttributeInstance passport_number((AttributeType(kPassportNumber)));
   passport_number.SetInfo(PASSPORT_NUMBER, u"LR0123456",
-                          /*app_locale=*/"", /*format_string=*/u"",
+                          /*app_locale=*/"", /*format_string=*/std::nullopt,
                           VerificationStatus::kObserved);
   EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER), u"LR0123456");
-  EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER, {.format_string = u"0"}),
-            u"LR0123456");
-  EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER, {.format_string = u"4"}),
-            u"LR01");
-  EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER, {.format_string = u"-4"}),
-            u"3456");
   EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER,
-                    {.format_string =
-                         base::NumberToString16(std::numeric_limits<int>::min())
-                             .c_str()}),
+                    {.format_string = from_affix(u"0")}),
             u"LR0123456");
+  EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER,
+                    {.format_string = from_affix(u"4")}),
+            u"LR01");
+  EXPECT_EQ(GetInfo(passport_number, PASSPORT_NUMBER,
+                    {.format_string = from_affix(u"-4")}),
+            u"3456");
 }
 
 // Tests that AttributeInstance appropriately manages dates.
 TEST(AutofillEntityInstanceTest, Attributes_Date) {
+  auto from_date = [](std::u16string fs) {
+    return AutofillFormatString(std::move(fs), FormatString_Type_DATE);
+  };
+
   AttributeInstance passport_name((AttributeType(kPassportIssueDate)));
   passport_name.SetInfo(PASSPORT_ISSUE_DATE, u"2001-02-03",
-                        /*app_locale=*/"", /*format_string=*/u"YYYY-MM-DD",
+                        /*app_locale=*/"", from_date(u"YYYY-MM-DD"),
                         VerificationStatus::kNoStatus);
 
   EXPECT_EQ(GetInfo(passport_name, PASSPORT_ISSUE_DATE), u"2001-02-03");
   EXPECT_EQ(GetInfo(passport_name, PASSPORT_ISSUE_DATE,
-                    {.format_string = u"DD/MM/YYYY"}),
+                    {.format_string = from_date(u"DD/MM/YYYY")}),
             u"03/02/2001");
+}
+
+// Tests that formatting flight numbers works correctly.
+TEST(AutofillEntityInstanceTest, AttributesFlightFormat) {
+  auto from_flight_number = [](std::u16string fs) {
+    return AutofillFormatString(std::move(fs), FormatString_Type_FLIGHT_NUMBER);
+  };
+
+  {
+    AttributeInstance flight_number(
+        (AttributeType(kFlightReservationFlightNumber)));
+    flight_number.SetInfo(
+        FLIGHT_RESERVATION_FLIGHT_NUMBER, u"LH89", /*app_locale*/ "",
+        /*format_string=*/std::nullopt, VerificationStatus::kNoStatus);
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER),
+              u"LH89");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"A")}),
+              u"LH");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"N")}),
+              u"89");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"F")}),
+              u"LH89");
+  }
+
+  {
+    // A mal-formed flight number.
+    AttributeInstance flight_number(
+        (AttributeType(kFlightReservationFlightNumber)));
+    flight_number.SetInfo(
+        FLIGHT_RESERVATION_FLIGHT_NUMBER, u"AA", /*app_locale*/ "",
+        /*format_string=*/std::nullopt, VerificationStatus::kNoStatus);
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER), u"AA");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"A")}),
+              u"AA");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"N")}),
+              u"AA");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"F")}),
+              u"AA");
+    EXPECT_EQ(GetInfo(flight_number, FLIGHT_RESERVATION_FLIGHT_NUMBER,
+                      {.format_string = from_flight_number(u"F")}),
+              u"AA");
+  }
 }
 
 TEST(AutofillEntityInstanceTest,
@@ -252,6 +304,32 @@ TEST(
   EXPECT_TRUE(result.is_subset);
 }
 
+TEST(AutofillEntityInstanceTest, IsSubsetOf_IdenticalEntities) {
+  EntityInstance entity1 = test::GetPassportEntityInstance();
+  EntityInstance entity2 = test::GetPassportEntityInstance();
+  EXPECT_TRUE(entity1.IsSubsetOf(entity2));
+}
+
+TEST(AutofillEntityInstanceTest, IsSubsetOf_ProperSubset) {
+  EntityInstance entity1 =
+      test::GetPassportEntityInstance({.expiry_date = nullptr});
+  EntityInstance entity2 = test::GetPassportEntityInstance();
+  EXPECT_TRUE(entity1.IsSubsetOf(entity2));
+}
+
+TEST(AutofillEntityInstanceTest, IsSubsetOf_NotASubset) {
+  EntityInstance entity1 = test::GetPassportEntityInstance();
+  EntityInstance entity2 =
+      test::GetPassportEntityInstance({.expiry_date = nullptr});
+  EXPECT_FALSE(entity1.IsSubsetOf(entity2));
+}
+
+TEST(AutofillEntityInstanceTest, IsSubsetOf_DifferentEntityTypes) {
+  EntityInstance entity1 = test::GetPassportEntityInstance();
+  EntityInstance entity2 = test::GetVehicleEntityInstance();
+  EXPECT_FALSE(entity1.IsSubsetOf(entity2));
+}
+
 // Tests that valid entities that don't share any attribute in common are not
 // merged, as we cannot verify that they represent the same real-world object.
 TEST(AutofillEntityInstanceTest, GetEntityMergeability_EntitiesAreDisjoint) {
@@ -278,7 +356,6 @@ TEST(AutofillEntityInstanceTest, FrecencyOrder_SortEntitiesByFrecency) {
 
   // Set first passport as have been used once.
   EntityInstance& top_entity = entities[0];
-  base::Uuid first_top_entity_guid = top_entity.guid();
   top_entity.RecordEntityUsed(test::kJune2017);
   sort_entities();
   EXPECT_EQ(entities[0].guid(), top_entity.guid());
@@ -286,7 +363,6 @@ TEST(AutofillEntityInstanceTest, FrecencyOrder_SortEntitiesByFrecency) {
   // Now set second passport as have been used twice. Note that the second use
   // date is the same as the one for the first passport.
   top_entity = entities[1];
-  base::Uuid second_top_entity_guid = top_entity.guid();
   top_entity.RecordEntityUsed(test::kJanuary2017);
   top_entity.RecordEntityUsed(test::kJune2017);
   sort_entities();

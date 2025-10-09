@@ -80,7 +80,6 @@ chrome_ios_eg2_test("ios_chrome_integration_eg2tests_module") {
   xcode_test_application_name = "ios_chrome_eg2tests"
 
   deps = [
-    "//ios/chrome/browser/autofill/model:eg2_tests",
     "//ios/chrome/browser/autofill/ui_bundled:eg2_tests",
     "//ios/chrome/browser/autofill/ui_bundled/branding:eg2_tests",
     "//ios/chrome/browser/autofill/ui_bundled/manual_fill:eg2_tests",
@@ -169,8 +168,8 @@ chrome_ios_eg2_test("ios_chrome_signin_eg2tests_module") {
   xcode_test_application_name = "ios_chrome_eg2tests"
 
   deps = [
+    "//ios/chrome/browser/authentication/account_menu/test:eg2_tests",
     "//ios/chrome/browser/authentication/ui_bundled:eg2_tests",
-    "//ios/chrome/browser/authentication/ui_bundled/account_menu:eg2_tests",
     "//ios/chrome/browser/authentication/ui_bundled/fullscreen_signin/test:eg2_tests",
     "//ios/chrome/browser/authentication/ui_bundled/signin:eg2_tests",
     "//ios/chrome/browser/authentication/ui_bundled/signin/consistency_promo_signin:eg2_tests",
@@ -194,6 +193,7 @@ chrome_ios_eg2_test("ios_chrome_ui_eg2tests_module") {
     "//ios/chrome/browser/bring_android_tabs/ui_bundled:eg2_tests",
     "//ios/chrome/browser/browser_view/test:eg2_tests",
     "//ios/chrome/browser/bubble/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/content_suggestions/ui_bundled/app_bundle_promo/test:eg2_tests",
     "//ios/chrome/browser/content_suggestions/ui_bundled/price_tracking_promo:eg2_tests",
     "//ios/chrome/browser/content_suggestions/ui_bundled/safety_check:eg2_tests",
     "//ios/chrome/browser/content_suggestions/ui_bundled/set_up_list:eg2_tests",
@@ -203,15 +203,16 @@ chrome_ios_eg2_test("ios_chrome_ui_eg2tests_module") {
     "//ios/chrome/browser/download/ui:eg2_tests",
     "//ios/chrome/browser/drive_file_picker/test:eg2_tests",
     "//ios/chrome/browser/explain_with_gemini/coordinator:eg2_tests",
-    "//ios/chrome/browser/find_bar/ui_bundled:eg2_tests",
     "//ios/chrome/browser/first_run/ui_bundled:eg2_tests",
     "//ios/chrome/browser/first_run/ui_bundled/best_features/ui:eg2_tests",
     "//ios/chrome/browser/first_run/ui_bundled/default_browser:eg2_tests",
     "//ios/chrome/browser/first_run/ui_bundled/omnibox_position:eg2_tests",
     "//ios/chrome/browser/fullscreen/ui_bundled:eg2_tests",
     "//ios/chrome/browser/history/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/home_customization/test:eg2_tests",
     "//ios/chrome/browser/incognito_interstitial/ui_bundled:eg2_tests",
     "//ios/chrome/browser/infobars/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/intelligence/bwg/ui:eg2_tests",
     "//ios/chrome/browser/keyboard/ui_bundled:eg2_tests",
     "//ios/chrome/browser/lens_overlay/ui:eg2_tests",
     "//ios/chrome/browser/link_to_text/ui_bundled:eg2_tests",
@@ -235,9 +236,10 @@ chrome_ios_eg2_test("ios_chrome_ui_eg2tests_module") {
     "//ios/chrome/browser/reading_list/ui_bundled:eg2_tests",
     "//ios/chrome/browser/recent_tabs/ui_bundled:eg2_tests",
     "//ios/chrome/browser/sad_tab/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/safari_data_import/test:eg2_tests",
     "//ios/chrome/browser/safe_mode/ui_bundled:eg2_tests",
     "//ios/chrome/browser/save_to_drive/ui_bundled:eg2_tests",
-    "//ios/chrome/browser/search_engine_choice/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/search_engine_choice/coordinator:eg2_tests",
     "//ios/chrome/browser/search_with/ui_bundled:eg2_tests",
     "//ios/chrome/browser/send_tab_to_self/ui_bundled:eg2_tests",
     "//ios/chrome/browser/settings/model/sync/utils:eg2_tests",
@@ -246,6 +248,7 @@ chrome_ios_eg2_test("ios_chrome_ui_eg2tests_module") {
     "//ios/chrome/browser/sharing/ui_bundled:eg2_tests",
     "//ios/chrome/browser/sharing/ui_bundled/activity_services:eg2_tests",
     "//ios/chrome/browser/side_swipe/ui_bundled:eg2_tests",
+    "//ios/chrome/browser/snackbar/ui_bundled:eg2_tests",
     "//ios/chrome/browser/start_surface/ui_bundled:eg2_tests",
     "//ios/chrome/browser/tab_switcher/tab_strip/test:eg2_tests",
     "//ios/chrome/browser/tab_switcher/ui_bundled/tab_grid:eg2_tests",

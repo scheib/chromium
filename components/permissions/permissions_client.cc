@@ -91,8 +91,7 @@ void PermissionsClient::TriggerPromptHatsSurveyIfEnabled(
         pepc_prompt_position,
     ContentSetting initial_permission_status,
     base::OnceCallback<void()> hats_shown_callback,
-    std::optional<PermissionHatsTriggerHelper::PreviewParametersForHats>
-        preview_parameters) {}
+    PromptOptions prompt_options) {}
 
 void PermissionsClient::OnPromptResolved(
     const PermissionRequest* request,
@@ -218,6 +217,11 @@ bool PermissionsClient::IsSystemDenied(ContentSettingsType type) const {
 
 bool PermissionsClient::CanPromptSystemPermission(
     ContentSettingsType type) const {
+  return false;
+}
+
+bool PermissionsClient::IsActorOperatingOnWebContents(
+    content::WebContents* web_contents) const {
   return false;
 }
 

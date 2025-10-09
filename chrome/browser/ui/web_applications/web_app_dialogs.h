@@ -16,12 +16,13 @@
 #include "build/build_config.h"
 #include "chrome/browser/web_applications/ui_manager/update_dialog_types.h"
 #include "chrome/browser/web_applications/web_app_callback_app_identity.h"
+#include "chrome/browser/web_applications/web_app_icon_manager.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_uninstall_dialog_user_options.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/interaction/element_identifier.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 static_assert(BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
               BUILDFLAG(IS_CHROMEOS));
@@ -32,7 +33,8 @@ class Browser;
 
 namespace base {
 class FilePath;
-}
+class TimeTicks;
+}  // namespace base
 
 namespace content {
 class WebContents;
@@ -92,6 +94,7 @@ void ShowWebAppIdentityUpdateDialog(const std::string& app_id,
 void ShowWebAppReviewUpdateDialog(const webapps::AppId& app_id,
                                   const WebAppIdentityUpdate& update,
                                   Browser* browser,
+                                  base::TimeTicks start_time,
                                   UpdateReviewDialogCallback callback);
 
 // Shows the web app uninstallation dialog on a page whenever user has decided
@@ -101,7 +104,7 @@ void ShowWebAppUninstallDialog(
     const webapps::AppId& app_id,
     webapps::WebappUninstallSource uninstall_source,
     gfx::NativeWindow parent,
-    std::map<SquareSizePx, SkBitmap> icon_bitmaps,
+    IconMetadataFromDisk icon_metadata,
     UninstallDialogCallback uninstall_dialog_result_callback);
 
 // Callback used to indicate whether a user has accepted the launch of a

@@ -66,6 +66,8 @@ class TestPageLoadMetricsEmbedderInterface
     return std::move(timer);
   }
 
+  bool HasWebUIConfig(const GURL& url) override { return false; }
+
   bool IsNoStatePrefetch(content::WebContents* web_contents) override {
     return false;
   }
@@ -75,6 +77,8 @@ class TestPageLoadMetricsEmbedderInterface
   bool IsNonTabWebUI(const GURL& url) override {
     return test_->is_non_tab_webui();
   }
+
+  bool IsInternalWebUI(const GURL& url) override { return true; }
 
   bool ShouldObserveScheme(std::string_view scheme) override { return false; }
 
@@ -305,9 +309,9 @@ void PageLoadMetricsObserverTester::SimulateLoadedResource(
   blink::mojom::ResourceLoadInfo resource_load_info;
   resource_load_info.final_url = info.final_url.GetURL();
   resource_load_info.was_cached = info.was_cached;
-  resource_load_info.raw_body_bytes = info.raw_body_bytes.InBytes();
+  resource_load_info.raw_body_bytes = info.raw_body_bytes;
   resource_load_info.total_received_bytes =
-      info.original_network_content_length.InBytes();
+      info.original_network_content_length;
   resource_load_info.request_destination = info.request_destination;
   resource_load_info.net_error = info.net_error;
   resource_load_info.network_info = blink::mojom::CommonNetworkInfo::New();

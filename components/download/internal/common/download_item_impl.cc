@@ -1207,8 +1207,8 @@ bool DownloadItemImpl::RequireSafetyChecks() const {
 }
 
 bool DownloadItemImpl::IsParallelDownload() const {
-  bool is_parallelizable = job_ ? job_->IsParallelizable() : false;
-  return is_parallelizable && download::IsParallelDownloadEnabled();
+  return job_ && job_->IsParallelizable() &&
+         download::IsParallelDownloadEnabled();
 }
 
 DownloadItem::DownloadCreationType DownloadItemImpl::GetDownloadCreationType()
@@ -2097,15 +2097,6 @@ void DownloadItemImpl::Completed() {
   if (is_parallelizable) {
     RecordParallelizableDownloadCount(COMPLETED_COUNT,
                                       IsParallelDownloadEnabled());
-    int64_t content_length = -1;
-    if (response_headers_->response_code() != net::HTTP_PARTIAL_CONTENT) {
-      content_length = response_headers_->GetContentLength();
-    } else {
-      int64_t first_byte = -1;
-      int64_t last_byte = -1;
-      response_headers_->GetContentRangeFor206(&first_byte, &last_byte,
-                                               &content_length);
-    }
   }
 
   if (auto_opened_) {
@@ -2303,9 +2294,9 @@ void DownloadItemImpl::SetHashState(
   }
 
   std::unique_ptr<crypto::SecureHash> clone_of_hash_state(hash_state_->Clone());
-  std::vector<char> hash_value(clone_of_hash_state->GetHashLength());
-  clone_of_hash_state->Finish(&hash_value.front(), hash_value.size());
-  destination_info_.hash.assign(hash_value.begin(), hash_value.end());
+  destination_info_.hash.resize(clone_of_hash_state->GetHashLength());
+  clone_of_hash_state->Finish(
+      base::as_writable_byte_span(destination_info_.hash));
 }
 
 void DownloadItemImpl::ReleaseDownloadFile(bool destroy_file) {

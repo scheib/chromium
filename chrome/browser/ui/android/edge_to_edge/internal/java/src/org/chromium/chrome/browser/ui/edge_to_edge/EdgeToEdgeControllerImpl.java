@@ -4,6 +4,9 @@
 
 package org.chromium.chrome.browser.ui.edge_to_edge;
 
+import static androidx.core.view.WindowInsetsCompat.Type.systemBars;
+import static androidx.core.view.WindowInsetsCompat.Type.tappableElement;
+
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.app.Activity;
@@ -37,13 +40,13 @@ import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.chrome.browser.tab.TabSupplierObserver;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeManager;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeManager.BackupNavbarInsetsCallSite;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgePadAdjuster;
-import org.chromium.components.browser_ui.edge_to_edge.EdgeToEdgeStateProvider;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeManager;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeManager.BackupNavbarInsetsCallSite;
+import org.chromium.ui.edge_to_edge.EdgeToEdgePadAdjuster;
+import org.chromium.ui.edge_to_edge.EdgeToEdgeStateProvider;
 import org.chromium.ui.insets.InsetObserver;
 import org.chromium.ui.insets.InsetObserver.WindowInsetsConsumer;
 import org.chromium.ui.insets.InsetObserver.WindowInsetsConsumer.InsetConsumerSource;
@@ -232,15 +235,6 @@ public class EdgeToEdgeControllerImpl
                 };
         mTabObserver =
                 new EmptyTabObserver() {
-                    @Override
-                    public void onWebContentsSwapped(
-                            Tab tab, boolean didStartLoad, boolean didFinishLoad) {
-                        drawToEdge(
-                                EdgeToEdgeUtils.isPageOptedIntoEdgeToEdge(mCurrentTab),
-                                /* changedWindowState= */ false);
-                        updateWebContentsObserver(tab);
-                    }
-
                     @Override
                     public void onContentChanged(Tab tab) {
                         assert tab.getWebContents() != null
@@ -887,7 +881,7 @@ public class EdgeToEdgeControllerImpl
 
     private static Insets getSystemInsets(
             WindowInsetsCompat windowInsets, boolean hasSeenNonZeroNavigationBarInsets) {
-        Insets systemBarInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+        Insets systemBarInsets = windowInsets.getInsets(systemBars() + tappableElement());
 
         if (!EdgeToEdgeUtils.isUseBackupNavbarInsetsEnabled()) return systemBarInsets;
 
@@ -900,8 +894,6 @@ public class EdgeToEdgeControllerImpl
                             windowInsets,
                             BackupNavbarInsetsCallSite.EDGE_TO_EDGE_CONTROLLER,
                             EdgeToEdgeFieldTrialImpl.getBackupNavbarInsetsOverrides(),
-                            ChromeFeatureList.sEdgeToEdgeUseBackupNavbarInsetsUseTappable
-                                    .getValue(),
                             ChromeFeatureList.sEdgeToEdgeUseBackupNavbarInsetsUseGestures
                                     .getValue());
             // If applicable, apply backup navbar insets to the left, right, and bottom (not the

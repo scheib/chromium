@@ -37,7 +37,8 @@ import time
 import urllib
 
 from update import (CDS_URL, CHROMIUM_DIR, CLANG_REVISION, LLVM_BUILD_DIR,
-                    FORCE_HEAD_REVISION_FILE, PACKAGE_VERSION, RELEASE_VERSION,
+                    FORCE_HEAD_REVISION_FILENAME, FORCE_HEAD_REVISION_FILE,
+                    PACKAGE_VERSION, RELEASE_VERSION, STAMP_FILENAME,
                     STAMP_FILE, THIS_DIR, DownloadUrl, DownloadAndUnpack,
                     DownloadAndUnpackPackage, EnsureDirExists, GetDefaultHostOs,
                     ReadStampFile, RmTree, WriteStampFile)
@@ -226,6 +227,9 @@ def GitCherryPick(git_repository,
 
 def GitRevert(git_repository, commit):
   print(f'Reverting {commit} in {git_repository}')
+  if not IsGitAncestorToHead(git_repository, commit):
+    print('Commit not an ancestor; skipping.')
+    return
   env = os.environ.copy()
   env.update(MODIFICATION_DATES)
   RunCommand(['git', '-C', git_repository, 'revert', '--no-edit', commit],
@@ -768,15 +772,17 @@ def main():
                       dest='with_zstd',
                       action='store_false',
                       help='Disable zstd in the build')
+  parser.add_argument('--preserve-gcs-signature',
+                      action='store_true',
+                      help='By default, this script removes gcs hash files '
+                      'so that third_party/llvm-build is clobbered on the next'
+                      'run of gclient sync. This disables that, so that the'
+                      'directory will be preserved when syncing. Useful for'
+                      'local development.')
 
   args = parser.parse_args()
 
-  global CLANG_REVISION, PACKAGE_VERSION, LLVM_BUILD_DIR
-
-  # TODO(crbug.com/432036065): Remove in next Clang roll.
-  if args.llvm_force_head_revision:
-    global RELEASE_VERSION
-    RELEASE_VERSION = '22'
+  global CLANG_REVISION, PACKAGE_VERSION, LLVM_BUILD_DIR, STAMP_FILE, FORCE_HEAD_REVISION_FILE
 
   if (args.pgo or args.thinlto) and not args.bootstrap:
     print('--pgo/--thinlto requires --bootstrap')
@@ -823,6 +829,12 @@ def main():
 
   if args.build_dir:
     LLVM_BUILD_DIR = args.build_dir
+    # These files record that we've done a local build of clang, and may be
+    # checked by the build system to validate the compiler. If we have a custom
+    # build directory, make sure they appear there instead of the default one.
+    STAMP_FILE = os.path.normpath(os.path.join(LLVM_BUILD_DIR, STAMP_FILENAME))
+    FORCE_HEAD_REVISION_FILE = os.path.normpath(
+        os.path.join(LLVM_BUILD_DIR, "..", FORCE_HEAD_REVISION_FILENAME))
 
   if args.llvm_force_head_revision:
     checkout_revision = GetLatestLLVMCommit()
@@ -832,14 +844,20 @@ def main():
   if not args.skip_checkout:
     with timer.time('checkout llvm'):
       CheckoutGitRepo('LLVM monorepo', LLVM_GIT_URL, checkout_revision, LLVM_DIR)
+      # TODO(crbug.com/435127246): remove once we roll past this revision
+      GitCherryPick(LLVM_DIR, '69b8d6d4ead01b88fb8d6642914ca7492e32fdb6')
 
   if args.llvm_force_head_revision:
     CLANG_REVISION = GetCommitDescription(checkout_revision)
     PACKAGE_VERSION = '%s-0' % CLANG_REVISION
 
   print('Locally building clang %s...' % PACKAGE_VERSION)
-  WriteStampFile('', STAMP_FILE)
-  WriteStampFile('', FORCE_HEAD_REVISION_FILE)
+  WriteStampFile('',
+                 STAMP_FILE,
+                 preserve_hash_files=args.preserve_gcs_signature)
+  WriteStampFile('',
+                 FORCE_HEAD_REVISION_FILE,
+                 preserve_hash_files=args.preserve_gcs_signature)
 
   if not args.use_system_cmake:
     AddCMakeToPath()
@@ -1009,6 +1027,8 @@ def main():
         '^.*Sanitizer-.*sunrpc.*cpp$',
         # sysroot/host glibc version mismatch, crbug.com/1506551
         '^.*Sanitizer.*mallinfo2.cpp$',
+        # This BOLT test hangs in lit's internal shell, crbug.com/442483657
+        '^BOLT.*runtime/instrumentation-indirect-2.c$',
     ]
   elif sys.platform == 'darwin':
     lit_excludes += [
@@ -1197,12 +1217,6 @@ def main():
   if args.llvm_force_head_revision:
     cflags += ['-DLLVM_FORCE_HEAD_REVISION']
     cxxflags += ['-DLLVM_FORCE_HEAD_REVISION']
-
-  # TODO(https://crbug.com/437910658): remove once we roll past clang change
-  if IsGitAncestorToHead(LLVM_DIR,
-                         '91cdd35008e9ab32dffb7e401cdd7313b3461892'):
-    cflags += ['-DCLANG_ELABORATED_TYPE_CHANGES']
-    cxxflags += ['-DCLANG_ELABORATED_TYPE_CHANGES']
 
   # Build PDBs for archival on Windows.  Don't use RelWithDebInfo since it
   # has different optimization defaults than Release.
@@ -1646,8 +1660,12 @@ def main():
     with timer.time('install'):
       RunCommand(['ninja', 'install'], setenv=True)
 
-  WriteStampFile(PACKAGE_VERSION, STAMP_FILE)
-  WriteStampFile(PACKAGE_VERSION, FORCE_HEAD_REVISION_FILE)
+  WriteStampFile(PACKAGE_VERSION,
+                 STAMP_FILE,
+                 preserve_hash_files=args.preserve_gcs_signature)
+  WriteStampFile(PACKAGE_VERSION,
+                 FORCE_HEAD_REVISION_FILE,
+                 preserve_hash_files=args.preserve_gcs_signature)
 
   print('Clang build was successful.')
 

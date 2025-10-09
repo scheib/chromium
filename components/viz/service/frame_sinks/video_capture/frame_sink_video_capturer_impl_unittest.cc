@@ -20,6 +20,7 @@
 #include "base/notimplemented.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/gtest_util.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/time/time.h"
 #include "base/token.h"
@@ -147,6 +148,8 @@ gfx::Size GetBufferSizeInPixelsForVideoPixelFormat(
   }
 }
 
+const uint32_t kSourceId = 8276;
+
 // Dummy frame sink ID.
 const VideoCaptureTarget kVideoCaptureTarget(FrameSinkId(1, 1));
 
@@ -218,7 +221,7 @@ class MockConsumer : public mojom::FrameSinkVideoConsumer {
       : test_sii_(base::MakeRefCounted<gpu::TestSharedImageInterface>()) {}
 
   MOCK_METHOD0(OnFrameCapturedMock, void());
-  MOCK_METHOD1(OnNewSubCaptureTargetVersion, void(uint32_t));
+  MOCK_METHOD1(OnNewCaptureVersion, void(const media::CaptureVersion&));
   MOCK_METHOD0(OnStopped, void());
   MOCK_METHOD1(OnLog, void(const std::string&));
 
@@ -822,7 +825,8 @@ class FrameSinkVideoCapturerTest
 
     capturer_ = std::make_unique<FrameSinkVideoCapturerImpl>(
         frame_sink_manager_, gmb_context_provider_.get(), mojo::NullReceiver(),
-        std::move(oracle), false);
+        std::move(oracle), /*log_to_webrtc=*/false,
+        /*capture_version_source=*/kSourceId);
   }
 
   void SetUp() override {
@@ -1907,6 +1911,31 @@ TEST_P(FrameSinkVideoCapturerTest, ClientCaptureStartsAndStops) {
   // Stop capturing. frame_sink_ should now have no client capturing.
   StopCapture();
   EXPECT_EQ(frame_sink_.number_clients_capturing(), 0);
+}
+
+TEST_P(FrameSinkVideoCapturerTest, ChangeTargetIncreasesCaptureVersion) {
+  const auto kCropId = RegionCaptureCropId::CreateRandom();
+  VideoCaptureTarget target(kVideoCaptureTarget.frame_sink_id, kCropId);
+
+  EXPECT_CALL(frame_sink_manager_, FindCapturableFrameSink(target))
+      .WillRepeatedly(Return(&frame_sink_));
+
+  MockConsumer consumer;
+  EXPECT_CALL(consumer, OnNewCaptureVersion(media::CaptureVersion(
+                            /*source=*/kSourceId, /*sub_capture=*/0)))
+      .Times(1);
+  StartCapture(&consumer);
+
+  PropagateMojoTasks();
+  testing::Mock::VerifyAndClearExpectations(&consumer);
+
+  // The capture-version is increased from (kSourceId, 0) to a larger value.
+  const media::CaptureVersion capture_version(/*source=*/kSourceId,
+                                              /*sub_capture=*/222);
+  EXPECT_CALL(consumer, OnNewCaptureVersion(capture_version)).Times(1);
+  capturer_->ChangeTarget(target, capture_version.sub_capture);
+  PropagateMojoTasks();
+  testing::Mock::VerifyAndClearExpectations(&consumer);
 }
 
 TEST_P(FrameSinkVideoCapturerTest, RegionCaptureCropId) {

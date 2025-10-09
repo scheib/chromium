@@ -17,6 +17,7 @@
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/android/event_forwarder.h"
+#include "ui/android/ui_android_features.h"
 #include "ui/android/window_android.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
@@ -565,6 +566,16 @@ void ViewAndroid::OnControlsResizeViewChanged(bool controls_resize_view) {
   }
 }
 
+void ViewAndroid::DispatchWindowPositionChange() {
+  if (event_handler_) {
+    event_handler_->OnWindowPositionChanged();
+  }
+
+  for (ViewAndroid* child : children_) {
+    child->DispatchWindowPositionChange();
+  }
+}
+
 gfx::Size ViewAndroid::GetPhysicalBackingSize() const {
   return physical_size_;
 }
@@ -733,8 +744,10 @@ bool ViewAndroid::HitTest(EventHandlerCallback<E> handler_callback,
       bool matched = child->match_parent();
       if (!matched)
         matched = child->bounds_dips_.Contains(int_point);
-      if (matched && child->HitTest(handler_callback, event, offset_point))
+      if (matched && child->HitTest(handler_callback, event, offset_point) &&
+          child->IsCheckHitEligible()) {
         return true;
+      }
     }
   }
   return false;
@@ -759,6 +772,11 @@ void ViewAndroid::OnPointerLockRelease() {
   if (event_handler_) {
     event_handler_->OnPointerLockRelease();
   }
+}
+
+bool ViewAndroid::IsCheckHitEligible() const {
+  return !base::FeatureList::IsEnabled(kCheckHitEligibility) ||
+         is_hit_test_eligible_;
 }
 
 }  // namespace ui

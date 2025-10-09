@@ -67,7 +67,7 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/widget/widget_delegate.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -167,7 +167,7 @@ VideoOverlayWindowViews::WindowQuadrant GetCurrentWindowQuadrant(
     const gfx::Rect window_bounds,
     content::PictureInPictureWindowController* controller) {
   const gfx::Rect work_area =
-      display::Screen::GetScreen()
+      display::Screen::Get()
           ->GetDisplayNearestWindow(
               controller->GetWebContents()->GetTopLevelNativeWindow())
           .work_area();
@@ -264,9 +264,9 @@ class GradientBackground : public views::Background {
 
 }  // namespace
 
-// OverlayWindow implementation of NonClientFrameView.
-class OverlayWindowFrameView : public views::NonClientFrameView {
-  METADATA_HEADER(OverlayWindowFrameView, views::NonClientFrameView)
+// OverlayWindow implementation of FrameView.
+class OverlayWindowFrameView : public views::FrameView {
+  METADATA_HEADER(OverlayWindowFrameView, views::FrameView)
 
  public:
   explicit OverlayWindowFrameView(views::Widget* widget) : widget_(widget) {}
@@ -276,7 +276,7 @@ class OverlayWindowFrameView : public views::NonClientFrameView {
 
   ~OverlayWindowFrameView() override = default;
 
-  // views::NonClientFrameView:
+  // views::FrameView:
   gfx::Rect GetBoundsForClientView() const override { return bounds(); }
   gfx::Rect GetWindowBoundsForClientBounds(
       const gfx::Rect& client_bounds) const override {
@@ -369,7 +369,7 @@ class OverlayWindowWidgetDelegate : public views::WidgetDelegate {
   ~OverlayWindowWidgetDelegate() override = default;
 
   // views::WidgetDelegate:
-  std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
+  std::unique_ptr<views::FrameView> CreateFrameView(
       views::Widget* widget) override {
     return std::make_unique<OverlayWindowFrameView>(widget);
   }
@@ -386,8 +386,8 @@ std::unique_ptr<VideoOverlayWindowViews> VideoOverlayWindowViews::Create(
 
   // The 2024 updated controls use dark mode colors.
   if (Use2024UI()) {
-    overlay_window->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark,
-                                         /*background_color=*/std::nullopt);
+    overlay_window->SetColorModeOverride(
+        ui::ColorProviderKey::ColorMode::kDark);
   }
 
   overlay_window->CalculateAndUpdateWindowBounds();
@@ -501,14 +501,14 @@ VideoOverlayWindowViews::VideoOverlayWindowViews(
           base::BindRepeating(
               &VideoOverlayWindowViews::ReEnableControlsAfterMove,
               base::Unretained(this))) {
-  display::Screen::GetScreen()->AddObserver(this);
+  display::Screen::Get()->AddObserver(this);
 }
 
 VideoOverlayWindowViews::~VideoOverlayWindowViews() {
   if (overlay_view_) {
     overlay_view_->RemoveObserver(this);
   }
-  display::Screen::GetScreen()->RemoveObserver(this);
+  display::Screen::Get()->RemoveObserver(this);
   PictureInPictureWindowManager::GetInstance()->OnPictureInPictureWindowHidden(
       this);
 }
@@ -906,6 +906,7 @@ void VideoOverlayWindowViews::UpdateControlsVisibility(bool is_visible,
     }
     GetControlsContainerView()->layer()->SetOpacity(wanted_visibility ? 1.0
                                                                       : 0.0);
+    GetControlsContainerView()->SetVisible(wanted_visibility);
   }
 }
 
@@ -946,7 +947,7 @@ void VideoOverlayWindowViews::OnDisplayMetricsChanged(
   // Some display metric changes, such as display scaling, can affect the work
   // area, so max size needs to be updated.
   if (changed_metrics & display::DisplayObserver::DISPLAY_METRIC_WORK_AREA &&
-      display.id() == display::Screen::GetScreen()
+      display.id() == display::Screen::Get()
                           ->GetDisplayNearestWindow(GetNativeWindow())
                           .id()) {
     UpdateMaxSize(GetWorkAreaForWindow());
@@ -985,7 +986,7 @@ void VideoOverlayWindowViews::OnAutoPipSettingOverlayViewHidden() {
 }
 
 gfx::Rect VideoOverlayWindowViews::GetWorkAreaForWindow() const {
-  return display::Screen::GetScreen()
+  return display::Screen::Get()
       ->GetDisplayNearestWindow(
           native_widget() && IsVisible()
               ? GetNativeWindow()
@@ -1806,8 +1807,8 @@ void VideoOverlayWindowViews::OnUpdateControlsBounds() {
         {top_controls_bounds.width() - origin_position.x() - kOriginRightMargin,
          kOriginHeight});
 
-    minimize_button_->SetPosition(GetBounds().size(), quadrant);
-    back_to_tab_button_->SetPosition(GetBounds().size(), quadrant);
+    minimize_button_->SetPosition(GetBounds().size());
+    back_to_tab_button_->SetPosition(GetBounds().size());
 
     // Positioning of the middle row of controls.
     const gfx::Point center_control_position(
@@ -2403,12 +2404,17 @@ void VideoOverlayWindowViews::OnGestureEvent(ui::GestureEvent* event) {
     return;
   }
 
-  // Hide the live caption dialog if it's visible and the user taps outside of
-  // it.
-  if (live_caption_dialog_ && live_caption_dialog_->GetVisible() &&
-      !GetLiveCaptionDialogBounds().Contains(event->location()) &&
-      !GetLiveCaptionButtonBounds().Contains(event->location())) {
-    SetLiveCaptionDialogVisibility(false);
+  if (live_caption_dialog_ && live_caption_dialog_->GetVisible()) {
+    if (!GetLiveCaptionDialogBounds().Contains(event->location())) {
+      // Hide the live caption dialog if it's visible and the user taps outside
+      // of it.
+      SetLiveCaptionDialogVisibility(false);
+      event->SetHandled();
+      return;
+    }
+
+    // Otherwise, let the live caption dialog handle the gesture.
+    live_caption_dialog_->OnGestureTapEvent(event);
     return;
   }
 
@@ -2443,6 +2449,12 @@ void VideoOverlayWindowViews::OnGestureEvent(ui::GestureEvent* event) {
     event->SetHandled();
   } else if (GetHangUpButtonBounds().Contains(event->location())) {
     controller_->HangUp();
+    event->SetHandled();
+  } else if (GetReplay10SecondsButtonBounds().Contains(event->location())) {
+    Replay10Seconds();
+    event->SetHandled();
+  } else if (GetForward10SecondsButtonBounds().Contains(event->location())) {
+    Forward10Seconds();
     event->SetHandled();
   } else if (GetLiveCaptionButtonBounds().Contains(event->location())) {
     OnLiveCaptionButtonPressed();

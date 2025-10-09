@@ -10,7 +10,6 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/unguessable_token.h"
 #include "net/disk_cache/buildflags.h"
 #include "net/disk_cache/disk_cache.h"
 #include "net/disk_cache/sql/cache_entry_key.h"
@@ -35,10 +34,16 @@ class NET_EXPORT_PRIVATE SqlEntryImpl final
     : public Entry,
       public base::RefCounted<SqlEntryImpl> {
  public:
+  // For a speculatively created entry, this holds `std::nullopt` initially, and
+  // when the entry creation task is complete, it will hold either the `ResId`
+  // on success or an `Error` on failure. Otherwise, it just holds a `ResId`.
+  using ResIdOrErrorHolder = base::RefCountedData<std::optional<
+      std::variant<SqlPersistentStore::ResId, SqlPersistentStore::Error>>>;
+
   // Constructs a SqlEntryImpl.
   SqlEntryImpl(base::WeakPtr<SqlBackendImpl> backend,
                CacheEntryKey key,
-               const base::UnguessableToken& token,
+               scoped_refptr<ResIdOrErrorHolder> res_id_or_error,
                base::Time last_used,
                int64_t body_end,
                scoped_refptr<net::GrowableIOBuffer> head);
@@ -79,8 +84,10 @@ class NET_EXPORT_PRIVATE SqlEntryImpl final
   // Returns the cache key of the entry.
   const CacheEntryKey& cache_key() const { return key_; }
 
-  // Returns the unique token for this entry instance.
-  const base::UnguessableToken& token() const { return token_; }
+  // Returns the holder for the resource ID or an error.
+  const scoped_refptr<ResIdOrErrorHolder>& res_id_or_error() const {
+    return res_id_or_error_;
+  }
 
   // Marks the entry as doomed. This is called by the backend when an
   // active entry is doomed.
@@ -118,10 +125,9 @@ class NET_EXPORT_PRIVATE SqlEntryImpl final
   // The key for this cache entry.
   const CacheEntryKey key_;
 
-  // A unique token identifying this specific instance of the entry.
-  // This is used to ensure that operations (like dooming or deleting)
-  // target the correct version of an entry if it's reopened.
-  const base::UnguessableToken token_;
+  // Holds the ResId of the entry or an error if the speculative creation
+  // failed.
+  const scoped_refptr<ResIdOrErrorHolder> res_id_or_error_;
 
   // The last time this entry was accessed.
   base::Time last_used_;

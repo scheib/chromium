@@ -332,10 +332,12 @@
 <translation id="2083190527011054446">Jó éjszakát, <ph name="GIVEN_NAME" />!</translation>
 <translation id="2086334242442703436">Emojiválasztó megnyitása</translation>
 <translation id="2088116547584365419">játékok</translation>
+<translation id="2093792000875799555">Steam for Chromebook-hírek</translation>
 <translation id="209965399369889474">Nincs hálózati kapcsolat</translation>
 <translation id="2107581415810719320">Egyéb gomb: <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Az USB-C kábel nem támogatja a Thunderbolt-eszközöket. Ez korlátozhatja az eszköz teljesítményét.</translation>
 <translation id="2108303511227308752">Az Alt + Backspace billentyűparancs módosult. A Delete billentyű használatához nyomja le a(z) <ph name="LAUNCHER_KEY_NAME" /> + Backspace billentyűparancsot.</translation>
+<translation id="2115680839221566783">Az akkumulátor töltöttsége <ph name="PERCENTAGE" />%. A töltés szünetel.</translation>
 <translation id="2126242104232412123">Új asztal</translation>
 <translation id="2132302418721800944">Teljes képernyő rögzítése</translation>
 <translation id="2135456203358955318">Dokkolt nagyító</translation>
@@ -1589,6 +1591,7 @@ Nincsenek csatlakoztatott eszközök.</translation>
 <translation id="612734058257491180">A Google Segéd nem áll rendelkezésre Vendég-munkafolyamatban.</translation>
 <translation id="6127395413317891856">Ön offline állapotban van. Ellenőrizze a kapcsolatot, majd próbálja meg újra.</translation>
 <translation id="6129953537138746214">Szóköz</translation>
+<translation id="6136872094979134163">Nem sikerült lekérni a Steam for Chromebook-híreket.</translation>
 <translation id="6137566720514957455">Eltávolítási párbeszédpanel megnyitása, <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Mire szeretne összpontosítani?</translation>
 <translation id="6141988275892716286">Letöltés megerősítése</translation>
@@ -1678,6 +1681,7 @@ Nincsenek csatlakoztatott eszközök.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> itt: <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> esemény</translation>
+<translation id="6448529022565414427">A töltés szünetel</translation>
 <translation id="6449483711453944360">A Linux-alkalmazások és az inkognitó ablakok jelenleg nem támogatottak.</translation>
 <translation id="6450245544201845082">A jobb egérgombos kattintás billentyűparancsa jelenleg ki van kapcsolva</translation>
 <translation id="6452181791372256707">Elutasítás</translation>

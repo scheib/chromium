@@ -12,7 +12,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -61,10 +60,8 @@ import org.chromium.chrome.browser.tab.state.ArchivePersistedTabData;
 import org.chromium.chrome.browser.tabmodel.TabClosureParams;
 import org.chromium.chrome.browser.tabmodel.TabCreator;
 import org.chromium.chrome.browser.tabmodel.TabGroupModelFilter;
-import org.chromium.chrome.browser.tabmodel.TabGroupModelFilterProvider;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.chrome.browser.tabwindow.TabWindowManager;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.transit.AutoResetCtaTransitTestRule;
 import org.chromium.chrome.test.transit.ChromeTransitTestRules;
@@ -96,14 +93,9 @@ public class TabArchiverTest {
     private static final String TEST_PATH_2 = "/chrome/test/data/android/google.html";
 
     private @Mock Clock mClock;
-    private @Mock TabModelSelector mSelector;
-    private @Mock TabWindowManager mTabWindowManager;
     private @Mock Tab mTab;
-    private @Mock TabGroupModelFilterProvider mTabGroupModelFilterProvider;
-    private @Mock TabGroupModelFilter mTabGroupModelFilter;
     private @Mock TabGroupSyncService mTabGroupSyncService;
 
-    private ArchivedTabModelOrchestrator mArchivedTabModelOrchestrator;
     private TabArchiverImpl mTabArchiver;
     private TabModelSelector mRegularTabModelSelector;
     private TabModel mArchivedTabModel;
@@ -116,7 +108,7 @@ public class TabArchiverTest {
 
     @Before
     public void setUp() throws Exception {
-        mArchivedTabModelOrchestrator =
+        ArchivedTabModelOrchestrator archivedTabModelOrchestrator =
                 runOnUiThreadBlocking(
                         () ->
                                 ArchivedTabModelOrchestrator.getForProfile(
@@ -126,25 +118,16 @@ public class TabArchiverTest {
                                                 .get()
                                                 .getOriginalProfile()));
         TabGroupModelFilter archivedTabGroupModelFilter =
-                mArchivedTabModelOrchestrator
+                archivedTabModelOrchestrator
                         .getTabModelSelector()
                         .getTabGroupModelFilterProvider()
                         .getCurrentTabGroupModelFilter();
         mArchivedTabModel = archivedTabGroupModelFilter.getTabModel();
-        mArchivedTabCreator = mArchivedTabModelOrchestrator.getArchivedTabCreatorForTesting();
+        mArchivedTabCreator = archivedTabModelOrchestrator.getArchivedTabCreatorForTesting();
 
         mRegularTabModelSelector = mActivityTestRule.getActivity().getTabModelSelector();
         mRegularTabModel = mActivityTestRule.getActivity().getCurrentTabModel();
         mRegularTabCreator = mActivityTestRule.getActivity().getTabCreator(false);
-
-        doReturn(mSelector).when(mTabWindowManager).getTabModelSelectorById(anyInt());
-        doReturn(mRegularTabModel).when(mSelector).getModel(anyBoolean());
-        doReturn(true).when(mSelector).isTabStateInitialized();
-        doReturn(mTabGroupModelFilterProvider).when(mSelector).getTabGroupModelFilterProvider();
-        doReturn(mTabGroupModelFilter)
-                .when(mTabGroupModelFilterProvider)
-                .getCurrentTabGroupModelFilter();
-        doReturn(mRegularTabModel).when(mTabGroupModelFilter).getTabModel();
 
         mSharedPrefs = ChromeSharedPreferences.getInstance();
         runOnUiThreadBlocking(
@@ -196,11 +179,11 @@ public class TabArchiverTest {
         assertEquals(0, getTabCountOnUiThread(mArchivedTabModel));
 
         assertEquals(
+                new ArrayList<>(),
                 mTabArchiver.getTabsToArchive(
                         mRegularTabModelSelector
                                 .getTabGroupModelFilterProvider()
-                                .getCurrentTabGroupModelFilter()),
-                new ArrayList<>());
+                                .getCurrentTabGroupModelFilter()));
     }
 
     @Test
@@ -1152,14 +1135,6 @@ public class TabArchiverTest {
 
     @Test
     @MediumTest
-    public void testTabModelSelectorUninitialized() {
-        doReturn(false).when(mSelector).isTabStateInitialized();
-        runOnUiThreadBlocking(() -> mTabArchiver.doArchivePass(mSelector));
-        verify(mSelector, times(0)).getModel(anyBoolean());
-    }
-
-    @Test
-    @MediumTest
     public void testArchivedTabParentRootIdsReset() {
         Tab tab =
                 mActivityTestRule.loadUrlInNewTab(
@@ -1430,6 +1405,47 @@ public class TabArchiverTest {
                             });
                 });
         callbackHelper.waitForNext();
+    }
+
+    @Test
+    @MediumTest
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
+    public void testPinnedTabsAreNotArchived() {
+        mActivityTestRule.loadUrlInNewTab(
+                mActivityTestRule.getTestServer().getURL(TEST_PATH), /* incognito= */ false);
+
+        runOnUiThreadBlocking(
+                () -> {
+                    // Set the tab to expire after 1 hour to simplify testing.
+                    mTabArchiveSettings.setArchiveTimeDeltaHours(1);
+                });
+
+        // Set the clock to 1 hour after 0.
+        doReturn(TimeUnit.HOURS.toMillis(1)).when(mClock).currentTimeMillis();
+
+        // Get the tab and pin it.
+        Tab tab = runOnUiThreadBlocking(() -> mRegularTabModel.getTabAt(0));
+        runOnUiThreadBlocking(() -> tab.setIsPinned(true));
+
+        // Set the timestamp for the tab at 0, it should be archived.
+        runOnUiThreadBlocking(
+                () -> {
+                    ((TabImpl) tab).setTimestampMillisForTesting(0);
+                });
+
+        assertEquals(2, getTabCountOnUiThread(mRegularTabModel));
+        assertEquals(0, getTabCountOnUiThread(mArchivedTabModel));
+
+        // The pinned tab should be skipped.
+        runOnUiThreadBlocking(
+                () ->
+                        mTabArchiver.doArchivePass(
+                                mActivityTestRule
+                                        .getActivity()
+                                        .getTabModelSelectorSupplier()
+                                        .get()));
+        CriteriaHelper.pollUiThread(() -> 2 == getTabCountOnUiThread(mRegularTabModel));
+        assertEquals(0, getTabCountOnUiThread(mArchivedTabModel));
     }
 
     private void addRegularTabInBackgroundForArchive(String path) {

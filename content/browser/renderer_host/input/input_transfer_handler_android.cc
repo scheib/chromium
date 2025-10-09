@@ -8,6 +8,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/trace_event/typed_macros.h"
+#include "components/input/features.h"
 #include "components/input/utils.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/compositor/surface_utils.h"
@@ -90,7 +91,7 @@ bool InputTransferHandlerAndroid::OnTouchEvent(
     return true;
   }
 
-  if (event.GetDownTime() <= cached_transferred_sequence_down_time_ms_ &&
+  if (event.GetRawDownTime() <= cached_transferred_sequence_down_time_ms_ &&
       requested_input_back_reason_ ==
           RequestInputBackReason::kStartDragAndDropGesture) {
     requested_input_back_reason_ = std::nullopt;
@@ -115,24 +116,26 @@ bool InputTransferHandlerAndroid::OnTouchEvent(
   const bool active_touch_sequence_on_viz =
       cached_transferred_sequence_down_time_ms_ > last_seen_touch_end_ts_;
 
-  // GetDownTime is in milliseconds precision, convert delta to milliseconds
+  // GetRawDownTime is in milliseconds precision, convert delta to milliseconds
   // precision as well for accurate comparison.
   const int64_t delta =
-      (event.GetEventTime() - event.GetDownTime()).InMilliseconds();
+      (event.GetEventTime() - event.GetRawDownTime()).InMilliseconds();
   if (delta < 0) {
     // TODO(crbug.com/406485568): Investigate this negative delta and
     // potentially file an Android platform bug.
     TRACE_EVENT_INSTANT("input,input.scrolling", "DownTimeAfterEventTime");
-    EmitTransferResultHistogramAndTraceEvent(
-        TransferInputToVizResult::kDownTimeAfterEventTime);
-    if (active_touch_sequence_on_viz) {
-      OnStartDroppingSequence(
-          event,
-          InputOnVizSequenceDroppedReason::kActiveSeqOnVizAbnormalDownTime);
-      return true;
+    if (!input::features::kTransferSequencesWithAbnormalDownTime.Get()) {
+      EmitTransferResultHistogramAndTraceEvent(
+          TransferInputToVizResult::kDownTimeAfterEventTime);
+      if (active_touch_sequence_on_viz) {
+        OnStartDroppingSequence(
+            event,
+            InputOnVizSequenceDroppedReason::kActiveSeqOnVizAbnormalDownTime);
+        return true;
+      }
+      // Let browser handle this sequence.
+      return false;
     }
-    // Let browser handle this sequence.
-    return false;
   }
 
   const bool is_transferred_back_sequence = delta > 0;
@@ -177,7 +180,6 @@ bool InputTransferHandlerAndroid::OnTouchEvent(
 
   const bool browser_would_have_handled =
       (transfer_result == TransferInputToVizResult::kSelectionHandlesActive) ||
-      (transfer_result == TransferInputToVizResult::kCanTriggerBackGesture) ||
       (transfer_result == TransferInputToVizResult::kImeIsActive) ||
       (transfer_result == TransferInputToVizResult::kRequestedByEmbedder) ||
       (transfer_result ==
@@ -216,7 +218,7 @@ bool InputTransferHandlerAndroid::FilterRedundantDownEvent(
   // `cached_transferred_sequence_down_time_ms_` would have a more recent time
   // than the down time of the whole sequence.
   requested_input_back_ = false;
-  return event.GetDownTime() <= cached_transferred_sequence_down_time_ms_;
+  return event.GetRawDownTime() <= cached_transferred_sequence_down_time_ms_;
 }
 
 void InputTransferHandlerAndroid::RequestInputBack(
@@ -269,12 +271,18 @@ void InputTransferHandlerAndroid::DropCurrentSequence(
 void InputTransferHandlerAndroid::ConsumeEventsUntilCancel(
     const ui::MotionEventAndroid& event) {
   CHECK_EQ(handler_state_, HandlerState::kConsumeEventsUntilCancel);
+  num_events_in_dropped_sequence_++;
   // TODO(crbug.com/383307455): Forward events seen on Browser post transfer
   // over to Viz.
   if (event.GetAction() == ui::MotionEvent::Action::CANCEL) {
-    if (event.GetDownTime() != cached_transferred_sequence_down_time_ms_) {
-      // TODO(crbug.com/411338242): Investigate touch cancel received with
-      // different downtime.
+    if (event.GetRawDownTime() != cached_transferred_sequence_down_time_ms_) {
+      // The `transferTouchGesture` API doesn't tell us about the sequence that
+      // was successfully transferred. In a scenario like this: TouchDown1,
+      // TouchUp1, TouchDown2.
+      // Chrome sees TouchDown1 and requests for transfer, but by the time
+      // OS processed the request a new sequence with downtime of TouchDown2 had
+      // started. In such scenarios the cancel is generated with downtime of
+      // TouchDown2.
       TRACE_EVENT_INSTANT("input,input.scrolling",
                           "CancelWithDifferentDownTime");
     }
@@ -284,7 +292,23 @@ void InputTransferHandlerAndroid::ConsumeEventsUntilCancel(
 
     handler_state_ = HandlerState::kIdle;
     touch_moves_seen_after_transfer_ = 0;
+    num_events_in_dropped_sequence_ = 0;
     return;
+  }
+  if (event.GetAction() == ui::MotionEvent::Action::UP) {
+    // The touch sequence transferred by system was probably a different one
+    // than the one Chrome requested for.
+    base::UmaHistogramEnumeration(
+        kTouchSequenceDroppedReasonHistogram,
+        InputOnVizSequenceDroppedReason::kAndroidOSTransferredANewSequence);
+    base::UmaHistogramCustomCounts(
+        kEventsInDroppedSequenceHistogram, num_events_in_dropped_sequence_,
+        kTouchMoveCountsMin, kTouchMoveCountsMax, kTouchMoveCountsBuckets);
+    num_events_in_dropped_sequence_ = 0;
+  }
+  if (event.GetAction() == ui::MotionEvent::Action::DOWN) {
+    client_->SendStateOnTouchTransfer(event,
+                                      last_sent_browser_would_have_handled_);
   }
   if (event.GetAction() == ui::MotionEvent::Action::MOVE) {
     touch_moves_seen_after_transfer_++;
@@ -307,8 +331,12 @@ void InputTransferHandlerAndroid::OnTouchTransferredSuccessfully(
     bool browser_would_have_handled) {
   CHECK_EQ(handler_state_, HandlerState::kIdle);
   handler_state_ = HandlerState::kConsumeEventsUntilCancel;
-  cached_transferred_sequence_down_time_ms_ = event.GetDownTime();
+  cached_transferred_sequence_down_time_ms_ = event.GetRawDownTime();
+  last_sent_browser_would_have_handled_ = browser_would_have_handled;
   client_->SendStateOnTouchTransfer(event, browser_would_have_handled);
+  // Corresponding to the `ACTION_DOWN` event which initiated the touch
+  // transfer.
+  num_events_in_dropped_sequence_ = 1;
 }
 
 InputTransferHandlerAndroid::InputObserver::InputObserver(

@@ -89,8 +89,7 @@ std::unordered_set<WebContentsAndroid*>& GetAllocatedWebContentsAndroids() {
 void JavaScriptResultCallback(const ScopedJavaGlobalRef<jobject>& callback,
                               base::Value result) {
   JNIEnv* env = base::android::AttachCurrentThread();
-  std::string json;
-  base::JSONWriter::Write(result, &json);
+  std::string json = base::WriteJson(result).value_or("");
   ScopedJavaLocalRef<jstring> j_json = ConvertUTF8ToJavaString(env, json);
   Java_WebContentsImpl_onEvaluateJavaScriptResult(env, j_json, callback);
 }
@@ -769,6 +768,14 @@ ScopedJavaLocalRef<jstring> WebContentsAndroid::GetEncoding(JNIEnv* env) const {
                                                 web_contents_->GetEncoding());
 }
 
+void WebContentsAndroid::Discard(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& on_discarded) {
+  web_contents_->Discard(base::BindOnce(
+      &base::android::RunRunnableAndroid,
+      base::android::ScopedJavaGlobalRef<jobject>(on_discarded)));
+}
+
 void WebContentsAndroid::SetOverscrollRefreshHandler(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& overscroll_refresh_handler) {
@@ -974,6 +981,21 @@ jint WebContentsAndroid::GetOriginalWindowOpenDisposition(JNIEnv* env) {
 
 jboolean WebContentsAndroid::HasOpener(JNIEnv* env) {
   return static_cast<jboolean>(web_contents_->HasOpener());
+}
+
+void WebContentsAndroid::UpdateWindowControlsOverlay(JNIEnv* env,
+                                                     jint left,
+                                                     jint top,
+                                                     jint right,
+                                                     jint bottom) {
+  float dip_scale = web_contents_->GetNativeView()->GetDipScale();
+  left = std::round(left / dip_scale);
+  top = std::round(top / dip_scale);
+  right = std::round(right / dip_scale);
+  bottom = std::round(bottom / dip_scale);
+
+  web_contents_->UpdateWindowControlsOverlay(
+      gfx::Rect(left, top, right - left, bottom - top));
 }
 
 void WebContentsAndroid::UpdateOffsetTagDefinitions(

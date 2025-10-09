@@ -55,10 +55,9 @@ cc::BrowserControlsState GetBrowserControlsStateConstraints(
     content::WebContents* contents) {
   DCHECK(contents);
 
-  if (!display::Screen::GetScreen()->InTabletMode() ||
-      contents->IsFullscreen() || contents->IsFocusedElementEditable() ||
-      contents->IsBeingDestroyed() || contents->IsCrashed() ||
-      IsSpokenFeedbackEnabled()) {
+  if (!display::Screen::Get()->InTabletMode() || contents->IsFullscreen() ||
+      contents->IsFocusedElementEditable() || contents->IsBeingDestroyed() ||
+      contents->IsCrashed() || IsSpokenFeedbackEnabled()) {
     return cc::BrowserControlsState::kShown;
   }
 
@@ -219,11 +218,12 @@ class TopControlsSlideTabObserver
     UpdateBrowserControlsStateShown(/*animate=*/true);
   }
 
-  void OnFocusChangedInPage(content::FocusedNodeDetails* details) override {
+  void OnFocusChangedInPage(
+      const content::FocusedNodeDetails& details) override {
     // Even if a non-editable node gets focused, if top-chrome is fully shown,
     // we should also update the browser controls state constraints so that
     // top-chrome is able to be hidden again.
-    if (details->is_editable_node || shown_ratio_ == 1.f) {
+    if (details.is_editable_node || shown_ratio_ == 1.f) {
       UpdateBrowserControlsStateShown(/*animate=*/true);
     }
   }
@@ -282,7 +282,7 @@ TopControlsSlideControllerChromeOS::TopControlsSlideControllerChromeOS(
     BrowserView* browser_view)
     : browser_view_(browser_view) {
   DCHECK(browser_view);
-  DCHECK(browser_view->frame());
+  DCHECK(browser_view->browser_widget());
   DCHECK(browser_view->browser());
   DCHECK(browser_view->GetIsNormalType());
   DCHECK(browser_view->browser()->tab_strip_model());
@@ -611,7 +611,7 @@ void TopControlsSlideControllerChromeOS::UpdateBrowserControlsStateShown(
 
 bool TopControlsSlideControllerChromeOS::CanEnable(
     std::optional<bool> fullscreen_state) const {
-  return display::Screen::GetScreen()->InTabletMode() &&
+  return display::Screen::Get()->InTabletMode() &&
          !(fullscreen_state.value_or(browser_view_->IsFullscreen()));
 }
 
@@ -689,7 +689,8 @@ void TopControlsSlideControllerChromeOS::Refresh() {
   gfx::Transform trans;
   trans.Translate(0, y_translation);
 
-  ui::Layer* root_layer = browser_view_->frame()->GetRootView()->layer();
+  ui::Layer* root_layer =
+      browser_view_->browser_widget()->GetRootView()->layer();
   std::vector<ui::Layer*> layers = {root_layer};
   // We need to transform all the native views' containers of all the attached
   // NativeViewHosts to this BrowserView, rather than the NativeViewHosts
@@ -732,8 +733,8 @@ void TopControlsSlideControllerChromeOS::OnBeginSliding() {
 
   is_sliding_in_progress_ = true;
 
-  BrowserFrame* browser_frame = browser_view_->frame();
-  views::View* root_view = browser_frame->GetRootView();
+  BrowserWidget* browser_widget = browser_view_->browser_widget();
+  views::View* root_view = browser_widget->GetRootView();
   // We paint to layer to be able to efficiently translate the browser
   // top-controls without having to adjust the bounds of the views which trigger
   // re-layouts and re-paints, which makes scrolling feel laggy.
@@ -748,9 +749,9 @@ void TopControlsSlideControllerChromeOS::OnBeginSliding() {
   // We need to fix the order of the layers after making the root view paint to
   // layer. Otherwise, the root view's layer will show on top of the contents'
   // native view's layer and cover it.
-  browser_frame->ReorderNativeViews();
+  browser_widget->ReorderNativeViews();
 
-  ui::Layer* widget_layer = browser_frame->GetLayer();
+  ui::Layer* widget_layer = browser_widget->GetLayer();
 
   // OnBeginSliding() means we are in a transient state (i.e. the top controls
   // didn't reach its final state of either fully shown or fully hidden). During
@@ -811,11 +812,11 @@ void TopControlsSlideControllerChromeOS::OnEndSliding() {
         identity_transform);
   }
 
-  BrowserFrame* browser_frame = browser_view_->frame();
-  views::View* root_view = browser_frame->GetRootView();
+  BrowserWidget* browser_widget = browser_view_->browser_widget();
+  views::View* root_view = browser_widget->GetRootView();
   root_view->DestroyLayer();
 
-  ui::Layer* widget_layer = browser_frame->GetLayer();
+  ui::Layer* widget_layer = browser_widget->GetLayer();
 
   // Note the difference between the below root view resize, and the
   // corresponding one in OnBeginSliding() above. Here we have reached a steady

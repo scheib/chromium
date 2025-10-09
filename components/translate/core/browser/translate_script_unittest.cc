@@ -70,7 +70,7 @@ class TranslateScriptTest : public testing::Test {
   // Sets up the task scheduling/task-runner environment for each test.
   base::test::TaskEnvironment task_environment_;
 
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
 
   // The translate script.
@@ -95,7 +95,7 @@ TEST_F(TranslateScriptTest, CheckScriptParameters) {
   EXPECT_TRUE(url.is_valid());
   EXPECT_EQ(expected_url.DeprecatedGetOriginAsURL().spec(),
             url.DeprecatedGetOriginAsURL().spec());
-  EXPECT_EQ(expected_url.path(), url.path());
+  EXPECT_EQ(expected_url.GetPath(), url.GetPath());
 
   EXPECT_EQ(network::mojom::CredentialsMode::kOmit,
             last_resource_request.credentials_mode);
@@ -154,7 +154,7 @@ TEST_F(TranslateScriptTest, CheckScriptURL) {
   EXPECT_TRUE(url.is_valid());
   EXPECT_EQ(expected_url.DeprecatedGetOriginAsURL().spec(),
             url.DeprecatedGetOriginAsURL().spec());
-  EXPECT_EQ(expected_url.path(), url.path());
+  EXPECT_EQ(expected_url.GetPath(), url.GetPath());
 }
 
 TEST_F(TranslateScriptTest, CheckResponse) {

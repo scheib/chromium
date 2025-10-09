@@ -40,6 +40,8 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -49,8 +51,6 @@
 #include "components/embedder_support/switches.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_handle.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "components/prefs/pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
 #include "components/ukm/test_ukm_recorder.h"
@@ -1707,50 +1707,6 @@ IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest, ServiceWorkerIntercept) {
   // observing the fetch of the image.
   PrefetchFromFile(kPrefetchPage, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
   WaitForRequestCount(src_server()->GetURL(kPrefetchPng), 1);
-}
-
-class NoStatePrefetchIncognitoBrowserTest : public NoStatePrefetchBrowserTest {
- public:
-  NoStatePrefetchIncognitoBrowserTest() {
-    feature_list_.InitWithFeatures(
-        {}, {content_settings::features::kTrackingProtection3pcd,
-             privacy_sandbox::kAlwaysBlock3pcsIncognito});
-  }
-
-  void SetUpOnMainThread() override {
-    Profile* normal_profile = current_browser()->profile();
-    set_browser(OpenURLOffTheRecord(normal_profile, GURL("about:blank")));
-    NoStatePrefetchBrowserTest::SetUpOnMainThread();
-    current_browser()->profile()->GetPrefs()->SetInteger(
-        prefs::kCookieControlsMode,
-        static_cast<int>(content_settings::CookieControlsMode::kOff));
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Checks that prerendering works in incognito mode.
-IN_PROC_BROWSER_TEST_F(NoStatePrefetchIncognitoBrowserTest,
-                       PrerenderIncognito) {
-  std::unique_ptr<TestPrerender> test_prerender =
-      PrefetchFromFile(kPrefetchPage, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
-
-  // Verify that the page load did not happen.
-  test_prerender->WaitForLoads(0);
-  WaitForRequestCount(src_server()->GetURL(kPrefetchPage), 1);
-  WaitForRequestCount(src_server()->GetURL(kPrefetchScript), 1);
-  WaitForRequestCount(src_server()->GetURL(kPrefetchScript2), 0);
-}
-
-// Checks that prerenders are aborted when an incognito profile is closed.
-// TODO(crbug.com/41476151): The test is crashing on multiple platforms.
-IN_PROC_BROWSER_TEST_F(NoStatePrefetchIncognitoBrowserTest,
-                       DISABLED_PrerenderIncognitoClosed) {
-  std::unique_ptr<TestPrerender> test_prerender =
-      PrefetchFromFile(kHungPrerenderPage, FINAL_STATUS_PROFILE_DESTROYED);
-  current_browser()->window()->Close();
-  test_prerender->WaitForStop();
 }
 
 // Checks that when the history is cleared, NoStatePrefetch history is cleared.

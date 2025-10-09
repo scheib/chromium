@@ -34,6 +34,7 @@
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/shared/ui/util/util_swift.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/buttons/toolbar_configuration.h"
+#import "ios/chrome/browser/toolbar/ui_bundled/public/omnibox_position_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/device_util.h"
@@ -129,12 +130,19 @@ const CGFloat kHeaderTopPadding = 16.0f;
 
 @end
 
-@implementation OmniboxPopupViewController
+@implementation OmniboxPopupViewController {
+  // The height of the bottom omnibox when attached to the keyboard.
+  CGFloat _keyboardAttachedBottomOmniboxHeight;
+  // The context in which the omnibox is presented.
+  OmniboxPresentationContext _presentationContext;
+}
 
 @synthesize omniboxGuide = _omniboxGuide;
 
-- (instancetype)init {
+- (instancetype)initWithPresentationContext:
+    (OmniboxPresentationContext)presentationContext {
   if ((self = [super initWithNibName:nil bundle:nil])) {
+    _presentationContext = presentationContext;
     _forwardsScrollEvents = YES;
     _preselectedMatchGroupIndex = 0;
     _visibleSuggestionCount = 0;
@@ -175,17 +183,6 @@ const CGFloat kHeaderTopPadding = 16.0f;
   self.tableView.dataSource = self;
   self.view = self.tableView;
 }
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  [self updateUIOnTraitChange];
-}
-#endif
 
 - (void)toggleOmniboxDebuggerView {
   if (self.debugInfoViewController.viewIfLoaded.window) {
@@ -289,11 +286,9 @@ const CGFloat kHeaderTopPadding = 16.0f;
   self.shouldUpdateVisibleSuggestionCount = YES;
   self.tableView.sectionHeaderTopPadding = 0;
 
-  if (@available(iOS 17, *)) {
-    NSArray<UITrait>* traits = TraitCollectionSetForTraits(nil);
-    [self registerForTraitChanges:traits
-                       withAction:@selector(updateUIOnTraitChange)];
-  }
+  NSArray<UITrait>* traits = TraitCollectionSetForTraits(nil);
+  [self registerForTraitChanges:traits
+                     withAction:@selector(updateUIOnTraitChange)];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -361,6 +356,7 @@ const CGFloat kHeaderTopPadding = 16.0f;
   self.currentResult = result;
 
   [self.tableView reloadData];
+
   self.forwardsScrollEvents = YES;
   id<AutocompleteSuggestion> firstSuggestionOfPreselectedGroup =
       [self suggestionAtIndexPath:[NSIndexPath indexPathForRow:0
@@ -397,6 +393,11 @@ const CGFloat kHeaderTopPadding = 16.0f;
   }
   [self.mutator
       requestResultsWithVisibleSuggestionCount:self.visibleSuggestionCount];
+}
+
+- (void)setKeyboardAttachedBottomOmniboxHeight:
+    (CGFloat)keyboardAttachedBottomOmniboxHeight {
+  _keyboardAttachedBottomOmniboxHeight = keyboardAttachedBottomOmniboxHeight;
 }
 
 #pragma mark - OmniboxKeyboardDelegate
@@ -929,6 +930,7 @@ const CGFloat kHeaderTopPadding = 16.0f;
       configuration.semanticContentAttribute = self.semanticContentAttribute;
       configuration.faviconRetriever = self.faviconRetriever;
       configuration.imageRetriever = self.imageRetriever;
+      configuration.presentationContext = _presentationContext;
 
       [cell setContentConfiguration:configuration];
       cell.backgroundConfiguration =
@@ -1113,11 +1115,15 @@ const CGFloat kHeaderTopPadding = 16.0f;
   CGRect tableViewFrameInCurrentWindowCoordinateSpace =
       [self.tableView convertRect:self.tableView.bounds
                 toCoordinateSpace:self.tableView.window.coordinateSpace];
+  CGFloat bottomOccludedHeight =
+      self.keyboardHeight + _keyboardAttachedBottomOmniboxHeight;
   // Computes the visible area between the omnibox and the keyboard.
+  CGFloat tableViewTopContentOffset = -self.tableView.contentOffset.y;
   CGFloat visibleTableViewHeight =
       CGRectGetHeight(self.tableView.window.bounds) -
       tableViewFrameInCurrentWindowCoordinateSpace.origin.y -
-      self.keyboardHeight - self.tableView.contentInset.top;
+      bottomOccludedHeight - self.tableView.contentInset.top -
+      tableViewTopContentOffset;
   // Use font size to estimate the size of a omnibox search suggestion.
   CGFloat fontSizeHeight = [@"T" sizeWithAttributes:@{
                              NSFontAttributeName : [UIFont
@@ -1194,7 +1200,10 @@ const CGFloat kHeaderTopPadding = 16.0f;
 // UITrait has been changed.
 - (void)updateUIOnTraitChange {
   [self updateBackgroundColor];
-  if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
+  BOOL followSteadyState =
+      omnibox::ShouldFocusedOmniboxFollowSteadyStatePosition();
+  if (followSteadyState ||
+      ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
     [self.mutator onTraitCollectionChange];
   }
 }

@@ -20,7 +20,6 @@
 #include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/perfetto/include/perfetto/tracing/internal/track_event_internal.h"
 #include "third_party/perfetto/include/perfetto/tracing/track.h"
-#include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_process_descriptor.gen.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/track_descriptor.gen.h"
 
 namespace base {
@@ -43,7 +42,6 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackNameRecorder
 
   // perfetto::TrackEventSessionObserver implementation
   void OnSetup(const perfetto::DataSourceBase::SetupArgs&) override;
-  void OnStop(const perfetto::DataSourceBase::StopArgs&) override;
 
   // base::ThreadIdNameManager::Observer implementation.
   void OnThreadNameChanged(const char* name) override;
@@ -58,7 +56,7 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackNameRecorder
   void UpdateProcessLabel(int label_id, const std::string& current_label);
   void RemoveProcessLabel(int label_id);
 
-  void SetRecordHostAppPackageName(bool record_host_app_package_name);
+  static void SetRecordHostAppPackageName(bool record_host_app_package_name);
 
  private:
   friend class base::NoDestructor<TrackNameRecorder>;
@@ -91,7 +89,7 @@ class COMPONENT_EXPORT(TRACING_CPP) TrackNameRecorder
   }
 
   int64_t process_start_timestamp_;
-  bool record_host_app_package_name_{false};
+  static bool record_host_app_package_name_;
 
   // This lock protects `process_labels_` member accesses from arbitrary
   // threads.

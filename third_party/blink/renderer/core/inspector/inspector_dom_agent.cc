@@ -132,10 +132,11 @@ void ForEachSupportedPseudo(const Element* element, Functor& func) {
     if (PseudoElement* pseudo_element = element->GetPseudoElement(pseudo_id))
       func(pseudo_element);
   }
-  ViewTransitionUtils::ForEachDirectTransitionPseudo(element, func);
+  ViewTransitionUtils::ForEachTransitionPseudo(
+      *element, func, ViewTransitionUtils::Filter::kDirectChildren);
   if (const ColumnPseudoElementsVector* column_pseudo_elements =
       element->GetColumnPseudoElements()) {
-    for (auto column_pseudo_element : *column_pseudo_elements) {
+    for (const auto& column_pseudo_element : *column_pseudo_elements) {
       func(column_pseudo_element.Get());
     }
   }
@@ -777,10 +778,9 @@ protocol::Response InspectorDOMAgent::getNodesForSubtreeByStyle(
 
   HeapVector<Member<Node>> nodes;
 
-  CollectNodes(
-      root_node, INT_MAX, pierce.value_or(false), IncludeWhitespace(),
-      WTF::BindRepeating(&NodeHasMatchingStyles, WTF::Unretained(&properties)),
-      &nodes);
+  CollectNodes(root_node, INT_MAX, pierce.value_or(false), IncludeWhitespace(),
+               BindRepeating(&NodeHasMatchingStyles, Unretained(&properties)),
+               &nodes);
 
   NodeToIdMap* nodes_map = document_node_to_id_map_.Get();
   *node_ids = std::make_unique<protocol::Array<int>>();
@@ -977,8 +977,8 @@ protocol::Response InspectorDOMAgent::getTopLayerElements(
     return protocol::Response::ServerError("DOM agent hasn't been enabled");
 
   *result = std::make_unique<protocol::Array<int>>();
-  for (auto document : Documents()) {
-    for (auto element : document->TopLayerElements()) {
+  for (const auto& document : Documents()) {
+    for (const auto& element : document->TopLayerElements()) {
       int node_id = PushNodePathToFrontend(element);
       if (node_id)
         (*result)->emplace_back(node_id);
@@ -1102,10 +1102,12 @@ protocol::Response InspectorDOMAgent::setAttributesAsText(
                         : StrCat({"<span ", text, "></span>"});
     DocumentFragment* fragment =
         element->GetDocument().createDocumentFragment();
-    if (is_html_document && contextElement)
-      fragment->ParseHTML(markup, contextElement, kAllowScriptingContent);
-    else
+    if (is_html_document && contextElement) {
+      fragment->ParseHTML(markup, contextElement, /*registry*/ nullptr,
+                          kAllowScriptingContent);
+    } else {
       fragment->ParseXML(markup, contextElement, IGNORE_EXCEPTION);
+    }
     return DynamicTo<Element>(fragment->firstChild());
   };
 
@@ -1218,7 +1220,7 @@ protocol::Response InspectorDOMAgent::getOuterHTML(
     std::optional<int> backend_node_id,
     std::optional<String> object_id,
     std::optional<bool> include_shadow_dom,
-    WTF::String* outer_html) {
+    String* outer_html) {
   Node* node = nullptr;
   protocol::Response response =
       AssertNode(node_id, backend_node_id, object_id, node);
@@ -2229,8 +2231,9 @@ std::unique_ptr<protocol::DOM::Node> InspectorDOMAgent::BuildObjectForNode(
     if (element->IsPseudoElement()) {
       value->setPseudoType(
           ProtocolPseudoElementType(element->GetPseudoIdForStyling()));
-      if (auto tag = To<PseudoElement>(element)->view_transition_name())
+      if (auto tag = To<PseudoElement>(element)->GetPseudoArgument()) {
         value->setPseudoIdentifier(tag);
+      }
     } else {
       if (!element->ownerDocument()->xmlVersion().empty())
         value->setXmlVersion(element->ownerDocument()->xmlVersion());
@@ -2282,6 +2285,9 @@ std::unique_ptr<protocol::DOM::Node> InspectorDOMAgent::BuildObjectForNode(
   }
   if (isNodeScrollable(node)) {
     value->setIsScrollable(true);
+  }
+  if (AffectedByStartingStyles(node)) {
+    value->setAffectedByStartingStyles(true);
   }
   return value;
 }
@@ -2695,6 +2701,15 @@ bool InspectorDOMAgent::isNodeScrollable(Node* node) {
   return false;
 }
 
+bool InspectorDOMAgent::AffectedByStartingStyles(Node* node) {
+  Element* element = DynamicTo<Element>(node);
+  if (!element) {
+    return false;
+  }
+
+  return element->AffectedByStartingStyles();
+}
+
 void InspectorDOMAgent::DidPushShadowRoot(Element* host, ShadowRoot* root) {
   if (!host->ownerDocument())
     return;
@@ -2820,6 +2835,22 @@ void InspectorDOMAgent::UpdateScrollableFlag(
   GetFrontend()->scrollableFlagUpdated(nodeId, override_flag.has_value()
                                                    ? override_flag.value()
                                                    : isNodeScrollable(node));
+}
+
+void InspectorDOMAgent::UpdateAffectedByStartingStylesFlag(
+    Node* node,
+    std::optional<bool> override_flag) {
+  if (!node) {
+    return;
+  }
+  int nodeId = BoundNodeId(node);
+  // If node is not mapped yet -> ignore the event.
+  if (!nodeId) {
+    return;
+  }
+  GetFrontend()->affectedByStartingStylesFlagUpdated(
+      nodeId, override_flag.has_value() ? override_flag.value()
+                                        : AffectedByStartingStyles(node));
 }
 
 namespace {

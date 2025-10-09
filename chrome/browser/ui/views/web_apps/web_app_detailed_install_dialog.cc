@@ -271,7 +271,7 @@ class ImageCarouselView : public views::View {
                            std::optional<std::u16string> label) {
     CHECK(index < static_cast<int>(image_inner_container_->children().size()));
     float current_scale =
-        display::Screen::GetScreen()
+        display::Screen::Get()
             ->GetPreferredScaleFactorForView(GetWidget()->GetNativeView())
             .value_or(1.0f);
 
@@ -422,9 +422,12 @@ void ShowWebAppDetailedInstallDialog(
   feature_engagement::Tracker* const tracker =
       feature_engagement::TrackerFactory::GetForBrowserContext(browser_context);
 
-  gfx::ImageSkia icon_image(std::make_unique<WebAppInfoImageSource>(
-                                kIconSize, install_info->icon_bitmaps.any),
-                            gfx::Size(kIconSize, kIconSize));
+  DialogImageInfo dialog_image_info =
+      install_info->GetIconBitmapsForSecureSurfaces();
+  gfx::ImageSkia icon_image(
+      std::make_unique<WebAppInfoImageSource>(
+          kIconSize, std::move(dialog_image_info.bitmaps)),
+      gfx::Size(kIconSize, kIconSize));
 
   auto title = install_info->title;
   GURL start_url = install_info->start_url();
@@ -450,8 +453,9 @@ void ShowWebAppDetailedInstallDialog(
           .SetTitle(l10n_util::GetStringUTF16(IDS_INSTALL_PWA_DIALOG_TITLE))
           .AddCustomField(
               std::make_unique<views::BubbleDialogModelHost::CustomView>(
-                  WebAppIconNameAndOriginView::Create(icon_image, title,
-                                                      start_url),
+                  WebAppIconNameAndOriginView::Create(
+                      icon_image, title, start_url,
+                      dialog_image_info.is_maskable),
                   views::BubbleDialogModelHost::FieldType::kControl))
           .AddParagraph(
               ui::DialogModelLabel(description).set_is_secondary(),

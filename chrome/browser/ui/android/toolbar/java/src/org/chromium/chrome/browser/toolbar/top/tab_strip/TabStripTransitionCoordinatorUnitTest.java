@@ -40,12 +40,13 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.Callback;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Features.DisableFeatures;
-import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.cc.input.BrowserControlsState;
 import org.chromium.chrome.R;
@@ -72,7 +73,6 @@ import java.util.concurrent.TimeUnit;
 /** Unit test for {@link TabStripTransitionCoordinator}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(qualifiers = "w600dp-h800dp", shadows = ShadowLooper.class)
-@EnableFeatures(ChromeFeatureList.TAB_STRIP_TRANSITION_IN_DESKTOP_WINDOW)
 @DisableFeatures(ChromeFeatureList.TAB_STRIP_LAYOUT_OPTIMIZATION)
 public class TabStripTransitionCoordinatorUnitTest {
     private static final int TEST_TAB_STRIP_HEIGHT = 40;
@@ -1357,13 +1357,19 @@ public class TabStripTransitionCoordinatorUnitTest {
         public float scrimOpacityRequested = NOTHING_OBSERVED;
         public boolean applyScrimOverlay;
         public final CallbackHelper fadeTransitionCallback = new CallbackHelper();
-        private @StripVisibilityState int mStripVisibilityState;
+
+        private final ObservableSupplierImpl<Integer> mStripVisibilitySupplier =
+                new ObservableSupplierImpl<>();
+
+        TestDelegate() {
+            mStripVisibilitySupplier.set(StripVisibilityState.VISIBLE);
+        }
 
         void reset() {
             heightChanged = NOTHING_OBSERVED;
             heightTransitionFinished = false;
             scrimOpacityRequested = NOTHING_OBSERVED;
-            mStripVisibilityState = StripVisibilityState.VISIBLE;
+            mStripVisibilitySupplier.set(StripVisibilityState.VISIBLE);
             applyScrimOverlay = false;
         }
 
@@ -1371,10 +1377,10 @@ public class TabStripTransitionCoordinatorUnitTest {
         public void onHeightChanged(int newHeight, boolean applyScrimOverlay) {
             heightChanged = newHeight;
             if (applyScrimOverlay) {
-                mStripVisibilityState =
+                mStripVisibilitySupplier.set(
                         newHeight == 0
                                 ? StripVisibilityState.HIDDEN_BY_HEIGHT_TRANSITION
-                                : StripVisibilityState.VISIBLE;
+                                : StripVisibilityState.VISIBLE);
             }
             this.applyScrimOverlay = applyScrimOverlay;
         }
@@ -1387,16 +1393,16 @@ public class TabStripTransitionCoordinatorUnitTest {
         @Override
         public void onFadeTransitionRequested(float newOpacity, int durationMs) {
             scrimOpacityRequested = newOpacity;
-            mStripVisibilityState =
+            mStripVisibilitySupplier.set(
                     newOpacity == 0f
                             ? StripVisibilityState.VISIBLE
-                            : StripVisibilityState.HIDDEN_BY_FADE;
+                            : StripVisibilityState.HIDDEN_BY_FADE);
             fadeTransitionCallback.notifyCalled();
         }
 
         @Override
-        public int getStripVisibilityState() {
-            return mStripVisibilityState;
+        public ObservableSupplier<Integer> getStripVisibilityStateSupplier() {
+            return mStripVisibilitySupplier;
         }
     }
 }

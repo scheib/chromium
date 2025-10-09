@@ -9,17 +9,20 @@
 #include <vector>
 
 #include "base/base64.h"
+#include "base/command_line.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/types/expected.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/ip_protection/ip_protection_switches.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/ip_protection/common/ip_protection_config_http.h"
@@ -29,6 +32,7 @@
 #include "components/metrics/enabled_state_provider.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/metrics/test/test_enabled_state_provider.h"
+#include "components/network_session_configurator/common/network_switches.h"
 #include "components/policy/core/common/management/management_service.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
@@ -47,6 +51,7 @@
 #include "net/third_party/quiche/src/quiche/blind_sign_auth/proto/spend_token_data.pb.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/status/status.h"
 
@@ -55,13 +60,34 @@
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #endif
 
-using ::ip_protection::BlindSignedAuthToken;
-using ::ip_protection::GeoHint;
-
 namespace {
 
+using ::ip_protection::BlindSignedAuthToken;
+using ::ip_protection::GeoHint;
+using ::testing::Pair;
+using ::testing::UnorderedElementsAre;
+
+// A Gmock matcher for a `base::TimeDelta` within the jitter range defined by
+// `net::features::kIpPrivacyBackoffJitter`.
+MATCHER_P(IsNearWithJitter, expected, "") {
+  if (arg == base::TimeDelta::Max() && (expected) == base::TimeDelta::Max()) {
+    return true;
+  }
+
+  const auto jitter = net::features::kIpPrivacyBackoffJitter.Get();
+  const auto lower_bound = (expected) * (1.0 - jitter);
+  const auto upper_bound = (expected) * (1.0 + jitter);
+  if (arg >= lower_bound && arg <= upper_bound) {
+    return true;
+  }
+
+  *result_listener << "which is outside the expected range [" << lower_bound
+                   << ", " << upper_bound << "]";
+  return false;
+}
+
 constexpr char kTryGetAuthTokensResultHistogram[] =
-    "NetworkService.IpProtection.TryGetAuthTokensResult";
+    "NetworkService.IpProtection.TryGetAuthTokensResult2";
 constexpr char kOAuthTokenFetchHistogram[] =
     "NetworkService.IpProtection.OAuthTokenFetchTime";
 constexpr char kTryGetAuthTokensErrorHistogram[] =
@@ -261,7 +287,8 @@ class IpProtectionCoreHostTest : public testing::Test {
     auto& [bsa_tokens, try_again_after] = tokens_future_.Get();
     EXPECT_EQ(bsa_tokens, std::nullopt);
     if (!bsa_tokens) {
-      EXPECT_EQ(*try_again_after, base::Time::Now() + try_again_delta);
+      EXPECT_THAT(*try_again_after - base::Time::Now(),
+                  IsNearWithJitter(try_again_delta));
     }
     // Clear future so it can be reused and accept new tokens.
     tokens_future_.Clear();
@@ -276,9 +303,8 @@ class IpProtectionCoreHostTest : public testing::Test {
   // Run on the UI thread.
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-  base::test::TestFuture<
-      const std::optional<std::vector<BlindSignedAuthToken>>&,
-      std::optional<base::Time>>
+  base::test::TestFuture<std::optional<std::vector<BlindSignedAuthToken>>,
+                         std::optional<base::Time>>
       tokens_future_;
 
   base::test::TestFuture<const std::optional<std::vector<net::ProxyChain>>&,
@@ -333,6 +359,42 @@ class IpProtectionCoreHostTest : public testing::Test {
 // IpProtectionTokenDirectFetcher, but both make sense. In the fetcher, they
 // serve as unit tests with a fake delegate. Here, they incorporate
 // IpProtectionCoreHost as a delegate.
+
+TEST_F(IpProtectionCoreHostTest, CanIpProtectionBeEnabled) {
+  // Ensure feature is enabled so we only test the switches.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      net::features::kEnableIpProtectionProxy);
+
+  // Base case: Feature enabled, no switches.
+  EXPECT_TRUE(IpProtectionCoreHost::CanIpProtectionBeEnabled());
+
+  {
+    // Case: Disable IP Protection switch.
+    base::test::ScopedCommandLine scoped_command_line;
+    scoped_command_line.GetProcessCommandLine()->AppendSwitch(
+        switches::kDisableIpProtectionProxy);
+    EXPECT_FALSE(IpProtectionCoreHost::CanIpProtectionBeEnabled());
+  }
+
+  {
+    // Case: Disable HTTP/2 switch.
+    base::test::ScopedCommandLine scoped_command_line;
+    scoped_command_line.GetProcessCommandLine()->AppendSwitch(
+        switches::kDisableHttp2);
+    EXPECT_FALSE(IpProtectionCoreHost::CanIpProtectionBeEnabled());
+  }
+
+  {
+    // Case: Both switches.
+    base::test::ScopedCommandLine scoped_command_line;
+    scoped_command_line.GetProcessCommandLine()->AppendSwitch(
+        switches::kDisableIpProtectionProxy);
+    scoped_command_line.GetProcessCommandLine()->AppendSwitch(
+        switches::kDisableHttp2);
+    EXPECT_FALSE(IpProtectionCoreHost::CanIpProtectionBeEnabled());
+  }
+}
 
 // The success case: a primary account is available, and BSA gets a token for
 // it.
@@ -733,9 +795,8 @@ TEST_F(IpProtectionCoreHostTest, SessionRefreshTriggersBackoffReset) {
       GoogleServiceAuthError(
           GoogleServiceAuthError::State::INVALID_GAIA_CREDENTIALS));
 
-  base::test::TestFuture<
-      const std::optional<std::vector<BlindSignedAuthToken>>&,
-      std::optional<base::Time>>
+  base::test::TestFuture<std::optional<std::vector<BlindSignedAuthToken>>,
+                         std::optional<base::Time>>
       tokens_future;
   core_host_->TryGetAuthTokens(1, ip_protection::ProxyLayer::kProxyB,
                                tokens_future.GetCallback());
@@ -1166,4 +1227,28 @@ TEST_F(IpProtectionCoreHostTest, TokenFormat) {
   size_t comma_position = token.find(",", token_position);
   EXPECT_NE(comma_position, std::string::npos);
   EXPECT_LT(comma_position, extensions_position);
+}
+
+TEST_F(IpProtectionCoreHostTest, RecycleAndTakeRecycledTokens) {
+  std::vector<BlindSignedAuthToken> tokens_a;
+  tokens_a.push_back(ip_protection::IpProtectionTokenFetcherHelper::
+                         CreateMockBlindSignedAuthTokenForTesting(
+                             "single-use-1", expiration_time_, geo_hint_)
+                             .value());
+  std::vector<BlindSignedAuthToken> tokens_b;
+  tokens_b.push_back(ip_protection::IpProtectionTokenFetcherHelper::
+                         CreateMockBlindSignedAuthTokenForTesting(
+                             "single-use-2", expiration_time_, geo_hint_)
+                             .value());
+
+  core_host_->RecycleTokens(ip_protection::ProxyLayer::kProxyA, tokens_a);
+  core_host_->RecycleTokens(ip_protection::ProxyLayer::kProxyB, tokens_b);
+
+  EXPECT_THAT(
+      core_host_->TakeRecycledTokens(),
+      UnorderedElementsAre(Pair(ip_protection::ProxyLayer::kProxyA, tokens_a),
+                           Pair(ip_protection::ProxyLayer::kProxyB, tokens_b)));
+
+  // The previous operation should empty the cache.
+  EXPECT_THAT(core_host_->TakeRecycledTokens(), testing::IsEmpty());
 }

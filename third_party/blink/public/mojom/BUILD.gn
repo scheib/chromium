@@ -103,6 +103,7 @@ mojom("mojom_platform") {
     "file_system_access/file_system_access_permission_mode.mojom",
     "file_system_access/file_system_access_transfer_token.mojom",
     "filesystem/file_system.mojom",
+    "fingerprinting_protection/canvas_interventions.mojom",
     "font_access/font_access.mojom",
     "forms/form_control_type.mojom",
     "geolocation/geolocation_service.mojom",
@@ -149,7 +150,6 @@ mojom("mojom_platform") {
     "loader/url_loader_factory_bundle.mojom",
     "lock_screen/lock_screen.mojom",
     "locks/lock_manager.mojom",
-    "manifest/capture_links.mojom",
     "manifest/display_mode.mojom",
     "manifest/manifest.mojom",
     "manifest/manifest_launch_handler.mojom",
@@ -259,6 +259,7 @@ mojom("mojom_platform") {
     "worker/dedicated_worker_host.mojom",
     "worker/shared_worker_client.mojom",
     "worker/shared_worker_creation_context_type.mojom",
+    "worker/shared_worker_exception_details.mojom",
     "worker/shared_worker_host.mojom",
     "worker/shared_worker_info.mojom",
     "worker/subresource_loader_updater.mojom",
@@ -314,6 +315,7 @@ mojom("mojom_platform") {
     "//services/viz/public/mojom",
     "//skia/public/mojom",
     "//third_party/blink/public/mojom/content_extraction",
+    "//third_party/blink/public/mojom/fingerprinting_protection",
     "//third_party/blink/public/mojom/gpu",
     "//third_party/blink/public/mojom/origin_trials:origin_trial_feature",
     "//third_party/blink/public/mojom/origin_trials:origin_trial_state",
@@ -380,6 +382,7 @@ mojom("mojom_platform") {
       "//media/capture/mojom:video_capture",
       "//media/capture/mojom:video_capture_types",
       "//media/mojo/mojom",
+      "//media/mojo/mojom:media_types",
     ]
   }
 
@@ -1397,6 +1400,7 @@ mojom("mojom_core") {
     "//services/service_manager/public/mojom",
     "//services/viz/public/mojom",
     "//skia/public/mojom",
+    "//third_party/blink/public/mojom/fingerprinting_protection",
     "//third_party/blink/public/mojom/runtime_feature_state",
     "//third_party/blink/public/mojom/service_worker:storage",
     "//third_party/blink/public/mojom/storage_key",

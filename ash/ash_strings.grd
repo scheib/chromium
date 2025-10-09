@@ -2954,6 +2954,12 @@ You can also use the keyboard shortcut. First, highlight text, then press <ph na
       </message>
 
       <!-- Status tray charging strings. -->
+      <message name="IDS_ASH_STATUS_TRAY_INCOMPATIBLE_CHARGER_TITLE" desc="The title of a notification indicating that an incompatible charger has been connected, and no charging will occur.">
+        Can't charge device
+      </message>
+      <message name="IDS_ASH_STATUS_TRAY_INCOMPATIBLE_CHARGER_MESSAGE" desc="The message body of a notification indicating that an incompatible charger has been connected, and that the user needs to connect a more powerful one.">
+        Try a charger with more watts (W) or use your original charger.
+      </message>
       <message name="IDS_ASH_STATUS_TRAY_LOW_POWER_CHARGER_TITLE" desc="The title of a notification indicating that a low-current USB charger has been connected.">
         Low-power charger connected
       </message>
@@ -3110,6 +3116,9 @@ Some features are limited to increase battery life.
       </message>
       <message name="IDS_ASH_STATUS_TRAY_BATTERY_CHARGING_UNRELIABLE_ACCESSIBLE" desc="The message used by accessibility to indicate that battery charging is unreliable.">
         Plugged in to a low-power charger. Battery charging may not be reliable.
+      </message>
+      <message name="IDS_ASH_STATUS_TRAY_BATTERY_INCOMPATIBLE_CHARGER_ACCESSIBLE" desc="The message used by accessibility to announce that an incompatible charger is connected.">
+        Device plugged in, but not charging. Try a charger with more watts (W) or use your original charger.
       </message>
       <message name="IDS_ASH_STATUS_TRAY_BATTERY_STATUS_SEPARATOR" desc="The separator symbol between battery percentage string and battery remaining time string">
         ''' - '''
@@ -9252,6 +9261,17 @@ To shut down the device, press and hold the power button on the device again.
       </message>
       <message name="IDS_ASH_ERROR_MESSAGE_TOAST_SETTINGS" desc="An error message toast is a notification that shows up when an error occurs. This is the text that is displayed on the button when the action is to upgrade the operating system (by opening settings).">
         Settings
+      </message>
+
+      <!-- Borealis MOTD -->
+      <message name="IDS_ASH_BOREALIS_MOTD_DISMISS_TEXT" desc="Text on dismiss button in Borealis MOTD. Clicking on it will dismiss the dialog.">
+        Dismiss
+      </message>
+      <message name="IDS_ASH_BOREALIS_MOTD_PLACEHOLDER_TEXT" desc="Placeholder text for Borealis MOTD. Shown if the message of the day is unable to be retrieved from the Static Content Service.">
+        Unable to retrieve Steam for Chromebook news.
+      </message>
+      <message name="IDS_ASH_BOREALIS_MOTD_TITLE_TEXT" desc="Title text for Borealis MOTD. Shown at the top of the dialog.">
+        Steam for Chromebook News
       </message>
      </messages>
     </release>

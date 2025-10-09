@@ -22,6 +22,7 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
+#include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/animation/animation.h"
@@ -118,7 +119,10 @@ using media::VideoFrame;
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::AtLeast;
+using ::testing::ElementsAre;
 using ::testing::Mock;
+using ::testing::Pointee;
+using ::testing::Property;
 using ::testing::Range;
 using ::testing::Return;
 using ::testing::StrictMock;
@@ -425,8 +429,6 @@ class LayerTreeHostImplTestBase : public testing::Test,
     tree->top_controls_shown_ratio()->AbortCommit(
         /* next_bmf */ false, /* main_frame_applied_deltas */ false);
     tree->bottom_controls_shown_ratio()->AbortCommit(
-        /* next_bmf */ false, /* main_frame_applied_deltas */ false);
-    tree->elastic_overscroll()->AbortCommit(
         /* next_bmf */ false, /* main_frame_applied_deltas */ false);
   }
 
@@ -761,24 +763,24 @@ class LayerTreeHostImplTestBase : public testing::Test,
     child->SetTouchActionRegion(child_touch_action_region);
 
     TouchAction touch_action = TouchAction::kAuto;
-    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(gfx::Point(10, 10),
-                                                             &touch_action);
+    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
+        gfx::Rect(gfx::Point(10, 10), gfx::Size()), &touch_action);
     EXPECT_EQ(TouchAction::kPanLeft, touch_action);
     touch_action = TouchAction::kAuto;
-    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(gfx::Point(30, 30),
-                                                             &touch_action);
+    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
+        gfx::Rect(gfx::Point(30, 30), gfx::Size()), &touch_action);
     EXPECT_EQ(TouchAction::kPanX, touch_action);
 
     TouchActionRegion new_child_region;
     new_child_region.Union(TouchAction::kPanY, gfx::Rect(0, 0, 25, 25));
     child->SetTouchActionRegion(new_child_region);
     touch_action = TouchAction::kAuto;
-    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(gfx::Point(10, 10),
-                                                             &touch_action);
+    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
+        gfx::Rect(gfx::Point(10, 10), gfx::Size()), &touch_action);
     EXPECT_EQ(TouchAction::kPanY, touch_action);
     touch_action = TouchAction::kAuto;
-    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(gfx::Point(30, 30),
-                                                             &touch_action);
+    GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
+        gfx::Rect(gfx::Point(30, 30), gfx::Size()), &touch_action);
     EXPECT_EQ(TouchAction::kPanX, touch_action);
   }
 
@@ -1725,7 +1727,7 @@ TEST_P(LayerTreeHostImplTest, ScrollBlocksOnTouchEventHandlers) {
   root->SetTouchActionRegion(std::move(touch_action_region));
   EXPECT_EQ(InputHandler::TouchStartOrMoveEventListenerType::kHandler,
             GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
-                gfx::Point(10, 10), &touch_action));
+                gfx::Rect(gfx::Point(10, 10), gfx::Size()), &touch_action));
   EXPECT_EQ(TouchAction::kPanLeft, touch_action);
 
   // But they don't influence the actual handling of the scroll gestures.
@@ -1743,18 +1745,18 @@ TEST_P(LayerTreeHostImplTest, ScrollBlocksOnTouchEventHandlers) {
 
   EXPECT_EQ(InputHandler::TouchStartOrMoveEventListenerType::kHandler,
             GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
-                gfx::Point(10, 30), &touch_action));
+                gfx::Rect(gfx::Point(10, 30), gfx::Size()), &touch_action));
   root->SetTouchActionRegion(TouchActionRegion());
   EXPECT_EQ(InputHandler::TouchStartOrMoveEventListenerType::kNoHandler,
             GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
-                gfx::Point(10, 30), &touch_action));
+                gfx::Rect(gfx::Point(10, 30), gfx::Size()), &touch_action));
   EXPECT_EQ(TouchAction::kAuto, touch_action);
   touch_action_region = TouchActionRegion();
   touch_action_region.Union(TouchAction::kPanX, gfx::Rect(0, 0, 50, 50));
   child->SetTouchActionRegion(std::move(touch_action_region));
   EXPECT_EQ(InputHandler::TouchStartOrMoveEventListenerType::kHandler,
             GetInputHandler().EventListenerTypeForTouchStartOrMoveAt(
-                gfx::Point(10, 30), &touch_action));
+                gfx::Rect(gfx::Point(10, 30), gfx::Size()), &touch_action));
   EXPECT_EQ(TouchAction::kPanX, touch_action);
 }
 
@@ -6077,6 +6079,64 @@ TEST_P(LayerTreeHostImplTestMultiScrollable,
   ResetScrollbars();
 }
 
+TEST_P(LayerTreeHostImplTestMultiScrollable, ScrollbarFlashWhenMouseEnter) {
+  LayerTreeSettings settings = DefaultSettings();
+  settings.scrollbar_fade_delay = base::Milliseconds(500);
+  settings.scrollbar_fade_duration = base::Milliseconds(300);
+  settings.scrollbar_animator = LayerTreeSettings::AURA_OVERLAY;
+  settings.scrollbar_flash_when_mouse_enter = true;
+
+  SetUpLayers(settings);
+
+  constexpr size_t kNumberOfRepeats = 3;
+  for (size_t i = 0; i < kNumberOfRepeats; i++) {
+    ScrollbarAnimationController* scrollbar_animation_controller =
+        host_impl_->ScrollbarAnimationControllerForElementId(
+            scrollbar_1_->scroll_element_id());
+
+    const float kMouseMoveDistanceToTriggerFadeIn =
+        scrollbar_animation_controller
+            ->GetScrollbarAnimationController(ScrollbarOrientation::kVertical)
+            .MouseMoveDistanceToTriggerFadeIn();
+    const int thumb_thickness = scrollbar_1_->ThumbThickness();
+
+    GetInputHandler().MouseMoveAt(
+        gfx::Point(thumb_thickness + kMouseMoveDistanceToTriggerFadeIn + 1, 1));
+    EXPECT_FALSE(scrollbar_animation_controller->MouseIsNearScrollbar(
+        ScrollbarOrientation::kVertical));
+    EXPECT_FALSE(scrollbar_animation_controller->MouseIsNearScrollbarThumb(
+        ScrollbarOrientation::kVertical));
+
+    EXPECT_FALSE(scrollbar_1_->Opacity());
+    EXPECT_FALSE(scrollbar_2_->Opacity());
+
+    ResetScrollbars();
+
+    ScrollbarAnimationController* scrollbar_animation_controller2 =
+        host_impl_->ScrollbarAnimationControllerForElementId(
+            scrollbar_2_->scroll_element_id());
+
+    const float kMouseMoveDistanceToTriggerFadeInChild =
+        scrollbar_animation_controller2
+            ->GetScrollbarAnimationController(ScrollbarOrientation::kVertical)
+            .MouseMoveDistanceToTriggerFadeIn();
+    const int kThumbThicknessChild = scrollbar_2_->ThumbThickness();
+
+    GetInputHandler().MouseMoveAt(gfx::Point(
+        kThumbThicknessChild + kMouseMoveDistanceToTriggerFadeInChild + 50,
+        50));
+    EXPECT_FALSE(scrollbar_animation_controller2->MouseIsNearScrollbar(
+        ScrollbarOrientation::kVertical));
+    EXPECT_FALSE(scrollbar_animation_controller2->MouseIsNearScrollbarThumb(
+        ScrollbarOrientation::kVertical));
+
+    EXPECT_FALSE(scrollbar_1_->Opacity());
+    EXPECT_TRUE(scrollbar_2_->Opacity());
+
+    ResetScrollbars();
+  }
+}
+
 TEST_P(LayerTreeHostImplTest, ScrollHitTestOnScrollbar) {
   LayerTreeSettings settings = DefaultSettings();
   settings.scrollbar_fade_delay = base::Milliseconds(500);
@@ -7128,6 +7188,7 @@ struct PrepareToDrawSuccessTestCase {
   };
 
   bool high_res_required = false;
+  bool has_view_transition_save_directive = false;
   State layer_before;
   State layer_between;
   State layer_after;
@@ -7222,6 +7283,11 @@ TEST_P(LayerTreeHostImplPrepareToDrawTest, PrepareToDrawSucceedsAndFails) {
   cases.back().layer_between.has_missing_tile = true;
   cases.back().layer_before.has_missing_tile = true;
   cases.back().layer_before.is_animating = true;
+  // 17. checkerboarded animated content with a view transition save directive.
+  cases.push_back(PrepareToDrawSuccessTestCase(DrawResult::kSuccess));
+  cases.back().has_view_transition_save_directive = true;
+  cases.back().layer_between.has_missing_tile = true;
+  cases.back().layer_between.is_animating = true;
 
   auto* root = SetupRootLayer<DidDrawCheckLayer>(host_impl_->active_tree(),
                                                  gfx::Size(10, 10));
@@ -7243,6 +7309,14 @@ TEST_P(LayerTreeHostImplPrepareToDrawTest, PrepareToDrawSucceedsAndFails) {
     CreateLayerFromState(root, timeline(), testcase.layer_between);
     CreateLayerFromState(root, timeline(), testcase.layer_after);
     UpdateDrawProperties(host_impl_->active_tree());
+
+    if (testcase.has_view_transition_save_directive) {
+      host_impl_->active_tree()->AddViewTransitionRequest(
+          ViewTransitionRequest::CreateCapture(
+              blink::ViewTransitionToken(), false, {},
+              base::DoNothingAs<void(
+                  const viz::ViewTransitionElementResourceRects&)>()));
+    }
 
     if (testcase.high_res_required)
       host_impl_->SetRequiresHighResToDraw();
@@ -13193,7 +13267,7 @@ TEST_P(LayerTreeHostImplTest, OnMemoryPressure) {
       host_impl_->resource_pool()->GetTotalMemoryUsageForTesting();
 
   base::MemoryPressureListener::SimulatePressureNotificationAsync(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
+      base::MEMORY_PRESSURE_LEVEL_CRITICAL);
   base::RunLoop().RunUntilIdle();
 
   size_t memory_usage_after_memory_pressure =
@@ -17206,7 +17280,8 @@ TEST_P(TreesInVizServerLayerTreeHostImplTest,
   TestFrameData frame;
   frame.set_trees_in_viz_timestamps(
       {base::TimeTicks::Now(), base::TimeTicks::Now() + base::Milliseconds(1),
-       base::TimeTicks::Now() + base::Milliseconds(2)});
+       base::TimeTicks::Now() + base::Milliseconds(2),
+       base::TimeTicks::Now() + base::Milliseconds(3)});
   auto args = viz::CreateBeginFrameArgsForTesting(
       BEGINFRAME_FROM_HERE, viz::BeginFrameArgs::kManualSourceId, 1,
       base::TimeTicks() + base::Milliseconds(1));
@@ -17231,6 +17306,8 @@ TEST_P(TreesInVizServerLayerTreeHostImplTest,
             metadata.trees_in_viz_timing_details.start_prepare_to_draw);
   EXPECT_EQ(frame.trees_in_viz_timing_details->start_draw_layers,
             metadata.trees_in_viz_timing_details.start_draw_layers);
+  EXPECT_EQ(frame.trees_in_viz_timing_details->submit_compositor_frame,
+            metadata.trees_in_viz_timing_details.submit_compositor_frame);
 }
 
 // Tests ScrollUpdate() to see if the method sets the scroll tree's currently
@@ -19391,6 +19468,75 @@ TEST_P(LayerTreeHostImplTest, VisbilityUpdateToLayers) {
   EXPECT_TRUE(layer->has_been_in_invisible_layer_tree());
 }
 
+TEST_P(LayerTreeHostImplTest, DidNotProduceFramePreservesMetricsForScrollEnds) {
+  SetupViewportLayersInnerScrolls(gfx::Size(50, 50), gfx::Size(100, 100));
+
+  // Frame 1 which emits GSU and GSE metrics but doesn't end up being produced.
+  {
+    TestFrameData frame;
+    auto args = viz::CreateBeginFrameArgsForTesting(
+        BEGINFRAME_FROM_HERE, viz::BeginFrameArgs::kManualSourceId, 1,
+        base::TimeTicks() + base::Milliseconds(16));
+    host_impl_->WillBeginImplFrame(args);
+
+    base::SimpleTestTickClock tick_clock;
+    auto metrics_array = std::to_array<std::unique_ptr<EventMetrics>>(
+        {ScrollEventMetrics::CreateForTesting(
+             ui::EventType::kGestureScrollEnd,
+             ui::ScrollInputType::kTouchscreen,
+             /* is_inertial= */ false,
+             /* timestamp= */ base::TimeTicks() + base::Milliseconds(11),
+             /* arrived_in_browser_main_timestamp= */ base::TimeTicks() +
+                 base::Milliseconds(12),
+             &tick_clock),
+         ScrollUpdateEventMetrics::CreateForTesting(
+             ui::EventType::kGestureScrollUpdate,
+             ui::ScrollInputType::kTouchscreen, /* is_inertial= */ false,
+             ScrollUpdateEventMetrics::ScrollUpdateType::kContinued,
+             /* delta= */ 4.2f,
+             /* timestamp= */ base::TimeTicks() + base::Milliseconds(13),
+             /* arrived_in_browser_main_timestamp= */ base::TimeTicks() +
+                 base::Milliseconds(14),
+             &tick_clock,
+             /* trace_id= */ std::nullopt)});
+    for (auto& metrics : metrics_array) {
+      EXPECT_NE(metrics, nullptr);
+      auto scoped_monitor =
+          host_impl_->GetScopedEventMetricsMonitor(base::BindOnce(
+              [](std::unique_ptr<EventMetrics> metrics, bool handled) {
+                std::unique_ptr<EventMetrics> result =
+                    handled ? std::move(metrics) : nullptr;
+                return result;
+              },
+              std::move(metrics)));
+      scoped_monitor->SetSaveMetrics();
+    }
+
+    host_impl_->DidFinishImplFrame(args);
+    host_impl_->DidNotProduceFrame(viz::BeginFrameAck(),
+                                   FrameSkippedReason::kNoDamage);
+  }
+
+  // Frame 2 should submit the GSE metrics from frame 1 so that Chrome would
+  // emit per-scroll jank metrics for the scroll that's just ended. However,
+  // frame 2 should NOT submit the GSU metrics from frame 1 because the GSU
+  // didn't cause any damage and thus shouldn't be associated with any frame for
+  // the purposes of measuring scroll jank.
+  {
+    TestFrameData frame;
+    auto args = viz::CreateBeginFrameArgsForTesting(
+        BEGINFRAME_FROM_HERE, viz::BeginFrameArgs::kManualSourceId, 1,
+        base::TimeTicks() + base::Milliseconds(32));
+    host_impl_->WillBeginImplFrame(args);
+    host_impl_->PrepareToDraw(&frame);
+    std::optional<SubmitInfo> submit_info = host_impl_->DrawLayers(&frame);
+    EXPECT_THAT(
+        submit_info->events_metrics.impl_event_metrics,
+        ElementsAre(Pointee(Property(
+            &EventMetrics::type, EventMetrics::EventType::kGestureScrollEnd))));
+  }
+}
+
 class ConcurrentImplOnlyScrollAnimationsTest : public LayerTreeHostImplTest {
  public:
   gfx::PointF CreateAndTickScrollAnimations();
@@ -19665,5 +19811,25 @@ TEST_P(ConcurrentSnapAnimationsTest, TrackAnimatingSnapTargetIds) {
   EXPECT_FALSE(snap_state_map.contains(container1_id_));
   EXPECT_FALSE(snap_state_map.contains(container2_id_));
 }
+
+class ElasticOverscrollTest : public LayerTreeHostImplTest {
+ public:
+  LayerTreeSettings DefaultSettings() override {
+    auto settings = LayerTreeHostImplTest::DefaultSettings();
+    settings.enable_elastic_overscroll = true;
+    return settings;
+  }
+};
+
+// Verifies destroying the scroll elasticity helper without a viewport scroll
+// node does not crash.
+TEST_P(ElasticOverscrollTest, ElasticOverscrollWithoutViewport) {
+  ASSERT_NE(nullptr,
+            host_impl_->GetInputHandler().CreateScrollElasticityHelper());
+
+  // Destroying the helper without a viewport should be a safe no-op.
+  host_impl_->GetInputHandler().DestroyScrollElasticityHelper();
+}
+INSTANTIATE_COMMIT_TO_TREE_TEST_P(ElasticOverscrollTest);
 
 }  // namespace cc

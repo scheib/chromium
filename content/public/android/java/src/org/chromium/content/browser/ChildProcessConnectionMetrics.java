@@ -9,6 +9,7 @@ import androidx.collection.ArraySet;
 
 import org.chromium.base.ApplicationState;
 import org.chromium.base.ApplicationStatus;
+import org.chromium.base.ChildBindingState;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.process_launcher.BindService;
@@ -163,13 +164,6 @@ public class ChildProcessConnectionMetrics {
         cancelEmitting();
     }
 
-    private boolean bindingManagerHasExclusiveVisibleBinding(ChildProcessConnection connection) {
-        if (mBindingManager != null) {
-            return mBindingManager.hasExclusiveVisibleBinding(connection);
-        }
-        return false;
-    }
-
     // These metrics are only emitted in the foreground.
     @VisibleForTesting
     void emitMetrics() {
@@ -193,21 +187,27 @@ public class ChildProcessConnectionMetrics {
         }
 
         for (ChildProcessConnection connection : mConnections) {
-            if (connection.isStrongBindingBound()) {
-                strongBindingCount++;
-            } else if (connection.isVisibleBindingBound()) {
-                visibleBindingCount++;
-                if (bindingManagerHasExclusiveVisibleBinding(connection)) {
-                    contentWaivedBindingCount++;
-                } else {
+            @ChildBindingState int bindingState = connection.bindingStateCurrent();
+            switch (bindingState) {
+                case ChildBindingState.STRONG:
+                    strongBindingCount++;
+                    break;
+                case ChildBindingState.VISIBLE:
+                    visibleBindingCount++;
                     contentVisibleBindingCount++;
-                }
-            } else if (connection.isNotPerceptibleBindingBound()) {
-                notPerceptibleBindingCount++;
-                contentWaivedBindingCount++;
-            } else {
-                waivedBindingCount++;
-                contentWaivedBindingCount++;
+                    break;
+                case ChildBindingState.NOT_PERCEPTIBLE:
+                    notPerceptibleBindingCount++;
+                    contentWaivedBindingCount++;
+                    break;
+                case ChildBindingState.WAIVED:
+                case ChildBindingState.UNBOUND:
+                    // UNBOUND shouldn't be counted as waived, but we count them for the backward
+                    // compatibility. But in practice it should happen rarely and does not matter
+                    // much even if it does.
+                    waivedBindingCount++;
+                    contentWaivedBindingCount++;
+                    break;
             }
         }
 
@@ -246,8 +246,23 @@ public class ChildProcessConnectionMetrics {
 
     private void emitBinderIpcCount() {
         assert LauncherThread.runningOnLauncherThread();
-        int bindServiceCount = BindService.getAndResetBindServiceCount();
+        BindService.BinderCallCounter counter = BindService.getAndResetBinderCallCounter();
+        if (counter == null) {
+            return;
+        }
         RecordHistogram.recordCount100000Histogram(
-                "Android.ChildProcessBinding.BinderIPC.Count", bindServiceCount);
+                "Android.ChildProcessBinding.BinderIPC.BindService.Count",
+                counter.mBindServiceCount);
+        RecordHistogram.recordCount100000Histogram(
+                "Android.ChildProcessBinding.BinderIPC.UnbindService.Count",
+                counter.mUnbindServiceCount);
+        RecordHistogram.recordCount100000Histogram(
+                "Android.ChildProcessBinding.BinderIPC.UpdateServiceGroup.Count",
+                counter.mUpdateServiceGroupCount);
+        RecordHistogram.recordCount100000Histogram(
+                "Android.ChildProcessBinding.BinderIPC.Total.Count",
+                counter.mBindServiceCount
+                        + counter.mUnbindServiceCount
+                        + counter.mUpdateServiceGroupCount);
     }
 }

@@ -197,10 +197,8 @@ bool IsViewVisibleOnScreen(views::View* view) {
   if (view->layer() && view->layer()->opacity() == 0.0f)
     return false;
 
-  return display::Screen::GetScreen()
-      ->GetPrimaryDisplay()
-      .work_area()
-      .Intersects(view->GetBoundsInScreen());
+  return display::Screen::Get()->GetPrimaryDisplay().work_area().Intersects(
+      view->GetBoundsInScreen());
 }
 
 class AppListViewTest : public views::ViewsTestBase {
@@ -856,7 +854,7 @@ TEST_P(AppListViewFocusTest, LinearFocusTraversalInFullscreenAllAppsState) {
     forward_view_list.push_back(entry.view);
   forward_view_list.push_back(search_box_view()->search_box());
   std::vector<views::View*> backward_view_list = forward_view_list;
-  std::reverse(backward_view_list.begin(), backward_view_list.end());
+  std::ranges::reverse(backward_view_list);
 
   // Test traversal triggered by tab.
   TestFocusTraversal(forward_view_list, ui::VKEY_TAB, false);
@@ -892,7 +890,7 @@ TEST_P(AppListViewFocusTest, LinearFocusTraversalInFolder) {
   forward_view_list.push_back(search_box_view()->search_box());
   forward_view_list.push_back(view_model->view_at(0));
   std::vector<views::View*> backward_view_list = forward_view_list;
-  std::reverse(backward_view_list.begin(), backward_view_list.end());
+  std::ranges::reverse(backward_view_list);
 
   // Test traversal triggered by tab.
   TestFocusTraversal(forward_view_list, ui::VKEY_TAB, false);

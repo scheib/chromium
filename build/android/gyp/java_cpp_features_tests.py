@@ -16,6 +16,7 @@ from util import java_cpp_utils
 
 
 class _TestFeaturesParser(unittest.TestCase):
+
   def testParseComments(self):
     test_data = """
 /**
@@ -120,33 +121,45 @@ BASE_FEATURE(kMaybeEnabled, "MaybeEnabled",
     self.assertEqual('MAYBE_ENABLED', features[3].name)
     self.assertEqual('"MaybeEnabled"', features[3].value)
 
+
   def testTwoArgumentMacro(self):
     test_data = """
-// 2-arg macro
-BASE_FEATURE(MyFeature, base::FEATURE_ENABLED_BY_DEFAULT);
+// 2-arg BASE_FEATURE macro
+BASE_FEATURE(kMyFeature, base::FEATURE_ENABLED_BY_DEFAULT);
 
-// 2-arg macro over multiple lines
-BASE_FEATURE(AnotherFeature,
+// 2-arg BASE_FEATURE macro over multiple lines
+BASE_FEATURE(kAnotherFeature,
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Mix of 2-arg and 3-arg.
 BASE_FEATURE(kOldStyleFeature, "OldStyleFeature",
              base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(NewStyleFeature, base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kNewStyleFeature, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Value depends on build config
-BASE_FEATURE(MaybeEnabledFeature,
+BASE_FEATURE(kMaybeEnabledFeature,
 #if BUILDFLAG(IS_ANDROID)
     base::FEATURE_DISABLED_BY_DEFAULT
 #else
     base::FEATURE_ENABLED_BY_DEFAULT
 #endif
 );
+
+// Comments in 2-arg macro definition
+BASE_FEATURE(kCommentsInFeatureDefinition,
+// Add the following line to confuse the parser.
+// TODO(crrev.com/c/12345678): BASE_FEATURE(Foo, ...)
+#if BUILDFLAG(IS_CHROMEOS)
+             base::FEATURE_DISABLED_BY_DEFAULT
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT
+#endif
+);
 """.split('\n')
     feature_file_parser = java_cpp_utils.CppConstantParser(
         java_cpp_features.FeatureParserDelegate(), test_data)
     features = feature_file_parser.Parse()
-    self.assertEqual(5, len(features))
+    self.assertEqual(6, len(features))
     self.assertEqual('MY_FEATURE', features[0].name)
     self.assertEqual('"MyFeature"', features[0].value)
     self.assertEqual('ANOTHER_FEATURE', features[1].name)
@@ -157,12 +170,11 @@ BASE_FEATURE(MaybeEnabledFeature,
     self.assertEqual('"NewStyleFeature"', features[3].value)
     self.assertEqual('MAYBE_ENABLED_FEATURE', features[4].name)
     self.assertEqual('"MaybeEnabledFeature"', features[4].value)
+    self.assertEqual('COMMENTS_IN_FEATURE_DEFINITION', features[5].name)
+    self.assertEqual('"CommentsInFeatureDefinition"', features[5].value)
 
-  def testNotYetSupported(self):
-    # Negative test for cases we don't yet support, to ensure we don't misparse
-    # these until we intentionally add proper support.
+  def testNameDependsOnOs(self):
     test_data = """
-// Not currently supported: name depends on C++ directive
 BASE_FEATURE(kNameDependsOnOs,
 #if BUILDFLAG(IS_ANDROID)
     "MaybeName1",
@@ -170,28 +182,13 @@ BASE_FEATURE(kNameDependsOnOs,
     "MaybeName2",
 #endif
     base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Not currently supported: feature named with a constant instead of literal
-BASE_FEATURE(kNamedAfterConstant, kNamedStringConstant,
-             base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Not currently supported: 2-arg macro with a name that starts with "k". This
-// is ambiguous with a 3-arg macro.
-BASE_FEATURE(kAmbiguousFeature, base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Not currently supported: 2-arg macro name depends on C++ directive
-BASE_FEATURE(
-#if BUILDFLAG(IS_ANDROID)
-    MyAndroidFeature,
-#else
-    MyDesktopFeature,
-#endif
-    base::FEATURE_DISABLED_BY_DEFAULT);
 """.split('\n')
     feature_file_parser = java_cpp_utils.CppConstantParser(
         java_cpp_features.FeatureParserDelegate(), test_data)
     features = feature_file_parser.Parse()
-    self.assertEqual(0, len(features))
+    self.assertEqual(1, len(features))
+    self.assertEqual('NAME_DEPENDS_ON_OS', features[0].name)
+    self.assertEqual('"MaybeName1"', features[0].value)
 
   def testTreatWebViewLikeOneWord(self):
     test_data = """

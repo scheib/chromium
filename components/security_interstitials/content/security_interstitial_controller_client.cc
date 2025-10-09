@@ -14,6 +14,7 @@
 #include "components/security_interstitials/content/security_interstitial_tab_helper.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/core/metrics_helper.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
@@ -122,6 +123,12 @@ void SecurityInterstitialControllerClient::Reload() {
   InterstitialRenderFrameHost()->GetController().Reload(
       content::ReloadType::NORMAL, true);
 }
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+void SecurityInterstitialControllerClient::ShowCertificateViewer() {
+  NOTREACHED();
+}
+#endif
 
 void SecurityInterstitialControllerClient::OpenUrlInCurrentTab(
     const GURL& url) {

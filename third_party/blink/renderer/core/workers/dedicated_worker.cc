@@ -403,9 +403,6 @@ void DedicatedWorker::OnFinished(
         back_forward_cache_controller_host) {
   DCHECK(GetExecutionContext()->IsContextThread());
   TRACE_EVENT("blink.worker", "DedicatedWorker::OnFinished");
-  TRACE_EVENT_NESTABLE_ASYNC_END0("blink.worker",
-                                  "LegacyDedicatedWorker Specific Setup",
-                                  TRACE_ID_LOCAL(this));
   if (classic_script_loader_->Canceled()) {
     // Do nothing.
   } else if (classic_script_loader_->Failed()) {
@@ -465,14 +462,14 @@ void DedicatedWorker::ContinueStart(
         ->GetTaskRunner(TaskType::kInternalDefault)
         ->PostDelayedTask(
             FROM_HERE,
-            WTF::BindOnce(&DedicatedWorker::ContinueStartInternal,
-                          WrapWeakPersistent(this), script_url,
-                          std::move(worker_main_script_load_params),
-                          std::move(referrer_policy),
-                          std::move(response_content_security_policies),
-                          std::move(back_forward_cache_controller_host),
-                          std::move(coep_reporting_observer),
-                          std::move(dip_reporting_observer)),
+            BindOnce(&DedicatedWorker::ContinueStartInternal,
+                     WrapWeakPersistent(this), script_url,
+                     std::move(worker_main_script_load_params),
+                     std::move(referrer_policy),
+                     std::move(response_content_security_policies),
+                     std::move(back_forward_cache_controller_host),
+                     std::move(coep_reporting_observer),
+                     std::move(dip_reporting_observer)),
             base::Milliseconds(features::kDedicatedWorkerStartDelayInMs.Get()));
     return;
   }
@@ -613,7 +610,8 @@ DedicatedWorker::CreateGlobalScopeCreationParams(
       execution_context->GetStorageAccessApiStatus(),
       /*require_cross_site_request_for_cookies=*/false,
       origin_ ? origin_->IsolatedCopy() : nullptr,
-      std::move(coep_reporting_observer), std::move(dip_reporting_observer));
+      std::move(coep_reporting_observer), std::move(dip_reporting_observer),
+      execution_context->CanvasNoiseToken());
   params->dedicated_worker_start_time = start_time_;
   return params;
 }

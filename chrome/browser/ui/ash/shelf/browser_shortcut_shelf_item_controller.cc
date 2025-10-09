@@ -30,6 +30,8 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
@@ -94,6 +96,15 @@ BrowserShortcutShelfItemController::BrowserShortcutShelfItemController(
     : ash::ShelfItemDelegate(ash::ShelfID(app_constants::kChromeAppId)),
       shelf_model_(shelf_model) {
   BrowserList::AddObserver(this);
+
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [this](BrowserWindowInterface* browser) {
+        browser_close_subscriptions_[browser] =
+            browser->RegisterBrowserDidClose(base::BindRepeating(
+                &BrowserShortcutShelfItemController::OnBrowserDidClose,
+                base::Unretained(this)));
+        return true;  // Continue iterating through all browsers
+      });
 }
 
 BrowserShortcutShelfItemController::~BrowserShortcutShelfItemController() {
@@ -348,7 +359,8 @@ BrowserShortcutShelfItemController::ActivateOrAdvanceToNextBrowser() {
         /*should_trigger_session_restore=*/true);
     return ash::SHELF_ACTION_NEW_WINDOW_CREATED;
   }
-  Browser* browser = BrowserList::GetInstance()->GetLastActive();
+  Browser* browser = GetLastActiveBrowserWindowInterfaceWithAnyProfile()
+                         ->GetBrowserForMigrationOnly();
   if (items.size() == 1) {
     // If there is only one suitable browser, we can either activate it, or
     // bounce it (if it is already active).
@@ -382,6 +394,11 @@ BrowserShortcutShelfItemController::ActivateOrAdvanceToNextBrowser() {
 }
 
 void BrowserShortcutShelfItemController::OnBrowserAdded(Browser* browser) {
+  browser_close_subscriptions_[browser] =
+      browser->RegisterBrowserDidClose(base::BindRepeating(
+          &BrowserShortcutShelfItemController::OnBrowserDidClose,
+          base::Unretained(this)));
+
   if (!ShouldRecordLaunchTime(browser, shelf_model_)) {
     return;
   }
@@ -407,11 +424,13 @@ void BrowserShortcutShelfItemController::OnBrowserAdded(Browser* browser) {
   }
 }
 
-void BrowserShortcutShelfItemController::OnBrowserClosing(Browser* browser) {
-  DCHECK(browser);
+void BrowserShortcutShelfItemController::OnBrowserDidClose(
+    BrowserWindowInterface* browser_window_interface) {
+  browser_close_subscriptions_.erase(browser_window_interface);
+
   // Reset pointers to the closed browser, but leave menu indices intact.
   for (auto& it : app_menu_items_) {
-    if (it.first == browser) {
+    if (it.first == browser_window_interface) {
       it.first = nullptr;
     }
   }

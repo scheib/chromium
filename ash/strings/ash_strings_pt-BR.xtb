@@ -128,7 +128,7 @@ Veja o que você pode fazer para começar.</translation>
 <translation id="1365866993922957110">Receber atualizações automáticas</translation>
 <translation id="1372545819342940910">Salvar espaço de trabalho para mais tarde</translation>
 <translation id="1383597849754832576">Não foi possível baixar os arquivos de fala. Tente novamente mais tarde.</translation>
-<translation id="1383876407941801731">Pesquisar</translation>
+<translation id="1383876407941801731">Pesquise</translation>
 <translation id="1391102559483454063">Ativado</translation>
 <translation id="1394698770495054737">Desfoque total</translation>
 <translation id="1395878931462960119">{DAYS,plural, =1{1 dia atrás}one{# dia atrás}other{# dias atrás}}</translation>
@@ -332,10 +332,12 @@ Veja o que você pode fazer para começar.</translation>
 <translation id="2083190527011054446">Boa noite, <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Abrir seletor de emojis</translation>
 <translation id="2088116547584365419">jogos</translation>
+<translation id="2093792000875799555">Notícias sobre o Steam para Chromebook</translation>
 <translation id="209965399369889474">Sem conexão com a rede</translation>
 <translation id="2107581415810719320">Outro botão <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">O cabo USB-C não oferece suporte a Thunderbolt. O desempenho do dispositivo pode ser limitado.</translation>
 <translation id="2108303511227308752">O atalho de teclado Alt + Backspace mudou. Para usar a tecla Delete, pressione <ph name="LAUNCHER_KEY_NAME" /> + Backspace.</translation>
+<translation id="2115680839221566783">Bateria em <ph name="PERCENTAGE" />%. Carregamento suspenso.</translation>
 <translation id="2126242104232412123">Novo espaço</translation>
 <translation id="2132302418721800944">Gravar tela cheia</translation>
 <translation id="2135456203358955318">Lupa em área fixa</translation>
@@ -996,7 +998,7 @@ Alguns recursos estão limitados para aumentar a duração da bateria.</translat
 <translation id="4279490309300973883">Espelhamento</translation>
 <translation id="4280601795273309128">As atualizações de segurança foram encerradas. Recomendamos que você troque seu dispositivo.</translation>
 <translation id="4283888303416325161">Informe a senha para aumentar a segurança</translation>
-<translation id="4285498937028063278">Soltar</translation>
+<translation id="4285498937028063278">Liberar guia</translation>
 <translation id="428715201724021596">Conectando-se ao perfil. Pode levar alguns minutos..</translation>
 <translation id="4287250812980588583">Janela do Chrome</translation>
 <translation id="4291322857434980285">{NUM_APPS,plural, =1{Volume do microfone controlado pelo app <ph name="APP_NAME" />}one{Volume do microfone controlado por # app}other{Volume do microfone controlado por # apps}}</translation>
@@ -1368,7 +1370,7 @@ Nenhum dispositivo conectado.</translation>
 <translation id="5426063383988017631">Menu de configurações fechado</translation>
 <translation id="5428899915242071344">Iniciar seleção</translation>
 <translation id="5429993543155113935">No momento, não há suporte para janelas anônimas</translation>
-<translation id="5431318178759467895">Colorido</translation>
+<translation id="5431318178759467895">Cor</translation>
 <translation id="5433020815079095860">Entrada de áudio</translation>
 <translation id="543584294741034249">Você pode conectar até <ph name="DISPLAY_LIMIT" /> telas externas.</translation>
 <translation id="544691375626129091">Todos os usuários disponíveis já foram adicionados a esta sessão.</translation>
@@ -1588,6 +1590,7 @@ Nenhum dispositivo conectado.</translation>
 <translation id="612734058257491180">O Google Assistente não está disponível em uma sessão de visitante.</translation>
 <translation id="6127395413317891856">Você está off-line. Verifique sua conexão e tente de novo.</translation>
 <translation id="6129953537138746214">Espaço</translation>
+<translation id="6136872094979134163">Não foi possível recuperar as notícias do Steam para Chromebook.</translation>
 <translation id="6137566720514957455">Abrir caixa de diálogo para a remoção de <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Em que você quer focar?</translation>
 <translation id="6141988275892716286">Confirmar download</translation>
@@ -1677,6 +1680,7 @@ Nenhum dispositivo conectado.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> para <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> evento</translation>
+<translation id="6448529022565414427">Carregamento suspenso</translation>
 <translation id="6449483711453944360">No momento, não há suporte para apps do Linux e janelas anônimas</translation>
 <translation id="6450245544201845082">O atalho do botão direito do mouse está desativado no momento</translation>
 <translation id="6452181791372256707">Rejeitar</translation>
@@ -2364,7 +2368,7 @@ Para desligar o dispositivo, toque no botão liga/desliga novamente e pressione.
 <translation id="8724318433625452070">Captura de tela cheia</translation>
 <translation id="8725066075913043281">Tentar novamente</translation>
 <translation id="8725214031272624704">Mostrar lista de métodos de entrada disponíveis</translation>
-<translation id="8730621377337864115">Concluir</translation>
+<translation id="8730621377337864115">Concluído</translation>
 <translation id="8731188831050207755">Falha no download de <ph name="FILE_NAME" />.</translation>
 <translation id="8731487213223706745">Término: <ph name="END_TIME" /> <ph name="DAYS_ELAPSED" /></translation>
 <translation id="8734991477317290293">Ele pode estar tentando capturar sua digitação</translation>

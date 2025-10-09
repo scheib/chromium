@@ -253,7 +253,8 @@ void InputRouterImpl::SendGestureEventWithoutQueueing(
       // then no scrolling really ever occurs (even though we still send
       // GestureScrollBegin).
       touch_scroll_started_sent_ = true;
-      touch_event_queue_.PrependTouchScrollNotification();
+      touch_event_queue_.PrependTouchScrollNotification(
+          gesture_event.event.primary_unique_touch_event_id);
     }
   }
 
@@ -403,6 +404,7 @@ void InputRouterImpl::SetTouchActionFromMain(cc::TouchAction touch_action) {
   touch_event_queue_.StopTimeoutMonitor();
   ProcessDeferredGestureEventQueue();
   UpdateTouchAckTimeoutEnabled();
+  touch_event_queue_.OnTouchActionFromMain();
 }
 
 void InputRouterImpl::SetPanAction(blink::mojom::PanAction pan_action) {
@@ -730,15 +732,24 @@ void InputRouterImpl::FilterAndSendWebInputEvent(
       }
     }
   } else {
-    if (base::FeatureList::IsEnabled(features::kSendEmptyGestureScrollUpdate) &&
-        event->Event().GetType() == blink::WebInputEvent::Type::kTouchMove) {
-      CHECK(!last_touch_move_event_, base::NotFatalUntil::M142);
-      last_touch_move_event_ = std::move(event);
-    } else {
+    bool store_touch_move_event =
+        base::FeatureList::IsEnabled(features::kSendEmptyGestureScrollUpdate) &&
+        event->Event().GetType() == blink::WebInputEvent::Type::kTouchMove;
+    bool dispatch_last_event =
+        store_touch_move_event && last_touch_move_event_.has_value();
+
+    // If the previous touch move event was not followed by a gesture scroll
+    // update, dispatch it before storing the new touch move event.
+    if (!store_touch_move_event || dispatch_last_event) {
       TRACE_EVENT_INSTANT0("input", "InputEventSentNonBlocking",
                            TRACE_EVENT_SCOPE_THREAD);
       client_->GetWidgetInputHandler()->DispatchNonBlockingEvent(
-          std::move(event));
+          dispatch_last_event ? std::move(last_touch_move_event_.value())
+                              : std::move(event));
+    }
+
+    if (store_touch_move_event) {
+      last_touch_move_event_ = std::move(event);
     }
 
     std::move(callback).Run(

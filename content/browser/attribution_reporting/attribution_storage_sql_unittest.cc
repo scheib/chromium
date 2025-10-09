@@ -64,7 +64,6 @@
 #include "sql/database.h"
 #include "sql/meta_table.h"
 #include "sql/recovery.h"
-#include "sql/sql_features.h"
 #include "sql/statement.h"
 #include "sql/test/scoped_error_expecter.h"
 #include "sql/test/test_helpers.h"
@@ -1094,39 +1093,6 @@ TEST_F(AttributionStorageSqlTest, DeleteAggregatableAttributionReport) {
   EXPECT_TRUE(storage()->DeleteReport(AttributionReport::Id(2)));
   EXPECT_THAT(storage()->GetAttributionReports(base::Time::Max()),
               ElementsAre(ReportTypeIs(AttributionReport::Type::kEventLevel)));
-
-  CloseDatabase();
-}
-
-TEST_F(AttributionStorageSqlTest, NegativeTriggerMoment_HistogramRecorded) {
-  const char sql[] = "UPDATE sources SET source_time=?";
-  base::HistogramTester histograms;
-
-  OpenDatabase();
-
-  storage()->StoreSource(TestAggregatableSourceProvider().GetBuilder().Build());
-
-  CloseDatabase();
-
-  {
-    sql::Database raw_db(sql::test::kTestTag);
-    ASSERT_TRUE(raw_db.Open(db_path()));
-
-    sql::Statement statement(raw_db.GetUniqueStatement(sql));
-    statement.BindTime(0, base::Time::Now() + base::Hours(1));
-    ASSERT_TRUE(statement.Run());
-  }
-
-  OpenDatabase();
-
-  EXPECT_THAT(storage()->MaybeCreateAndStoreReport(
-                  DefaultAggregatableTriggerBuilder().Build()),
-              AllOf(CreateReportEventLevelStatusIs(
-                        AttributionTrigger::EventLevelResult::kSuccess),
-                    CreateReportAggregatableStatusIs(
-                        AttributionTrigger::AggregatableResult::kSuccess)));
-  histograms.ExpectUniqueSample("Conversions.TriggerTimeLessThanSourceTime", 1,
-                                1);
 
   CloseDatabase();
 }

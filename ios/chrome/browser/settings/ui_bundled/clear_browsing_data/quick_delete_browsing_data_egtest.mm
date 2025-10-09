@@ -11,11 +11,10 @@
 #import "components/signin/public/base/signin_metrics.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/sync/base/command_line_switches.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
-#import "ios/chrome/browser/settings/ui_bundled/cells/clear_browsing_data_constants.h"
-#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/features.h"
+#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/quick_delete_constants.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/common/ui/confirmation_alert/constants.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -153,7 +152,6 @@ void NoDeleteBrowsingDataDialogHistogram(
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
   config.relaunch_policy = NoForceRelaunchAndResetState;
-  config.features_enabled.push_back(kIOSQuickDelete);
   config.additional_args.push_back(std::string("--") +
                                    syncer::kSyncShortNudgeDelayForTest);
   return config;
@@ -699,13 +697,6 @@ void NoDeleteBrowsingDataDialogHistogram(
                  grey_text(l10n_util::GetNSString(
                      IDS_IOS_CLEAR_BROWSING_DATA_TIME_RANGE_SELECTOR_TITLE))]
       performAction:grey_tap()];
-
-  // TODO(crbug.com/428928323): Investigate why the keyboard appears and remove
-  // this workaround when it's not needed anymore.
-  // On iOS 26, the keyboard appears when the 'Time Range' button is tapped and
-  // it hides the elements behind. Close the keyboard by typing a return key.
-  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\\n" flags:0];
-
   [[EarlGrey
       selectElementWithMatcher:
           PopupCellMenuItemWithTimeRange(l10n_util::GetNSString(

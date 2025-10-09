@@ -550,14 +550,6 @@ void AutofillMetrics::LogUnmaskingDuration(base::TimeDelta duration,
 }
 
 // static
-void AutofillMetrics::LogDeveloperEngagementMetric(
-    DeveloperEngagementMetric metric) {
-  DCHECK_LT(metric, NUM_DEVELOPER_ENGAGEMENT_METRICS);
-  UMA_HISTOGRAM_ENUMERATION("Autofill.DeveloperEngagement", metric,
-                            NUM_DEVELOPER_ENGAGEMENT_METRICS);
-}
-
-// static
 void AutofillMetrics::LogEditedAutofilledFieldAtSubmission(
     autofill_metrics::FormInteractionsUkmLogger& form_interactions_ukm_logger,
     ukm::SourceId source_id,
@@ -1245,29 +1237,6 @@ void AutofillMetrics::LogUploadEvent(SubmissionSource submission_source,
 }
 
 // static
-void AutofillMetrics::LogDeveloperEngagementUkm(
-    ukm::UkmRecorder* ukm_recorder,
-    ukm::SourceId source_id,
-    const GURL& url,
-    bool is_for_credit_card,
-    DenseSet<FormTypeNameForLogging> form_types,
-    int developer_engagement_metrics,
-    FormSignature form_signature) {
-  DCHECK(developer_engagement_metrics);
-  DCHECK_LT(developer_engagement_metrics,
-            1 << NUM_DEVELOPER_ENGAGEMENT_METRICS);
-  if (!url.is_valid())
-    return;
-
-  ukm::builders::Autofill_DeveloperEngagement(source_id)
-      .SetDeveloperEngagement(developer_engagement_metrics)
-      .SetIsForCreditCard(is_for_credit_card)
-      .SetFormTypes(FormTypesToBitVector(form_types))
-      .SetFormSignature(HashFormSignature(form_signature))
-      .Record(ukm_recorder);
-}
-
-// static
 void AutofillMetrics::LogAutofillFieldInfoAfterSubmission(
     ukm::UkmRecorder* ukm_recorder,
     ukm::SourceId source_id,
@@ -1549,13 +1518,11 @@ void AutofillMetrics::LogDeleteAddressProfileFromPopup() {
 }
 
 // static
-void AutofillMetrics::LogDeleteAddressProfileFromKeyboardAccessory() {
-  // Only the "confirmed" bucket is recorded here, as the cancellation can only
-  // be recorded from Java.
+void AutofillMetrics::LogDeleteAddressProfileFromKeyboardAccessory(
+    bool delete_confirmed) {
   base::UmaHistogramBoolean("Autofill.ProfileDeleted.KeyboardAccessory",
-                            /*delete_confirmed=*/true);
-  base::UmaHistogramBoolean("Autofill.ProfileDeleted.Any",
-                            /*delete_confirmed=*/true);
+                            delete_confirmed);
+  base::UmaHistogramBoolean("Autofill.ProfileDeleted.Any", delete_confirmed);
 }
 
 // static

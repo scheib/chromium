@@ -13,6 +13,24 @@ import org.chromium.ui.base.DeviceFormFactor;
 /** Static utilities related to browser controls interfaces. */
 @NullMarked
 public class BrowserControlsUtils {
+
+    // Disallow top browser controls from scrolling off on large tablets by setting min height
+    // equal to overall height.
+    // TODO(https://crbug.com/436900619): Converge on and implement long-term solution.
+    public static boolean doSyncMinHeightWithTotalHeight(Context context) {
+        return ChromeFeatureList.sLockTopControlsOnLargeTablets.isEnabled()
+                && DeviceFormFactor.isNonMultiDisplayContextOnLargeTablet(context);
+    }
+
+    /**
+     * Disallow top browser controls from scrolling off by setting min height equal to overall
+     * height. This feature does not check form factors.
+     */
+    public static boolean doSyncMinHeightWithTotalHeightV2() {
+        return ChromeFeatureList.sLockTopControlsOnLargeTabletsV2.isEnabled()
+                && ChromeFeatureList.sTopControlsRefactor.isEnabled();
+    }
+
     /**
      * @return True if the browser controls are completely off screen.
      */
@@ -37,19 +55,11 @@ public class BrowserControlsUtils {
 
     /**
      * TODO(jinsukkim): Move this to CompositorViewHolder.
-     *
-     * @return {@code true} if browser controls shrink Blink view's size. Note that this is valid
-     *     only when the browser controls are in idle state i.e. not scrolling or animating.
+     * @return {@code true} if browser controls shrink Blink view's size. Note that this
+     *         is valid only when the browser controls are in idle state i.e. not scrolling
+     *         or animating.
      */
-    public static boolean controlsResizeView(
-            BrowserControlsStateProvider stateProvider, Context context) {
-        // Returning 'true' here works around b/437820869, landing as a temporary fix.
-        // TODO(https://crbug.com/436900619): Remove this code in favor of a real long term
-        // solution.
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.LOCK_TOP_CONTROLS_ON_LARGE_TABLETS)
-                && DeviceFormFactor.isNonMultiDisplayContextOnLargeTablet(context)) {
-            return true;
-        }
+    public static boolean controlsResizeView(BrowserControlsStateProvider stateProvider) {
         return stateProvider.getContentOffset() > stateProvider.getTopControlsMinHeight()
                 || getBottomContentOffset(stateProvider)
                         > stateProvider.getBottomControlsMinHeight();

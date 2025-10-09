@@ -245,6 +245,20 @@ void* PartitionAllocFunctionsInternal<base_alloc_flags,
 template <partition_alloc::AllocFlags base_alloc_flags,
           partition_alloc::FreeFlags base_free_flags>
 void* PartitionAllocFunctionsInternal<base_alloc_flags, base_free_flags>::
+    CallocUnchecked(size_t n, size_t size, void* context) {
+  partition_alloc::ScopedDisallowAllocations guard{};
+  const size_t total =
+      partition_alloc::internal::base::CheckMul(n, size).ValueOrDie();
+  return Allocator()
+      ->AllocInline<base_alloc_flags |
+                    partition_alloc::AllocFlags::kReturnNull |
+                    partition_alloc::AllocFlags::kZeroFill>(total);
+}
+
+// static
+template <partition_alloc::AllocFlags base_alloc_flags,
+          partition_alloc::FreeFlags base_free_flags>
+void* PartitionAllocFunctionsInternal<base_alloc_flags, base_free_flags>::
     Memalign(size_t alignment, size_t size, void* context) {
   partition_alloc::ScopedDisallowAllocations guard{};
   return AllocateAlignedMemory<base_alloc_flags>(alignment, size);
@@ -643,8 +657,9 @@ void ConfigurePartitions(
         scheduler_loop_quarantine_global_config,
     partition_alloc::internal::SchedulerLoopQuarantineConfig
         scheduler_loop_quarantine_thread_local_config,
-    EventuallyZeroFreedMemory eventually_zero_freed_memory,
-    FewerMemoryRegions fewer_memory_regions) {
+    partition_alloc::internal::SchedulerLoopQuarantineConfig
+        scheduler_loop_quarantine_for_advanced_memory_safety_checks_config,
+    EventuallyZeroFreedMemory eventually_zero_freed_memory) {
   // Calling Get() is actually important, even if the return value isn't
   // used, because it has a side effect of initializing the variable, if it
   // wasn't already.
@@ -672,13 +687,12 @@ void ConfigurePartitions(
             eventually_zero_freed_memory
                 ? partition_alloc::PartitionOptions::kEnabled
                 : partition_alloc::PartitionOptions::kDisabled;
-        opts.fewer_memory_regions =
-            fewer_memory_regions ? partition_alloc::PartitionOptions::kEnabled
-                                 : partition_alloc::PartitionOptions::kDisabled;
         opts.scheduler_loop_quarantine_global_config =
             scheduler_loop_quarantine_global_config;
         opts.scheduler_loop_quarantine_thread_local_config =
             scheduler_loop_quarantine_thread_local_config;
+        opts.scheduler_loop_quarantine_for_advanced_memory_safety_checks_config =
+            scheduler_loop_quarantine_for_advanced_memory_safety_checks_config;
         opts.memory_tagging = {
             .enabled = enable_memory_tagging
                            ? partition_alloc::PartitionOptions::kEnabled

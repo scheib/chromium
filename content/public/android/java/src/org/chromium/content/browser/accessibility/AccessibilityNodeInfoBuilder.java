@@ -79,8 +79,7 @@ import org.chromium.content_public.browser.ContentFeatureMap;
 import org.chromium.ui.accessibility.AccessibilityFeatures;
 import org.chromium.ui.accessibility.AccessibilityFeaturesMap;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -144,16 +143,6 @@ public class AccessibilityNodeInfoBuilder {
     public static final String ACCESSIBILITY_SPANNABLE_CREATION_TIME =
             "Accessibility.Android.Performance.SpannableCreationTime2";
     private static final int MAX_TIME_BUCKET = 5 * 1000; // 5,000 microseconds = 5ms.
-
-    // Static instances of the three types of extra data keys that can be added to nodes.
-    private static final List<String> sTextCharacterLocation =
-            Collections.singletonList(EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY);
-
-    private static final List<String> sTextCharacterLocationInWindow =
-            Collections.singletonList(EXTRA_DATA_TEXT_CHARACTER_LOCATION_IN_WINDOW_KEY);
-
-    private static final List<String> sRequestImageData =
-            Collections.singletonList(EXTRAS_DATA_REQUEST_IMAGE_DATA_KEY);
 
     /** Delegate interface for any client that wants to use the node builder. */
     interface BuilderDelegate {
@@ -228,16 +217,18 @@ public class AccessibilityNodeInfoBuilder {
         node.setContentInvalid(contentInvalid);
         node.setHeading(isHeading);
 
+        List<String> availableExtraData = new ArrayList<>();
         if (hasImage) {
             Bundle bundle = node.getExtras();
             bundle.putCharSequence(EXTRAS_KEY_HAS_IMAGE, "true");
-            node.setAvailableExtraData(sRequestImageData);
+            availableExtraData.add(EXTRAS_DATA_REQUEST_IMAGE_DATA_KEY);
         }
 
         if (hasCharacterLocations) {
-            node.setAvailableExtraData(sTextCharacterLocation);
-            node.setAvailableExtraData(sTextCharacterLocationInWindow);
+            availableExtraData.add(EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY);
+            availableExtraData.add(EXTRA_DATA_TEXT_CHARACTER_LOCATION_IN_WINDOW_KEY);
         }
+        node.setAvailableExtraData(availableExtraData);
 
         node.setMovementGranularities(
                 MOVEMENT_GRANULARITY_CHARACTER
@@ -383,7 +374,8 @@ public class AccessibilityNodeInfoBuilder {
             String brailleLabel,
             String brailleRoleDescription,
             int expandedState,
-            int checked) {
+            int checked,
+            int[] labelledByIds) {
         node.setUniqueId(String.valueOf(virtualViewId));
         node.setClassName(className);
 
@@ -440,6 +432,10 @@ public class AccessibilityNodeInfoBuilder {
         }
 
         node.setChecked(checked);
+
+        for (int id : labelledByIds) {
+            node.addLabeledBy(mDelegate.getView(), id);
+        }
     }
 
     @SuppressLint("NewApi")
@@ -867,7 +863,7 @@ public class AccessibilityNodeInfoBuilder {
     }
 
     @FunctionalInterface
-    private static interface SpanFactory<T> {
+    private interface SpanFactory<T> {
         @Nullable ParcelableSpan createSpan(T param);
     }
 
@@ -961,38 +957,5 @@ public class AccessibilityNodeInfoBuilder {
         } else if (rect.right < clippedLeft) {
             rect.right = clippedLeft;
         }
-    }
-
-    @CalledByNative
-    public static <K> Map<K, int[][]> createTextAttributeRangesMap() {
-        return new HashMap<K, int[][]>();
-    }
-
-    @CalledByNative
-    public static void setTextAttributeRangesMapFloatValue(
-            Map<Float, int[][]> map, float value, int[] starts, int[] ends) {
-        setTextAttributeRangesMapValue(map, value, starts, ends);
-    }
-
-    @CalledByNative
-    public static void setTextAttributeRangesMapIntValue(
-            Map<Integer, int[][]> map, int value, int[] starts, int[] ends) {
-        setTextAttributeRangesMapValue(map, value, starts, ends);
-    }
-
-    @CalledByNative
-    public static void setTextAttributeRangesMapStringValue(
-            Map<String, int[][]> map, String value, int[] starts, int[] ends) {
-        setTextAttributeRangesMapValue(map, value, starts, ends);
-    }
-
-    // TODO(crbug.com/439665919): refactor setTextAttributeRangesMapValue and callers to an utility
-    // class.
-    public static <T> void setTextAttributeRangesMapValue(
-            Map<T, int[][]> map, T value, int[] starts, int[] ends) {
-        if (map == null || value == null || starts == null || ends == null) {
-            return;
-        }
-        map.put(value, new int[][] {starts, ends});
     }
 }

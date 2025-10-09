@@ -454,8 +454,10 @@ void TabContainerImpl::ToggleTabGroup(
             ? CloseTabSource::kFromMouse
             : CloseTabSource::kFromTouch;
 
+    // Use actual last tab bounds instead of ideal_bounds to match
+    // current_group_width timing.
     EnterTabClosingMode(
-        tabs_view_model_.ideal_bounds(GetTabCount() - 1).right() -
+        tabs_view_model_.view_at(GetTabCount() - 1)->bounds().right() -
             current_group_width + collapsed_group_width,
         source);
   } else {
@@ -520,6 +522,13 @@ void TabContainerImpl::OnSplitContentsChanged(const std::vector<int>& indices) {
     Tab* const tab = GetTabAtModelIndex(index);
     CHECK(tab->split().has_value());
     tab->UpdateInsets();
+
+    // Tab shape may change due to reordering (eg. reversing split tabs). We
+    // should repaint the focus ring to ensure the highlight path matches the
+    // new shape.
+    if (auto* focus_ring = views::FocusRing::Get(tab)) {
+      focus_ring->SchedulePaint();
+    }
   }
 }
 
@@ -1759,7 +1768,7 @@ gfx::Rect TabContainerImpl::GetDropBounds(int drop_index,
                         g_drop_indicator_height);
 
   // If the rect doesn't fit on the monitor, push the arrow to the bottom.
-  display::Screen* screen = display::Screen::GetScreen();
+  display::Screen* screen = display::Screen::Get();
   display::Display display = screen->GetDisplayMatching(drop_bounds);
   *is_beneath = !display.bounds().Contains(drop_bounds);
   if (*is_beneath) {

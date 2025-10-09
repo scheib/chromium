@@ -82,6 +82,10 @@
 #include "url/gurl.h"
 #include "url/origin.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/apps/app_service/chrome_app_deprecation/chrome_app_deprecation.h"
+#endif
+
 namespace extensions {
 
 namespace {
@@ -281,7 +285,8 @@ class OrbAndCorsExtensionBrowserTest : public OrbAndCorsExtensionTestBase {
     EXPECT_TRUE(resource_load_observer_);
     resource_load_observer_->WaitForResourceCompletion(url);
     EXPECT_TRUE(resource_load_observer_->GetResource(url));
-    EXPECT_EQ(0, (*resource_load_observer_->GetResource(url))->raw_body_bytes);
+    EXPECT_TRUE(
+        (*resource_load_observer_->GetResource(url))->raw_body_bytes.is_zero());
 
     // For later versions of ORB the error code lets us determine precisely
     // whether a fetch was blocked by ORB. For "v0.1" and "v0.2" (for
@@ -989,8 +994,8 @@ IN_PROC_BROWSER_TEST_F(
       base::FilePath(), base::FilePath(FILE_PATH_LITERAL("title1.html")));
   GURL same_dir_resource = ui_test_utils::GetTestUrl(
       base::FilePath(), base::FilePath(FILE_PATH_LITERAL("title2.html")));
-  ASSERT_EQ(url::kFileScheme, page_url.scheme());
-  ASSERT_EQ(url::kFileScheme, same_dir_resource.scheme());
+  ASSERT_EQ(url::kFileScheme, page_url.GetScheme());
+  ASSERT_EQ(url::kFileScheme, same_dir_resource.GetScheme());
 
   // Navigate to a file:// test page.
   ASSERT_TRUE(NavigateToURL(active_web_contents(), page_url));
@@ -2239,6 +2244,11 @@ IN_PROC_BROWSER_TEST_F(OrbAndCorsAppBrowserTest, WebViewContentScript) {
   dir.WriteFile(FILE_PATH_LITERAL("page.html"), kPage);
   const Extension* app = LoadExtension(dir.UnpackedPath());
   ASSERT_TRUE(app);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  apps::chrome_app_deprecation::ScopedAddAppToAllowlistForTesting allowlist(
+      app->id());
+#endif
 
   // Launch the test app and grab its WebContents.
   content::WebContents* app_contents = nullptr;

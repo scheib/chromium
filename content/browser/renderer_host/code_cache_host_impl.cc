@@ -4,14 +4,18 @@
 
 #include "content/browser/renderer_host/code_cache_host_impl.h"
 
+#include <optional>
+#include <string_view>
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
+#include "components/persistent_cache/entry.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/child_process_security_policy_impl.h"
@@ -20,13 +24,18 @@
 #include "content/browser/process_lock.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/public/browser/resource_context.h"
+#include "content/public/browser/site_isolation_policy.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/url_constants.h"
+#include "mojo/public/cpp/base/big_buffer.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/io_buffer.h"
+#include "net/http/http_cache.h"
 #include "third_party/blink/public/common/cache_storage/cache_storage_utils.h"
+#include "third_party/blink/public/common/features_generated.h"
 #include "third_party/blink/public/common/scheme_registry.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-data-view.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -35,6 +44,73 @@ using blink::mojom::CacheStorageError;
 namespace content {
 
 namespace {
+
+// The key used for the PersistentCacheCollection when a unique context cannot
+// be determined and strict site isolation is disabled. This groups entries in
+// the same way as with GeneratedCodeCache under the same conditions.
+constexpr const char kSharedContextKeyForRelaxedIsolation[] =
+    "_shared_context_for_relaxed_isolation";
+
+GeneratedCodeCache::CodeCacheType MojoCacheTypeToCodeCacheType(
+    blink::mojom::CodeCacheType type) {
+  switch (type) {
+    case blink::mojom::CodeCacheType::kJavascript:
+      return GeneratedCodeCache::CodeCacheType::kJavaScript;
+    case blink::mojom::CodeCacheType::kWebAssembly:
+      return GeneratedCodeCache::CodeCacheType::kWebAssembly;
+    default:
+      NOTREACHED();
+  }
+}
+
+// Returns null where there is no usable context key and caching should not be
+// used. Returns the key to an isolated cache for locked processes and the key
+// to a shared cache for unlocked processes when under partial site isolation.
+// `secondary_key` should come from `GetSecondaryKeyForCodeCache` to make sure
+// it conforms with the security checks.
+std::optional<std::string> GetContextKeyForPersistentCacheCollection(
+    const GURL& secondary_key,
+    const net::NetworkIsolationKey& nik,
+    blink::mojom::CodeCacheType cache_type) {
+  std::string context_key = GeneratedCodeCache::GetContextKey(
+      secondary_key, nik, MojoCacheTypeToCodeCacheType(cache_type));
+
+  // Here `context_key` will contain a value for locked processes and an empty
+  // string for unlocked ones. When sites are isolated per process an empty
+  // context key means no access to the cache.
+  if (context_key.empty() &&
+      content::SiteIsolationPolicy::IsSitePerProcessOrStricter()) {
+    return std::nullopt;
+  }
+
+  // Alternatively, Android uses partial Site Isolation (i.e., some sites
+  // require dedicated processes and others do not).
+  //
+  // An empty string is not a valid context key for PersistentCacheCollection so
+  // a shared context key is used instead. This lets all unlocked processes
+  // share a context (and thus a cache) like is achieved when using
+  // GeneratedCodeCache through the implementation of `GetCacheKey()` which will
+  // construct the full cache key using only the resource URL for requests from
+  // unlocked processes.
+  //
+  // The context key returned by this function needs to enforce the "jail" and
+  // "citadel" concepts (see:
+  // https://chromium.googlesource.com/chromium/src/+/main/docs/process_model_and_site_isolation.md)
+  //
+  // 1) Locked processes are "jailed" since they cannot access shared context
+  // with their non-empty context key which will never equal
+  // `kSharedContextKeyForRelaxedIsolation'.
+  // 2) The "citadel" concept is upheld
+  // because unlocked processes do not have access to data from locked processes
+  // because locked processed store their data using their specific keys and not
+  // the shared context key.
+  if (context_key.empty() &&
+      !content::SiteIsolationPolicy::IsSitePerProcessOrStricter()) {
+    return kSharedContextKeyForRelaxedIsolation;
+  }
+
+  return context_key;
+}
 
 bool CheckSecurityForAccessingCodeCacheData(
     const GURL& resource_url,
@@ -51,13 +127,13 @@ bool CheckSecurityForAccessingCodeCacheData(
   // suspicious activity.
   if (resource_url.SchemeIs(content::kChromeUIScheme) ||
       resource_url.SchemeIs(content::kChromeUIUntrustedScheme)) {
-    if (!process_lock.is_locked_to_site()) {
+    if (!process_lock.IsLockedToSite()) {
       // We can't tell for certain whether this renderer is doing something
       // malicious, but we don't trust it enough to store data.
       return false;
     }
-    if (process_lock.matches_scheme(url::kHttpScheme) ||
-        process_lock.matches_scheme(url::kHttpsScheme)) {
+    if (process_lock.MatchesScheme(url::kHttpScheme) ||
+        process_lock.MatchesScheme(url::kHttpsScheme)) {
       if (operation == CodeCacheHostImpl::Operation::kWrite) {
         mojo::ReportBadMessage("HTTP(S) pages cannot cache WebUI code");
       }
@@ -66,13 +142,14 @@ bool CheckSecurityForAccessingCodeCacheData(
     // Other schemes which might successfully load chrome or chrome-untrusted
     // scripts, such as the PDF viewer, are unsupported but not considered
     // dangerous.
-    return process_lock.matches_scheme(content::kChromeUIScheme) ||
-           process_lock.matches_scheme(content::kChromeUIUntrustedScheme);
+    return process_lock.MatchesScheme(content::kChromeUIScheme) ||
+           process_lock.MatchesScheme(content::kChromeUIUntrustedScheme);
   }
   if (resource_url.SchemeIsHTTPOrHTTPS() ||
-      blink::CommonSchemeRegistry::IsExtensionScheme(resource_url.scheme())) {
-    if (process_lock.matches_scheme(content::kChromeUIScheme) ||
-        process_lock.matches_scheme(content::kChromeUIUntrustedScheme)) {
+      blink::CommonSchemeRegistry::IsExtensionScheme(
+          resource_url.GetScheme())) {
+    if (process_lock.MatchesScheme(content::kChromeUIScheme) ||
+        process_lock.MatchesScheme(content::kChromeUIUntrustedScheme)) {
       // It is possible for WebUI pages to include open-web content, but such
       // usage is rare and we've decided that reasoning about security is easier
       // if the WebUI code cache includes only WebUI scripts.
@@ -240,6 +317,33 @@ void CodeCacheHostImpl::SetCacheStorageControlForTesting(
   cache_storage_control_for_testing_ = cache_storage_control;
 }
 
+bool CodeCacheHostImpl::IsPersistentCacheForCodeCacheEnabled(
+    blink::mojom::CodeCacheType cache_type) {
+  // Serve non-js from existing cache implementation.
+  // TODO(crbug.com/377475540): Use another PersistentCacheCollection for
+  // WASM.
+  if (cache_type != blink::mojom::CodeCacheType::kJavascript) {
+    return false;
+  }
+
+  ProcessLock process_lock =
+      ChildProcessSecurityPolicyImpl::GetInstance()->GetProcessLock(
+          render_process_id_);
+
+  // Serve ChromeUI from existing cache implementation.
+  // TODO(crbug.com/377475540): Use another PersistentCacheCollection for
+  // ChromeUI.
+  if (process_lock.MatchesScheme(content::kChromeUIScheme) ||
+      process_lock.MatchesScheme(content::kChromeUIUntrustedScheme)) {
+    return false;
+  }
+
+  // The feature is only compatible with split caches.
+  return base::FeatureList::IsEnabled(
+             blink::features::kUsePersistentCacheForCodeCache) &&
+         net::HttpCache::IsSplitCacheEnabled();
+}
+
 void CodeCacheHostImpl::DidGenerateCacheableMetadata(
     blink::mojom::CodeCacheType cache_type,
     const GURL& url,
@@ -247,29 +351,49 @@ void CodeCacheHostImpl::DidGenerateCacheableMetadata(
     mojo_base::BigBuffer data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  GeneratedCodeCache* code_cache = GetCodeCache(cache_type);
-  if (!code_cache)
-    return;
-
   std::optional<GURL> secondary_key =
       GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kWrite);
   if (!secondary_key) {
     return;
   }
 
-  code_cache->WriteEntry(url, *secondary_key, network_isolation_key_,
-                         expected_response_time, std::move(data));
+  if (IsPersistentCacheForCodeCacheEnabled(cache_type)) {
+    if (!generated_code_cache_context_) {
+      return;
+    }
+
+    std::string resource_key = GeneratedCodeCache::GetResourceKey(
+        url, MojoCacheTypeToCodeCacheType(cache_type));
+    std::optional<std::string> context_key =
+        GetContextKeyForPersistentCacheCollection(
+            secondary_key.value(), network_isolation_key_, cache_type);
+
+    // An empty context key here means the isolation requirements for caching
+    // are not met (see `GetContextKeyForPersistentCacheCollection()` for
+    // details). In this case, we intentionally do not use the cache.
+    if (context_key.has_value()) {
+      generated_code_cache_context_->InsertIntoPersistentCacheCollection(
+          context_key.value(), resource_key, std::move(data),
+          persistent_cache::EntryMetadata{
+              .input_signature =
+                  expected_response_time.ToDeltaSinceWindowsEpoch()
+                      .InMicroseconds()});
+    }
+  } else {
+    GeneratedCodeCache* code_cache = GetCodeCache(cache_type);
+    if (!code_cache) {
+      return;
+    }
+
+    code_cache->WriteEntry(url, *secondary_key, network_isolation_key_,
+                           expected_response_time, std::move(data));
+  }
 }
 
 void CodeCacheHostImpl::FetchCachedCode(blink::mojom::CodeCacheType cache_type,
                                         const GURL& url,
                                         FetchCachedCodeCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  GeneratedCodeCache* code_cache = GetCodeCache(cache_type);
-  if (!code_cache) {
-    std::move(callback).Run(base::Time(), {});
-    return;
-  }
 
   std::optional<GURL> secondary_key =
       GetSecondaryKeyForCodeCache(url, render_process_id_, Operation::kRead);
@@ -278,17 +402,72 @@ void CodeCacheHostImpl::FetchCachedCode(blink::mojom::CodeCacheType cache_type,
     return;
   }
 
-  auto read_callback = base::BindOnce(
-      &CodeCacheHostImpl::OnReceiveCachedCode, weak_ptr_factory_.GetWeakPtr(),
-      cache_type, base::TimeTicks::Now(), std::move(callback));
-  code_cache->FetchEntry(url, *secondary_key, network_isolation_key_,
-                         std::move(read_callback));
+  if (IsPersistentCacheForCodeCacheEnabled(cache_type)) {
+    if (!generated_code_cache_context_) {
+      std::move(callback).Run(base::Time(), {});
+      return;
+    }
+
+    std::string resource_key = GeneratedCodeCache::GetResourceKey(
+        url, MojoCacheTypeToCodeCacheType(cache_type));
+    std::optional<std::string> context_key =
+        GetContextKeyForPersistentCacheCollection(
+            secondary_key.value(), network_isolation_key_, cache_type);
+
+    // An empty context key here means the isolation requirements for caching
+    // are not met (see `GetContextKeyForPersistentCacheCollection()` for
+    // details). In this case, we intentionally do not use the cache.
+    if (!context_key.has_value()) {
+      std::move(callback).Run(base::Time(), mojo_base::BigBuffer());
+      return;
+    }
+
+    std::unique_ptr<persistent_cache::Entry> entry =
+        generated_code_cache_context_->FindInPersistentCacheCollection(
+            context_key.value(), resource_key);
+
+    if (entry && entry->GetContentSize() > 0) {
+      std::move(callback).Run(
+          base::Time::FromDeltaSinceWindowsEpoch(
+              base::Microseconds(entry->GetMetadata().input_signature)),
+          mojo_base::BigBuffer(entry->GetContentSpan()));
+    } else {
+      std::move(callback).Run(base::Time(), mojo_base::BigBuffer());
+    }
+
+  } else {
+    GeneratedCodeCache* code_cache = GetCodeCache(cache_type);
+    if (!code_cache) {
+      std::move(callback).Run(base::Time(), {});
+      return;
+    }
+
+    auto read_callback = base::BindOnce(
+        &CodeCacheHostImpl::OnReceiveCachedCode, weak_ptr_factory_.GetWeakPtr(),
+        cache_type, base::TimeTicks::Now(), std::move(callback));
+    code_cache->FetchEntry(url, *secondary_key, network_isolation_key_,
+                           std::move(read_callback));
+  }
 }
 
 void CodeCacheHostImpl::ClearCodeCacheEntry(
     blink::mojom::CodeCacheType cache_type,
     const GURL& url) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Note:
+  // There is no handling under `IsPersistentCacheForCodeCacheEnabled()`
+  // here as `PersistentCache` does not expose the ability to delete specific
+  // entries. This will lead to entries that are known to be unusable by
+  // renderers remaining in the cache. This does not lead to keys being
+  // unusable forever since the entries can get overwritten by valid entries.
+  // Additionally this does not lead to invalid values being used by renderers
+  // since the fact that they are unusable was detected by the clients
+  // themselves.
+  if (IsPersistentCacheForCodeCacheEnabled(cache_type)) {
+    return;
+  }
+
   GeneratedCodeCache* code_cache = GetCodeCache(cache_type);
   if (!code_cache)
     return;
@@ -330,8 +509,8 @@ GeneratedCodeCache* CodeCacheHostImpl::GetCodeCache(
   // To minimize the chance of any cache bug resulting in privilege escalation
   // from an ordinary web page to trusted WebUI, we use a completely separate
   // GeneratedCodeCache instance for WebUI pages.
-  if (process_lock.matches_scheme(content::kChromeUIScheme) ||
-      process_lock.matches_scheme(content::kChromeUIUntrustedScheme)) {
+  if (process_lock.MatchesScheme(content::kChromeUIScheme) ||
+      process_lock.MatchesScheme(content::kChromeUIUntrustedScheme)) {
     if (cache_type == blink::mojom::CodeCacheType::kJavascript) {
       return generated_code_cache_context_->generated_webui_js_code_cache();
     }
@@ -407,7 +586,7 @@ std::optional<GURL> CodeCacheHostImpl::GetSecondaryKeyForCodeCache(
   // Case 1: If process is not locked to a site, it is safe to just use the
   // |resource_url| of the requested resource as the key. Return an empty GURL
   // as the second key.
-  if (!process_lock.is_locked_to_site()) {
+  if (!process_lock.IsLockedToSite()) {
     return GURL();
   }
 
@@ -429,13 +608,13 @@ std::optional<GURL> CodeCacheHostImpl::GetSecondaryKeyForCodeCache(
   // cache across all file:// URLs. That would likely be ok for security, but
   // since this case is not performance sensitive we will keep things simple and
   // limit the cache to http/https/chrome/chrome-untrusted processes.
-  if (process_lock.matches_scheme(url::kHttpScheme) ||
-      process_lock.matches_scheme(url::kHttpsScheme) ||
-      process_lock.matches_scheme(content::kChromeUIScheme) ||
-      process_lock.matches_scheme(content::kChromeUIUntrustedScheme) ||
+  if (process_lock.MatchesScheme(url::kHttpScheme) ||
+      process_lock.MatchesScheme(url::kHttpsScheme) ||
+      process_lock.MatchesScheme(content::kChromeUIScheme) ||
+      process_lock.MatchesScheme(content::kChromeUIUntrustedScheme) ||
       blink::CommonSchemeRegistry::IsExtensionScheme(
-          process_lock.lock_url().scheme())) {
-    return process_lock.lock_url();
+          process_lock.GetProcessLockURL().GetScheme())) {
+    return process_lock.GetProcessLockURL();
   }
 
   return std::nullopt;

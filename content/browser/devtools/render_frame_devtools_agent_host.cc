@@ -290,10 +290,13 @@ RenderFrameDevToolsAgentHost::RenderFrameDevToolsAgentHost(
   g_was_ever_attached_to_any_frame = true;
   AddRef();  // Balanced in DestroyOnRenderFrameGone.
   auto* wc = WebContentsImpl::FromRenderFrameHostImpl(frame_host);
+  CHECK(!wc->IsBeingDestroyed());
   WebContentsObserver::Observe(wc);
   SetFrameTreeNode(frame_tree_node);
   ChangeFrameHostAndObservedProcess(frame_host);
   render_frame_alive_ = frame_host_ && frame_host_->IsRenderFrameLive();
+  CHECK(!render_frame_alive_ ||
+        frame_host->GetProcess()->IsInitializedAndNotDead());
   if (frame_tree_node->GetFrameType() != FrameType::kPrimaryMainFrame &&
       frame_tree_node->GetFrameType() != FrameType::kPrerenderMainFrame) {
     render_frame_crashed_ = !render_frame_alive_;
@@ -372,7 +375,7 @@ bool RenderFrameDevToolsAgentHost::AttachSession(DevToolsSession* session) {
       GetId(),
       frame_host_ ? frame_host_->devtools_frame_token()
                   : base::UnguessableToken(),
-      GetIOContext(),
+      GetIOContext(), /*maybe_storage_partition=*/nullptr,
       base::BindRepeating(
           &RenderFrameDevToolsAgentHost::UpdateResourceLoaderFactories,
           base::Unretained(this)),
@@ -388,7 +391,8 @@ bool RenderFrameDevToolsAgentHost::AttachSession(DevToolsSession* session) {
   session->CreateAndAddHandler<protocol::SchemaHandler>();
   const bool may_attach_to_browser = session->GetClient()->IsTrusted();
   session->CreateAndAddHandler<protocol::ServiceWorkerHandler>();
-  session->CreateAndAddHandler<protocol::StorageHandler>(session->GetClient());
+  session->CreateAndAddHandler<protocol::StorageHandler>(this,
+                                                         session->GetClient());
   session->CreateAndAddHandler<protocol::SystemInfoHandler>(
       /* is_browser_session= */ false);
   session->CreateAndAddHandler<protocol::TargetHandler>(

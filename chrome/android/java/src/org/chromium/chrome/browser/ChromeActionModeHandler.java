@@ -23,7 +23,6 @@ import org.chromium.base.Callback;
 import org.chromium.base.PackageManagerUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -51,6 +50,7 @@ import org.chromium.url.GURL;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** A class that handles selection action mode for the active {@link Tab}. */
 @NullMarked
@@ -249,12 +249,13 @@ public class ChromeActionModeHandler {
                 int groupId,
                 int id,
                 @Nullable Intent intent,
-                View.@Nullable OnClickListener clickListener) {
+                View.@Nullable OnClickListener clickListener,
+                boolean closeMenu) {
             boolean res =
                     handleItemClick(id)
-                            || mHelper.onDropdownItemClicked(groupId, id, intent, clickListener);
-            // We will always dismiss the drop-down menu here.
-            mHelper.dismissMenu();
+                            || mHelper.onDropdownItemClicked(
+                                    groupId, id, intent, clickListener, closeMenu);
+            if (closeMenu) mHelper.dismissMenu();
             return res;
         }
 

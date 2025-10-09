@@ -9,6 +9,7 @@
 #include "base/trace_event/trace_id_helper.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom-blink.h"
+#include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom-forward.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
@@ -19,6 +20,7 @@
 #include "third_party/blink/renderer/core/editing/selection_template.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
@@ -42,17 +44,20 @@
 #include "third_party/blink/renderer/core/layout/layout_text_fragment.h"
 #include "third_party/blink/renderer/core/layout/layout_video.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
+#include "third_party/blink/renderer/core/layout/map_coordinates_flags.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_root.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table_caption.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table_row.h"
 #include "third_party/blink/renderer/core/layout/table/layout_table_section.h"
+#include "third_party/blink/renderer/core/paint/clip_path_clipper.h"
 #include "third_party/blink/renderer/core/script_tools/automation_delegate_supplement.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
 #include "third_party/blink/renderer/modules/content_extraction/ai_page_content_debug_utils.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "ui/accessibility/ax_role_properties.h"
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -60,7 +65,9 @@
 namespace blink {
 namespace {
 
-constexpr MapCoordinatesFlags kMapCoordinatesFlags =
+// Coordinate mapping flags
+// - Viewport mapping: positions relative to the window/viewport origin.
+constexpr MapCoordinatesFlags kMapToViewportFlags =
     kTraverseDocumentBoundaries | kApplyRemoteViewportTransform;
 constexpr VisualRectFlags kVisualRectFlags = static_cast<VisualRectFlags>(
     kUseGeometryMapper | kVisualRectApplyRemoteViewportTransform |
@@ -80,16 +87,159 @@ ListBasedHitTestBehavior CollectHitTestNodes(std::vector<DOMNodeId>& hit_nodes,
   return kContinueHitTesting;
 }
 
+// Computes the visible portion of a LayoutObject's bounding box.
+//
+// This function calculates what part of the object is actually visible in the
+// viewport, taking into account:
+// - The object's local bounding box (its natural size and position)
+// - Viewport clipping (objects outside the viewport are clipped)
+// - Scroll offsets (objects scrolled out of view are clipped)
+// - CSS overflow clipping from ancestor containers
+//
+// The returned rectangle is in viewport coordinates (relative to the top-left
+// of the visible area), which is why coordinates are always >= 0.
 gfx::Rect ComputeVisibleBoundingBox(const LayoutObject& object) {
-  gfx::RectF visible_bounding_box =
-      object.LocalBoundingBoxRectForAccessibility();
+  // Layout must be complete before computing bounding boxes.
+  DCHECK(object.GetDocument().Lifecycle().GetState() >=
+         DocumentLifecycle::kLayoutClean)
+      << "ComputeVisibleBoundingBox only works when layout is complete";
 
+  // Get the object's local bounding box before viewport clipping.
+  gfx::RectF object_rect =
+      ClipPathClipper::LocalClipPathBoundingBox(object).value_or(
+          object.LocalBoundingBoxRectForAccessibility());
+
+  // Transform the local bounding box to viewport coordinates, applying:
+  // 1. All CSS transforms (translate, scale, rotate, etc.)
+  // 2. Scroll offsets from all ancestor scroll containers
+  // 3. Clipping from overflow:hidden containers
+  // 4. Viewport clipping (anything outside the viewport is clipped)
+  //
+  // The nullptr ancestor means "map to the root of the document". When used
+  // with kVisualRectFlags, this gives us viewport-relative coordinates.
   // TODO(khushalsagar): It might be more optimal to derive this from output of
   // paint.
-  object.MapToVisualRectInAncestorSpace(nullptr, visible_bounding_box,
-                                        kVisualRectFlags);
-  return ToEnclosingRect(visible_bounding_box);
+  object.MapToVisualRectInAncestorSpace(nullptr, object_rect, kVisualRectFlags);
+
+  gfx::Rect visible_box_in_viewport_coords = ToEnclosingRect(object_rect);
+
+#if DCHECK_IS_ON() && !defined(OFFICIAL_BUILD)
+  // The visible bounding box should always have non-negative coordinates since
+  // it's relative to the viewport. Negative coordinates would indicate a bug
+  // in the coordinate transformation.
+  DCHECK_GE(visible_box_in_viewport_coords.x(), 0)
+      << "Visible bounding box should be viewport-relative with x >= 0, got: "
+      << visible_box_in_viewport_coords.ToString() << " for object: " << object;
+  DCHECK_GE(visible_box_in_viewport_coords.y(), 0)
+      << "Visible bounding box should be viewport-relative with y >= 0, got: "
+      << visible_box_in_viewport_coords.ToString() << " for object: " << object;
+#endif
+
+  return visible_box_in_viewport_coords;
 }
+
+gfx::Rect ComputeOuterBoundingBox(const LayoutObject& object) {
+  const std::optional<gfx::RectF> clip_path_box =
+      ClipPathClipper::LocalClipPathBoundingBox(object);
+
+  if (clip_path_box.has_value()) {
+    gfx::QuadF absolute_quad = object.LocalToAbsoluteQuad(
+        gfx::QuadF(clip_path_box.value()), kMapToViewportFlags);
+    return gfx::ToEnclosingRect(absolute_quad.BoundingBox());
+  }
+
+  return object.AbsoluteBoundingBoxRect(kMapToViewportFlags);
+}
+
+// Processes fragment bounding boxes for layout objects that can be split.
+//
+// Uses QuadsInAncestor() to retrieve quads for each object, then converts them
+// to integer bounding rects.
+//
+// In CSS layout, some objects can be "fragmented" - split across multiple
+// visual areas. This includes:
+// - Text that wraps across multiple lines
+// - Content that flows across CSS columns
+//
+// Each fragment represents a visual piece of the same logical object.
+// We only store fragment boxes when there are multiple fragments (size > 1),
+// as single fragments are redundant with the main bounding box.
+void ComputeFragmentBoundingBoxes(
+    const LayoutObject& object,
+    mojom::blink::AIPageContentGeometry& geometry) {
+  Vector<gfx::QuadF> fragment_quads_in_viewport_coords;
+  object.QuadsInAncestor(fragment_quads_in_viewport_coords,
+                         /*ancestor=*/nullptr, kMapToViewportFlags);
+
+  Vector<gfx::Rect> fragment_rects_in_viewport_coords;
+  for (const auto& fragment_quad_in_viewport_coords :
+       fragment_quads_in_viewport_coords) {
+    gfx::Rect fragment_enclosing_rect_in_viewport_coords =
+        gfx::ToEnclosingRect(fragment_quad_in_viewport_coords.BoundingBox());
+    // Clip to the viewport by intersecting with the element's visible bounding
+    // box (viewport-relative).
+    fragment_enclosing_rect_in_viewport_coords.Intersect(
+        geometry.visible_bounding_box);
+    if (!fragment_enclosing_rect_in_viewport_coords.IsEmpty()) {
+      fragment_rects_in_viewport_coords.push_back(
+          fragment_enclosing_rect_in_viewport_coords);
+    }
+  }
+
+  // AddFragmentRectsAfterClipping(object, geometry.visible_bounding_box,
+  //                               fragment_rects_in_viewport_coords);
+
+  if (fragment_rects_in_viewport_coords.size() > 1) {
+    geometry.fragment_visible_bounding_boxes =
+        std::move(fragment_rects_in_viewport_coords);
+  }
+}
+
+// Validates the relationship between outer and visible bounding boxes.
+//
+// The visible bounding box should generally be contained within or equal to
+// the outer bounding box, since it represents the visible portion of the
+// object. However, there are some exceptions:
+// 1. Inline elements can have different calculation methods that cause slight
+// differences
+// 2. Floating-point to integer conversions can introduce small rounding errors
+// 3. CSS transforms can cause complex geometric relationships
+#if DCHECK_IS_ON() && !defined(OFFICIAL_BUILD)
+void ValidateBoundingBoxes(const gfx::Rect& outer_box_in_absolute_coords,
+                           const gfx::Rect& visible_box_in_viewport_coords,
+                           const LayoutObject& object) {
+  // Visible box coordinates should always be viewport-relative (>= 0)
+  DCHECK_GE(visible_box_in_viewport_coords.x(), 0)
+      << "Visible box should have x >= 0, got: "
+      << visible_box_in_viewport_coords.ToString() << " for object: " << object;
+  DCHECK_GE(visible_box_in_viewport_coords.y(), 0)
+      << "Visible box should have y >= 0, got: "
+      << visible_box_in_viewport_coords.ToString() << " for object: " << object;
+
+  // For block-level elements, the visible box should generally be no larger
+  // than the outer box (with some tolerance for rounding errors).
+  // Inline elements are exempt because they can have different calculation
+  // methods that cause the visible box to be larger.
+  // TODO(crbug.com/422588784): Fixinline element box sizing  and enable check.
+  if (!object.IsInline()) {
+    const int kTolerancePixels = 1;
+    DCHECK_LE(visible_box_in_viewport_coords.width(),
+              outer_box_in_absolute_coords.width() + kTolerancePixels)
+        << "Visible box width should not exceed outer box width by more than "
+        << kTolerancePixels
+        << "px. Visible: " << visible_box_in_viewport_coords.ToString()
+        << ", Outer: " << outer_box_in_absolute_coords.ToString()
+        << " for object: " << object;
+    DCHECK_LE(visible_box_in_viewport_coords.height(),
+              outer_box_in_absolute_coords.height() + kTolerancePixels)
+        << "Visible box height should not exceed outer box height by more than "
+        << kTolerancePixels
+        << "px. Visible: " << visible_box_in_viewport_coords.ToString()
+        << ", Outer: " << outer_box_in_absolute_coords.ToString()
+        << " for object: " << object;
+  }
+}
+#endif  // DCHECK_IS_ON()
 
 void ComputeScrollerInfo(
     const LayoutObject& object,
@@ -230,10 +380,21 @@ void AddClickabilityReasons(
     interaction_info.clickability_reasons.push_back(Reason::kClickEvents);
   }
 
-  if (element.HasJSBasedEventListeners(event_type_names::kMouseover) ||
-      element.HasJSBasedEventListeners(event_type_names::kMouseenter) ||
+  const bool has_mouse_hover =
+      element.HasJSBasedEventListeners(event_type_names::kMouseover) ||
+      element.HasJSBasedEventListeners(event_type_names::kMouseenter);
+  const bool has_mouse_click =
       element.HasJSBasedEventListeners(event_type_names::kMouseup) ||
-      element.HasJSBasedEventListeners(event_type_names::kMousedown)) {
+      element.HasJSBasedEventListeners(event_type_names::kMousedown);
+  if (has_mouse_hover) {
+    interaction_info.clickability_reasons.push_back(Reason::kMouseHover);
+  }
+  if (has_mouse_click) {
+    interaction_info.clickability_reasons.push_back(Reason::kMouseClick);
+  }
+  // TODO(linnan): Remove this once consumers move to use kMouseClick and
+  // kMouseHover.
+  if (has_mouse_hover || has_mouse_click) {
     interaction_info.clickability_reasons.push_back(Reason::kMouseEvents);
   }
 
@@ -324,6 +485,45 @@ bool ShouldSkipSubtree(const LayoutObject& object) {
   return false;
 }
 
+bool ShouldSkipDescendants(
+    const mojom::blink::AIPageContentNodePtr& content_node) {
+  if (!content_node) {
+    return false;
+  }
+  // If the child is an iframe, it does its own tree walk.
+  // TODO(crbug.com/405173553): Moving ProcessIframe here might simplify
+  // tree construction and keep stack depth counting in one place.
+  if (content_node->content_attributes->attribute_type ==
+      mojom::blink::AIPageContentAttributeType::kIframe) {
+    return true;
+  }
+
+  // We don't capture the SVG layout internally so there's no need to
+  // walk their tree.
+  if (content_node->content_attributes->attribute_type ==
+      mojom::blink::AIPageContentAttributeType::kSVG) {
+    return true;
+  }
+
+  // There's no layout nodes under a canvas, the content is just the
+  // canvas buffer.
+  if (content_node->content_attributes->attribute_type ==
+      mojom::blink::AIPageContentAttributeType::kCanvas) {
+    return true;
+  }
+
+  // Ensure that password editor subtrees are skipped even when the password
+  // is revealed.
+  if (content_node->content_attributes->form_control_data &&
+      content_node->content_attributes->form_control_data->redaction_decision ==
+          mojom::blink::AIPageContentRedactionDecision::
+              kRedacted_HasBeenPassword) {
+    return true;
+  }
+
+  return false;
+}
+
 void ProcessTextNode(const LayoutText& layout_text,
                      mojom::blink::AIPageContentAttributes& attributes,
                      const ComputedStyle& document_style) {
@@ -374,7 +574,7 @@ void ProcessSVGNode(const LayoutSVGRoot& layout_svg,
   }
 
   auto svg_data = mojom::blink::AIPageContentSVGData::New();
-  svg_data->inner_text = element->innerText();
+  svg_data->inner_text = element->GetInnerTextWithoutUpdate();
   attributes.svg_data = std::move(svg_data);
 }
 
@@ -384,7 +584,7 @@ void ProcessCanvasNode(const LayoutHTMLCanvas& layout_canvas,
   CHECK(IsVisible(layout_canvas));
 
   auto canvas_data = mojom::blink::AIPageContentCanvasData::New();
-  canvas_data->layout_size = ToRoundedSize(layout_canvas.Size());
+  canvas_data->layout_size = ToRoundedSize(layout_canvas.StitchedSize());
   attributes.canvas_data = std::move(canvas_data);
 }
 
@@ -465,11 +665,28 @@ void ProcessFormControlNode(const HTMLFormControlElement& form_control_element,
   form_control_data->form_control_type = form_control_element.FormControlType();
   form_control_data->field_name = form_control_element.GetName();
   form_control_data->is_required = form_control_element.IsRequired();
+
+  // Set the default value for redaction, and override below as appropriate.
+  form_control_data->redaction_decision =
+      mojom::blink::AIPageContentRedactionDecision::kNoRedactionNecessary;
+
   if (const auto* text_control_element =
           DynamicTo<TextControlElement>(form_control_element)) {
     // Don't include password values as they are sensitive.
-    if (form_control_data->form_control_type !=
-        mojom::blink::FormControlType::kInputPassword) {
+    if (const auto* input_element =
+            DynamicTo<HTMLInputElement>(text_control_element)) {
+      if (input_element->HasBeenPasswordField()) {
+        form_control_data->redaction_decision =
+            input_element->Value().empty()
+                ? mojom::blink::AIPageContentRedactionDecision::
+                      kUnredacted_EmptyPassword
+                : mojom::blink::AIPageContentRedactionDecision::
+                      kRedacted_HasBeenPassword;
+      }
+    }
+    if (form_control_data->redaction_decision !=
+        mojom::blink::AIPageContentRedactionDecision::
+            kRedacted_HasBeenPassword) {
       form_control_data->field_value = text_control_element->Value();
     }
     form_control_data->placeholder =
@@ -584,6 +801,25 @@ bool NeedsSyncExtraction(const mojom::blink::AIPageContentOptions& options) {
   return options.on_critical_path;
 }
 
+const mojom::blink::AIPageContentNode* FindContentNode(
+    const mojom::blink::AIPageContentNode* current_node,
+    DOMNodeId target_id) {
+  if (!current_node) {
+    return nullptr;
+  }
+  if (current_node->content_attributes &&
+      current_node->content_attributes->dom_node_id == target_id) {
+    return current_node;
+  }
+  for (const auto& child : current_node->children_nodes) {
+    if (const mojom::blink::AIPageContentNode* found =
+            FindContentNode(child.get(), target_id)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 // static
@@ -675,7 +911,7 @@ void AIPageContentAgent::GetAIPageContent(
 
   // We don't expect many overlapping calls to this service as the browser will
   // only issue one request at a time.
-  async_extraction_tasks_.push_back(WTF::BindOnce(
+  async_extraction_tasks_.push_back(blink::BindOnce(
       &AIPageContentAgent::GetAIPageContentSync, WrapWeakPersistent(this),
       std::move(options), std::move(callback), start_time));
 }
@@ -710,6 +946,31 @@ String AIPageContentAgent::DumpContentNodeTreeForTest() {
   return ContentNodeTreeToString(content->root_node.get());
 }
 
+String AIPageContentAgent::DumpContentNodeForTest(Node* node) {
+  CHECK(node);
+
+  mojom::blink::AIPageContentOptions options;
+  options.on_critical_path = true;
+  options.mode = mojom::blink::AIPageContentMode::kActionableElements;
+  auto content = GetAIPageContentInternal(options);
+  CHECK(content);
+  CHECK(content->root_node);
+
+  DOMNodeId target_id = node->GetDomNodeId();
+  if (target_id == kInvalidDOMNodeId) {
+    return "Error: node has no DOMNodeId";
+  }
+
+  const mojom::blink::AIPageContentNode* found_node =
+      FindContentNode(content->root_node.get(), target_id);
+
+  if (!found_node) {
+    return "Error: content node not found for the given DOM node";
+  }
+
+  return ContentNodeToString(found_node, /*format_on_single_line=*/false);
+}
+
 mojom::blink::AIPageContentPtr AIPageContentAgent::GetAIPageContentInternal(
     const mojom::blink::AIPageContentOptions& options) const {
   LocalFrame* frame = GetSupplementable()->GetFrame();
@@ -729,6 +990,7 @@ AIPageContentAgent::ContentBuilder::~ContentBuilder() = default;
 
 mojom::blink::AIPageContentPtr AIPageContentAgent::ContentBuilder::Build(
     LocalFrame& frame) {
+  TRACE_EVENT0("blink", "AIPageContentAgent::ContentBuilder::Build");
   auto& document = *frame.GetDocument();
 
   mojom::blink::AIPageContentPtr page_content =
@@ -803,7 +1065,7 @@ mojom::blink::AIPageContentPtr AIPageContentAgent::ContentBuilder::Build(
 
 void AIPageContentAgent::ContentBuilder::AddMetaData(
     const LocalFrame& frame,
-    WTF::Vector<mojom::blink::AIPageContentMetaPtr>& meta_data) const {
+    Vector<mojom::blink::AIPageContentMetaPtr>& meta_data) const {
   int max = options_->max_meta_elements;
   if (max == 0) {
     return;
@@ -936,21 +1198,7 @@ bool AIPageContentAgent::ContentBuilder::WalkChildren(
     bool child_has_visible_content = false;
     auto child_content_node =
         MaybeGenerateContentNode(*child, child_recursion_data);
-    if (child_content_node &&
-        // If the child is an iframe, it does its own tree walk.
-        // TODO(crbug.com/405173553): Moving ProcessIframe here might simplify
-        // tree construction and keep stack depth counting in one place.
-        (child_content_node->content_attributes->attribute_type ==
-             mojom::blink::AIPageContentAttributeType::kIframe ||
-         // We don't capture the SVG layout internally so there's no need to
-         // walk their tree.
-         child_content_node->content_attributes->attribute_type ==
-             mojom::blink::AIPageContentAttributeType::kSVG ||
-         // There's no layout nodes under a canvas, the content is just the
-         // canvas buffer.
-         child_content_node->content_attributes->attribute_type ==
-             mojom::blink::AIPageContentAttributeType::kCanvas)) {
-    } else {
+    if (!ShouldSkipDescendants(child_content_node)) {
       if (child_content_node) {
         child_recursion_data.stack_depth++;
       }
@@ -985,23 +1233,41 @@ void AIPageContentAgent::ContentBuilder::ProcessIframe(
 
   auto iframe_data = mojom::blink::AIPageContentIframeData::New();
   iframe_data->frame_token = frame.GetFrameToken();
-  iframe_data->likely_ad_frame = frame.IsAdFrame();
 
   content_node.content_attributes->iframe_data = std::move(iframe_data);
 
   auto* local_frame = DynamicTo<LocalFrame>(frame);
+  if (!local_frame) {
+    return;
+  }
+
+  if (options_->include_same_site_only && !frame.IsOutermostMainFrame()) {
+    const SecurityOrigin* frame_origin =
+        local_frame->GetSecurityContext()->GetSecurityOrigin();
+    const SecurityOrigin* main_frame_origin =
+        local_frame->Top()->GetSecurityContext()->GetSecurityOrigin();
+    CHECK(frame_origin);
+    CHECK(main_frame_origin);
+    if (!frame_origin->IsSameSiteWith(main_frame_origin)) {
+      content_node.content_attributes->iframe_data->content =
+          mojom::blink::AIPageContentIframeContent::NewRedactedFrameMetadata(
+              mojom::blink::RedactedFrameMetadata::New(
+                  mojom::blink::RedactedFrameMetadata::Reason::kCrossSite));
+      return;
+    }
+  }
 
   // Add interaction metadata before walking the tree to ensure we promote
   // interactive DOM nodes to ContentNodes.
-  if (local_frame && local_frame->GetDocument()) {
+  if (local_frame->GetDocument()) {
     auto frame_data = mojom::blink::AIPageContentFrameData::New();
     AddFrameData(*local_frame, *frame_data);
-    content_node.content_attributes->iframe_data->local_frame_data =
-        std::move(frame_data);
+    content_node.content_attributes->iframe_data->content =
+        mojom::blink::AIPageContentIframeContent::NewLocalFrameData(
+            std::move(frame_data));
   }
 
-  auto* child_layout_view =
-      local_frame ? local_frame->ContentLayoutObject() : nullptr;
+  auto* child_layout_view = local_frame->ContentLayoutObject();
   if (child_layout_view) {
     RecursionData child_recursion_data(*child_layout_view->Style());
     // The aria attribute values don't pierce frame boundaries.
@@ -1014,9 +1280,9 @@ void AIPageContentAgent::ContentBuilder::ProcessIframe(
         MaybeGenerateContentNode(*child_layout_view, child_recursion_data);
     CHECK(child_content_node);
 
-    // We could consider removing an iframe with no visible content. But this is
-    // likely not common and should be done in the browser so it's consistently
-    // done for local and remote frames.
+    // We could consider removing an iframe with no visible content. But this
+    // is likely not common and should be done in the browser so it's
+    // consistently done for local and remote frames.
     WalkChildren(*child_layout_view, *child_content_node, child_recursion_data);
     content_node.children_nodes.emplace_back(std::move(child_content_node));
   }
@@ -1134,6 +1400,8 @@ AIPageContentAgent::ContentBuilder::MaybeGenerateContentNode(
 
   AddNodeGeometry(object, attributes);
   AddLabel(object, attributes);
+
+  attributes.is_ad_related = element && element->IsAdRelated();
 
   return content_node;
 }
@@ -1272,12 +1540,48 @@ void AIPageContentAgent::ContentBuilder::AddNodeGeometry(
     return;
   }
 
+  // Layout must be complete before computing geometry.
+  DCHECK(object.GetDocument().Lifecycle().GetState() >=
+         DocumentLifecycle::kLayoutClean)
+      << "AddNodeGeometry only works when layout is complete for object: "
+      << object;
+
   attributes.geometry = mojom::blink::AIPageContentGeometry::New();
   mojom::blink::AIPageContentGeometry& geometry = *attributes.geometry;
 
-  geometry.outer_bounding_box =
-      object.AbsoluteBoundingBoxRect(kMapCoordinatesFlags);
+  // Compute the two fundamental bounding boxes:
+  //
+  // 1. outer_bounding_box: The object's full bounding box in viewport
+  //    coordinates, ignoring all ancestor clipping (including the viewport
+  //    clip). This includes the entire object regardless of viewport
+  //    visibility. The origin is relative to the viewport; negative values
+  //    indicate the object begins above/left of the viewport.
+  //
+  // 2. visible_bounding_box: The portion visible in the viewport, expressed in
+  //    viewport coordinates after applying all ancestor and viewport clipping.
+  //
+  // These boxes serve different purposes:
+  // - outer_bounding_box: Used for hit-testing semantics and determining the
+  //   object’s overall size and position relative to the viewport.
+  // - visible_bounding_box: Used for determining what is actually visible to
+  //   users and immediately hit-testable without scrolling.
+  geometry.outer_bounding_box = ComputeOuterBoundingBox(object);
   geometry.visible_bounding_box = ComputeVisibleBoundingBox(object);
+
+  // Validate the relationship between outer and visible bounding boxes
+  // TODO(aleventhal): restore for Canary builds.
+#if DCHECK_IS_ON() && !defined(OFFICIAL_BUILD)
+  ValidateBoundingBoxes(geometry.outer_bounding_box,
+                        geometry.visible_bounding_box, object);
+#endif
+
+  // Compute fragment bounding boxes for objects that split across multiple
+  // lines or containers (fragmentation). This happens when:
+  // - Text wraps across multiple lines
+  // - Content splits across columns (CSS multi-column layout)
+  //
+  // Fragment boxes help understand the visual layout of split content.
+  ComputeFragmentBoundingBoxes(object, geometry);
 
   geometry.is_fixed_or_sticky_position =
       object.Style()->GetPosition() == EPosition::kFixed ||
@@ -1304,12 +1608,12 @@ void AIPageContentAgent::ContentBuilder::ComputeHitTestableNodesInViewport(
 
   const auto local_visible_viewport_rect =
       document.GetLayoutView()->AbsoluteToLocalRect(PhysicalRect(viewport_rect),
-                                                    kMapCoordinatesFlags);
+                                                    kMapToViewportFlags);
   HitTestLocation location(local_visible_viewport_rect);
 
   std::vector<DOMNodeId> hit_nodes;
   HitTestRequest::HitNodeCb hit_node_cb =
-      WTF::BindRepeating(&CollectHitTestNodes, std::ref(hit_nodes));
+      BindRepeating(&CollectHitTestNodes, std::ref(hit_nodes));
   HitTestRequest request(
       HitTestRequest::kReadOnly | HitTestRequest::kActive |
           HitTestRequest::kListBased | HitTestRequest::kPenetratingList |
@@ -1317,6 +1621,31 @@ void AIPageContentAgent::ContentBuilder::ComputeHitTestableNodesInViewport(
       nullptr, std::move(hit_node_cb));
   HitTestResult result(request, location);
   document.GetLayoutView()->HitTest(location, result);
+
+  // TODO(averge): At this point, hit_nodes may contain duplicates due to
+  // multiple passes over the same node while hit testing. These need to
+  // be filtered out. The most correct approach is probably to keep the first
+  // occurrence of each node, because it's more likely it was added in a later
+  // paint phase, which is more representative of what the page actually looks
+  // like to the user (or actor).
+  //
+  // result.ListBasedTestResult() already returns a NodeSet with predictable
+  // iteration order based on order of insertion, which is a fancy way of saying
+  // it already handles duplicates in exactly the way we need. We should eval
+  // using the NodeSet result directly, and if we see improvement, remove
+  // hit_nodes and the associated callback entirely.
+  if (base::FeatureList::IsEnabled(
+          blink::features::kAIPageContentZOrderEarlyFiltering)) {
+    std::vector<DOMNodeId> nodes_from_result;
+    for (auto& gc_member : result.ListBasedTestResult()) {
+      Node& node = *gc_member;
+      if (node.GetLayoutObject()) {
+        nodes_from_result.push_back(DOMNodeIds::IdForNode(&node));
+      }
+    }
+
+    hit_nodes = nodes_from_result;
+  }
 
   int32_t next_z_order = 1;
   std::for_each(hit_nodes.rbegin(), hit_nodes.rend(), [&](auto node_id) {
@@ -1387,8 +1716,7 @@ void AIPageContentAgent::ContentBuilder::AddFrameData(
   ComputeHitTestableNodesInViewport(frame, frame_data);
 
   if (auto* automation_delegate =
-          AutomationDelegateSupplement::GetDelegateIfExists(
-              *frame.DomWindow())) {
+          AutomationDelegateSupplement::GetIfExists(*frame.DomWindow())) {
     automation_delegate->ForEachScriptTool(
         [&](const mojom::blink::ScriptTool& tool) {
           frame_data.script_tools.push_back(tool.Clone());
@@ -1515,7 +1843,8 @@ void AIPageContentAgent::ContentBuilder::AddNodeInteractionInfo(
     // TODO(khushalsagar): Remove is_clickability.
     node_interaction_info->is_clickable =
         !node_interaction_info->clickability_reasons.empty();
-    node_interaction_info->is_focusable = element->IsFocusable();
+    node_interaction_info->is_focusable =
+        element->IsFocusable(Element::UpdateBehavior::kAssertNoLayoutUpdates);
   }
 
   const bool needs_interaction_info =

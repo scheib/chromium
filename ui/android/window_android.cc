@@ -315,10 +315,11 @@ WindowAndroid* WindowAndroid::GetWindowAndroid() const {
 
 display::Display WindowAndroid::GetDisplayWithWindowColorSpace() {
   display::Display display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(this);
+      display::Screen::Get()->GetDisplayNearestWindow(this);
   DisplayAndroidManager::DoUpdateDisplay(
       &display, display.label(), display.bounds(), display.work_area(),
       display.GetSizeInPixel(), display.device_scale_factor(),
+      display.GetPixelsPerInchX(), display.GetPixelsPerInchY(),
       display.RotationAsDegree(), display.color_depth(),
       display.depth_per_component(), window_is_wide_color_gamut_,
       display.GetColorSpaces().SupportsHDR(),
@@ -361,10 +362,34 @@ void WindowAndroid::OnWindowPointerLockRelease(JNIEnv* env) {
   pointer_locking_view_ = nullptr;
 }
 
+void WindowAndroid::OnWindowPositionChanged(JNIEnv* env) {
+  DispatchWindowPositionChange();
+}
+
 bool WindowAndroid::SetHasKeyboardCapture(bool keyboard_capture) {
   JNIEnv* env = AttachCurrentThread();
   return Java_WindowAndroid_setHasKeyboardCapture(env, GetJavaObject(),
                                                   keyboard_capture);
+}
+
+std::optional<gfx::Rect> WindowAndroid::GetBoundsInScreenCoordinates() {
+  JNIEnv* env = AttachCurrentThread();
+  base::android::ScopedJavaLocalRef<jintArray> j_bounds_array =
+      Java_WindowAndroid_getBoundsInScreenCoordinates(env, GetJavaObject());
+  if (!j_bounds_array) {
+    return std::nullopt;
+  }
+
+  std::vector<int> bounds_vector;
+  base::android::JavaIntArrayToIntVector(env, j_bounds_array, &bounds_vector);
+  CHECK(bounds_vector.size() == 4);
+
+  const int x = bounds_vector[0];
+  const int y = bounds_vector[1];
+  const int width = bounds_vector[2];
+  const int height = bounds_vector[3];
+
+  return gfx::Rect(x, y, width, height);
 }
 
 void WindowAndroid::SetTestHooks(TestHooks* hooks) {

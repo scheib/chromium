@@ -326,8 +326,6 @@ struct SameSizeAsLayoutObject : public GarbageCollected<SameSizeAsLayoutObject>,
 
 ASSERT_SIZE(LayoutObject, SameSizeAsLayoutObject);
 
-bool LayoutObject::affects_parent_block_ = false;
-
 LayoutObject* LayoutObject::CreateObject(Element* element,
                                          const ComputedStyle& style) {
   DCHECK(IsAllowedToModifyLayoutTreeStructure(element->GetDocument()));
@@ -491,6 +489,20 @@ bool LayoutObject::IsDescendantOf(const LayoutObject* obj) const {
   for (const LayoutObject* r = this; r; r = r->parent_) {
     if (r == obj)
       return true;
+  }
+  return false;
+}
+
+bool LayoutObject::IsContainedBy(const LayoutObject* obj) const {
+  NOT_DESTROYED();
+  AncestorSkipInfo skip_info(obj);
+  for (const LayoutObject* r = this; r; r = r->Container(&skip_info)) {
+    if (r == obj) {
+      return true;
+    }
+    if (skip_info.AncestorSkipped()) {
+      return false;
+    }
   }
   return false;
 }
@@ -1352,11 +1364,11 @@ static inline bool ObjectIsRelayoutBoundary(const LayoutObject* object) {
     return false;
   }
 
-  // Similarly to flex items, we can't relayout a grid item independently of
-  // its container. This also applies to out of flow items of the grid, as we
-  // need the cached information of the grid to recompute the out of flow
-  // item's containing block rect.
-  if (box->ContainingBlock()->IsLayoutGrid()) {
+  // Similarly to flex items, we can't relayout a grid/masonry item
+  // independently of its container. This also applies to out of flow items of
+  // the grid, as we need the cached information of the grid to recompute the
+  // out of flow item's containing block rect.
+  if (box->ContainingBlock()->IsLayoutGridOrMasonry()) {
     return false;
   }
 
@@ -1686,8 +1698,10 @@ static inline bool ShouldInvalidateBeyond(LayoutObject* o) {
 
   // Invalidate past any subgrids. NOTE: we do this in both axes as we don't
   // know what writing-mode the root grid is in.
-  if (o->IsLayoutGrid()) {
+  if (o->IsLayoutGridOrMasonry()) {
     const auto& style = o->StyleRef();
+    // TODO(almaher): Masonry can only be subgridded in the grid axis, so we
+    // will only need to check in the grid/track sizing axis for masonry.
     if (style.GridTemplateColumns().IsSubgriddedAxis() ||
         style.GridTemplateRows().IsSubgriddedAxis()) {
       return true;
@@ -2794,7 +2808,9 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
   // animation affecting that property may require paint invalidation.
   diff = AdjustForCompositableAnimationPaint(style_, style, GetNode(), diff);
 
-  StyleWillChange(diff, *style);
+  StyleChangeContext style_change_context;
+
+  StyleWillChange(diff, *style, style_change_context);
 
   const ComputedStyle* old_style = std::move(style_);
   SetStyleInternal(std::move(style));
@@ -2805,7 +2821,7 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
 
   bool does_not_need_layout_or_paint_invalidation = !parent_;
 
-  StyleDidChange(diff, old_style);
+  StyleDidChange(diff, old_style, style_change_context);
 
   // FIXME: |this| might be destroyed here. This can currently happen for a
   // LayoutTextFragment when its first-letter block gets an update in
@@ -2875,8 +2891,9 @@ void LayoutObject::SetStyle(const ComputedStyle* style,
     }
   }
 
-  // Clip Path animations need a property update when they're composited, as it
-  // changes between mask based and path based clip.
+  // Main thread clip path animations always require paint property updates,
+  // and cc thread clip path animations require updates when stopping or
+  // starting. See: AdjustForCompositableAnimationPaint.
   if (old_style && diff.NeedsNormalPaintInvalidation() &&
       diff.ClipPathChanged()) {
     SetNeedsPaintPropertyUpdate();
@@ -2964,7 +2981,8 @@ void LayoutObject::UpdateFirstLineImageObservers(
 }
 
 void LayoutObject::StyleWillChange(StyleDifference diff,
-                                   const ComputedStyle& new_style) {
+                                   const ComputedStyle& new_style,
+                                   StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   if (style_) {
     bool visibility_changed = style_->Visibility() != new_style.Visibility();
@@ -3015,7 +3033,7 @@ void LayoutObject::StyleWillChange(StyleDifference diff,
           *this);
     }
 
-    affects_parent_block_ =
+    style_change_context.became_normal_flow =
         IsFloatingOrOutOfFlowPositioned() &&
         ((!new_style.IsFloating() ||
           new_style.IsInsideDisplayIgnoringFloatingChildren()) &&
@@ -3029,8 +3047,6 @@ void LayoutObject::StyleWillChange(StyleDifference diff,
       SetFloating(false);
       ClearPositionedState();
     }
-  } else {
-    affects_parent_block_ = false;
   }
 
   // Elements with non-auto touch-action will send a SetTouchAction message
@@ -3124,8 +3140,10 @@ bool LayoutObject::BelongsToElementChangingOverflowBehaviour() const {
          IsA<HTMLImageElement>(element);
 }
 
-void LayoutObject::StyleDidChange(StyleDifference diff,
-                                  const ComputedStyle* old_style) {
+void LayoutObject::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   if (HasHiddenBackface()) {
     if (Parent() && Parent()->StyleRef().UsedTransformStyle3D() ==
@@ -3199,8 +3217,9 @@ void LayoutObject::StyleDidChange(StyleDifference diff,
   // it's not affected.
   SetOutlineMayBeAffectedByDescendants(style_->HasOutline());
 
-  if (affects_parent_block_)
+  if (style_change_context.became_normal_flow) {
     HandleDynamicFloatPositionChange(this);
+  }
 
   if (diff.NeedsFullLayout()) {
     // If the in-flow state of an element is changed, disable scroll
@@ -3218,8 +3237,8 @@ void LayoutObject::StyleDidChange(StyleDifference diff,
         }
       }
     } else if (IsBox() &&
-               To<LayoutBox>(this)->IsValidColumnSpanner(*old_style) !=
-                   To<LayoutBox>(this)->IsValidColumnSpanner(*style_)) {
+               To<LayoutBox>(this)->IsValidColumnSpannerInTree(*old_style) !=
+                   To<LayoutBox>(this)->IsValidColumnSpannerInTree(*style_)) {
       MarkParentForSpannerOrOutOfFlowPositionedChange();
     }
 
@@ -3842,7 +3861,7 @@ void LayoutObject::InsertedIntoTree() {
     Parent()->DirtyLinesFromChangedChild(this);
 
   if (const Element* element = DynamicTo<Element>(GetNode());
-      element && element->HasImplicitlyAnchoredElement()) {
+      element && element->MayBeImplicitAnchor()) {
     MarkMayHaveAnchorQuery();
   } else if (MayHaveAnchorQuery()) {
     Parent()->MarkMayHaveAnchorQuery();

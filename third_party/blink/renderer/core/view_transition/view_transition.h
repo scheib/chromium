@@ -206,16 +206,14 @@ class CORE_EXPORT ViewTransition : public GarbageCollected<ViewTransition>,
            style_tracker_->IsTransitionElement(*document_->documentElement());
   }
 
-  void RecalcTransitionPseudoTreeStyle() const;
-
-  void RebuildTransitionPseudoLayoutTree() const;
-
   // In physical pixels. See comments on equivalent methods in
   // ViewTransitionStyleTracker for info.
   gfx::Size GetSnapshotRootSize() const;
   gfx::Vector2d GetFrameToSnapshotRootOffset() const;
 
   bool IsDone() const { return IsTerminalState(state_); }
+
+  bool HasActiveAnimations() const;
 
   // Returns true if this object was created to cache a snapshot of the current
   // Document for a navigation.

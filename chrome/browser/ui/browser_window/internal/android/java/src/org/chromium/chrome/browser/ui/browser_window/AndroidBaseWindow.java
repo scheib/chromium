@@ -11,6 +11,8 @@ import org.jni_zero.JniType;
 import org.jni_zero.NativeMethods;
 
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+import org.chromium.ui.base.WindowAndroid;
 
 /** Java class for communicating with the native {@code AndroidBaseWindow}. */
 @NullMarked
@@ -53,10 +55,47 @@ final class AndroidBaseWindow {
     }
 
     @CalledByNative
+    private boolean isMaximized() {
+        return mChromeAndroidTask.isMaximized();
+    }
+
+    @CalledByNative
+    private boolean isMinimized() {
+        return mChromeAndroidTask.isMinimized();
+    }
+
+    @CalledByNative
+    private boolean isFullscreen() {
+        return mChromeAndroidTask.isFullscreen();
+    }
+
+    @CalledByNative
+    @JniType("std::vector<int>")
+    private int[] getRestoredBounds() {
+        Rect bounds = mChromeAndroidTask.getRestoredBoundsInDp();
+        return new int[] {bounds.left, bounds.top, bounds.width(), bounds.height()};
+    }
+
+    @CalledByNative
     @JniType("std::vector<int>")
     private int[] getBounds() {
-        Rect bounds = mChromeAndroidTask.getBounds();
+        Rect bounds = mChromeAndroidTask.getBoundsInDp();
         return new int[] {bounds.left, bounds.top, bounds.width(), bounds.height()};
+    }
+
+    @CalledByNative
+    private void show() {
+        mChromeAndroidTask.show();
+    }
+
+    @CalledByNative
+    private boolean isVisible() {
+        return mChromeAndroidTask.isVisible();
+    }
+
+    @CalledByNative
+    private void showInactive() {
+        mChromeAndroidTask.showInactive();
     }
 
     @CalledByNative
@@ -70,8 +109,38 @@ final class AndroidBaseWindow {
     }
 
     @CalledByNative
+    private void deactivate() {
+        mChromeAndroidTask.deactivate();
+    }
+
+    @CalledByNative
+    private void maximize() {
+        mChromeAndroidTask.maximize();
+    }
+
+    @CalledByNative
+    private void minimize() {
+        mChromeAndroidTask.minimize();
+    }
+
+    @CalledByNative
+    private void restore() {
+        mChromeAndroidTask.restore();
+    }
+
+    @CalledByNative
+    private void setBounds(int left, int top, int right, int bottom) {
+        mChromeAndroidTask.setBoundsInDp(new Rect(left, top, right, bottom));
+    }
+
+    @CalledByNative
     private void clearNativePtr() {
         mNativeAndroidBaseWindow = 0;
+    }
+
+    @CalledByNative
+    private @Nullable WindowAndroid getWindowAndroid() {
+        return mChromeAndroidTask.getActivityWindowAndroid();
     }
 
     long getNativePtrForTesting() {

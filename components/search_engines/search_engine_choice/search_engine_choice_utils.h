@@ -14,6 +14,7 @@
 #include "base/version.h"
 #include "build/build_config.h"
 #include "components/country_codes/country_codes.h"
+#include "components/regional_capabilities/regional_capabilities_metrics.h"  // IWYU pragma: export
 #include "components/search_engines/choice_made_location.h"
 #include "components/search_engines/search_engine_type.h"
 #include "components/search_engines/template_url.h"
@@ -25,6 +26,10 @@ struct TemplateURLData;
 namespace base {
 class Time;
 }  // namespace base
+
+namespace regional_capabilities {
+class RegionalCapabilitiesService;
+}  // namespace regional_capabilities
 
 namespace search_engines {
 
@@ -65,55 +70,6 @@ inline constexpr char kSearchEngineChoiceRepromptSpecificCountryHistogram[] =
     "Search.ChoiceReprompt.SpecificCountry";
 inline constexpr char kSearchEngineChoiceCompletedOnMonthHistogram[] =
     "Search.ChoiceCompletedOnMonth.OnProfileLoad2";
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-// LINT.IfChange(SearchEngineChoiceScreenConditions)
-enum class SearchEngineChoiceScreenConditions {
-  // The user has a custom search engine set.
-  kHasCustomSearchEngine = 0,
-  // The user has a search provider list override.
-  kSearchProviderOverride = 1,
-  // The user is not in the regional scope.
-  kNotInRegionalScope = 2,
-  // A policy sets the default search engine or disables search altogether.
-  kControlledByPolicy = 3,
-  // The profile is out of scope.
-  kProfileOutOfScope = 4,
-  // An extension controls the default search engine.
-  kExtensionControlled = 5,
-  // The user is eligible to see the screen at the next opportunity.
-  kEligible = 6,
-  // The choice has already been completed.
-  kAlreadyCompleted = 7,
-  // The browser type is unsupported.
-  kUnsupportedBrowserType = 8,
-  // The feature can't run, it is disabled by local or remote configuration.
-  kFeatureSuppressed = 9,
-  // Some other dialog is showing and interfering with the choice one.
-  kSuppressedByOtherDialog = 10,
-  // The browser window can't fit the dialog's smallest variant.
-  kBrowserWindowTooSmall = 11,
-  // The user has a distribution custom search engine set as default.
-  kHasDistributionCustomSearchEngine = 12,
-  // The user has an unknown (which we assume is because it has been removed)
-  // prepopulated search engine set as default.
-  kHasRemovedPrepopulatedSearchEngine = 13,
-  // The user does not have Google as the default search engine.
-  kHasNonGoogleSearchEngine = 14,
-  // The user is eligible, the app could have presented a dialog but the
-  // application was started via an external intent and the dialog skipped.
-  kAppStartedByExternalIntent = 15,
-  // The browser attempting to show the choice screen in a dialog is already
-  // showing a choice screen.
-  kAlreadyBeingShown = 16,
-  // The user made the choice in the guest session and opted to save it across
-  // guest sessions.
-  kUsingPersistedGuestSessionChoice = 17,
-
-  kMaxValue = kUsingPersistedGuestSessionChoice,
-};
-// LINT.ThenChange(/tools/metrics/histograms/metadata/search/enums.xml:SearchEngineChoiceScreenConditions)
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -294,15 +250,29 @@ struct ChoiceCompletionMetadata {
     kInvalidVersion,
     kMissingTimestamp,
     kNullTimestamp,
+    kInvalidProgram,
   };
 
   base::Time timestamp;
   base::Version version;
+  int serialized_program;
 };
 
 base::expected<ChoiceCompletionMetadata, ChoiceCompletionMetadata::ParseError>
 GetChoiceCompletionMetadata(const PrefService& prefs);
 
+// Creates a `ChoiceCompletionMetadata` with the specified program and current
+// timestamp and version.
+ChoiceCompletionMetadata CreateChoiceCompletionMetadataWithProgram(
+    int serialized_program);
+
+// Creates a `ChoiceCompletionMetadata` for the current state by getting the
+// active program from `regional_capabilities_service`.
+ChoiceCompletionMetadata CreateChoiceCompletionMetadataForCurrentState(
+    regional_capabilities::RegionalCapabilitiesService&
+        regional_capabilities_service);
+
+// Persists the choice completion metadata to prefs.
 void SetChoiceCompletionMetadata(PrefService& prefs,
                                  ChoiceCompletionMetadata metadata);
 
@@ -313,15 +283,7 @@ std::optional<base::Time> GetChoiceScreenCompletionTimestamp(
 
 void ClearSearchEngineChoiceInvalidation(PrefService& prefs);
 
-bool IsSearchEngineChoiceInvalid(PrefService& prefs);
-
-#if !BUILDFLAG(IS_ANDROID)
-// Returns the engine marketing snippet string resource id or -1 if the snippet
-// was not found.
-// The function definition is generated in `generated_marketing_snippets.cc`.
-// `engine_keyword` is the search engine keyword.
-int GetMarketingSnippetResourceId(const std::u16string& engine_keyword);
-#endif  // !BUILDFLAG(IS_ANDROID)
+bool IsSearchEngineChoiceInvalid(const PrefService& prefs);
 
 }  // namespace search_engines
 

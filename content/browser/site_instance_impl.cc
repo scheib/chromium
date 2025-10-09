@@ -27,6 +27,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_or_resource_context.h"
 #include "content/public/browser/content_browser_client.h"
+#include "content/public/browser/process_allocation_context.h"
 #include "content/public/browser/site_isolation_policy.h"
 #include "content/public/browser/web_ui_controller_factory.h"
 #include "content/public/common/content_client.h"
@@ -71,7 +72,6 @@ SiteInstanceId::Generator g_site_instance_id_generator;
 // creation was intentional, or the caller should be changed to avoid
 // unnecessarily creating a process.
 BASE_FEATURE(kTraceSiteInstanceGetProcessCreation,
-             "TraceSiteInstanceGetProcessCreation",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Whether to crash if GetProcess is called on a SiteInstance without a process.
@@ -114,7 +114,7 @@ SiteInstanceImpl::SiteInstanceImpl(BrowsingInstance* browsing_instance)
                      .browser_or_resource_context()
                      .ToBrowserContext()),
       has_site_(false),
-      process_reuse_policy_(ProcessReusePolicy::DEFAULT),
+      process_reuse_policy_(ProcessReusePolicy::kDefault),
       is_for_service_worker_(false),
       process_assignment_(SiteInstanceProcessAssignment::UNKNOWN) {
   DCHECK(browsing_instance);
@@ -211,12 +211,13 @@ scoped_refptr<SiteInstanceImpl> SiteInstanceImpl::CreateForServiceWorker(
   // Attempt to reuse a renderer process if possible. Note that in the
   // <webview> case, process reuse isn't currently supported and a new
   // process will always be created (https://crbug.com/752667).
-  DCHECK(site_instance->process_reuse_policy() == ProcessReusePolicy::DEFAULT ||
+  DCHECK(site_instance->process_reuse_policy() ==
+             ProcessReusePolicy::kDefault ||
          site_instance->process_reuse_policy() ==
-             ProcessReusePolicy::PROCESS_PER_SITE);
+             ProcessReusePolicy::kProcessPerSite);
   if (can_reuse_process) {
     site_instance->set_process_reuse_policy(
-        ProcessReusePolicy::REUSE_PENDING_OR_COMMITTED_SITE_WORKER);
+        ProcessReusePolicy::kReusePendingOrCommittedSiteWorker);
   }
   return site_instance;
 }
@@ -318,7 +319,7 @@ SiteInstanceImpl::CreateReusableInstanceForTesting(
   auto site_instance = instance->GetSiteInstanceForURL(
       UrlInfo(UrlInfoInit(url)), /* allow_default_instance */ false);
   site_instance->set_process_reuse_policy(
-      ProcessReusePolicy::REUSE_PENDING_OR_COMMITTED_SITE_SUBFRAME);
+      ProcessReusePolicy::kReusePendingOrCommittedSiteSubframe);
   // Proactively create a process since many callers of this function in tests
   // rely on site_instance->GetProcess().
   site_instance->GetOrCreateProcess(
@@ -341,7 +342,8 @@ scoped_refptr<SiteInstanceImpl> SiteInstanceImpl::CreateForTesting(
 // static
 bool SiteInstanceImpl::ShouldAssignSiteForUrlInfo(const UrlInfo& url_info) {
   // Only empty document schemes can leave SiteInstances unassigned.
-  if (!base::Contains(url::GetEmptyDocumentSchemes(), url_info.url.scheme())) {
+  if (!base::Contains(url::GetEmptyDocumentSchemes(),
+                      url_info.url.GetScheme())) {
     return true;
   }
 
@@ -461,9 +463,9 @@ RenderProcessHost* SiteInstanceImpl::GetOrCreateProcess(
   if (!has_group()) {
     // Check if the ProcessReusePolicy should be updated.
     if (ShouldUseProcessPerSite()) {
-      process_reuse_policy_ = ProcessReusePolicy::PROCESS_PER_SITE;
-    } else if (process_reuse_policy_ == ProcessReusePolicy::PROCESS_PER_SITE) {
-      process_reuse_policy_ = ProcessReusePolicy::DEFAULT;
+      process_reuse_policy_ = ProcessReusePolicy::kProcessPerSite;
+    } else if (process_reuse_policy_ == ProcessReusePolicy::kProcessPerSite) {
+      process_reuse_policy_ = ProcessReusePolicy::kDefault;
     }
     ProcessAllocationContext allocation_context = context;
     if (allocation_context.navigation_context.has_value()) {
@@ -561,7 +563,7 @@ void SiteInstanceImpl::SetProcessInternal(RenderProcessHost* process) {
   // If we are using process-per-site, we need to register this process
   // for the current site so that we can find it again.  (If no site is set
   // at this time, we will register it in SetSite().)
-  if (process_reuse_policy_ == ProcessReusePolicy::PROCESS_PER_SITE &&
+  if (process_reuse_policy_ == ProcessReusePolicy::kProcessPerSite &&
       has_site_) {
     RenderProcessHostImpl::RegisterSoleProcessHostForSite(
         site_instance_group_->process(), this);
@@ -661,7 +663,6 @@ void SiteInstanceImpl::SetSiteInfoInternal(const SiteInfo& site_info) {
     // BrowsingInstance, even if its opt-in status changes later.
     ChildProcessSecurityPolicyImpl* policy =
         ChildProcessSecurityPolicyImpl::GetInstance();
-    url::Origin origin(url::Origin::Create(site_info_.process_lock_url()));
     // This is one of two places that origins can be marked as opted-in, the
     // other is
     // NavigationRequest::AddSameProcessOriginAgentClusterStateIfNecessary().
@@ -669,7 +670,8 @@ void SiteInstanceImpl::SetSiteInfoInternal(const SiteInfo& site_info) {
     // In future, when SiteInstance Groups are complete, this may revert to
     // being the only call site.
     policy->AddOriginAgentClusterStateForBrowsingInstance(
-        browsing_instance_->isolation_context(), origin,
+        browsing_instance_->isolation_context(),
+        site_info_.agent_cluster_key().GetOrigin(),
         OriginAgentClusterIsolationState::CreateForOriginAgentCluster(
             true /* had_oac_request */,
             true /* requires_origin_keyed_process */));
@@ -684,7 +686,10 @@ void SiteInstanceImpl::SetSiteInfoInternal(const SiteInfo& site_info) {
     // origins, by default), but this isn't always the case.  For example, this
     // SiteInstance could be isolated with the origin granularity due to
     // Origin-Agent-Cluster (see site_info_.oac_status() above).
-    url::Origin origin(url::Origin::Create(site_info_.process_lock_url()));
+    url::Origin origin =
+        site_info_.agent_cluster_key().IsOriginKeyed()
+            ? site_info_.agent_cluster_key().GetOrigin()
+            : url::Origin::Create(site_info_.agent_cluster_key().GetSite());
     GURL site(SiteInfo::GetSiteForOrigin(origin));
     ChildProcessSecurityPolicyImpl* policy =
         ChildProcessSecurityPolicyImpl::GetInstance();
@@ -696,7 +701,7 @@ void SiteInstanceImpl::SetSiteInfoInternal(const SiteInfo& site_info) {
   // Update the process reuse policy based on the site.
   bool should_use_process_per_site = ShouldUseProcessPerSite();
   if (should_use_process_per_site)
-    process_reuse_policy_ = ProcessReusePolicy::PROCESS_PER_SITE;
+    process_reuse_policy_ = ProcessReusePolicy::kProcessPerSite;
 
   if (has_group()) {
     LockProcessIfNeeded();
@@ -777,7 +782,7 @@ SiteInstanceImpl::GetLastProcessAssignmentOutcome() {
   return process_assignment_;
 }
 
-const GURL& SiteInstanceImpl::GetSiteURL() {
+const GURL& SiteInstanceImpl::GetSiteURL() const {
   return site_info_.site_url();
 }
 
@@ -1476,7 +1481,10 @@ bool SiteInstanceImpl::CanBePlacedInDefaultSiteInstanceOrGroup(
 GURL SiteInstanceImpl::GetEffectiveURL(BrowserContext* browser_context,
                                        const GURL& url) {
   DCHECK(browser_context);
-  return GetContentClient()->browser()->GetEffectiveURL(browser_context, url);
+  return GetContentClient()
+      ->browser()
+      ->GetEffectiveURL(browser_context, url)
+      .value_or(url);
 }
 
 // static
@@ -1495,7 +1503,7 @@ void SiteInstanceImpl::LockProcessIfNeeded() {
   StoragePartitionImpl* storage_partition =
       static_cast<StoragePartitionImpl*>(process->GetStoragePartition());
   if (!has_site_) {
-    CHECK(!process_lock.is_locked_to_site())
+    CHECK(!process_lock.IsLockedToSite())
         << "A process that's already locked to " << process_lock.ToString()
         << " cannot be updated to a more permissive lock";
     // Update the process lock state to signal that the process has been
@@ -1513,7 +1521,7 @@ void SiteInstanceImpl::LockProcessIfNeeded() {
           /*cross_origin_isolation_key=*/std::nullopt);
       process->SetProcessLock(GetIsolationContext(), new_process_lock);
     } else {
-      CHECK(process_lock.allows_any_site())
+      CHECK(process_lock.AllowsAnySite())
           << "Unexpected process lock " << process_lock.ToString();
       policy->IncludeIsolationContext(process->GetDeprecatedID(),
                                       GetIsolationContext());
@@ -1527,7 +1535,7 @@ void SiteInstanceImpl::LockProcessIfNeeded() {
 
   if (site_info_.ShouldLockProcessToSite(GetIsolationContext())) {
     ProcessLock lock_to_set = ProcessLock::FromSiteInfo(GetSiteInfo());
-    if (!process_lock.is_locked_to_site()) {
+    if (!process_lock.IsLockedToSite()) {
       // TODO(nick): When all sites are isolated, this operation provides
       // strong protection. If only some sites are isolated, we need
       // additional logic to prevent the non-isolated sites from requesting
@@ -1551,7 +1559,7 @@ void SiteInstanceImpl::LockProcessIfNeeded() {
       // happen for commits to |site_info_| after the first one.
     }
   } else {
-    if (process_lock.is_locked_to_site()) {
+    if (process_lock.IsLockedToSite()) {
       // The site that we're committing doesn't require a dedicated
       // process, but it has been put in a process for a site that does.
       base::debug::SetCrashKeyString(bad_message::GetRequestedSiteInfoKey(),
@@ -1570,7 +1578,7 @@ void SiteInstanceImpl::LockProcessIfNeeded() {
           /*cross_origin_isolation_key=*/std::nullopt);
       process->SetProcessLock(GetIsolationContext(), new_process_lock);
     } else {
-      CHECK(process_lock.allows_any_site())
+      CHECK(process_lock.AllowsAnySite())
           << "Unexpected process lock " << process_lock.ToString();
     }
   }
@@ -1719,11 +1727,7 @@ void SiteInstanceImpl::IncrementActiveDocumentCount(
     // increment the count.
     return;
   }
-  if (active_document_counts_.contains(url_derived_site_info)) {
-    active_document_counts_[url_derived_site_info]++;
-  } else {
-    active_document_counts_[url_derived_site_info] = 1;
-  }
+  active_document_counts_[url_derived_site_info]++;
 }
 
 void SiteInstanceImpl::DecrementActiveDocumentCount(
@@ -1735,17 +1739,20 @@ void SiteInstanceImpl::DecrementActiveDocumentCount(
     // won't contain the SiteInfo, so just return early here.
     return;
   }
-  CHECK(active_document_counts_.contains(url_derived_site_info));
-  active_document_counts_[url_derived_site_info]--;
-  if (active_document_counts_[url_derived_site_info] == 0) {
+  auto it = active_document_counts_.find(url_derived_site_info);
+  CHECK(it != active_document_counts_.end());
+  auto& count = it->second;
+  --count;
+  if (count == 0) {
     active_document_counts_.erase(url_derived_site_info);
   }
 }
 
 size_t SiteInstanceImpl::GetActiveDocumentCount(
     const SiteInfo& url_derived_site_info) {
-  if (active_document_counts_.contains(url_derived_site_info)) {
-    return active_document_counts_[url_derived_site_info];
+  if (auto it = active_document_counts_.find(url_derived_site_info);
+      it != active_document_counts_.end()) {
+    return it->second;
   }
   return 0;
 }

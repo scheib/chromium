@@ -47,6 +47,7 @@
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_item_warning_data.h"
+#include "chrome/browser/enterprise/connectors/reporting/realtime_reporting_client.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/profile_password_store_factory.h"
@@ -86,7 +87,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer.h"
-#include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
+#include "components/safe_browsing/content/browser/web_ui/web_ui_content_info_singleton.h"
 #include "components/safe_browsing/content/common/file_type_policies_test_util.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/db/test_database_manager.h"
@@ -155,7 +156,6 @@ using ::testing::AtMost;
 using ::testing::ContainerEq;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
-using ::testing::Invoke;
 using ::testing::Mock;
 using ::testing::NiceMock;
 using ::testing::NotNull;
@@ -704,9 +704,9 @@ class DownloadProtectionServiceTestBase
     display_name_ = display_name.value_or(final_path_.BaseName());
     hash_ = "hash";
 
-    EXPECT_CALL(*item, GetURL()).WillRepeatedly(Invoke([&]() -> const GURL& {
+    EXPECT_CALL(*item, GetURL()).WillRepeatedly([&]() -> const GURL& {
       return url_chain_.back();
-    }));
+    });
     EXPECT_CALL(*item, GetFullPath()).WillRepeatedly(ReturnRef(tmp_path_));
     EXPECT_CALL(*item, GetTargetFilePath())
         .WillRepeatedly(ReturnRef(final_path_));
@@ -2470,7 +2470,8 @@ TEST_F(DownloadProtectionServiceTest,
     HistoryServiceFactory::GetForProfile(profile(),
                                          ServiceAccessType::EXPLICIT_ACCESS)
         ->AddPage(tab_url, base::Time::Now(), 1, 0, GURL(), redirects,
-                  ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED, false);
+                  ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED,
+                  history::VisitResponseCodeCategory::kNot404, false);
 
     PrepareResponse(ClientDownloadResponse::SAFE, net::HTTP_OK, net::OK);
 
@@ -2666,7 +2667,7 @@ TEST_F(DownloadProtectionServiceMockTimeTest, TestDownloadRequestTimeout) {
                           base::Unretained(this), run_loop.QuitClosure()));
 
   task_environment()->FastForwardBy(
-      base::Milliseconds(download_service_->download_request_timeout_ms_));
+      download_service_->GetDownloadRequestTimeout());
 
   // The request should time out because the HTTP request hasn't returned
   // anything yet.
@@ -2740,10 +2741,10 @@ TEST_F(DownloadProtectionServiceTest,
   EXPECT_CALL(*sb_service_->mock_database_manager(),
               MatchDownloadAllowlistUrl(_, _))
       .WillRepeatedly(
-          Invoke([&item](const GURL&, base::OnceCallback<void(bool)> callback) {
+          [&item](const GURL&, base::OnceCallback<void(bool)> callback) {
             item.reset();
             std::move(callback).Run(false);
-          }));
+          });
   EXPECT_CALL(*binary_feature_extractor_.get(), CheckSignature(tmp_path_, _))
       .Times(0);
   EXPECT_CALL(*binary_feature_extractor_.get(),
@@ -4152,7 +4153,8 @@ TEST_F(DownloadProtectionServiceTest,
     HistoryServiceFactory::GetForProfile(profile(),
                                          ServiceAccessType::EXPLICIT_ACCESS)
         ->AddPage(tab_url, base::Time::Now(), 1, 0, GURL(), redirects,
-                  ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED, false);
+                  ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED,
+                  history::VisitResponseCodeCategory::kNot404, false);
 
     PrepareResponse(ClientDownloadResponse::SAFE, net::HTTP_OK, net::OK);
 
@@ -4207,7 +4209,7 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenForEnhancedProtectionUsers) {
   identity_test_env_adaptor_->identity_test_env()
       ->SetAutomaticIssueOfAccessTokens(/*grant=*/true);
 
-  WebUIInfoSingleton::GetInstance()->AddListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->AddListenerForTesting();
 
   {
     SetEnhancedProtectionPrefForTests(profile()->GetPrefs(), true);
@@ -4251,7 +4253,8 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenForEnhancedProtectionUsers) {
     run_loop.Run();
 
     const std::vector<std::unique_ptr<ClientDownloadRequest>>& requests =
-        WebUIInfoSingleton::GetInstance()->client_download_requests_sent();
+        WebUIContentInfoSingleton::GetInstance()
+            ->client_download_requests_sent();
     ASSERT_EQ(requests.size(), 1u);
   }
 
@@ -4298,11 +4301,12 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenForEnhancedProtectionUsers) {
     run_loop.Run();
 
     const std::vector<std::unique_ptr<ClientDownloadRequest>>& requests =
-        WebUIInfoSingleton::GetInstance()->client_download_requests_sent();
+        WebUIContentInfoSingleton::GetInstance()
+            ->client_download_requests_sent();
     ASSERT_EQ(requests.size(), 2u);
   }
 
-  WebUIInfoSingleton::GetInstance()->ClearListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->ClearListenerForTesting();
 }
 
 TEST_F(EnhancedProtectionDownloadTest, AccessTokenOnlyWhenSignedIn) {
@@ -4312,7 +4316,7 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenOnlyWhenSignedIn) {
       ->SetAutomaticIssueOfAccessTokens(/*grant=*/true);
   SetEnhancedProtectionPrefForTests(profile()->GetPrefs(), true);
 
-  WebUIInfoSingleton::GetInstance()->AddListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->AddListenerForTesting();
 
   {
     NiceMockDownloadItem item;
@@ -4362,7 +4366,8 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenOnlyWhenSignedIn) {
     run_loop.Run();
 
     const std::vector<std::unique_ptr<ClientDownloadRequest>>& requests =
-        WebUIInfoSingleton::GetInstance()->client_download_requests_sent();
+        WebUIContentInfoSingleton::GetInstance()
+            ->client_download_requests_sent();
     ASSERT_EQ(requests.size(), 1u);
     identity_test_env_adaptor_->identity_test_env()
         ->SetCallbackForNextAccessTokenRequest(base::NullCallback());
@@ -4412,18 +4417,19 @@ TEST_F(EnhancedProtectionDownloadTest, AccessTokenOnlyWhenSignedIn) {
     run_loop.Run();
 
     const std::vector<std::unique_ptr<ClientDownloadRequest>>& requests =
-        WebUIInfoSingleton::GetInstance()->client_download_requests_sent();
+        WebUIContentInfoSingleton::GetInstance()
+            ->client_download_requests_sent();
     ASSERT_EQ(requests.size(), 2u);
   }
 
-  WebUIInfoSingleton::GetInstance()->ClearListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->ClearListenerForTesting();
 }
 #endif
 
 TEST_F(EnhancedProtectionDownloadTest, NoAccessTokenWhileIncognito) {
   PrepareResponse(ClientDownloadResponse::SAFE, net::HTTP_OK, net::OK);
 
-  WebUIInfoSingleton::GetInstance()->AddListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->AddListenerForTesting();
 
   sb_service_->CreateTestURLLoaderFactoryForProfile(
       profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true));
@@ -4473,11 +4479,12 @@ TEST_F(EnhancedProtectionDownloadTest, NoAccessTokenWhileIncognito) {
     run_loop.Run();
 
     const std::vector<std::unique_ptr<ClientDownloadRequest>>& requests =
-        WebUIInfoSingleton::GetInstance()->client_download_requests_sent();
+        WebUIContentInfoSingleton::GetInstance()
+            ->client_download_requests_sent();
     ASSERT_EQ(requests.size(), 1u);
   }
 
-  WebUIInfoSingleton::GetInstance()->ClearListenerForTesting();
+  WebUIContentInfoSingleton::GetInstance()->ClearListenerForTesting();
 }
 
 TEST_F(DownloadProtectionServiceTest,

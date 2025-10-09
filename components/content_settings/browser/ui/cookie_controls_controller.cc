@@ -4,10 +4,13 @@
 
 #include "components/content_settings/browser/ui/cookie_controls_controller.h"
 
+#include <limits>
 #include <memory>
 #include <string>
 
+#include "base/containers/lru_cache.h"
 #include "base/feature_list.h"
+#include "base/features.h"
 #include "base/functional/bind.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
@@ -38,6 +41,7 @@
 #include "components/strings/grit/privacy_sandbox_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
@@ -56,6 +60,12 @@ constexpr char kEntryPointAnimatedKey[] = "entry_point_animated";
 constexpr char kLastExpirationKey[] = "last_expiration";
 constexpr char kLastVisitedActiveException[] = "last_visited_active_exception";
 constexpr char kActivationsCountKey[] = "activations_count_key";
+
+using CacheSizeType =
+    base::LRUCacheSet<content_settings::AccessDetails>::size_type;
+constexpr CacheSizeType kAccessDetailsCacheSize = 1000;
+constexpr CacheSizeType kMaximumCacheCapacity =
+    std::numeric_limits<CacheSizeType>::max();
 
 base::Value::Dict GetMetadata(HostContentSettingsMap* settings_map,
                               const GURL& url) {
@@ -339,26 +349,17 @@ void CookieControlsController::OnCookieBlockingEnabledForSite(
     bool block_third_party_cookies) {
   const GURL& url = GetWebContents()->GetLastCommittedURL();
   should_reload_ = true;
-  // TODO(crbug.com/430893360): Clean up TP exception logic after IPP experiment
-  // ends.
-  if (is_incognito_profile_ &&
-      base::FeatureList::IsEnabled(
-          privacy_sandbox::kTrackingProtectionContentSettingIn3pcUx)) {
-    if (block_third_party_cookies) {
-      tracking_protection_settings_->RemoveTrackingProtectionException(url);
-    } else {
-      tracking_protection_settings_->AddTrackingProtectionException(url);
-    }
-  }
   if (block_third_party_cookies) {
     base::RecordAction(UserMetricsAction("CookieControls.Bubble.TurnOn"));
     cookie_settings_->ResetThirdPartyCookieSetting(url);
+    Update(GetWebContents());
     return;
   }
 
   CHECK(!block_third_party_cookies);
   base::RecordAction(UserMetricsAction("CookieControls.Bubble.TurnOff"));
   cookie_settings_->SetCookieSettingForUserBypass(url);
+  Update(GetWebContents());
   // Record expiration metadata for the newly created exception, and increased
   // the activation count.
   base::Value::Dict metadata = GetMetadata(settings_map_, url);
@@ -529,25 +530,23 @@ void CookieControlsController::OnPageFinishedLoading() {
 void CookieControlsController::OnThirdPartyCookieBlockingChanged(
     bool block_third_party_cookies) {
   if (GetWebContents()) {
-    Update(GetWebContents());
+    UpdateUserBypass();
   }
 }
 
 void CookieControlsController::OnCookieSettingChanged() {
   if (GetWebContents()) {
-    Update(GetWebContents());
+    UpdateUserBypass();
   }
 }
 
 void CookieControlsController::OnIpProtectionEnabledChanged() {
-  // TODO(crbug.com/434953880): Add tests for this logic.
   if (GetWebContents()) {
     UpdateUserBypass();
   }
 }
 
 void CookieControlsController::OnFpProtectionEnabledChanged() {
-  // TODO(crbug.com/434953880): Add tests for this logic.
   if (GetWebContents()) {
     UpdateUserBypass();
   }
@@ -696,7 +695,12 @@ CookieControlsController::TabObserver::TabObserver(
     : content_settings::PageSpecificContentSettings::SiteDataObserver(
           web_contents),
       content::WebContentsObserver(web_contents),
-      cookie_controls_(cookie_controls) {
+      cookie_controls_(cookie_controls),
+      // When under the ReducePPMs experiment reduce the capacity of the
+      // cache and leave it practically unbounded otherwise.
+      cookie_accessed_set_(base::features::IsReducePPMsEnabled()
+                               ? kAccessDetailsCacheSize
+                               : kMaximumCacheCapacity) {
   last_visited_url_ =
       content::WebContentsObserver::web_contents()->GetVisibleURL();
   auto* fpf_web_contents_helper = fingerprinting_protection_filter::
@@ -742,10 +746,11 @@ void CookieControlsController::TabObserver::OnSiteDataAccessed(
   // Model's StorageType, which would let us remove an enum, and let us cache
   // all accesses here.
 
-  if (cookie_accessed_set_.count(access_details)) {
+  if (cookie_accessed_set_.Get(access_details) != cookie_accessed_set_.end()) {
     return;
   }
-  cookie_accessed_set_.insert(access_details);
+
+  cookie_accessed_set_.Put(AccessDetails(access_details));
   cookie_controls_->UpdateUserBypass();
 }
 
@@ -766,7 +771,7 @@ void CookieControlsController::TabObserver::PrimaryPageChanged(
     content::Page& page) {
   const GURL& current_url =
       content::WebContentsObserver::web_contents()->GetVisibleURL();
-  cookie_accessed_set_.clear();
+  cookie_accessed_set_.Clear();
 
   if (current_url != last_visited_url_) {
     reload_count_ = 0;

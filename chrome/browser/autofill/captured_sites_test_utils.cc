@@ -151,11 +151,11 @@ and then write commands into it:
 std::optional<autofill::FieldType> StringToFieldType(std::string_view str) {
   static auto map = [] {
     std::map<std::string_view, autofill::FieldType> map;
-    for (autofill::FieldType field_type : autofill::kAllFieldTypes) {
+    for (autofill::FieldType field_type : autofill::FieldTypeSet::all()) {
       map[autofill::FieldTypeToStringView(field_type)] = field_type;
     }
     for (autofill::HtmlFieldType html_field_type :
-         autofill::kAllHtmlFieldTypes) {
+         autofill::HtmlFieldTypeSet::all()) {
       map[autofill::FieldTypeToStringView(html_field_type)] =
           autofill::HtmlFieldTypeToBestCorrespondingFieldType(html_field_type);
     }
@@ -472,7 +472,8 @@ std::optional<base::Value::Dict> ReadRecipeFile(
   }
 
   // Convert the file text into a json object.
-  std::optional<base::Value> parsed_json = base::JSONReader::Read(json_text);
+  std::optional<base::Value> parsed_json =
+      base::JSONReader::Read(json_text, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!parsed_json) {
     ADD_FAILURE() << "Failed to deserialize json text!";
     return std::nullopt;
@@ -677,13 +678,7 @@ bool WebPageReplayServerWrapper::Start(
       args.push_back("--quiet_mode");
   }
   args.push_back(base::StringPrintf(
-      "--inject_scripts=%s,%s",
-      FilePathToUTF8(src_dir.AppendASCII("third_party")
-                         .AppendASCII("catapult")
-                         .AppendASCII("web_page_replay_go")
-                         .AppendASCII("deterministic.js")
-                         .value())
-          .c_str(),
+      "--inject_scripts=%s",
       FilePathToUTF8(src_dir.AppendASCII("chrome")
                          .AppendASCII("test")
                          .AppendASCII("data")
@@ -1004,8 +999,8 @@ bool TestRecipeReplayer::OverrideTimeClock(
     return false;
   }
   // Convert the file text into a json object.
-  std::optional<base::Value> parsed_json =
-      base::JSONReader::Read(decompressed_json_text);
+  std::optional<base::Value> parsed_json = base::JSONReader::Read(
+      decompressed_json_text, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!parsed_json) {
     VLOG(1) << kTimeClockOverrideNotSetMessage << "Failed to deserialize json";
     return false;
@@ -2162,15 +2157,24 @@ bool TestRecipeReplayer::AllAssertionsPassed(
     return false;
   }
   for (const std::string& assertion : assertions) {
-    if (!EvalJs(frame, base::StringPrintf("(function() {"
-                                          "  try {"
-                                          "    %s"
-                                          "  } catch (ex) {}"
-                                          "  return false;"
-                                          "})();",
-                                          assertion.c_str()))
-             .ExtractBool()) {
-      VLOG(1) << "'" << assertion << "' failed!";
+    content::EvalJsResult result =
+        EvalJs(frame, base::StringPrintf("(function() {"
+                                         "  try {"
+                                         "    %s"
+                                         "  } catch (ex) {}"
+                                         "  return false;"
+                                         "})();",
+                                         assertion.c_str()));
+    if (!result.is_ok()) {
+      VLOG(1) << "'" << assertion << "' failed: " << result.ExtractError();
+      return false;
+    }
+    if (!result.is_bool()) {
+      VLOG(1) << "'" << assertion << "' failed: Did not return boolean.";
+      return false;
+    }
+    if (!result.ExtractBool()) {
+      VLOG(1) << "'" << assertion << "' failed: Returned false.";
       return false;
     }
   }

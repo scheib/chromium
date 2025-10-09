@@ -16,18 +16,17 @@ class ContextualCueingService;
 }  // namespace contextual_cueing
 
 namespace glic {
-class GlicSharingManagerImpl;
+class GlicSharingManager;
 class GlicWindowController;
 class Host;
 
 // A class for managing sending zero state suggestions through the mojo api.
 class GlicZeroStateSuggestionsManager {
  public:
-  explicit GlicZeroStateSuggestionsManager(
-      GlicSharingManagerImpl* sharing_manager,
+  GlicZeroStateSuggestionsManager(
+      GlicSharingManager* sharing_manager,
       GlicWindowController* window_controller,
-      contextual_cueing::ContextualCueingService* contextual_cueing_service,
-      Host* host);
+      contextual_cueing::ContextualCueingService* contextual_cueing_service);
   virtual ~GlicZeroStateSuggestionsManager();
 
   // Callback to send zero state suggestions to the webui on tab changes.
@@ -47,7 +46,7 @@ class GlicZeroStateSuggestionsManager {
   void NotifyZeroStateSuggestionsOnPinnedTabDataChanged(
       bool is_first_run,
       const std::vector<std::string>& supported_tools,
-      const mojom::TabData* data);
+      const TabDataChange& data);
 
   // This handles calls from the webui to return a suggestion, and begin to
   // notify the webui of changes to the zero state suggestsions.
@@ -76,8 +75,10 @@ class GlicZeroStateSuggestionsManager {
 
   base::WeakPtr<GlicZeroStateSuggestionsManager> GetWeakPtr();
 
+  Host& host();
+
   // Owned by the glic_keyed_service.
-  raw_ptr<GlicSharingManagerImpl> sharing_manager_;
+  raw_ptr<GlicSharingManager> sharing_manager_;
   raw_ptr<GlicWindowController> window_controller_;
   raw_ptr<Host> host_;
 

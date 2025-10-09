@@ -25,6 +25,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/interaction/element_identifier.h"
+#include "ui/base/interaction/element_specifier.h"
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/interaction_sequence.h"
 #include "ui/base/interaction/interaction_test_util.h"
@@ -38,9 +39,6 @@
 #endif
 
 namespace ui::test {
-
-extern std::ostream& operator<<(std::ostream& os,
-                                internal::ElementSpecifier element);
 
 // Provides basic interactive test functionality.
 //
@@ -72,6 +70,7 @@ class InteractiveTestApi {
   using OnIncompatibleAction =
       internal::InteractiveTestPrivate::OnIncompatibleAction;
   using AdditionalContext = internal::InteractiveTestPrivate::AdditionalContext;
+  using ElementSpecifier = ::ui::ElementSpecifier;
 
   // Construct a single MultiStep from one or more StepBuilders and/or
   // MultiSteps. This should only be necessary when packaging up steps in custom
@@ -124,10 +123,6 @@ class InteractiveTestApi {
   template <typename... Args>
     requires(sizeof...(Args) > 0 && (internal::IsValueOrRvalue<Args> && ...))
   bool RunTestSequenceInContext(ElementContext context, Args&&... steps);
-
-  // An ElementSpecifier holds either an ElementIdentifier or a
-  // std::string_view denoting a named element in the test sequence.
-  using ElementSpecifier = internal::ElementSpecifier;
 
   // Convenience methods for creating interaction steps of type kShown. The
   // resulting step's start callback is already set; therefore, do not try to
@@ -447,6 +442,38 @@ class InteractiveTestApi {
     requires IsStateObserver<O>
   [[nodiscard]] StepBuilder StopObservingState(StateIdentifier<O> id);
 
+  // Convenience method for waiting for a state to achieve a particular value.
+  // Equivalent to:
+  // ```
+  //   PollState(id, callback, polling_interval),
+  //   WaitForState(id, value),
+  //   StopObservingState(id)
+  // ```
+  //
+  // Note that you can use different identifiers in different subsequences of an
+  // `InParallel` block, but not the same identifier.
+  //
+  // This is probably more than you need for a simple do-until loop; Use
+  // PollUntil() instead where possible.
+  template <typename T, typename C, typename M>
+  [[nodiscard]] MultiStep PollStateUntil(
+      StateIdentifier<PollingStateObserver<T>> id,
+      C&& callback,
+      M&& value,
+      base::TimeDelta polling_interval =
+          PollingStateObserver<T>::kDefaultPollingInterval);
+
+  // Convenience version of PollStateUntil which polls until `callback` becomes
+  // true; it uses a single internal identifier which means that unlike
+  // `PollStateUntil()` with different `id`s, these cannot be used in parallel.
+  template <typename C>
+    requires internal::HasSignature<C, bool()>
+  [[nodiscard]] MultiStep PollUntil(
+      C&& callback,
+      std::string description,
+      base::TimeDelta polling_interval =
+          PollingStateObserver<bool>::kDefaultPollingInterval);
+
   // Provides syntactic sugar so you can put "in any context" before an action
   // or test step rather than after. For example the following are equivalent:
   // ```
@@ -760,7 +787,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::AfterShow(
     T&& step_callback) {
   StepBuilder builder;
   builder.SetDescription("AfterShow()");
-  internal::SpecifyElement(builder, element);
+  builder.SetElement(element);
   builder.SetStartCallback(
       base::RectifyCallback<InteractionSequence::StepStartCallback>(
           internal::MaybeBind(std::forward<T>(step_callback))));
@@ -777,7 +804,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::AfterEvent(
   StepBuilder builder;
   builder.SetDescription(
       base::StrCat({"AfterEvent( ", event_type.GetName(), " )"}));
-  internal::SpecifyElement(builder, element);
+  builder.SetElement(element);
   builder.SetType(InteractionSequence::StepType::kCustomEvent, event_type);
   builder.SetStartCallback(
       base::RectifyCallback<InteractionSequence::StepStartCallback>(
@@ -793,7 +820,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::AfterHide(
     T&& step_callback) {
   StepBuilder builder;
   builder.SetDescription("AfterHide()");
-  internal::SpecifyElement(builder, element);
+  builder.SetElement(element);
   builder.SetType(InteractionSequence::StepType::kHidden);
   using Callback = base::OnceCallback<void(InteractionSequence*)>;
   builder.SetStartCallback(
@@ -812,7 +839,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::WithElement(
     T&& step_callback) {
   StepBuilder builder;
   builder.SetDescription("WithElement()");
-  internal::SpecifyElement(builder, element);
+  builder.SetElement(element);
   builder.SetStartCallback(
       base::RectifyCallback<InteractionSequence::StepStartCallback>(
           internal::MaybeBind(std::forward<T>(step_callback))));
@@ -830,7 +857,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::NameElementRelative(
   StepBuilder builder;
   builder.SetDescription(
       base::StringPrintf("NameElementRelative( \"%s\" )", name.data()));
-  ui::test::internal::SpecifyElement(builder, relative_to);
+  builder.SetElement(relative_to);
   builder.SetMustBeVisibleAtStart(true);
   builder.SetStartCallback(base::BindOnce(
       [](base::OnceCallback<TrackedElement*(TrackedElement*)> find_callback,
@@ -940,7 +967,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::IfElementMatches(
     ThenBlock then_steps,
     ElseBlock else_steps) {
   InteractionSequence::StepBuilder step;
-  internal::SpecifyElement(step, element);
+  step.SetElement(element);
   step.SetSubsequenceMode(InteractionSequence::SubsequenceMode::kAtMostOne);
   using FunctionType =
       base::OnceCallback<R(const InteractionSequence*, const TrackedElement*)>;
@@ -1213,6 +1240,32 @@ InteractiveTestApi::StepBuilder InteractiveTestApi::StopObservingState(
   return step;
 }
 
+template <typename T, typename C, typename M>
+InteractiveTestApi::MultiStep InteractiveTestApi::PollStateUntil(
+    StateIdentifier<PollingStateObserver<T>> id,
+    C&& callback,
+    M&& value,
+    base::TimeDelta polling_interval) {
+  auto steps =
+      Steps(PollState(id, std::forward<C>(callback), polling_interval),
+            WaitForState(id, std::forward<M>(value)), StopObservingState(id));
+  AddDescriptionPrefix(steps, "PollStateUntil()");
+  return steps;
+}
+
+template <typename C>
+  requires internal::HasSignature<C, bool()>
+InteractiveTestApi::MultiStep InteractiveTestApi::PollUntil(
+    C&& callback,
+    std::string description,
+    base::TimeDelta polling_interval) {
+  auto steps =
+      PollStateUntil(internal::kInteractiveTestPollUntilState,
+                     std::forward<C>(callback), true, polling_interval);
+  AddDescriptionPrefix(steps, description);
+  return steps;
+}
+
 // static
 template <typename... Args>
 InteractiveTestApi::StepBuilder InteractiveTestApi::Log(Args... args) {
@@ -1307,7 +1360,7 @@ InteractionSequence::StepBuilder InteractiveTestApi::CheckElement(
     M&& matcher) {
   StepBuilder builder;
   builder.SetDescription("CheckElement()");
-  internal::SpecifyElement(builder, element);
+  builder.SetElement(element);
   using MatcherType = internal::MatcherTypeFor<R>;
   builder.SetStartCallback(base::BindOnce(
       [](base::OnceCallback<R(TrackedElement*)> function,

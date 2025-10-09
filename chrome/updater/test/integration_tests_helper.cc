@@ -58,7 +58,8 @@ constexpr int kUnknownSwitch = 101;
 constexpr int kBadCommand = 102;
 
 base::Value ValueFromString(const std::string& values) {
-  std::optional<base::Value> results_value = base::JSONReader::Read(values);
+  std::optional<base::Value> results_value =
+      base::JSONReader::Read(values, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   EXPECT_TRUE(results_value) << values;
   return results_value->Clone();
 }
@@ -333,7 +334,8 @@ void AppTestHelper::FirstTaskRun() {
                                     WithSwitch(
                                         "crash_upload_url",
                                         WithSwitch("update_url",
-                                                   Wrap(&EnterTestMode)))))))))},  // NOLINT
+                                                   Wrap(
+                                                       &EnterTestMode)))))))))},
           {"exit_test_mode", WithSystemScope(Wrap(&ExitTestMode))},
           {"set_dict_policies", WithSwitch("values", Wrap(&SetDictPolicies))},
           {"set_platform_policies",
@@ -405,16 +407,15 @@ void AppTestHelper::FirstTaskRun() {
           {"install_scheduled_task",
            WithSwitch("use_task_subfolders",
                       WithSwitch("task_name",
-                                 WithSystemScope(Wrap(&InstallScheduledTask))))},  // NOLINT
-          {"is_scheduled_task_registered_from_medium",
+                                 Wrap(&InstallScheduledTask)))},
+          {"is_scheduled_task_registered",
            WithSwitch("use_task_subfolders",
                       WithSwitch("task_name",
-                                 WithSystemScope(
-                                     Wrap(&IsScheduledTaskRegisteredFromMedium))))},  // NOLINT
+                                 Wrap(&IsScheduledTaskRegistered)))},
           {"delete_scheduled_task",
            WithSwitch("use_task_subfolders",
                       WithSwitch("task_name",
-                                 WithSystemScope(Wrap(&DeleteScheduledTask))))},
+                                 Wrap(&DeleteScheduledTask)))},
 #endif  // BUILDFLAG(IS_WIN)
           {"expect_version_active",
            WithSwitch("updater_version",
@@ -459,6 +460,10 @@ void AppTestHelper::FirstTaskRun() {
           {"run_server",
            WithSwitch("internal", WithSwitch("exit_code", WithSystemScope(Wrap(
                                                               &RunServer))))},
+          {"run_update_apps",
+           WithSwitch(
+               "version",
+               WithSwitch("exit_code", WithSystemScope(Wrap(&RunUpdateApps))))},
           {"update",
            WithSwitch("install_data_index",
                       (WithSwitch("app_id", WithSystemScope(Wrap(&Update)))))},

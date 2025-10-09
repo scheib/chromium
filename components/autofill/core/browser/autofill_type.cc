@@ -112,11 +112,7 @@ bool AutofillType::TestConstraints(const FieldTypeSet& s) {
   auto test_entity_constraint = [&s](EntityType entity) {
     FieldTypeSet t;
     for (AttributeType attribute : entity.attributes()) {
-      if (base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-        t.insert_all(attribute.field_subtypes());
-      } else {
-        t.insert(attribute.field_type_with_tag_types());
-      }
+      t.insert_all(attribute.field_subtypes());
     }
     return Intersection(s, t).size() <= 1;
   };
@@ -127,36 +123,6 @@ bool AutofillType::TestConstraints(const FieldTypeSet& s) {
          Intersection(s, kIdentityCredentialFieldTypes).size() <= 1 &&
          Intersection(s, kLoyaltyCardFieldTypes).size() <= 1 &&
          Intersection(s, kPasswordManagerFieldTypes).size() <= 1;
-}
-
-AutofillType::ServerPrediction::ServerPrediction() = default;
-
-AutofillType::ServerPrediction::ServerPrediction(const AutofillField& field) {
-  password_requirements = field.password_requirements();
-  server_predictions = field.server_predictions();
-}
-
-AutofillType::ServerPrediction::ServerPrediction(const ServerPrediction&) =
-    default;
-
-AutofillType::ServerPrediction& AutofillType::ServerPrediction::operator=(
-    const ServerPrediction&) = default;
-
-AutofillType::ServerPrediction::ServerPrediction(ServerPrediction&&) = default;
-
-AutofillType::ServerPrediction& AutofillType::ServerPrediction::operator=(
-    ServerPrediction&&) = default;
-
-AutofillType::ServerPrediction::~ServerPrediction() = default;
-
-FieldType AutofillType::ServerPrediction::server_type() const {
-  return server_predictions.empty()
-             ? NO_SERVER_DATA
-             : ToSafeFieldType(server_predictions[0].type(), NO_SERVER_DATA);
-}
-
-bool AutofillType::ServerPrediction::is_override() const {
-  return server_predictions.empty() ? false : server_predictions[0].override();
 }
 
 AutofillType::AutofillType(FieldTypeSet field_types, bool is_country_code)
@@ -199,14 +165,8 @@ FieldType AutofillType::GetAddressType() const {
 
 FieldType AutofillType::GetAutofillAiType(EntityType entity) const {
   FieldTypeSet field_types = {};
-  if (base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    for (AttributeType attribute : entity.attributes()) {
-      field_types.insert_all(attribute.field_subtypes());
-    }
-  } else {
-    for (AttributeType attribute : entity.attributes()) {
-      field_types.insert(attribute.field_type_with_tag_types());
-    }
+  for (AttributeType attribute : entity.attributes()) {
+    field_types.insert_all(attribute.field_subtypes());
   }
   return GetUniqueIfAny(Intersection(GetTypes(), field_types));
 }
@@ -229,52 +189,16 @@ FieldType AutofillType::GetPasswordManagerType() const {
 }
 
 FieldTypeSet AutofillType::GetAutofillAiTypes() const {
-  if (base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    static FieldTypeSet kFieldTypesWithoutTagTypes = [] {
-      FieldTypeSet field_types;
-      for (EntityType entity : DenseSet<EntityType>::all()) {
-        for (AttributeType attribute : entity.attributes()) {
-          field_types.insert_all(attribute.field_subtypes());
-        }
-      }
-      return field_types;
-    }();
-    return Intersection(GetTypes(), kFieldTypesWithoutTagTypes);
-  } else {
-    // Some entities (e.g. National Id Card) use NAME_FULL instead of a tag
-    // type.
-    static constexpr FieldTypeSet kFieldTypes =
-        Union(FieldTypesOfGroup(FieldTypeGroup::kAutofillAi),
-              FieldTypeSet{NAME_FULL});
-    return Intersection(GetTypes(), kFieldTypes);
-  }
-
-  // TODO(crbug.com/422563282): Remove when cleaning up kAutofillAiNoTagTypes,
-  // do the following:
-  // - Exclude `*_TAG` types in ToSafeFieldType().
-  // - Remove the above code of this function.
-  // - Activate the below code of this function.
-
-  // static constexpr FieldTypeSet kFieldTypes =
-  //     Union(FieldTypesOfGroup(FieldTypeGroup::kName),
-  //           FieldTypesOfGroup(FieldTypeGroup::kAutofillAi));
-  // return Intersection(GetTypes(), kFieldTypes);
+  static constexpr FieldTypeSet kFieldTypes =
+      Union(FieldTypesOfGroup(FieldTypeGroup::kName),
+            FieldTypesOfGroup(FieldTypeGroup::kAutofillAi));
+  return Intersection(GetTypes(), kFieldTypes);
 }
 
 FieldTypeSet AutofillType::GetStaticAutofillAiTypes() const {
   static constexpr FieldTypeSet kFieldTypes =
       FieldTypesOfGroup(FieldTypeGroup::kAutofillAi);
   return Intersection(GetTypes(), kFieldTypes);
-}
-
-FieldType AutofillType::GetAutofillAiTypeAndResolveTagTypes(
-    EntityType entity) const {
-  FieldType type = GetAutofillAiType(entity);
-  if (IsTagType(type) &&
-      !base::FeatureList::IsEnabled(features::kAutofillAiNoTagTypes)) {
-    type = GetAddressType();
-  }
-  return type;
 }
 
 std::string AutofillType::ToString() const {

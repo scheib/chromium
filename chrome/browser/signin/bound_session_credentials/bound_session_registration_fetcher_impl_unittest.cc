@@ -198,6 +198,8 @@ class BoundSessionRegistrationFetcherImplTest : public testing::Test {
   void ExpectRecordedMetrics(RegistrationError error) {
     histogram_tester_.ExpectUniqueSample(
         "Signin.BoundSessionCredentials.SessionRegistrationResult", error, 1);
+    histogram_tester_.ExpectUniqueSample(
+        "Net.DeviceBoundSessions.GoogleRegistrationIsFromStandard", false, 1);
     histogram_tester_.ExpectTotalCount(
         "Signin.BoundSessionCredentials.SessionRegistrationTotalDuration", 1);
     histogram_tester_.ExpectTotalCount(
@@ -226,7 +228,7 @@ class BoundSessionRegistrationFetcherImplTest : public testing::Test {
       base::test::TaskEnvironment::ThreadPoolExecutionMode::
           QUEUED};  // QUEUED - tasks don't run until `RunUntilIdle()` is
                     // called.
-  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+  variations::test::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   // Provides a fake key provider by default.
   std::variant<crypto::ScopedFakeUnexportableKeyProvider,

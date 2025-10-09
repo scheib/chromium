@@ -18,7 +18,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/notimplemented.h"
 #include "build/build_config.h"
-#include "components/viz/common/resources/resource_sizes.h"
 #include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/gl_utils.h"
@@ -93,7 +92,6 @@ namespace {
 // staging buffers. This is fine since it is used on linux only when a user
 // forces Vulkan ON.
 BASE_FEATURE(kUseCpuFallbackPathForExternalVkImage,
-             "UseCpuFallbackPathForExternalVkImage",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 class ScopedDedicatedMemoryObject {

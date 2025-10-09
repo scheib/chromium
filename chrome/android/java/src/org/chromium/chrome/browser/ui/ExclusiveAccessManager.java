@@ -4,14 +4,22 @@
 
 package org.chromium.chrome.browser.ui;
 
+import android.app.Activity;
+
 import org.jni_zero.NativeMethods;
 
 import org.chromium.base.lifetime.Destroyable;
+import org.chromium.build.annotations.MonotonicNonNull;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.ActivityTabProvider;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
+import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tabmodel.TabModel;
+import org.chromium.chrome.browser.tabmodel.TabModelObserver;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager;
 import org.chromium.content_public.browser.WebContents;
 
 /**
@@ -24,13 +32,66 @@ import org.chromium.content_public.browser.WebContents;
  * responsible for native object creation and destruction.
  */
 @NullMarked
-public class ExclusiveAccessManager implements Destroyable {
+public class ExclusiveAccessManager
+        implements Destroyable, DesktopWindowStateManager.AppHeaderObserver {
     private long mExclusiveAccessManagerAndroidNativePointer;
+    private final FullscreenManager mFullscreenManager;
+    private @MonotonicNonNull DesktopWindowStateManager mDesktopWindowStateManager;
+    @Nullable private TabModelSelector mTabModelSelector;
+    private final TabModelObserver mTabModelObserver;
 
     public ExclusiveAccessManager(
-            FullscreenManager fullscreenManager, ActivityTabProvider activityTabProvider) {
+            Activity activity,
+            FullscreenManager fullscreenManager,
+            ActivityTabProvider activityTabProvider,
+            @Nullable DesktopWindowStateManager desktopWindowStateManager) {
+        mFullscreenManager = fullscreenManager;
         mExclusiveAccessManagerAndroidNativePointer =
-                ExclusiveAccessManagerJni.get().init(this, fullscreenManager, activityTabProvider);
+                ExclusiveAccessManagerJni.get()
+                        .init(this, activity, fullscreenManager, activityTabProvider);
+        if (desktopWindowStateManager != null) {
+            mDesktopWindowStateManager = desktopWindowStateManager;
+            mDesktopWindowStateManager.addObserver(this);
+        }
+        mFullscreenManager.setFullscreenManagerDelegate(
+                new FullscreenManager.FullscreenManagerDelegate() {
+                    @Override
+                    public void onExitFullscreen(@Nullable Tab tab) {
+                        if (tab == null) {
+                            ExclusiveAccessManagerJni.get()
+                                    .exitExclusiveAccess(
+                                            mExclusiveAccessManagerAndroidNativePointer);
+                        } else {
+                            deactivateTab(tab);
+                        }
+                    }
+                });
+        mTabModelObserver =
+                new TabModelObserver() {
+                    @Override
+                    public void willCloseTab(Tab tab, boolean didCloseAlone) {
+                        ExclusiveAccessManagerJni.get()
+                                .onTabClosing(
+                                        mExclusiveAccessManagerAndroidNativePointer,
+                                        tab.getWebContents());
+                    }
+                };
+    }
+
+    public void initialize(TabModelSelector modelSelector) {
+        mTabModelSelector = modelSelector;
+        for (TabModel model : modelSelector.getModels()) {
+            model.addObserver(mTabModelObserver);
+        }
+    }
+
+    private void deactivateTab(Tab tab) {
+        ExclusiveAccessManagerJni.get()
+                .onTabDeactivated(
+                        mExclusiveAccessManagerAndroidNativePointer, tab.getWebContents());
+        ExclusiveAccessManagerJni.get()
+                .onTabDetachedFromView(
+                        mExclusiveAccessManagerAndroidNativePointer, tab.getWebContents());
     }
 
     /**
@@ -45,7 +106,8 @@ public class ExclusiveAccessManager implements Destroyable {
                         mExclusiveAccessManagerAndroidNativePointer,
                         requestingFrame,
                         options.showNavigationBar,
-                        options.showStatusBar);
+                        options.showStatusBar,
+                        options.displayId);
     }
 
     /**
@@ -65,6 +127,9 @@ public class ExclusiveAccessManager implements Destroyable {
      * @return is currently in fullscreen
      */
     public boolean isFullscreenForTabOrPending(WebContents webContents) {
+        if (webContents == null) {
+            return false;
+        }
         return ExclusiveAccessManagerJni.get()
                 .isFullscreenForTabOrPending(
                         mExclusiveAccessManagerAndroidNativePointer, webContents);
@@ -121,6 +186,14 @@ public class ExclusiveAccessManager implements Destroyable {
                 .lostPointerLock(mExclusiveAccessManagerAndroidNativePointer);
     }
 
+    @Override
+    public void onDesktopWindowingModeChanged(boolean isInDesktopWindow) {
+        if (isInDesktopWindow && mFullscreenManager.getPersistentFullscreenMode()) {
+            ExclusiveAccessManagerJni.get()
+                    .exitExclusiveAccess(mExclusiveAccessManagerAndroidNativePointer);
+        }
+    }
+
     /** Cleanup function which should be called when owning object is destroyed. */
     @Override
     public void destroy() {
@@ -128,12 +201,19 @@ public class ExclusiveAccessManager implements Destroyable {
             ExclusiveAccessManagerJni.get().destroy(mExclusiveAccessManagerAndroidNativePointer);
             mExclusiveAccessManagerAndroidNativePointer = 0;
         }
+        if (mDesktopWindowStateManager != null) mDesktopWindowStateManager.removeObserver(this);
+        if (mTabModelSelector != null) {
+            for (TabModel model : mTabModelSelector.getModels()) {
+                model.removeObserver(mTabModelObserver);
+            }
+        }
     }
 
     @NativeMethods
     public interface Natives {
         long init(
                 ExclusiveAccessManager caller,
+                Activity activity,
                 FullscreenManager fullscreenManager,
                 ActivityTabProvider activityTabProvider);
 
@@ -141,7 +221,8 @@ public class ExclusiveAccessManager implements Destroyable {
                 long nativeExclusiveAccessManagerAndroid,
                 long requestingFrame,
                 boolean showNavigationBar,
-                boolean showStatusBar);
+                boolean showStatusBar,
+                long displayId);
 
         void exitFullscreenModeForTab(
                 long nativeExclusiveAccessManagerAndroid, @Nullable WebContents webContents);
@@ -167,6 +248,17 @@ public class ExclusiveAccessManager implements Destroyable {
                 boolean lastUnlockedByTarget);
 
         void lostPointerLock(long nativeExclusiveAccessManagerAndroid);
+
+        void exitExclusiveAccess(long nativeExclusiveAccessManagerAndroid);
+
+        void onTabDeactivated(
+                long nativeExclusiveAccessManagerAndroid, @Nullable WebContents webContents);
+
+        void onTabDetachedFromView(
+                long nativeExclusiveAccessManagerAndroid, @Nullable WebContents webContents);
+
+        void onTabClosing(
+                long nativeExclusiveAccessManagerAndroid, @Nullable WebContents webContents);
 
         void destroy(long nativeExclusiveAccessManagerAndroid);
     }

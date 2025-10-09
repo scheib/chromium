@@ -19,6 +19,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
+#include "content/browser/webid/metrics.h"
 #include "content/browser/webid/test/mock_permission_delegate.h"
 #include "content/common/features.h"
 #include "content/public/browser/manifest_icon_downloader.h"
@@ -306,10 +307,10 @@ class IdpNetworkRequestManagerTest : public ::testing::Test {
     FetchStatus fetch_status;
     TokenResult token_result;
     base::RunLoop run_loop;
-    auto callback =
-        base::BindLambdaForTesting([&](FetchStatus status, TokenResult result) {
+    auto callback = base::BindLambdaForTesting(
+        [&](FetchStatus status, TokenResult&& result) {
           fetch_status = status;
-          token_result = result;
+          token_result = std::move(result);
           run_loop.Quit();
         });
 
@@ -318,7 +319,7 @@ class IdpNetworkRequestManagerTest : public ::testing::Test {
                               std::move(callback), base::DoNothing(),
                               CreateErrorMetricsCallback(run_loop));
     run_loop.Run();
-    return {fetch_status, token_result};
+    return {std::move(fetch_status), std::move(token_result)};
   }
 
   IdpClientMetadata SendClientMetadataRequestAndWaitForResponse(
@@ -1815,8 +1816,103 @@ TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestWithCORSError) {
 
   EXPECT_EQ(ParseStatus::kNoResponseError, fetch_status.parse_status);
   EXPECT_EQ(net::ERR_FAILED, fetch_status.response_code);
-  ASSERT_EQ("", token_result.token);
+  ASSERT_FALSE(token_result.token.has_value());
   ASSERT_EQ(true, fetch_status.cors_error);
+}
+
+// Test that flexible token formats (JSON objects, primitives) are
+// properly handled
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestJsonObjectToken) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(features::kFedCmNonStringToken);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+
+  // Test JSON object token
+  const char* json_object_response = R"({
+    "token": {
+      "access_token": "abc123",
+      "token_type": "Bearer",
+      "expires_in": 3600
+    }
+  })";
+
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_OK, "application/json",
+      json_object_response);
+
+  EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
+  EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
+  EXPECT_TRUE(token_result.token.has_value() &&
+              (token_result.token->is_dict()));
+  const base::Value::Dict& value = token_result.token->GetDict();
+
+  const base::Value* access_token = value.Find("access_token");
+  ASSERT_TRUE(access_token && access_token->is_string());
+  EXPECT_EQ("abc123", access_token->GetString());
+
+  const base::Value* token_type = value.Find("token_type");
+  ASSERT_TRUE(token_type && token_type->is_string());
+  EXPECT_EQ("Bearer", token_type->GetString());
+
+  const base::Value* expires_in = value.Find("expires_in");
+  ASSERT_TRUE(expires_in && expires_in->is_int());
+  EXPECT_EQ(3600, expires_in->GetInt());
+}
+
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestNumberToken) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(features::kFedCmNonStringToken);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+
+  const char* number_response = R"({"token": 12345})";
+
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_OK, "application/json", number_response);
+
+  EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
+  EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
+  EXPECT_TRUE(
+      token_result.token.has_value() &&
+      (token_result.token->is_int() && token_result.token->GetInt() == 12345));
+}
+
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestBooleanToken) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(features::kFedCmNonStringToken);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+
+  const char* boolean_response = R"({"token": true})";
+
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_OK, "application/json", boolean_response);
+
+  EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
+  EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
+  EXPECT_TRUE(token_result.token.has_value() && token_result.token->is_bool() &&
+              token_result.token->GetBool() == true);
+}
+
+TEST_F(IdpNetworkRequestManagerTest, IdAssertionRequestNullToken) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(features::kFedCmNonStringToken);
+
+  FetchStatus fetch_status;
+  TokenResult token_result;
+
+  const char* null_response = R"({"token": null})";
+
+  std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
+      "account", "request", net::HTTP_OK, "application/json", null_response);
+
+  EXPECT_EQ(ParseStatus::kSuccess, fetch_status.parse_status);
+  EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
+  EXPECT_TRUE(token_result.token.has_value() && token_result.token->is_none());
 }
 
 // Tests the client metadata implementation.
@@ -1839,19 +1935,63 @@ TEST_F(IdpNetworkRequestManagerTest, ClientMetadata) {
   ASSERT_EQ(GURL(), data.privacy_policy_url);
   ASSERT_EQ(GURL(), data.terms_of_service_url);
   ASSERT_EQ(GURL(), data.brand_icon_url);
-  ASSERT_FALSE(data.client_matches_top_frame_origin.has_value());
+  EXPECT_FALSE(data.client_is_third_party_to_top_frame_origin);
 }
 
-// Tests the "matches top frame" boolean.
-TEST_F(IdpNetworkRequestManagerTest, ClientMatchesTopFrameOrigin) {
+// Tests client_is_third_party_to_top_frame_origin: true
+TEST_F(IdpNetworkRequestManagerTest, ClientIsThirdPartyToTopFrameOrigin) {
   base::test::ScopedFeatureList list;
   list.InitAndEnableFeature(features::kFedCmIframeOrigin);
 
   IdpClientMetadata data = SendClientMetadataRequestAndWaitForResponse(
-      "clientid", R"({"client_matches_top_frame_origin": false})",
+      "clientid", R"({"client_is_third_party_to_top_frame_origin": true})",
       "https://toplevel.example");
-  ASSERT_TRUE(data.client_matches_top_frame_origin.has_value());
-  EXPECT_FALSE(*data.client_matches_top_frame_origin);
+  EXPECT_TRUE(data.client_is_third_party_to_top_frame_origin);
+  histogram_tester()->ExpectUniqueSample(
+      "Blink.FedCm.CrossSiteIframeType",
+      webid::CrossSiteIframeType::kIframeIsThirdParty, 1);
+}
+
+// Tests client_is_third_party_to_top_frame_origin: false
+TEST_F(IdpNetworkRequestManagerTest, ClientIsSamePartyToTopFrameOrigin) {
+  base::test::ScopedFeatureList list;
+  list.InitAndEnableFeature(features::kFedCmIframeOrigin);
+
+  IdpClientMetadata data = SendClientMetadataRequestAndWaitForResponse(
+      "clientid", R"({"client_is_third_party_to_top_frame_origin": false})",
+      "https://toplevel.example");
+  EXPECT_FALSE(data.client_is_third_party_to_top_frame_origin);
+  histogram_tester()->ExpectUniqueSample(
+      "Blink.FedCm.CrossSiteIframeType",
+      webid::CrossSiteIframeType::kIframeIsSameParty, 1);
+}
+
+// Tests client_is_third_party_to_top_frame_origin is not sent
+TEST_F(IdpNetworkRequestManagerTest,
+       ClientIsThirdPartyToTopFrameOriginNotSent) {
+  base::test::ScopedFeatureList list;
+  list.InitAndEnableFeature(features::kFedCmIframeOrigin);
+
+  IdpClientMetadata data = SendClientMetadataRequestAndWaitForResponse(
+      "clientid", R"({})", "https://toplevel.example");
+  EXPECT_FALSE(data.client_is_third_party_to_top_frame_origin);
+  histogram_tester()->ExpectUniqueSample(
+      "Blink.FedCm.CrossSiteIframeType",
+      webid::CrossSiteIframeType::kNoValueReceived, 1);
+}
+
+// Tests that we don't record the histogram for
+// client_is_third_party_to_top_frame_origin if there is no cross-site iframe.
+TEST_F(IdpNetworkRequestManagerTest,
+       ClientIsThirdPartyToTopFrameOriginNoIframe) {
+  base::test::ScopedFeatureList list;
+  list.InitAndEnableFeature(features::kFedCmIframeOrigin);
+
+  // We pass no top_level_origin here.
+  IdpClientMetadata data = SendClientMetadataRequestAndWaitForResponse(
+      "clientid", R"({"client_is_third_party_to_top_frame_origin": true})");
+  EXPECT_FALSE(data.client_is_third_party_to_top_frame_origin);
+  histogram_tester()->ExpectTotalCount("Blink.FedCm.CrossSiteIframeType", 0);
 }
 
 // Tests that we correctly records metrics regarding approved_clients.
@@ -2106,7 +2246,7 @@ TEST_F(IdpNetworkRequestManagerTest, IdAssertionWrongMimeType) {
   TokenResult token_result;
   std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
       "account", "request", net::HTTP_OK, "text/html");
-  EXPECT_EQ("", token_result.token);
+  ASSERT_FALSE(token_result.token.has_value());
   EXPECT_EQ(ParseStatus::kInvalidContentTypeError, fetch_status.parse_status);
   EXPECT_EQ(net::HTTP_OK, fetch_status.response_code);
 }
@@ -2122,7 +2262,7 @@ TEST_F(IdpNetworkRequestManagerTest, FetchingTokenLeadsToAContinuationUrl) {
 
   base::RunLoop run_loop;
   auto callback = base::BindLambdaForTesting(
-      [&](FetchStatus status, TokenResult result) {});
+      [&](FetchStatus status, TokenResult&& result) {});
 
   auto on_continue = base::BindLambdaForTesting([&](FetchStatus status,
                                                     const GURL& url) {
@@ -2212,7 +2352,7 @@ TEST_F(IdpNetworkRequestManagerTest, ContinueOnCanBeRelativeUrl) {
 
   base::RunLoop run_loop;
   auto callback = base::BindLambdaForTesting(
-      [&](FetchStatus status, TokenResult result) {});
+      [&](FetchStatus status, TokenResult&& result) {});
 
   auto on_continue = base::BindLambdaForTesting([&](FetchStatus status,
                                                     const GURL& url) {
@@ -2503,7 +2643,7 @@ TEST_F(IdpNetworkRequestManagerTest, IdAssertionResponseWithTokenAndHttpError) {
   std::tie(fetch_status, token_result) = SendTokenRequestAndWaitForResponse(
       "account", "request", net::HTTP_FORBIDDEN);
 
-  EXPECT_EQ("", token_result.token);
+  ASSERT_FALSE(token_result.token.has_value());
   EXPECT_TRUE(token_result.error);
   EXPECT_EQ("", token_result.error->code);
   EXPECT_EQ("", token_result.error->url);

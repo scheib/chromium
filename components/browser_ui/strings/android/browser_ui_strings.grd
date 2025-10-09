@@ -190,7 +190,7 @@
       <message name="IDS_SAVE" desc="Label for a button to save a change. Used in multiple contexts. [CHAR_LIMIT=20]">
         Save
       </message>
-      <message name="IDS_DETAILS_LINK" desc="In 1) Settings > Clean up computer (desktop), a link to open details of incompatible applications. In 2) Settings > Lite mode (mobile), static title for data usage breakdown." meaning="Short for 'view details'. Link; static title.">
+      <message name="IDS_DETAILS_LINK" desc="Settings > Lite mode (mobile), static title for data usage breakdown." meaning="Short for 'view details'. Link; static title.">
         Details
       </message>
      <message name="IDS_DONE" desc="Label for a button to save a change or finish editing data. Used in multiple contexts. [CHAR_LIMIT=20]">
@@ -204,6 +204,9 @@
       </message>
       <message name="IDS_REMOVE" desc="Label for a button to remove an item (e.g. a bookmark) from a list. [CHAR_LIMIT=20]">
         Remove
+      </message>
+      <message name="IDS_EDIT" desc="Label for a button to edit an item (e.g. a permission) on a list.">
+        Edit
       </message>
       <message name="IDS_RESET" desc="Label for a button to reset information you are editing to a default.">
         Reset
@@ -733,8 +736,11 @@
         Tap to return to the site
       </message>
       <!-- Bookmarks -->
-      <message name="IDS_BOOKMARKS_BAR_EMPTY_MESSAGE" desc="Message shown in a popup menu when a bookmarks bar folder is opened and contains no bookmarks." translateable="false">
-        No bookmarks
+      <message name="IDS_BOOKMARKS_BAR_EMPTY_MESSAGE" desc="Message shown in a popup menu when a bookmarks bar folder is opened and contains no bookmarks.">
+        This folder is empty
+      </message>
+      <message name="IDS_BOOKMARKS_BAR_IPH_MESSAGE" desc="IPH text bubble encouraging users to turn on the bookmarks bar in settings.">
+        You can turn on the bookmarks bar in Settings > Appearance
       </message>
       <!-- USB -->
       <message name="IDS_CONNECTED_TO_USB_DEVICE_NOTIFICATION_TITLE" desc="Text to be shown as a notification when a website is connected to a USB device.">
@@ -804,6 +810,9 @@
       </message>
       <message name="IDS_ACCESSIBILITY_NEXT_SLIDE" desc="The accessibility text of the next slide button in a Picture-in-Picture window that allow users to navigate to the next slide.">
         Next slide
+      </message>
+      <message name="IDS_ACCESSIBILITY_GO_TO_BACKGROUND" desc="The accessibility text for the button in a Picture-in-Picture window that closes the window and keeps the media playing in the background.">
+        Go to background
       </message>
       <message name="IDS_MEDIA_NOTIFICATION_INCOGNITO" desc="Text used as a placeholder for a media notification about playing media, when notification is shown from Incognito tab.">
         A site is playing media
@@ -1008,6 +1017,27 @@
       <message name="IDS_FONT_SIZE_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change font size.">
         Text scaling set to <ph name="TEXT_SCALING">%1$s<ex>100%</ex></ph>
       </message>
+      <message name="IDS_FONT_FAMILY_SANS_SERIF_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change font family to sans serif.">
+        Font Sans Serif
+      </message>
+      <message name="IDS_FONT_FAMILY_SERIF_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change font family to serif.">
+        Font Serif
+      </message>
+      <message name="IDS_FONT_FAMILY_MONOSPACE_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change font family to monospace.">
+        Font Mono
+      </message>
+      <message name="IDS_FONT_SIZE_SLIDER_ACCESSIBILITY_LABEL" desc="Accessibility label for slider to allow user to change font size.">
+        Font size slider
+      </message>
+      <message name="IDS_LIGHT_THEME_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change to light theme.">
+        Theme color light
+      </message>
+      <message name="IDS_SEPIA_THEME_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change to sepia theme.">
+        Theme color sepia
+      </message>
+      <message name="IDS_DARK_THEME_ACCESSIBILITY_LABEL" desc="Accessibility label for control to allow user to change to dark theme.">
+        Theme color dark
+      </message>
       <message name="IDS_FORCE_ENABLE_ZOOM_TITLE" desc="Title of preference that allows the user to zoom in on any webpage, even if the page tries to disable zooming.">
         Force enable zoom
       </message>
@@ -1031,6 +1061,13 @@
       </message>
       <message name="IDS_JUMP_START_OMNIBOX_SUMMARY" desc="When this preference is enabled, Chrome start-up time is reduced, and the user is taken directly to an active Omnibox">
         Launch Chrome with the Omnibox focused, reducing start-up time on low-end devices.
+      </message>
+
+      <message name="IDS_CARET_BROWSING_TITLE" desc="Title of preference that allows the user to navigate pages with a text caret.">
+        Navigate pages with a text cursor when a keyboard is attached
+      </message>
+      <message name="IDS_CARET_BROWSING_SUMMARY" desc="Summary of preference that allows the user to navigate pages with a text caret.">
+        To turn caret browsing on or off, use the shortcut F7
       </message>
 
       <!-- Text Size Contrast -->
@@ -1095,6 +1132,13 @@
       </message>
       <message name="IDS_PAGE_ZOOM_IPH_MESSAGE" desc="Text for in-product help bubble that appears to alert user of the new Zoom option in the main menu">
         You can zoom in or out on sites you visit
+      </message>
+      <!-- Zoom Indicator -->
+      <message name="IDS_ZOOM_BUTTON_CONTENT_DESCRIPTION" desc="Content description for the zoom indicator on the location bar.">
+        {ZOOM_PERCENTAGE, plural,
+          =1 {Zoom}
+          other {Zoom: <ph name="ZOOM_PERCENTAGE_NUMBER">%1$d<ex>120</ex></ph>%%}
+        }
       </message>
 
       <!-- Search resumption module strings -->
@@ -1329,23 +1373,44 @@
       <message name="IDS_NTP_CUSTOMIZATION_MAIN_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the new tab page customization main bottom sheet is fully opened.">
         Customize your new tab page bottom sheet opened at full height
       </message>
+      <message name="IDS_NTP_CUSTOMIZATION_MAIN_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the new tab page customization main bottom sheet is fully opened.">
+        Customize your new tab page bottom sheet opened at half height
+      </message>
       <message name="IDS_NTP_CUSTOMIZATION_MVT_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the mvt bottom sheet is fully opened." is_accessibility_with_no_ui="true">
-        my shortcuts bottom sheet opened at full height
+        My shortcuts bottom sheet opened at full height
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_MVT_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the mvt bottom sheet is fully opened." is_accessibility_with_no_ui="true">
+        My shortcuts bottom sheet opened at half height
       </message>
       <message name="IDS_NTP_CUSTOMIZATION_NTP_CARDS_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the new tab page cards bottom sheet is fully opened.">
         New tab page cards bottom sheet opened at full height
       </message>
+      <message name="IDS_NTP_CUSTOMIZATION_NTP_CARDS_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the new tab page cards bottom sheet is fully opened.">
+        New tab page cards bottom sheet opened at half height
+      </message>
       <message name="IDS_NTP_CUSTOMIZATION_FEED_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the feed bottom sheet is fully opened.">
         Discover feed bottom sheet opened at full height
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_FEED_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the feed bottom sheet is fully opened.">
+        Discover feed bottom sheet opened at half height
       </message>
       <message name="IDS_NTP_CUSTOMIZATION_THEME_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the new tab page appearance bottom sheet is fully opened.">
         New tab page appearance bottom sheet opened at full height
       </message>
+      <message name="IDS_NTP_CUSTOMIZATION_THEME_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the new tab page appearance bottom sheet is fully opened.">
+        New tab page appearance bottom sheet opened at half height
+      </message>
       <message name="IDS_NTP_CUSTOMIZATION_CHROME_COLORS_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the new tab page appearance bottom sheet is fully opened.">
         Chrome colors bottom sheet opened at full height
       </message>
+      <message name="IDS_NTP_CUSTOMIZATION_CHROME_COLORS_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the new tab page appearance bottom sheet is fully opened.">
+        Chrome colors bottom sheet opened at half height
+      </message>
       <message name="IDS_NTP_CUSTOMIZATION_MAIN_BOTTOM_SHEET_CLOSED" desc="Accessibility string that describes a new tab page customization bottom sheet is closed">
         Customize your new tab page bottom sheet closed
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_FEED_SWITCH_DESCRIPTION" desc="Title of the list items in the new tab page customization discover feed bottom sheet">
+        Get suggested articles on the New Tab page
       </message>
       <message name="IDS_NTP_CUSTOMIZATION_FEED_LIST_ITEMS_TITLE" desc="Title of the list items in the new tab page customization discover feed bottom sheet">
         Manage your feed
@@ -1398,6 +1463,9 @@
       <message name="IDS_NTP_CUSTOMIZATION_THEME_COLLECTIONS_BOTTOM_SHEET_OPENED_FULL" desc="Accessibility string that describes the new tab page appearance theme collections bottom sheet is fully opened.">
         New tab page appearance theme collections bottom sheet opened at full height
       </message>
+      <message name="IDS_NTP_CUSTOMIZATION_THEME_COLLECTIONS_BOTTOM_SHEET_OPENED_HALF" desc="Accessibility string that describes the new tab page appearance theme collections bottom sheet is fully opened.">
+        New tab page appearance theme collections bottom sheet opened at half height
+      </message>
       <message name="IDS_NTP_CUSTOMIZATION_THEME_COLLECTIONS_DAILY_UPDATE" desc="Title of the toggle switch for updating theme collection background daily">
         Refresh daily
       </message>
@@ -1406,6 +1474,18 @@
       </message>
       <message name="IDS_NTP_CUSTOMIZATION_CHROME_COLORS_BOTTOM_SHEET" desc="Accessibility string to announce the currently displaying bottom sheet is the Chrome Colors bottom sheet." is_accessibility_with_no_ui="true">
         Chrome Colors bottom sheet
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_THEME_IMAGE_PREVIEW_PINCH_TO_RESIZE" desc="Text explaining the image could be resized by pinching it.">
+        Pinch to resize
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_TYPE_BACKGROUND_COLOR_HEX_TITLE" desc="Title of the edit text box to input a color hex for the background color.">
+        Background Color Hex
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_TYPE_PRIMARY_COLOR_HEX_TITLE" desc="Title of the edit text box to input a color hex for the primary color.">
+        Primary Color Hex
+      </message>
+      <message name="IDS_NTP_CUSTOMIZATION_HINT_TO_TYPE_COLOR_HEX" desc="Hint in the edit box to ask users to type a color hex.">
+        Type hex here
       </message>
 
       <!-- Time Last Accessed strings -->

@@ -8,11 +8,11 @@
 #include "base/types/expected_macros.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/isolated_web_apps/commands/isolated_web_app_install_command_helper.h"
+#include "chrome/browser/web_applications/isolated_web_apps/install/pending_install_info.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_features.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_trust_checker.h"
-#include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_update_manager.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
-#include "chrome/browser/web_applications/isolated_web_apps/pending_install_info.h"
+#include "chrome/browser/web_applications/isolated_web_apps/update/isolated_web_app_update_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_ui_manager.h"
@@ -22,7 +22,6 @@
 #include "components/webapps/isolated_web_apps/types/url_loading_types.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/isolated_web_apps_policy.h"
-#include "content/public/browser/storage_partition_config.h"
 #include "content/public/browser/web_contents.h"
 
 namespace web_app {
@@ -95,7 +94,7 @@ void GetIwaSourceForRequestImpl(
     if (const auto& source =
             IsolatedWebAppPendingInstallInfo::FromWebContents(*web_contents)
                 .source()) {
-      if (request.url.path() == kInstallPagePath) {
+      if (request.url.GetPath() == kInstallPagePath) {
         std::move(callback).Run(
             GeneratedResponse{.response_body = kInstallPageContent});
       } else {
@@ -117,7 +116,7 @@ void GetIwaSourceForRequestImpl(
         // succeeds, we send the request to the updated version. If it fails, we
         // send the request to the previous version and rely on the update
         // system to retry the update at a later point.
-        base::IgnoreArgs<IsolatedWebAppUpdateApplyTask::CompletionStatus>(
+        base::IgnoreArgs<IsolatedWebAppApplyUpdateCommandResult>(
             base::BindOnce(&GetIwaSource, profile, iwa_id)
                 .Then(std::move(callback))));
     return;
@@ -139,19 +138,6 @@ base::expected<void, std::string> ChromeIwaClient::ValidateTrust(
     bool dev_mode) {
   return IsolatedWebAppTrustChecker::IsTrusted(
       *Profile::FromBrowserContext(browser_context), web_bundle_id, dev_mode);
-}
-
-base::expected<web_package::SignedWebBundleId, std::string>
-ChromeIwaClient::CreateWebBundleIdFromURL(const GURL& url) {
-  return IsolatedWebAppUrlInfo::Create(url).transform(
-      [](const auto& url_info) { return url_info.web_bundle_id(); });
-}
-
-GURL ChromeIwaClient::CreateBaseURLForWebBundleId(
-    const web_package::SignedWebBundleId& web_bundle_id) {
-  return GURL(
-      base::StrCat({chrome::kIsolatedAppScheme, url::kStandardSchemeSeparator,
-                    web_bundle_id.id()}));
 }
 
 void ChromeIwaClient::RunWhenAppCloses(
@@ -178,15 +164,6 @@ void ChromeIwaClient::GetIwaSourceForRequest(
       FROM_HERE, base::BindOnce(&GetIwaSourceForRequestImpl,
                                 profile->GetWeakPtr(), web_bundle_id, request,
                                 frame_tree_node, std::move(callback)));
-}
-
-content::StoragePartition* ChromeIwaClient::GetStoragePartition(
-    content::BrowserContext* browser_context,
-    const web_package::SignedWebBundleId& web_bundle_id) {
-  return browser_context->GetStoragePartition(
-      IsolatedWebAppUrlInfo::CreateFromSignedWebBundleId(web_bundle_id)
-          .storage_partition_config(browser_context),
-      /*can_create=*/false);
 }
 
 }  // namespace web_app

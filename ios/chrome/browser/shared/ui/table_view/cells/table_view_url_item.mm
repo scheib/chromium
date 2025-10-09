@@ -41,7 +41,7 @@ const int kMaxNumberOfLinesForCellTitleLabel = 2;
   return self;
 }
 
-- (void)configureCell:(TableViewCell*)tableCell
+- (void)configureCell:(LegacyTableViewCell*)tableCell
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:tableCell withStyler:styler];
 
@@ -71,7 +71,7 @@ const int kMaxNumberOfLinesForCellTitleLabel = 2;
   if (!self.URL) {
     return @"";
   }
-  return base::SysUTF8ToNSString(self.URL.gurl.host());
+  return base::SysUTF8ToNSString(self.URL.gurl.GetHost());
 }
 
 #pragma mark Private

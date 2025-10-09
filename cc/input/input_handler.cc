@@ -16,6 +16,7 @@
 #include "base/types/optional_ref.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
+#include "cc/base/math_util.h"
 #include "cc/input/browser_controls_offset_manager.h"
 #include "cc/input/browser_controls_offset_tag_modifications.h"
 #include "cc/input/scroll_elasticity_helper.h"
@@ -560,9 +561,15 @@ void InputHandler::ScrollEnd(ScrollNode* scroll_node, bool should_snap) {
   } else if (latched_node) {
     scrollbar_controller_->ResetState();
 
+    // Scroll end will be deferred if there is an overscroll animation and the
+    // scrolling node need be snapped.
+    bool overscroll_snapped_node =
+        scroll_elasticity_helper_ &&
+        !scroll_elasticity_helper_->StretchAmount().IsZero() &&
+        latched_node->snap_container_data.has_value();
     // Note that if we deferred the scroll end then we should not snap. We will
     // snap once we deliver the deferred scroll end.
-    if (GetAnimatingNodeForCurrentScrollingNode()) {
+    if (GetAnimatingNodeForCurrentScrollingNode() || overscroll_snapped_node) {
       DCHECK(!deferred_scroll_end_);
       deferred_scroll_end_ = true;
       return;
@@ -663,6 +670,15 @@ InputHandlerPointerResult InputHandler::MouseMoveAt(
     compositor_delegate_->ScrollbarAnimationMouseLeave(
         scroll_element_id_mouse_currently_over_);
     scroll_element_id_mouse_currently_over_ = scroll_element_id;
+
+    // Do not send mouse enter event for inner and outer viewport scrollbars to
+    // avoid unnecessary flashes. Only children scrollbars should flash when
+    // mouse enters.
+    if (!scroll_node->scrolls_inner_viewport &&
+        !scroll_node->scrolls_outer_viewport &&
+        compositor_delegate_->GetSettings().scrollbar_flash_when_mouse_enter) {
+      compositor_delegate_->DidMouseEnterNonViewportScroller(scroll_element_id);
+    }
   }
 
   compositor_delegate_->ScrollbarAnimationMouseMove(scroll_element_id,
@@ -855,14 +871,22 @@ bool InputHandler::HasBlockingWheelEventHandlerAt(
 
 InputHandler::TouchStartOrMoveEventListenerType
 InputHandler::EventListenerTypeForTouchStartOrMoveAt(
-    const gfx::Point& viewport_point,
+    const gfx::Rect& viewport_touch_rect,
     TouchAction* out_touch_action) {
-  gfx::PointF device_viewport_point = gfx::ScalePoint(
-      gfx::PointF(viewport_point), compositor_delegate_->DeviceScaleFactor());
+  gfx::RectF device_viewport_touch_rect =
+      gfx::ScaleRect(gfx::RectF(viewport_touch_rect),
+                     compositor_delegate_->DeviceScaleFactor());
 
+  // For stylus "near-miss" scenarios, we need to do a proximity based hit test.
+  // The compositor has incomplete information, as it's not aware of the DOM
+  // node type, layering order, nor the actual shape of the hit-test area for
+  // the content and isn't capable of providing a definitive answer except for
+  // "certainly not writable" or "possibly writable" (at-least one region may
+  // allow handwriting). If the compositor finds a region that may allow
+  // handwriting then the main thread must perform a more precise hit-test.
   LayerImpl* layer_impl_with_touch_handler =
       ActiveTree().FindLayerThatIsHitByPointInTouchHandlerRegion(
-          device_viewport_point);
+          device_viewport_touch_rect);
 
   if (layer_impl_with_touch_handler == nullptr) {
     if (out_touch_action)
@@ -879,11 +903,14 @@ InputHandler::EventListenerTypeForTouchStartOrMoveAt(
     gfx::Transform inverse_layer_screen_space =
         layer_screen_space_transform.GetCheckedInverse();
     bool clipped = false;
-    gfx::PointF hit_test_point_in_layer_space = MathUtil::ProjectPoint(
-        inverse_layer_screen_space, device_viewport_point, &clipped);
+    const gfx::RectF hit_test_rect_in_layer_space =
+        MathUtil::MapQuad(inverse_layer_screen_space,
+                          gfx::QuadF(device_viewport_touch_rect), &clipped)
+            .BoundingBox();
     const auto& region = layer_impl_with_touch_handler->touch_action_region();
-    gfx::Point point = gfx::ToRoundedPoint(hit_test_point_in_layer_space);
-    *out_touch_action = region.GetAllowedTouchAction(point);
+    *out_touch_action = region.GetAllowedTouchAction(
+        gfx::Rect(gfx::ToRoundedPoint(hit_test_rect_in_layer_space.origin()),
+                  gfx::ToRoundedSize(hit_test_rect_in_layer_space.size())));
   }
 
   if (!IsCurrentlyScrolling()) {
@@ -895,8 +922,11 @@ InputHandler::EventListenerTypeForTouchStartOrMoveAt(
   // pointer and has an event handler, otherwise it is null. We want to compare
   // the most inner layer we are hitting on which may not have an event listener
   // with the actual scrolling layer.
-  LayerImpl* layer_impl =
-      ActiveTree().FindLayerThatIsHitByPoint(device_viewport_point);
+  // TODO(crbug.com/445727120): Update FindLayerThatIsHitByPoint to work with
+  // rects in order to find layers that are potentially in close proximity to
+  // the touch_rect.
+  LayerImpl* layer_impl = ActiveTree().FindLayerThatIsHitByPoint(
+      device_viewport_touch_rect.CenterPoint());
 
   ScrollNode* currently_scroll_node = CurrentlyScrollingNode();
   if (currently_scroll_node &&
@@ -1103,6 +1133,19 @@ void InputHandler::NotifyInputEvent(bool is_fling) {
   compositor_delegate_->NotifyInputEvent(is_fling);
 }
 
+void InputHandler::UpdateLastLatchedScrollSourceType() {
+  if (has_scrolled_by_wheel_ || has_scrolled_by_touch_ ||
+      has_scrolled_by_precisiontouchpad_ || has_scrolled_by_scrollbar_ ||
+      has_pinch_zoomed_) {
+    // On the compositor we set all scrollbar scrolls as relatives, the correct
+    // type for scrollbar scrolls is computed in
+    // `ScrollableArea::DidCompositorScroll`.
+    last_latched_scroll_source_type_ = ScrollSourceType::kRelativeScroll;
+    return;
+  }
+  last_latched_scroll_source_type_ = ScrollSourceType::kNone;
+}
+
 //
 // =========== InputDelegateForCompositor Interface
 //
@@ -1132,6 +1175,8 @@ void InputHandler::ProcessCommitDeltas(
       commit_data, inner_viewport_scroll_element_id,
       compositor_delegate_->GetSettings().commit_fractional_scroll_deltas,
       snapped_elements, main_thread_mutator_host);
+
+  commit_data->scroll_type = last_latched_scroll_source_type_;
 
   // Record and reset scroll source flags.
   DCHECK(!commit_data->manipulation_info);
@@ -1170,6 +1215,7 @@ void InputHandler::ProcessCommitDeltas(
   if (commit_data->scroll_end_data.done_containers.contains(
           last_latched_scroller_)) {
     last_latched_scroller_ = ElementId();
+    last_latched_scroll_source_type_ = ScrollSourceType::kNone;
   }
 }
 
@@ -1309,6 +1355,13 @@ void InputHandler::ScrollOffsetAnimationFinished(ElementId element_id) {
   if (deferred_scroll_end_) {
     ScrollEnd(/*should_snap=*/false);
     return;
+  }
+}
+
+void InputHandler::ElasticOverscrollAnimationFinished() {
+  if (CurrentlyScrollingNode() &&
+      !IsAnimatingForSnap(CurrentlyScrollingNode()->element_id)) {
+    ScrollEnd(true /* should_snap */);
   }
 }
 
@@ -2150,6 +2203,7 @@ void InputHandler::DidLatchToScroller(const ScrollState& scroll_state,
   compositor_delegate_->DidStartScroll();
 
   UpdateScrollSourceInfo(scroll_state, type);
+  UpdateLastLatchedScrollSourceType();
 }
 
 bool InputHandler::CanConsumeDelta(const ScrollState& scroll_state,

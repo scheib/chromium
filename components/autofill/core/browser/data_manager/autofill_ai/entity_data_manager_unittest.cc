@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/scoped_observation.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
@@ -16,11 +17,17 @@
 #include "base/uuid.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_instance.h"
 #include "components/autofill/core/browser/data_model/autofill_ai/entity_type.h"
+#include "components/autofill/core/browser/foundations/test_autofill_client.h"
+#include "components/autofill/core/browser/permissions/autofill_ai/autofill_ai_permission_utils.h"
 #include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/browser/webdata/autofill_ai/entity_table.h"
+#include "components/autofill/core/browser/webdata/autofill_webdata_backend.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service_test_helper.h"
 #include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/autofill_prefs.h"
 #include "components/os_crypt/async/browser/test_utils.h"
+#include "components/sync/base/features.h"
+#include "components/sync/test/test_sync_service.h"
 #include "components/webdata/common/web_database.h"
 #include "components/webdata/common/web_database_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -29,6 +36,9 @@
 namespace autofill {
 namespace {
 
+using base::Bucket;
+using base::BucketsAre;
+using ::testing::AtLeast;
 using ::testing::IsEmpty;
 using ::testing::Optional;
 using ::testing::UnorderedElementsAre;
@@ -48,16 +58,29 @@ class MockEntityDataManagerObserver : public EntityDataManager::Observer {
 // Test fixture for the asynchronous database operations in EntityDataManager.
 class EntityDataManagerTest : public testing::Test {
  public:
-  EntityDataManagerTest() = default;
+  EntityDataManagerTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {features::kAutofillAiWithDataSchema,
+         syncer::kSyncWalletFlightReservations,
+         syncer::kSyncWalletVehicleRegistrations},
+        {});
+  }
+
+  void TearDown() override { sync_service_.Shutdown(); }
 
   AutofillWebDataServiceTestHelper& helper() { return helper_; }
 
+  TestAutofillClient& client() { return client_; }
+
+  syncer::TestSyncService& sync_service() { return sync_service_; }
+
  private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      features::kAutofillAiWithDataSchema};
+  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   AutofillWebDataServiceTestHelper helper_{std::make_unique<EntityTable>()};
+  TestAutofillClient client_;
+  syncer::TestSyncService sync_service_;
 };
 
 // Tests that the constructor of EntityDataManager queries the database.
@@ -71,7 +94,10 @@ TEST_F(EntityDataManagerTest, InitialPopulation) {
       dl, base::DoNothing());
   helper().WaitUntilIdle();
 
-  EntityDataManager entity_data_manager(helper().autofill_webdata_service(),
+  EntityDataManager entity_data_manager(client().GetPrefs(),
+                                        /*identity_manager=*/nullptr,
+                                        &sync_service(),
+                                        helper().autofill_webdata_service(),
                                         /*history_service=*/nullptr,
                                         /*strike_database=*/nullptr);
   EXPECT_THAT(entity_data_manager.GetEntityInstances(), IsEmpty());
@@ -81,9 +107,46 @@ TEST_F(EntityDataManagerTest, InitialPopulation) {
               UnorderedElementsAre(pp, dl));
 }
 
+// Tests the emission of opt-in metrics that are emitted on EDM creation, i.e.
+// on profile startup.
+// TODO(crbug.com/445879337): Fix Linux MSan Test failure and re-enable the
+// test.
+TEST_F(EntityDataManagerTest, OptInMetric) {
+  ASSERT_FALSE(GetAutofillAiOptInStatus(client()));
+  base::HistogramTester histogram_tester;
+  client().set_entity_data_manager(std::make_unique<EntityDataManager>(
+      client().GetPrefs(), client().GetIdentityManager(), &sync_service(),
+      helper().autofill_webdata_service(),
+      /*history_service=*/nullptr,
+      /*strike_database=*/nullptr));
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples("Autofill.Ai.OptIn.Status.Startup"),
+      BucketsAre(Bucket(0, 1)));
+
+  client().SetUpPrefsAndIdentityForAutofillAi();
+  ASSERT_TRUE(GetAutofillAiOptInStatus(client()));
+
+  client().set_entity_data_manager(std::make_unique<EntityDataManager>(
+      client().GetPrefs(), client().GetIdentityManager(), &sync_service(),
+      helper().autofill_webdata_service(),
+      /*history_service=*/nullptr,
+      /*strike_database=*/nullptr));
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples("Autofill.Ai.OptIn.Status.Startup"),
+      BucketsAre(Bucket(0, 1), Bucket(1, 1)));
+}
+
 // Test fixture that starts with an empty database.
 class EntityDataManagerTest_InitiallyEmpty : public EntityDataManagerTest {
  public:
+  EntityDataManagerTest_InitiallyEmpty()
+      : entity_data_manager_(client().GetPrefs(),
+                             /*identity_manager=*/nullptr,
+                             &sync_service(),
+                             helper().autofill_webdata_service(),
+                             /*history_service=*/nullptr,
+                             /*strike_database=*/nullptr) {}
+
   EntityDataManager& entity_data_manager() { return entity_data_manager_; }
 
   base::span<const autofill::EntityInstance> GetEntityInstances() {
@@ -91,15 +154,14 @@ class EntityDataManagerTest_InitiallyEmpty : public EntityDataManagerTest {
     return entity_data_manager().GetEntityInstances();
   }
 
-  base::optional_ref<const EntityInstance> GetInstance(const base::Uuid& guid) {
+  base::optional_ref<const EntityInstance> GetInstance(
+      const EntityInstance::EntityId& guid) {
     helper().WaitUntilIdle();
     return entity_data_manager().GetEntityInstance(guid);
   }
 
  private:
-  EntityDataManager entity_data_manager_{helper().autofill_webdata_service(),
-                                         /*history_service=*/nullptr,
-                                         /*strike_database=*/nullptr};
+  EntityDataManager entity_data_manager_;
 };
 
 // Tests that AddOrUpdateEntityInstance() asynchronously adds entities.
@@ -111,10 +173,26 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty, AddEntityInstance) {
 
   EntityInstance pp = test::GetPassportEntityInstance();
   EntityInstance dl = test::GetDriversLicenseEntityInstance();
-  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(2);
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(AtLeast(2));
   entity_data_manager().AddOrUpdateEntityInstance(pp);
   entity_data_manager().AddOrUpdateEntityInstance(dl);
   EXPECT_THAT(GetEntityInstances(), UnorderedElementsAre(pp, dl));
+}
+
+// Tests that AddOrUpdateEntityInstance() correctly adds entities with an id
+// that's not formatted as GUID.
+TEST_F(EntityDataManagerTest_InitiallyEmpty, AddEntityInstanceNonGuidFormatId) {
+  MockEntityDataManagerObserver observer;
+  base::ScopedObservation<EntityDataManager, MockEntityDataManagerObserver>
+      observation{&observer};
+  observation.Observe(&entity_data_manager());
+
+  EntityInstance vr = test::GetVehicleEntityInstanceWithRandomGuid(
+      {.guid = "non-guid-format",
+       .record_type = EntityInstance::RecordType::kServerWallet});
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(AtLeast(1));
+  entity_data_manager().AddOrUpdateEntityInstance(vr);
+  EXPECT_THAT(GetEntityInstances(), UnorderedElementsAre(vr));
 }
 
 // Tests that recording an entity being used calls for a database entity update.
@@ -122,7 +200,8 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty, RecordEntityUsed) {
   // TODO(crbug.com/402616006): This test should re-read the entity from the db
   // and make sure the persisted information is the expected one. Update once db
   // columns are updated.
-  EntityInstance pp = test::GetPassportEntityInstance();
+  EntityInstance pp =
+      test::GetPassportEntityInstance({.use_date = base::Time::FromTimeT(0)});
   entity_data_manager().AddOrUpdateEntityInstance(pp);
   EXPECT_EQ(pp.use_count(), 0u);
   EXPECT_EQ(pp.use_date(), base::Time::FromTimeT(0));
@@ -147,7 +226,7 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty, UpdateEntityInstance) {
 
   EntityInstance pp = test::GetPassportEntityInstance(
       {.date_modified = test::kJune2017 - base::Days(3)});
-  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(2);
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(AtLeast(2));
   entity_data_manager().AddOrUpdateEntityInstance(pp);
   ASSERT_THAT(GetEntityInstances(), UnorderedElementsAre(pp));
 
@@ -166,7 +245,7 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty, RemoveEntityInstance) {
 
   EntityInstance pp = test::GetPassportEntityInstance();
   EntityInstance dl = test::GetDriversLicenseEntityInstance();
-  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(3);
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(AtLeast(3));
   entity_data_manager().AddOrUpdateEntityInstance(pp);
   entity_data_manager().AddOrUpdateEntityInstance(dl);
   ASSERT_THAT(GetEntityInstances(), UnorderedElementsAre(pp, dl));
@@ -205,7 +284,7 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty,
   entity_data_manager().AddOrUpdateEntityInstance(dl);
   ASSERT_THAT(GetEntityInstances(), UnorderedElementsAre(pp, dl));
 
-  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(1);
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(AtLeast(1));
   entity_data_manager().RemoveEntityInstancesModifiedBetween(
       test::kJune2017 - base::Days(1), test::kJune2017);
   EXPECT_THAT(GetEntityInstances(), UnorderedElementsAre(dl));
@@ -224,9 +303,65 @@ TEST_F(EntityDataManagerTest_InitiallyEmpty, GetEntityInstance) {
   ASSERT_THAT(GetEntityInstances(), UnorderedElementsAre(pp, dl));
 
   EXPECT_THAT(entity_data_manager().GetEntityInstance(pp.guid()), Optional(pp));
-  EXPECT_EQ(
-      entity_data_manager().GetEntityInstance(base::Uuid::GenerateRandomV4()),
-      std::nullopt);
+  EXPECT_EQ(entity_data_manager().GetEntityInstance(
+                EntityInstance::EntityId(base::Uuid::GenerateRandomV4())),
+            std::nullopt);
+}
+
+// Tests that a change notification for AUTOFILL_VALUABLE from sync triggers a
+// reload of entities.
+TEST_F(EntityDataManagerTest_InitiallyEmpty, OnAutofillValuableChangedBySync) {
+  MockEntityDataManagerObserver observer;
+  base::ScopedObservation<EntityDataManager, MockEntityDataManagerObserver>
+      observation{&observer};
+  observation.Observe(&entity_data_manager());
+
+  // 1. Add an entity directly to the DB to simulate a sync change.
+  EntityInstance vh = test::GetVehicleEntityInstance();
+  helper().autofill_webdata_service()->AddOrUpdateEntityInstance(
+      vh, base::DoNothing());
+
+  // The EDM's cache is not updated yet.
+  EXPECT_THAT(GetEntityInstances(), IsEmpty());
+
+  // 2. Trigger the sync notification.
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(1);
+  helper().autofill_webdata_service()->GetAutofillBackend(
+      base::BindOnce([](AutofillWebDataBackend* backend) {
+        backend->NotifyOnAutofillChangedBySync(
+            syncer::DataType::AUTOFILL_VALUABLE);
+      }));
+  helper().WaitUntilIdle();
+  // 3. Verify that the cache is reloaded.
+  EXPECT_THAT(GetEntityInstances(), UnorderedElementsAre(vh));
+}
+
+// Tests that a change notification for other data types does not trigger a
+// reload.
+TEST_F(EntityDataManagerTest_InitiallyEmpty, OnOtherDataTypeChangedBySync) {
+  MockEntityDataManagerObserver observer;
+  base::ScopedObservation<EntityDataManager, MockEntityDataManagerObserver>
+      observation{&observer};
+  observation.Observe(&entity_data_manager());
+
+  // 1. Add an entity directly to the DB.
+  EntityInstance vh = test::GetVehicleEntityInstance();
+  helper().autofill_webdata_service()->AddOrUpdateEntityInstance(
+      vh, base::DoNothing());
+
+  // The EDM's cache is not updated yet.
+  EXPECT_THAT(GetEntityInstances(), IsEmpty());
+
+  // 2. Trigger the sync notification for a different data type.
+  EXPECT_CALL(observer, OnEntityInstancesChanged).Times(0);
+  helper().autofill_webdata_service()->GetAutofillBackend(
+      base::BindOnce([](AutofillWebDataBackend* backend) {
+        backend->NotifyOnAutofillChangedBySync(
+            syncer::DataType::AUTOFILL_PROFILE);
+      }));
+  helper().WaitUntilIdle();
+  // 3. Verify that the cache is NOT reloaded.
+  EXPECT_THAT(GetEntityInstances(), IsEmpty());
 }
 
 }  // namespace

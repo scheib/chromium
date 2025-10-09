@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "base/compiler_specific.h"
 #include "base/containers/span.h"
 #include "base/containers/to_vector.h"
@@ -23,7 +24,9 @@
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "build/build_config.h"
 #include "components/sync/base/data_type.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/time.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
 #include "components/sync/model/data_type_activation_request.h"
@@ -126,15 +129,15 @@ SpecificsToPhoneAsASecurityKeyInfo(const DeviceInfoSpecifics& specifics) {
   return to;
 }
 
-std::optional<base::Time> SpecificsToFloatingWorkspaceLastSigninTime(
+std::optional<base::Time> SpecificsToAutoSignOutLastSigninTimestamp(
     const DeviceInfoSpecifics& specifics) {
   if (!specifics.feature_fields()
-           .has_floating_workspace_last_signin_time_windows_epoch_micros()) {
+           .has_auto_sign_out_last_signin_timestamp_windows_epoch_micros()) {
     return std::nullopt;
   }
   return base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(
       specifics.feature_fields()
-          .floating_workspace_last_signin_time_windows_epoch_micros()));
+          .auto_sign_out_last_signin_timestamp_windows_epoch_micros()));
 }
 
 std::string GetVersionNumberFromSpecifics(
@@ -156,22 +159,15 @@ bool IsChromeClient(const DeviceInfoSpecifics& specifics) {
 
 // Converts DeviceInfoSpecifics into DeviceInfo.
 DeviceInfo SpecificsToModel(const DeviceInfoSpecifics& specifics) {
-  DeviceInfo::FormFactor device_form_factor;
-  if (specifics.has_device_form_factor()) {
-    device_form_factor = ToDeviceInfoFormFactor(specifics.device_form_factor());
-  } else {
-    // Fallback to derive from old device type enum.
-    device_form_factor =
-        DeriveFormFactorFromDeviceType(specifics.device_type());
-  }
-  DeviceInfo::OsType os_type;
-  if (specifics.has_os_type()) {
-    os_type = ToDeviceInfoOsType(specifics.os_type());
-  } else {
-    // Fallback to derive from old device type enum.
-    os_type = DeriveOsFromDeviceType(specifics.device_type(),
-                                     specifics.manufacturer());
-  }
+  const DeviceInfo::FormFactor device_form_factor =
+      specifics.has_device_form_factor()
+          ? ToDeviceInfoFormFactor(specifics.device_form_factor())
+          : DeriveFormFactorFromDeviceType(specifics.device_type());
+  const DeviceInfo::OsType os_type =
+      specifics.has_os_type()
+          ? ToDeviceInfoOsType(specifics.os_type())
+          : DeriveOsFromDeviceType(specifics.device_type(),
+                                   specifics.manufacturer());
   return DeviceInfo(
       specifics.cache_guid(), specifics.client_name(),
       GetVersionNumberFromSpecifics(specifics), specifics.sync_user_agent(),
@@ -187,7 +183,7 @@ DeviceInfo SpecificsToModel(const DeviceInfoSpecifics& specifics) {
       specifics.invalidation_fields().instance_id_token(),
       GetDataTypeSetFromSpecificsFieldNumberList(
           specifics.invalidation_fields().interested_data_type_ids()),
-      SpecificsToFloatingWorkspaceLastSigninTime(specifics));
+      SpecificsToAutoSignOutLastSigninTimestamp(specifics));
 }
 
 // Allocate a EntityData and copies |specifics| into it.
@@ -246,10 +242,10 @@ std::unique_ptr<DeviceInfoSpecifics> MakeLocalDeviceSpecifics(
       info.send_tab_to_self_receiving_enabled());
   feature_fields->set_send_tab_to_self_receiving_type(
       info.send_tab_to_self_receiving_type());
-  if (info.floating_workspace_last_signin_timestamp().has_value()) {
+  if (info.auto_sign_out_last_signin_timestamp().has_value()) {
     feature_fields
-        ->set_floating_workspace_last_signin_time_windows_epoch_micros(
-            info.floating_workspace_last_signin_timestamp()
+        ->set_auto_sign_out_last_signin_timestamp_windows_epoch_micros(
+            info.auto_sign_out_last_signin_timestamp()
                 .value()
                 .ToDeltaSinceWindowsEpoch()
                 .InMicroseconds());
@@ -292,6 +288,18 @@ std::unique_ptr<DeviceInfoSpecifics> MakeLocalDeviceSpecifics(
   return specifics;
 }
 
+bool ArePaaskInfosEqual(
+    const std::optional<DeviceInfo::PhoneAsASecurityKeyInfo>& a,
+    const std::optional<DeviceInfo::PhoneAsASecurityKeyInfo>& b) {
+  if (a.has_value() != b.has_value()) {
+    return false;
+  }
+  if (!a.has_value()) {
+    return true;
+  }
+  return a->NonRotatingFieldsEqual(*b);
+}
+
 // Returns true if |stored| is similar enough to |current| that |current|
 // needn't be uploaded.
 bool StoredDeviceInfoStillAccurate(const DeviceInfo* stored,
@@ -313,18 +321,24 @@ bool StoredDeviceInfoStillAccurate(const DeviceInfo* stored,
          current->send_tab_to_self_receiving_type() ==
              stored->send_tab_to_self_receiving_type() &&
          current->sharing_info() == stored->sharing_info() &&
-         current->paask_info().has_value() ==
-             stored->paask_info().has_value() &&
-         (!current->paask_info().has_value() ||
-          current->paask_info()->NonRotatingFieldsEqual(
-              stored->paask_info().value())) &&
+         ArePaaskInfosEqual(current->paask_info(), stored->paask_info()) &&
          current->fcm_registration_token() ==
              stored->fcm_registration_token() &&
          current->interested_data_types() == stored->interested_data_types() &&
-         current->floating_workspace_last_signin_timestamp().has_value() ==
-             stored->floating_workspace_last_signin_timestamp().has_value() &&
-         current->floating_workspace_last_signin_timestamp() ==
-             stored->floating_workspace_last_signin_timestamp();
+         current->auto_sign_out_last_signin_timestamp() ==
+             stored->auto_sign_out_last_signin_timestamp();
+}
+
+int CalculateMaxConcurrentEvents(const std::multimap<base::Time, int>& events) {
+  int max_overlapping = 0;
+  int overlapping = 0;
+  for (const auto& [time, value] : events) {
+    overlapping += value;
+    DCHECK_LE(0, overlapping);
+    max_overlapping = std::max(max_overlapping, overlapping);
+  }
+  DCHECK_EQ(overlapping, 0);
+  return max_overlapping;
 }
 
 }  // namespace
@@ -353,11 +367,7 @@ DeviceInfoSyncBridge::DeviceInfoSyncBridge(
                                        weak_ptr_factory_.GetWeakPtr()));
 }
 
-DeviceInfoSyncBridge::~DeviceInfoSyncBridge() {
-  for (auto& observer : observers_) {
-    observer.OnDeviceInfoShutdown();
-  }
-}
+DeviceInfoSyncBridge::~DeviceInfoSyncBridge() = default;
 
 LocalDeviceInfoProvider* DeviceInfoSyncBridge::GetLocalDeviceInfoProvider() {
   return local_device_info_provider_.get();
@@ -703,7 +713,20 @@ std::string DeviceInfoSyncBridge::GetLocalClientName() const {
     }
   }
 
-  return sync_mode_ == SyncMode::kFull
+  bool can_use_personalizable_name =
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+      // On mobile, all sign-ins are considered explicit and thus can use the
+      // personalizable device name.
+      true;
+#else
+      // On desktop, sign-ins are explicit for Sync-the-feature users, or if
+      // kReplaceSyncPromosWithSignInPromos is enabled. (Or if
+      // prefs::kExplicitBrowserSignin is true, but that information is not
+      // easily available here and not worth the plumbing.)
+      (sync_mode_ == SyncMode::kFull) ||
+      base::FeatureList::IsEnabled(kReplaceSyncPromosWithSignInPromos);
+#endif
+  return can_use_personalizable_name
              ? local_device_name_info_.personalizable_name
              : local_device_name_info_.model_name;
 }
@@ -926,7 +949,7 @@ void DeviceInfoSyncBridge::CommitAndNotify(std::unique_ptr<WriteBatch> batch,
   }
 }
 
-std::map<DeviceInfo::FormFactor, int>
+absl::flat_hash_map<DeviceInfo::FormFactor, int>
 DeviceInfoSyncBridge::CountActiveDevicesByType() const {
   // The algorithm below leverages sync timestamps to give a tight lower bound
   // (modulo clock skew) on how many distinct devices are currently active
@@ -944,9 +967,9 @@ DeviceInfoSyncBridge::CountActiveDevicesByType() const {
   // The series of relevant events over time, the value being +1 when a device
   // was seen for the first time, and -1 when a device was seen last.
   const base::Time now = base::Time::Now();
-  std::map<std::pair<DeviceInfo::FormFactor, DeviceInfo::OsType>,
-           std::multimap<base::Time, int>>
-      relevant_events;
+  absl::flat_hash_map<std::pair<DeviceInfo::FormFactor, DeviceInfo::OsType>,
+                      std::multimap<base::Time, int>>
+      events_by_type;
 
   for (const auto& [cache_guid, device_info_and_specifics] : all_data_) {
     if (!IsChromeClient(device_info_and_specifics.specifics())) {
@@ -969,28 +992,15 @@ DeviceInfoSyncBridge::CountActiveDevicesByType() const {
           device_info_and_specifics.device_info().os_type();
       DeviceInfo::FormFactor form_factor =
           device_info_and_specifics.device_info().form_factor();
-      relevant_events[{form_factor, os_type}].emplace(begin, 1);
-      relevant_events[{form_factor, os_type}].emplace(end, -1);
+      events_by_type[{form_factor, os_type}].emplace(begin, 1);
+      events_by_type[{form_factor, os_type}].emplace(end, -1);
     }
   }
 
-  std::map<std::pair<DeviceInfo::FormFactor, DeviceInfo::OsType>, int>
-      device_count_by_type;
-  for (const auto& [type, events] : relevant_events) {
-    int max_overlapping = 0;
-    int overlapping = 0;
-    for (const auto& [time, value] : events) {
-      overlapping += value;
-      DCHECK_LE(0, overlapping);
-      max_overlapping = std::max(max_overlapping, overlapping);
-    }
-    device_count_by_type[type] = max_overlapping;
-    DCHECK_EQ(overlapping, 0);
-  }
-
-  std::map<DeviceInfo::FormFactor, int> device_count_by_form_factor;
-  for (const auto& [type, counts] : device_count_by_type) {
-    device_count_by_form_factor[type.first] += counts;
+  absl::flat_hash_map<DeviceInfo::FormFactor, int> device_count_by_form_factor;
+  for (const auto& [type, events] : events_by_type) {
+    device_count_by_form_factor[type.first] +=
+        CalculateMaxConcurrentEvents(events);
   }
 
   return device_count_by_form_factor;

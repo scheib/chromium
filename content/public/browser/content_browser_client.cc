@@ -27,6 +27,7 @@
 #include "components/language_detection/core/browser/language_detection_model_provider.h"
 #include "content/browser/ai/echo_ai_manager_impl.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/webauth/default_authenticator_request_client_delegate.h"
 #include "content/public/browser/anchor_element_preconnect_delegate.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
@@ -43,6 +44,7 @@
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/prefetch_service_delegate.h"
 #include "content/public/browser/prerender_web_contents_delegate.h"
+#include "content/public/browser/process_selection_deferring_condition.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/responsiveness_calculator_delegate.h"
 #include "content/public/browser/sms_fetcher.h"
@@ -76,7 +78,6 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/web_transport.mojom.h"
-#include "services/video_effects/public/cpp/buildflags.h"
 #include "storage/browser/quota/quota_manager.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/features_generated.h"
@@ -100,10 +101,6 @@
 #include "content/public/browser/authenticator_request_client_delegate.h"
 #include "third_party/blink/public/mojom/installedapp/related_application.mojom.h"
 #endif
-
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-#include "services/video_effects/public/mojom/video_effects_processor.mojom-forward.h"
-#endif  // BUILDFLAG(ENABLE_VIDEO_EFFECTS)
 
 using AttributionReportType =
     content::ContentBrowserClient::AttributionReportingOsRegistrar;
@@ -152,10 +149,11 @@ bool ContentBrowserClient::CanShutdownGpuProcessNowOnIOThread() {
   return false;
 }
 
-GURL ContentBrowserClient::GetEffectiveURL(BrowserContext* browser_context,
-                                           const GURL& url) {
+std::optional<GURL> ContentBrowserClient::GetEffectiveURL(
+    BrowserContext* browser_context,
+    const GURL& url) {
   DCHECK(browser_context);
-  return url;
+  return std::nullopt;
 }
 
 bool ContentBrowserClient::ShouldCompareEffectiveURLsForSiteInstanceSelection(
@@ -184,7 +182,7 @@ bool ContentBrowserClient::ShouldUseProcessPerSite(
 }
 
 bool ContentBrowserClient::
-    ShouldReuseExistingProcessForNewMainFrameSiteInstance(
+    ShouldReuseAnyExistingProcessForNewMainFrameSiteInstance(
         BrowserContext* browser_context,
         const GURL& site_instance_original_url) {
   DCHECK(browser_context);
@@ -418,10 +416,9 @@ bool ContentBrowserClient::IsIsolatedContextAllowedForUrl(
   return false;
 }
 
-void ContentBrowserClient::CheckGetAllScreensMediaAllowed(
-    content::RenderFrameHost* render_frame_host,
-    base::OnceCallback<void(bool)> callback) {
-  std::move(callback).Run(false);
+bool ContentBrowserClient::IsMultiCaptureAllowed(
+    content::RenderFrameHost* render_frame_host) {
+  return false;
 }
 
 size_t ContentBrowserClient::GetMaxRendererProcessCountOverride() {
@@ -540,6 +537,12 @@ bool ContentBrowserClient::OverrideWebPreferencesAfterNavigation(
     WebContents* web_contents,
     SiteInstance& main_frame_site,
     blink::web_pref::WebPreferences* prefs) {
+  return false;
+}
+
+bool ContentBrowserClient::WebPreferencesNeedUpdateForColorRelatedStateChanges(
+    WebContents& web_contents,
+    const SiteInstance& main_frame_site) const {
   return false;
 }
 
@@ -1009,6 +1012,12 @@ ContentBrowserClient::CreateCommitDeferringConditionsForNavigation(
   return std::vector<std::unique_ptr<CommitDeferringCondition>>();
 }
 
+std::vector<std::unique_ptr<ProcessSelectionDeferringCondition>>
+ContentBrowserClient::CreateProcessSelectionDeferringConditionsForNavigation(
+    NavigationHandle& navigation_handle) {
+  return std::vector<std::unique_ptr<ProcessSelectionDeferringCondition>>();
+}
+
 std::unique_ptr<NavigationUIData> ContentBrowserClient::GetNavigationUIData(
     NavigationHandle* navigation_handle) {
   return nullptr;
@@ -1048,10 +1057,6 @@ std::wstring ContentBrowserClient::GetLPACCapabilityNameForNetworkService() {
   // name. This will be used to secure the user data files required for the
   // network service.
   return std::wstring(L"lpacContentNetworkService");
-}
-
-bool ContentBrowserClient::IsRendererCodeIntegrityEnabled() {
-  return false;
 }
 
 bool ContentBrowserClient::ShouldEnableAudioProcessHighPriority() {
@@ -1311,7 +1316,7 @@ ContentBrowserClient::GetWebAuthenticationDelegate() {
 std::unique_ptr<AuthenticatorRequestClientDelegate>
 ContentBrowserClient::GetWebAuthenticationRequestDelegate(
     RenderFrameHost* render_frame_host) {
-  return std::make_unique<AuthenticatorRequestClientDelegate>();
+  return std::make_unique<DefaultAuthenticatorRequestClientDelegate>();
 }
 #endif
 
@@ -1805,20 +1810,6 @@ bool ContentBrowserClient::UseOutermostMainFrameOrEmbedderForSubCaptureTargets()
   return false;
 }
 
-#if BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-void ContentBrowserClient::BindReadonlyVideoEffectsManager(
-    const std::string& device_id,
-    BrowserContext* browser_context,
-    mojo::PendingReceiver<media::mojom::ReadonlyVideoEffectsManager>
-        readonly_video_effects_manager) {}
-
-void ContentBrowserClient::BindVideoEffectsProcessor(
-    const std::string& device_id,
-    BrowserContext* browser_context,
-    mojo::PendingReceiver<video_effects::mojom::VideoEffectsProcessor>
-        video_effects_processor) {}
-#endif  // BUILDFLAG(ENABLE_VIDEO_EFFECTS)
-
 void ContentBrowserClient::PreferenceRankAudioDeviceInfos(
     BrowserContext* browser_context,
     blink::WebMediaDeviceInfoArray& infos) {}
@@ -1931,11 +1922,6 @@ void ContentBrowserClient::QueryInstalledWebAppsByManifestId(
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_WIN)
-void ContentBrowserClient::OnUiaProviderRequested(bool uia_provider_enabled) {}
-void ContentBrowserClient::OnUiaProviderDisabled() {}
-#endif
-
 bool ContentBrowserClient::AllowNonActivatedCrossOriginPaintHolding() {
   return false;
 }
@@ -1984,6 +1970,14 @@ ContentBrowserClient::GetClipboardTypesIfPolicyApplied(
 bool ContentBrowserClient::ShouldEnableCanvasNoise(
     BrowserContext* browser_context,
     const GURL& origin) {
+  return false;
+}
+
+bool ContentBrowserClient::UsePrefetchPrerenderIntegration() {
+  return false;
+}
+
+bool ContentBrowserClient::UsePreloadServingMetrics() {
   return false;
 }
 

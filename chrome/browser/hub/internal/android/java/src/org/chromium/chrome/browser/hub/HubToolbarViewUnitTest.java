@@ -39,6 +39,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 
 import androidx.core.content.ContextCompat;
 import androidx.test.ext.junit.rules.ActivityScenarioRule;
@@ -60,6 +61,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner.Parameter;
 import org.robolectric.ParameterizedRobolectricTestRunner.Parameters;
 
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRule;
 import org.chromium.base.test.util.CallbackHelper;
@@ -74,7 +76,6 @@ import org.chromium.components.omnibox.OmniboxFeatureList;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
-import org.chromium.ui.util.XrUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -114,6 +115,7 @@ public class HubToolbarViewUnitTest {
     private FrameLayout mToolbarContainer;
     private Button mActionButton;
     private TabLayout mPaneSwitcher;
+    private LinearLayout mMenuButtonContainer;
     private MenuButton mMenuButtonWrapper;
     private View mSearchBox;
     private View mSearchLoupe;
@@ -124,7 +126,7 @@ public class HubToolbarViewUnitTest {
 
     @Before
     public void setUp() throws Exception {
-        XrUtils.setXrDeviceForTesting(mIsXrDevice);
+        DeviceInfo.setIsXrForTesting(mIsXrDevice);
 
         mActivityScenarioRule.getScenario().onActivity(this::onActivity);
     }
@@ -138,6 +140,7 @@ public class HubToolbarViewUnitTest {
         mToolbarContainer = (FrameLayout) inflater.inflate(layoutId, null, false);
         mActionButton = mToolbarContainer.findViewById(R.id.toolbar_action_button);
         mPaneSwitcher = mToolbarContainer.findViewById(R.id.pane_switcher);
+        mMenuButtonContainer = mToolbarContainer.findViewById(R.id.menu_button_container);
         mMenuButtonWrapper = mToolbarContainer.findViewById(R.id.menu_button_wrapper);
         mSearchBox = mToolbarContainer.findViewById(R.id.search_box);
         mSearchLoupe = mToolbarContainer.findViewById(R.id.search_loupe);
@@ -235,7 +238,70 @@ public class HubToolbarViewUnitTest {
     }
 
     @Test
-    public void testMenuButtonVisibility() {
+    public void testSetPaneSwitcherButtonData_UpdatesExistingList() {
+        // Set up initial button data with 2 buttons
+        FullButtonData buttonData1 = makeTestButtonData();
+        FullButtonData buttonData2 = makeTestButtonData();
+        List<FullButtonData> initialButtonData = Arrays.asList(buttonData1, buttonData2);
+
+        mPropertyModel.set(PANE_SWITCHER_BUTTON_DATA, initialButtonData);
+        mPropertyModel.set(PANE_SWITCHER_INDEX, 0);
+
+        // Verify initial state
+        assertEquals(2, mPaneSwitcher.getTabCount());
+        assertEquals(View.VISIBLE, mPaneSwitcher.getVisibility());
+
+        // Create new button data with same size but different content
+        DisplayButtonData newDisplayButtonData =
+                new ResourceButtonData(
+                        R.string.button_new_incognito_tab,
+                        R.string.button_new_incognito_tab,
+                        R.drawable.ic_incognito);
+        FullButtonData newButtonData1 = new DelegateButtonData(newDisplayButtonData, mOnButton);
+        FullButtonData newButtonData2 = makeTestButtonData();
+        List<FullButtonData> updatedButtonData = Arrays.asList(newButtonData1, newButtonData2);
+
+        // Update with new button data (should trigger updatePaneSwitcherButtonList)
+        mPropertyModel.set(PANE_SWITCHER_BUTTON_DATA, updatedButtonData);
+
+        // Verify the tab count remains the same (update, not rebuild)
+        assertEquals(2, mPaneSwitcher.getTabCount());
+        assertEquals(View.VISIBLE, mPaneSwitcher.getVisibility());
+
+        // Verify the first tab was updated with new content description
+        TabLayout.Tab firstTab = mPaneSwitcher.getTabAt(0);
+        assertEquals(
+                newButtonData1.resolveContentDescription(mActivity),
+                firstTab.getContentDescription());
+
+        // Create new button data with different size (should trigger buildPaneSwitcherButtonList)
+        FullButtonData newButtonData3 = makeTestButtonData();
+        List<FullButtonData> rebuiltButtonData =
+                Arrays.asList(newButtonData1, newButtonData2, newButtonData3);
+
+        // Update with different sized list (should trigger buildPaneSwitcherButtonList)
+        mPropertyModel.set(PANE_SWITCHER_BUTTON_DATA, rebuiltButtonData);
+
+        // Verify the tab count changed (rebuild occurred)
+        assertEquals(3, mPaneSwitcher.getTabCount());
+        assertEquals(View.VISIBLE, mPaneSwitcher.getVisibility());
+    }
+
+    @Test
+    @DisableFeatures(OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS)
+    public void testMenuButtonContainerVisibility() {
+        mPropertyModel.set(MENU_BUTTON_VISIBLE, false);
+        assertEquals(View.INVISIBLE, mMenuButtonContainer.getVisibility());
+
+        mPropertyModel.set(MENU_BUTTON_VISIBLE, true);
+        assertEquals(View.VISIBLE, mMenuButtonContainer.getVisibility());
+    }
+
+    @Test
+    @EnableFeatures({
+        OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS + ":enable_hub_search_tab_groups_pane/true"
+    })
+    public void testMenuButtonWrapperVisibility() {
         mPropertyModel.set(MENU_BUTTON_VISIBLE, false);
         assertEquals(View.INVISIBLE, mMenuButtonWrapper.getVisibility());
 
@@ -364,23 +430,6 @@ public class HubToolbarViewUnitTest {
                 mSearchBoxText.getCurrentHintTextColor());
         assertEquals(
                 ColorStateList.valueOf(SemanticColorUtils.getColorSurfaceContainerHigh(mActivity)),
-                backgroundDrawable.getColor());
-    }
-
-    @Test
-    @EnableFeatures({ChromeFeatureList.GRID_TAB_SWITCHER_SURFACE_COLOR_UPDATE})
-    public void testUpdateSearchBoxColorScheme_gtsSurfaceColorUpdateEnabled() {
-        forceSetColorScheme(HubColorScheme.INCOGNITO);
-
-        GradientDrawable backgroundDrawable = (GradientDrawable) mSearchBox.getBackground();
-        assertEquals(
-                ColorStateList.valueOf(
-                        ContextCompat.getColor(mActivity, R.color.gm3_baseline_surface_dark)),
-                backgroundDrawable.getColor());
-
-        forceSetColorScheme(HubColorScheme.DEFAULT);
-        assertEquals(
-                ColorStateList.valueOf(SemanticColorUtils.getColorSurface(mActivity)),
                 backgroundDrawable.getColor());
     }
 

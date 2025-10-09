@@ -200,9 +200,7 @@ GLES2Implementation::GLES2Implementation(
     GLES2CmdHelper* helper,
     scoped_refptr<ShareGroup> share_group,
     TransferBufferInterface* transfer_buffer,
-    bool bind_generates_resource,
     bool lose_context_when_out_of_memory,
-    bool support_client_side_arrays,
     GpuControl* gpu_control)
     : ImplementationBase(helper, transfer_buffer, gpu_control),
       helper_(helper),
@@ -238,7 +236,6 @@ GLES2Implementation::GLES2Implementation(
       bound_pixel_unpack_transfer_buffer_id_(0),
       error_bits_(0),
       lose_context_when_out_of_memory_(lose_context_when_out_of_memory),
-      support_client_side_arrays_(support_client_side_arrays),
       use_count_(0),
       flush_id_(0),
       max_extra_transfer_buffer_size_(0),
@@ -253,12 +250,8 @@ GLES2Implementation::GLES2Implementation(
 
   share_group_ =
       (share_group ? std::move(share_group)
-                   : new ShareGroup(
-                         bind_generates_resource,
+                   : base::MakeRefCounted<ShareGroup>(
                          gpu_control_->GetCommandBufferID().GetUnsafeValue()));
-  DCHECK(share_group_->bind_generates_resource() == bind_generates_resource);
-
-  memset(&reserved_ids_, 0, sizeof(reserved_ids_));
 }
 
 gpu::ContextResult GLES2Implementation::Initialize(
@@ -295,29 +288,12 @@ gpu::ContextResult GLES2Implementation::Initialize(
       std::make_unique<ReadbackBufferShadowTracker>(mapped_memory_.get(),
                                                     helper_);
 
-  for (int i = 0; i < static_cast<int>(IdNamespaces::kNumIdNamespaces); ++i)
+  for (int i = 0; i < static_cast<int>(IdNamespaces::kNumIdNamespaces); ++i) {
     id_allocators_[i] = std::make_unique<IdAllocator>();
-
-  if (support_client_side_arrays_) {
-    GetIdHandler(SharedIdNamespaces::kBuffers)
-        ->MakeIds(this, kClientSideArrayId, std::size(reserved_ids_),
-                  &reserved_ids_[0]);
   }
 
   vertex_array_object_manager_ = std::make_unique<VertexArrayObjectManager>(
-      gl_capabilities_.max_vertex_attribs, reserved_ids_[0], reserved_ids_[1],
-      support_client_side_arrays_);
-
-  // GL_BIND_GENERATES_RESOURCE_CHROMIUM state must be the same
-  // on Client & Service.
-  if (gl_capabilities_.bind_generates_resource_chromium !=
-      (share_group_->bind_generates_resource() ? 1 : 0)) {
-    SetGLError(GL_INVALID_OPERATION, "Initialize",
-               "Service bind_generates_resource mismatch.");
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-               << "bind_generates_resource mismatch";
-    return gpu::ContextResult::kFatalFailure;
-  }
+      gl_capabilities_.max_vertex_attribs);
 
   return gpu::ContextResult::kSuccess;
 }
@@ -333,12 +309,6 @@ GLES2Implementation::~GLES2Implementation() {
   WaitForCmd();
 
   query_tracker_.reset();
-
-  // GLES2Implementation::Initialize() could fail before allocating
-  // reserved_ids_, so we need delete them carefully.
-  if (support_client_side_arrays_ && reserved_ids_[0]) {
-    DeleteBuffers(std::size(reserved_ids_), &reserved_ids_[0]);
-  }
 
   // Release remaining BufferRange mem; This is when a MapBufferRange() is
   // called but not the UnmapBuffer() pair.
@@ -403,15 +373,13 @@ void GLES2Implementation::OnGpuControlErrorMessage(const char* message,
   SendErrorMessage(message, id);
 }
 
-void GLES2Implementation::OnGpuSwitched(
-    gl::GpuPreference active_gpu_heuristic) {
+void GLES2Implementation::OnGpuSwitched() {
   gpu_switched_ = true;
-  active_gpu_heuristic_ = active_gpu_heuristic;
 }
 
 GLboolean GLES2Implementation::DidGpuSwitch(gl::GpuPreference* active_gpu) {
   if (gpu_switched_) {
-    *active_gpu = active_gpu_heuristic_;
+    *active_gpu = gl::GpuPreference::kDefault;
   }
   GLboolean result = gpu_switched_ ? GL_TRUE : GL_FALSE;
   gpu_switched_ = false;
@@ -1400,24 +1368,6 @@ GLuint GLES2Implementation::GetMaxValueInBufferCHROMIUM(GLuint buffer_id,
   return result;
 }
 
-void GLES2Implementation::RestoreElementAndArrayBuffers(bool restore) {
-  if (restore) {
-    RestoreArrayBuffer(restore);
-    // Restore the element array binding.
-    // We only need to restore it if it wasn't a client side array.
-    if (vertex_array_object_manager_->bound_element_array_buffer() == 0) {
-      helper_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    }
-  }
-}
-
-void GLES2Implementation::RestoreArrayBuffer(bool restore) {
-  if (restore) {
-    // Restore the user's current binding.
-    helper_->BindBuffer(GL_ARRAY_BUFFER, bound_array_buffer_);
-  }
-}
-
 void GLES2Implementation::DrawElements(GLenum mode,
                                        GLsizei count,
                                        GLenum type,
@@ -1458,21 +1408,15 @@ void GLES2Implementation::DrawElementsImpl(GLenum mode,
     SetGLError(GL_INVALID_VALUE, func_name, "count < 0");
     return;
   }
-  bool simulated = false;
   GLuint offset = ToGLuint(indices);
   if (count > 0) {
     if (vertex_array_object_manager_->bound_element_array_buffer() != 0 &&
         !ValidateOffset(func_name, reinterpret_cast<GLintptr>(indices))) {
       return;
     }
-    if (!vertex_array_object_manager_->SetupSimulatedIndexAndClientSideBuffers(
-            func_name, this, helper_, count, type, 0, indices, &offset,
-            &simulated)) {
-      return;
-    }
+    offset = ToGLuint(indices);
   }
   helper_->DrawElements(mode, count, type, offset);
-  RestoreElementAndArrayBuffers(simulated);
   CheckGLError();
 }
 
@@ -1494,11 +1438,7 @@ void GLES2Implementation::DrawElementsIndirect(GLenum mode,
                "No element array buffer");
     return;
   }
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glDrawElementsIndirect",
-               "Missing array buffer for vertex attribute");
-    return;
-  }
+
   helper_->DrawElementsIndirect(mode, type, ToGLuint(offset));
   CheckGLError();
 }
@@ -2331,7 +2271,7 @@ void GLES2Implementation::VertexAttribIPointer(GLuint index,
                "client side arrays are not allowed in vertex array objects.");
     return;
   }
-  if (!support_client_side_arrays_ || bound_array_buffer_ != 0) {
+  if (bound_array_buffer_ != 0) {
     // Only report NON client side buffers to the service.
     if (!ValidateOffset("glVertexAttribIPointer",
                         reinterpret_cast<GLintptr>(ptr))) {
@@ -2362,7 +2302,7 @@ void GLES2Implementation::VertexAttribPointer(GLuint index,
                "client side arrays are not allowed in vertex array objects.");
     return;
   }
-  if (!support_client_side_arrays_ || bound_array_buffer_ != 0) {
+  if (bound_array_buffer_ != 0) {
     // Only report NON client side buffers to the service.
     if (!ValidateOffset("glVertexAttribPointer",
                         reinterpret_cast<GLintptr>(ptr))) {
@@ -2724,12 +2664,6 @@ void GLES2Implementation::MultiDrawArraysWEBGL(GLenum mode,
   if (drawcount == 0) {
     return;
   }
-  // This is for an extension for WebGL which doesn't support client side arrays
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glMultiDrawArraysWEBGL",
-               "Missing array buffer for vertex attribute");
-    return;
-  }
   MultiDrawArraysWEBGLHelper(mode, firsts, counts, drawcount);
   CheckGLError();
 }
@@ -2751,12 +2685,6 @@ void GLES2Implementation::MultiDrawArraysInstancedWEBGL(
     return;
   }
   if (drawcount == 0) {
-    return;
-  }
-  // This is for an extension for WebGL which doesn't support client side arrays
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glMultiDrawArraysWEBGLInstanced",
-               "Missing array buffer for vertex attribute");
     return;
   }
   MultiDrawArraysInstancedWEBGLHelper(mode, firsts, counts, instance_counts,
@@ -2785,13 +2713,6 @@ void GLES2Implementation::MultiDrawArraysInstancedBaseInstanceWEBGL(
   if (drawcount == 0) {
     return;
   }
-  // This is for an extension for WebGL which doesn't support client side arrays
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION,
-               "glMultiDrawArraysInstancedBaseInstanceWEBGL",
-               "Missing array buffer for vertex attribute");
-    return;
-  }
   MultiDrawArraysInstancedBaseInstanceWEBGLHelper(
       mode, firsts, counts, instance_counts, baseinstances, drawcount);
   CheckGLError();
@@ -2818,11 +2739,6 @@ void GLES2Implementation::MultiDrawElementsWEBGL(GLenum mode,
   if (vertex_array_object_manager_->bound_element_array_buffer() == 0) {
     SetGLError(GL_INVALID_OPERATION, "glMultiDrawElementsWEBGL",
                "No element array buffer");
-    return;
-  }
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glMultiDrawElementsWEBGL",
-               "Missing array buffer for vertex attribute");
     return;
   }
   MultiDrawElementsWEBGLHelper(mode, counts, type, offsets, drawcount);
@@ -2854,11 +2770,6 @@ void GLES2Implementation::MultiDrawElementsInstancedWEBGL(
   if (vertex_array_object_manager_->bound_element_array_buffer() == 0) {
     SetGLError(GL_INVALID_OPERATION, "glMultiDrawElementsInstancedWEBGL",
                "No element array buffer");
-    return;
-  }
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glMultiDrawElementsInstancedWEBGL",
-               "Missing array buffer for vertex attribute");
     return;
   }
   MultiDrawElementsInstancedWEBGLHelper(mode, counts, type, offsets,
@@ -2896,12 +2807,6 @@ void GLES2Implementation::MultiDrawElementsInstancedBaseVertexBaseInstanceWEBGL(
     SetGLError(GL_INVALID_OPERATION,
                "glMultiDrawElementsInstancedBaseVertexBaseInstanceWEBGL",
                "No element array buffer");
-    return;
-  }
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION,
-               "glMultiDrawElementsInstancedBaseVertexBaseInstanceWEBGL",
-               "Missing array buffer for vertex attribute");
     return;
   }
   MultiDrawElementsInstancedBaseVertexBaseInstanceWEBGLHelper(
@@ -5192,8 +5097,6 @@ void GLES2Implementation::BindBufferHelper(GLenum target, GLuint buffer_id) {
 
 void GLES2Implementation::BindBufferStub(GLenum target, GLuint buffer) {
   helper_->BindBuffer(target, buffer);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::OrderingBarrier();
 }
 
 bool GLES2Implementation::UpdateIndexedBufferState(GLenum target,
@@ -5257,8 +5160,6 @@ void GLES2Implementation::BindBufferBaseStub(GLenum target,
                                              GLuint index,
                                              GLuint buffer) {
   helper_->BindBufferBase(target, index, buffer);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::Flush();
 }
 
 void GLES2Implementation::BindBufferRangeHelper(GLenum target,
@@ -5281,8 +5182,6 @@ void GLES2Implementation::BindBufferRangeStub(GLenum target,
                                               GLintptr offset,
                                               GLsizeiptr size) {
   helper_->BindBufferRange(target, index, buffer, offset, size);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::Flush();
 }
 
 void GLES2Implementation::BindFramebufferHelper(GLenum target,
@@ -5356,8 +5255,6 @@ void GLES2Implementation::BindRenderbufferHelper(GLenum target,
 void GLES2Implementation::BindRenderbufferStub(GLenum target,
                                                GLuint renderbuffer) {
   helper_->BindRenderbuffer(target, renderbuffer);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::OrderingBarrier();
 }
 
 void GLES2Implementation::BindSamplerHelper(GLuint unit, GLuint sampler) {
@@ -5407,8 +5304,6 @@ void GLES2Implementation::BindTextureHelper(GLenum target, GLuint texture) {
 
 void GLES2Implementation::BindTextureStub(GLenum target, GLuint texture) {
   helper_->BindTexture(target, texture);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::OrderingBarrier();
 }
 
 void GLES2Implementation::BindTransformFeedbackHelper(
@@ -5441,7 +5336,9 @@ void GLES2Implementation::UseProgramHelper(GLuint program) {
 }
 
 bool GLES2Implementation::IsBufferReservedId(GLuint id) {
-  return vertex_array_object_manager_->IsReservedId(id);
+  // TODO(crbug.com/439823997): Remove callers from autogenerated code and
+  // delete this function.
+  return false;
 }
 
 void GLES2Implementation::DeleteBuffersHelper(GLsizei n,
@@ -5553,9 +5450,6 @@ void GLES2Implementation::DeleteTexturesHelper(GLsizei n,
                "id not created by this context.");
     return;
   }
-  for (GLsizei ii = 0; ii < n; ++ii) {
-    share_group_->discardable_texture_manager()->FreeTexture(textures[ii]);
-  }
   UnbindTexturesHelper(n, textures);
 }
 
@@ -5647,20 +5541,7 @@ void GLES2Implementation::DrawArrays(GLenum mode, GLint first, GLsizei count) {
     SetGLError(GL_INVALID_VALUE, "glDrawArrays", "count < 0");
     return;
   }
-  bool simulated = false;
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    GLsizei num_elements;
-    if (!base::CheckAdd(first, count).AssignIfValid(&num_elements)) {
-      SetGLError(GL_INVALID_VALUE, "glDrawArrays", "first+count overflow");
-      return;
-    }
-    if (!vertex_array_object_manager_->SetupSimulatedClientSideBuffers(
-            "glDrawArrays", this, helper_, num_elements, 0, &simulated)) {
-      return;
-    }
-  }
   helper_->DrawArrays(mode, first, count);
-  RestoreArrayBuffer(simulated);
   CheckGLError();
 }
 
@@ -5671,12 +5552,6 @@ void GLES2Implementation::DrawArraysIndirect(GLenum mode, const void* offset) {
                      << ")");
   if (!ValidateOffset("glDrawArraysIndirect",
                       reinterpret_cast<GLintptr>(offset))) {
-    return;
-  }
-  // This is for WebGL 2.0 Compute which doesn't support client side arrays
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    SetGLError(GL_INVALID_OPERATION, "glDrawArraysIndirect",
-               "Missing array buffer for vertex attribute");
     return;
   }
   helper_->DrawArraysIndirect(mode, ToGLuint(offset));
@@ -6716,22 +6591,7 @@ void GLES2Implementation::DrawArraysInstancedANGLE(GLenum mode,
   if (primcount == 0) {
     return;
   }
-  bool simulated = false;
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    GLsizei num_elements;
-    if (!base::CheckAdd(first, count).AssignIfValid(&num_elements)) {
-      SetGLError(GL_INVALID_VALUE, "glDrawArraysInstancedANGLE",
-                 "first+count overflow");
-      return;
-    }
-    if (!vertex_array_object_manager_->SetupSimulatedClientSideBuffers(
-            "glDrawArraysInstancedANGLE", this, helper_, num_elements,
-            primcount, &simulated)) {
-      return;
-    }
-  }
   helper_->DrawArraysInstancedANGLE(mode, first, count, primcount);
-  RestoreArrayBuffer(simulated);
   CheckGLError();
 }
 
@@ -6759,24 +6619,8 @@ void GLES2Implementation::DrawArraysInstancedBaseInstanceANGLE(
   if (primcount == 0) {
     return;
   }
-  bool simulated = false;
-  if (vertex_array_object_manager_->SupportsClientSideBuffers()) {
-    GLsizei num_elements;
-    if (!base::CheckAdd(first, count).AssignIfValid(&num_elements)) {
-      SetGLError(GL_INVALID_VALUE, "glDrawArraysInstancedBaseInstanceANGLE",
-                 "first+count overflow");
-      return;
-    }
-    // Client side buffer is not used by WebGL so leave it as is.
-    if (!vertex_array_object_manager_->SetupSimulatedClientSideBuffers(
-            "glDrawArraysInstancedBaseInstanceANGLE", this, helper_,
-            num_elements, primcount, &simulated)) {
-      return;
-    }
-  }
   helper_->DrawArraysInstancedBaseInstanceANGLE(mode, first, count, primcount,
                                                 baseinstance);
-  RestoreArrayBuffer(simulated);
   CheckGLError();
 }
 
@@ -6802,21 +6646,15 @@ void GLES2Implementation::DrawElementsInstancedANGLE(GLenum mode,
     return;
   }
   GLuint offset = 0;
-  bool simulated = false;
   if (count > 0 && primcount > 0) {
     if (vertex_array_object_manager_->bound_element_array_buffer() != 0 &&
         !ValidateOffset("glDrawElementsInstancedANGLE",
                         reinterpret_cast<GLintptr>(indices))) {
       return;
     }
-    if (!vertex_array_object_manager_->SetupSimulatedIndexAndClientSideBuffers(
-            "glDrawElementsInstancedANGLE", this, helper_, count, type,
-            primcount, indices, &offset, &simulated)) {
-      return;
-    }
+    offset = ToGLuint(indices);
   }
   helper_->DrawElementsInstancedANGLE(mode, count, type, offset, primcount);
-  RestoreElementAndArrayBuffers(simulated);
   CheckGLError();
 }
 
@@ -6848,23 +6686,16 @@ void GLES2Implementation::DrawElementsInstancedBaseVertexBaseInstanceANGLE(
     return;
   }
   GLuint offset = 0;
-  bool simulated = false;
   if (count > 0 && primcount > 0) {
     if (vertex_array_object_manager_->bound_element_array_buffer() != 0 &&
         !ValidateOffset("glDrawElementsInstancedBaseVertexBaseInstanceANGLE",
                         reinterpret_cast<GLintptr>(indices))) {
       return;
     }
-    // Client side buffer is not used by WebGL so leave it as is.
-    if (!vertex_array_object_manager_->SetupSimulatedIndexAndClientSideBuffers(
-            "glDrawElementsInstancedBaseVertexBaseInstanceANGLE", this, helper_,
-            count, type, primcount, indices, &offset, &simulated)) {
-      return;
-    }
+    offset = ToGLuint(indices);
   }
   helper_->DrawElementsInstancedBaseVertexBaseInstanceANGLE(
       mode, count, type, offset, primcount, basevertex, baseinstance);
-  RestoreElementAndArrayBuffers(simulated);
   CheckGLError();
 }
 
@@ -6878,11 +6709,9 @@ GLuint GLES2Implementation::CreateAndTexStorage2DSharedImageCHROMIUM(
   DCHECK(mailbox.Verify()) << "CreateAndTexStorage2DSharedImageCHROMIUM was "
                               "passed an invalid mailbox.";
   GLuint client_id;
-  GetIdHandler(SharedIdNamespaces::kTextures)->MakeIds(this, 0, 1, &client_id);
+  GetIdHandler(SharedIdNamespaces::kTextures)->MakeIds(this, 1, &client_id);
   helper_->CreateAndTexStorage2DSharedImageINTERNALImmediate(client_id,
                                                              mailbox_data);
-  if (share_group_->bind_generates_resource())
-    helper_->CommandBufferHelper::OrderingBarrier();
   CheckGLError();
   return client_id;
 }
@@ -7021,33 +6850,9 @@ GLboolean GLES2Implementation::UnmapBufferCHROMIUM(GLuint target) {
   return true;
 }
 
-uint64_t GLES2Implementation::ShareGroupTracingGUID() const {
-  return share_group_->TracingGUID();
-}
-
 void GLES2Implementation::SetErrorMessageCallback(
     base::RepeatingCallback<void(const char*, int32_t)> callback) {
   error_message_callback_ = std::move(callback);
-}
-
-bool GLES2Implementation::ThreadSafeShallowLockDiscardableTexture(
-    uint32_t texture_id) {
-  ClientDiscardableTextureManager* manager =
-      share_group()->discardable_texture_manager();
-  return manager->TextureIsValid(texture_id) &&
-         manager->LockTexture(texture_id);
-}
-
-void GLES2Implementation::CompleteLockDiscardableTexureOnContextThread(
-    uint32_t texture_id) {
-  helper_->LockDiscardableTextureCHROMIUM(texture_id);
-}
-
-bool GLES2Implementation::ThreadsafeDiscardableTextureIsDeletedForTracing(
-    uint32_t texture_id) {
-  ClientDiscardableTextureManager* manager =
-      share_group()->discardable_texture_manager();
-  return manager->TextureIsDeletedForTracing(texture_id);
 }
 
 base::span<uint8_t> GLES2Implementation::MapTransferCacheEntry(
@@ -7327,61 +7132,6 @@ void GLES2Implementation::GetInternalformativ(GLenum target,
     }
   }
   CheckGLError();
-}
-
-void GLES2Implementation::InitializeDiscardableTextureCHROMIUM(
-    GLuint texture_id) {
-  ClientDiscardableTextureManager* manager =
-      share_group()->discardable_texture_manager();
-  if (manager->TextureIsValid(texture_id)) {
-    SetGLError(GL_INVALID_VALUE, "glInitializeDiscardableTextureCHROMIUM",
-               "Texture ID already initialized");
-    return;
-  }
-  ClientDiscardableHandle handle =
-      manager->InitializeTexture(helper_->command_buffer(), texture_id);
-  if (!handle.IsValid())
-    return;
-
-  helper_->InitializeDiscardableTextureCHROMIUM(texture_id, handle.shm_id(),
-                                                handle.byte_offset());
-}
-
-void GLES2Implementation::UnlockDiscardableTextureCHROMIUM(GLuint texture_id) {
-  ClientDiscardableTextureManager* manager =
-      share_group()->discardable_texture_manager();
-  if (!manager->TextureIsValid(texture_id)) {
-    SetGLError(GL_INVALID_VALUE, "glUnlockDiscardableTextureCHROMIUM",
-               "Texture ID not initialized");
-    return;
-  }
-
-  // |should_unbind_texture| will be set to true if the texture has been fully
-  // unlocked. In this case, ensure the texture is unbound.
-  bool should_unbind_texture = false;
-  manager->UnlockTexture(texture_id, &should_unbind_texture);
-  if (should_unbind_texture)
-    UnbindTexturesHelper(1, &texture_id);
-
-  helper_->UnlockDiscardableTextureCHROMIUM(texture_id);
-}
-
-bool GLES2Implementation::LockDiscardableTextureCHROMIUM(GLuint texture_id) {
-  ClientDiscardableTextureManager* manager =
-      share_group()->discardable_texture_manager();
-  if (!manager->TextureIsValid(texture_id)) {
-    SetGLError(GL_INVALID_VALUE, "glLockDiscardableTextureCHROMIUM",
-               "Texture ID not initialized");
-    return false;
-  }
-  if (!manager->LockTexture(texture_id)) {
-    // Failure to lock means that this texture has been deleted on the service
-    // side. Delete it here as well.
-    DeleteTexturesHelper(1, &texture_id);
-    return false;
-  }
-  helper_->LockDiscardableTextureCHROMIUM(texture_id);
-  return true;
 }
 
 void GLES2Implementation::UpdateCachedExtensionsIfNeeded() {

@@ -126,6 +126,7 @@ component("gfx") {
     "interpolated_transform.h",
     "monogram_utils.cc",
     "monogram_utils.h",
+    "native_ui_util.h",
     "overlay_layer_id.cc",
     "overlay_layer_id.h",
     "overlay_plane_data.cc",
@@ -145,8 +146,6 @@ component("gfx") {
     "skbitmap_operations.cc",
     "skbitmap_operations.h",
     "swap_result.cc",
-    "sys_color_change_listener.cc",
-    "sys_color_change_listener.h",
     "text_constants.h",
     "text_elider.cc",
     "text_elider.h",
@@ -203,6 +202,7 @@ component("gfx") {
       "mac/nswindow_frame_controls.mm",
       "mac/scoped_cocoa_disable_screen_updates.h",
       "mac/scoped_cocoa_disable_screen_updates.mm",
+      "native_ui_util_mac.mm",
       "platform_font_mac.h",
       "platform_font_mac.mm",
       "scoped_cg_context_save_gstate_mac.h",
@@ -241,8 +241,6 @@ component("gfx") {
       "win/singleton_hwnd.h",
       "win/singleton_hwnd_hot_key_observer.cc",
       "win/singleton_hwnd_hot_key_observer.h",
-      "win/singleton_hwnd_observer.cc",
-      "win/singleton_hwnd_observer.h",
       "win/text_analysis_source.cc",
       "win/text_analysis_source.h",
       "win/window_impl.cc",
@@ -416,8 +414,6 @@ component("gfx") {
       "gdi_util.h",
       "icon_util.cc",
       "icon_util.h",
-      "sys_color_change_listener.cc",
-      "sys_color_change_listener.h",
     ]
   }
 
@@ -448,6 +444,10 @@ component("gfx") {
       "nine_image_painter.h",
     ]
   }
+
+  if (use_aura) {
+    sources += [ "native_ui_util_aura.cc" ]
+  }
 }
 
 component("color_space") {
@@ -477,6 +477,7 @@ component("color_space") {
     ]
   }
   deps = [
+    "//components/viz/common/resources:shared_image_format",
     "//skia:skcms",
     "//ui/gfx:buffer_types",
     "//ui/gfx:gfx_switches",
@@ -530,7 +531,7 @@ group("native_widget_types") {
 source_set("native_widget_types_sources") {
   visibility = [ ":*" ]  # Depend on through ":native_widget_types".
 
-  public = [ "native_widget_types.h" ]
+  public = [ "native_ui_types.h" ]
 
   public_deps = [ "//base" ]
 
@@ -539,7 +540,7 @@ source_set("native_widget_types_sources") {
   deps = [ "//build:blink_buildflags" ]
 
   if (is_mac) {
-    sources = [ "native_widget_types_mac.mm" ]
+    sources = [ "native_ui_types_mac.mm" ]
     frameworks = [ "AppKit.framework" ]
   }
 }
@@ -668,7 +669,7 @@ source_set("memory_buffer_sources") {
     ]
 
     public_deps += [
-      "//components/viz/common:shared_image_format",
+      "//components/viz/common/resources:shared_image_format",
       "//ui/gfx:color_space",
     ]
   }
@@ -682,6 +683,8 @@ source_set("memory_buffer_sources") {
       "native_pixmap_handle.cc",
       "native_pixmap_handle.h",
     ]
+
+    deps += [ "//components/viz/common/resources:shared_image_format" ]
   }
 
   if (enable_vulkan) {
@@ -906,7 +909,7 @@ test("gfx_unittests") {
     "//skia:skcms",
     "//testing/gtest",
     "//third_party/icu:icuuc",
-    "//third_party/libpng",
+    "//third_party/libpng:libpng_for_testonly",
     "//third_party/zlib",
     "//ui/base",
     "//ui/gfx/animation",
@@ -991,7 +994,10 @@ test("gfx_unittests") {
       "linux/fontconfig_util_unittest.cc",
       "linux/native_pixmap_dmabuf_unittest.cc",
     ]
-    deps += [ "//third_party/fontconfig" ]
+    deps += [
+      "//components/viz/common/resources:shared_image_format",
+      "//third_party/fontconfig",
+    ]
   }
 
   if (is_fuchsia) {

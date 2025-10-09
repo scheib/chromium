@@ -51,7 +51,7 @@
 #include "skia/buildflags.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/gpu_extra_info.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "ui/gl/direct_composition_support.h"
@@ -59,7 +59,6 @@
 
 namespace gpu {
 class DawnContextProvider;
-class GpuMemoryBufferFactory;
 class GpuWatchdogThread;
 class ImageDecodeAcceleratorWorker;
 class Scheduler;
@@ -166,12 +165,17 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void EstablishGpuChannel(int32_t client_id,
                            uint64_t client_tracing_id,
                            bool is_gpu_host,
+                           bool enable_extra_handles_validation,
                            EstablishGpuChannelCallback callback) override;
   void SetChannelClientPid(int32_t client_id,
                            base::ProcessId client_pid) override;
   void SetChannelDiskCacheHandle(
       int32_t client_id,
       const gpu::GpuDiskCacheHandle& handle) override;
+  void SetChannelPersistentCacheParams(
+      int32_t client_id,
+      const gpu::GpuDiskCacheHandle& handle,
+      persistent_cache::BackendParams backend_params) override;
   void OnDiskCacheHandleDestoyed(
       const gpu::GpuDiskCacheHandle& handle) override;
   void CloseChannel(int32_t client_id) override;
@@ -203,9 +207,6 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
 
   void GetVideoMemoryUsageStats(
       GetVideoMemoryUsageStatsCallback callback) override;
-  void AddVideoMemoryUsageStatsOnCompositorGpu(
-      GetVideoMemoryUsageStatsCallback callback,
-      gpu::VideoMemoryUsageStats video_memory_usage_stats);
 
   // These methods can be called from the CrBrowserMain thread and the
   // VizCompositorThread (with InputVizard) for PeakGpuMemory tracking.
@@ -219,7 +220,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
                   const std::string& key,
                   const std::string& data) override;
   void WakeUpGpu() override;
-  void GpuSwitched(gl::GpuPreference active_gpu_heuristic) override;
+  void GpuSwitched() override;
   void DisplayAdded() override;
   void DisplayRemoved() override;
   void DisplayMetricsChanged() override;
@@ -228,8 +229,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void OnBackgrounded() override;
   void OnForegrounded() override;
 #if !BUILDFLAG(IS_ANDROID)
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level) override;
+  void OnMemoryPressure(base::MemoryPressureLevel level) override;
 #endif
 #if BUILDFLAG(IS_APPLE)
   void BeginCATransaction() override;
@@ -298,10 +298,6 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
 
   CompositorGpuThread* compositor_gpu_thread() {
     return compositor_gpu_thread_.get();
-  }
-
-  gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory() {
-    return gpu_memory_buffer_factory_.get();
   }
 
   gpu::SharedImageManager* shared_image_manager() {
@@ -530,8 +526,6 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
 #endif
 
   std::unique_ptr<webnn::WebNNContextProviderImpl> webnn_context_provider_;
-
-  std::unique_ptr<gpu::GpuMemoryBufferFactory> gpu_memory_buffer_factory_;
 
   // An event that will be signalled when we shutdown. On some platforms it
   // comes from external sources.

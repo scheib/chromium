@@ -10,10 +10,17 @@
 #include "base/i18n/time_formatting.h"
 #include "base/json/json_writer.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/enterprise/connectors/core/reporting_constants.h"
 #include "components/safe_browsing/core/browser/referring_app_info.h"
 #include "components/safe_browsing/core/common/proto/csd.to_value.h"
 #include "components/safe_browsing/core/common/proto/realtimeapi.to_value.h"
 #include "components/safe_browsing/core/common/proto/safebrowsingv5.to_value.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/strings/escape.h"
+#else
+#include "components/enterprise/common/proto/upload_request_response.to_value.h"  // nogncheck crbug.com/1125897
+#endif
 
 #if BUILDFLAG(SAFE_BROWSING_DOWNLOAD_PROTECTION) && !BUILDFLAG(IS_ANDROID)
 #include "components/enterprise/common/proto/connectors.pb.h"
@@ -485,10 +492,40 @@ base::Value::Dict SerializeLogMessage(base::Time timestamp,
   return result;
 }
 
+// TODO(crbug.com/443997643): Delete when
+// UploadRealtimeReportingEventsUsingProto is cleaned up.
 base::Value::Dict SerializeReportingEvent(const base::Value::Dict& event) {
   base::Value::Dict result;
   result.Set("message", SerializeJson(event));
   return result;
+}
+
+base::Value::Dict SerializeUploadEventsRequest(
+    const ::chrome::cros::reporting::proto::UploadEventsRequest&
+        upload_events_request,
+    const base::Value::Dict& result) {
+  base::Value::Dict message;
+#if BUILDFLAG(IS_ANDROID)
+  message.Set("request",
+              base::EscapeNonASCII(upload_events_request.SerializeAsString()));
+#else
+  message.Set("request", ::chrome::cros::reporting::proto::Serialize(
+                             upload_events_request));
+#endif
+  message.Set("response", result.Clone());
+
+  base::Value::Dict wrapper;
+  wrapper.Set("message", SerializeJson(message));
+  auto& event = upload_events_request.events()[0];
+  wrapper.Set("timeMillis",
+              event.time().seconds() * 1000 + event.time().nanos() / 1000000.0);
+  wrapper.Set("event_type",
+              enterprise_connectors::GetEventName(event.event_case()));
+  wrapper.Set("profile", upload_events_request.has_profile());
+  wrapper.Set("device", upload_events_request.has_device());
+  wrapper.Set("success",
+              result.FindBool("uploaded_successfully").value_or(false));
+  return wrapper;
 }
 
 #if BUILDFLAG(SAFE_BROWSING_DOWNLOAD_PROTECTION) && !BUILDFLAG(IS_ANDROID)

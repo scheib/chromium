@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/data_sharing/public/features.h"
 #import "components/data_sharing/public/group_data.h"
 #import "components/data_sharing/test_support/test_utils.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/share_kit/model/test_constants.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/signin/model/fake_system_identity.h"
@@ -90,6 +91,9 @@ id<GREYMatcher> MenuButtonMatcher(int accessibility_label_id) {
 // Displays the tab cell context menu by long pressing at the tab cell at
 // `tab_cell_index`.
 void DisplayContextMenuForTabCellAtIndex(int tab_cell_index) {
+  // TODO(crbug.com/443957909): Investigate if there is a better solution to fix
+  // flakiness on iOS26.
+  base::PlatformThread::Sleep(base::Seconds(1));
   [[EarlGrey selectElementWithMatcher:TabGridCellAtIndex(tab_cell_index)]
       performAction:grey_longPress()];
 }
@@ -98,6 +102,10 @@ void DisplayContextMenuForTabCellAtIndex(int tab_cell_index) {
 // when no group is in the grid.
 void CreateDefaultFirstGroupFromTabCellAtIndex(int tab_cell_index) {
   DisplayContextMenuForTabCellAtIndex(tab_cell_index);
+
+  // TODO(crbug.com/443957909): Investigate if there is a better solution to fix
+  // flakiness on iOS26.
+  base::PlatformThread::Sleep(base::Seconds(1));
   [[EarlGrey
       selectElementWithMatcher:
           ContextMenuItemWithAccessibilityLabel(l10n_util::GetPluralNSStringF(
@@ -238,10 +246,6 @@ void CreateSharedGroupAndOpenMenu(
 // Tests that the tab group indicator view is visible when the active tab is
 // grouped.
 - (void)testTabGroupIndicatorNotVisibleOnIpad {
-  if (@available(iOS 17, *)) {
-  } else {
-    EARL_GREY_TEST_SKIPPED(@"Skipped on iOS 16.");
-  }
   if (![ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"Skipped on iPhone.");
   }
@@ -366,6 +370,11 @@ void CreateSharedGroupAndOpenMenu(
 
 // Tests that renaming a tab group from the tab group indicator menu works.
 - (void)testTabGroupIndicatorMenuActionsRenameGroup {
+  // TODO(crbug.com/442817314): Re-enable this flaky test on iOS26.
+  if (base::ios::IsRunningOnIOS26OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 26.");
+  }
+
   if ([ChromeEarlGrey isIPadIdiom]) {
     EARL_GREY_TEST_SKIPPED(@"On iPad, the tab group indicator is not displayed "
                            @"if the tab strip is visible.");

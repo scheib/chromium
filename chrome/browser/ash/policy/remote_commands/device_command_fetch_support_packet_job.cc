@@ -162,8 +162,7 @@ std::string GetUploadParameters(
           .Set(kFilenameKey, filename.BaseName().value())
           .Set(kCommandIdKey, base::NumberToString(command_id))
           .Set(kFileTypeKey, kSupportFileType);
-  std::string json;
-  base::JSONWriter::Write(upload_parameters_dict, &json);
+  std::string json = base::WriteJson(upload_parameters_dict).value_or("");
   return base::StringPrintf("%s\n%s", json.c_str(), kContentTypeJson);
 }
 
@@ -179,9 +178,7 @@ std::string GetCommandResultPayload(
     }
     json.Set(kNotesKey, std::move(notes_list));
   }
-  std::string result_payload;
-  base::JSONWriter::Write(json, &result_payload);
-  return result_payload;
+  return base::WriteJson(json).value_or("");
 }
 
 }  // namespace
@@ -240,8 +237,8 @@ bool DeviceCommandFetchSupportPacketJob::ParseCommandPayload(
 bool DeviceCommandFetchSupportPacketJob::ParseCommandPayloadImpl(
     const std::string& command_payload) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::optional<base::Value::Dict> value =
-      base::JSONReader::ReadDict(command_payload);
+  std::optional<base::Value::Dict> value = base::JSONReader::ReadDict(
+      command_payload, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!value) {
     return false;
   }

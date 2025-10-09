@@ -81,14 +81,11 @@ class PopupUpdater;
 namespace {
 
 HTMLOptionElement* EventTargetOption(const Event& event) {
-  auto* element = DynamicTo<Element>(event.RawTarget()->ToNode());
-  if (!element) {
-    return nullptr;
-  }
-  if (auto* option = DynamicTo<HTMLOptionElement>(element)) {
+  Node* target = event.RawTarget()->ToNode();
+  if (auto* option = DynamicTo<HTMLOptionElement>(target)) {
     return option;
   }
-  if (auto* option = DynamicTo<HTMLOptionElement>(element->OwnerShadowHost())) {
+  if (auto* option = DynamicTo<HTMLOptionElement>(target->OwnerShadowHost())) {
     return option;
   }
   return nullptr;
@@ -143,28 +140,17 @@ class PopoverElementForAppearanceBase : public HTMLDivElement {
           control->Focus(FocusParams(FocusTrigger::kScript));
         }
       } else {
-        HTMLElement* element_to_focus = nullptr;
-        if (auto* input = select->FirstDescendantTextInput();
-            input &&
-            (RuntimeEnabledFeatures::
-                 SelectAccessibilityReparentInputEnabled() ||
-             RuntimeEnabledFeatures::SelectAccessibilityNestedInputEnabled())) {
-          // If there is a filter input at the top of the picker, then that
-          // should be focused instead of options when opening.
-          element_to_focus = input;
-        } else {
-          element_to_focus = select->SelectedOption();
-          if (!element_to_focus || !element_to_focus->IsFocusable()) {
-            for (auto& option : select->GetOptionList()) {
-              if (option.IsFocusable()) {
-                element_to_focus = &option;
-                break;
-              }
+        HTMLOptionElement* option_to_focus = select->SelectedOption();
+        if (!option_to_focus || !option_to_focus->IsFocusable()) {
+          for (auto& option : select->GetOptionList()) {
+            if (option.IsFocusable()) {
+              option_to_focus = &option;
+              break;
             }
           }
         }
-        if (element_to_focus) {
-          element_to_focus->Focus(FocusParams(FocusTrigger::kScript));
+        if (option_to_focus) {
+          option_to_focus->Focus(FocusParams(FocusTrigger::kScript));
         }
       }
       if (AXObjectCache* cache =
@@ -198,27 +184,6 @@ class PopoverElementForAppearanceBase : public HTMLDivElement {
     return PopoverHideResult::kHidden;
   }
 
-  InsertionNotificationRequest InsertedInto(ContainerNode& container) override {
-    InsertionNotificationRequest return_value =
-        HTMLDivElement::InsertedInto(container);
-    if (container == parentNode()) {
-      CHECK(ParentSelect());
-      ParentSelect()->IncrementImplicitlyAnchoredElementCount();
-    }
-    return return_value;
-  }
-
-  void RemovedFrom(ContainerNode& container) override {
-    if (!parentNode()) {
-      auto* shadowroot = DynamicTo<ShadowRoot>(container);
-      CHECK(shadowroot);
-      auto* select = DynamicTo<HTMLSelectElement>(shadowroot->host());
-      CHECK(select);
-      select->DecrementImplicitlyAnchoredElementCount();
-    }
-    HTMLDivElement::RemovedFrom(container);
-  }
-
   void DidRecalcStyle(const StyleRecalcChange change) override {
     HTMLDivElement::DidRecalcStyle(change);
     if (auto* style = GetComputedStyle()) {
@@ -238,7 +203,7 @@ class PopoverElementForAppearanceBase : public HTMLDivElement {
         GetDocument()
             .GetTaskRunner(TaskType::kUserInteraction)
             ->PostTask(FROM_HERE,
-                       WTF::BindOnce(
+                       BindOnce(
                            [](HTMLSelectElement* select) {
                              select->HidePopup(
                                  SelectPopupHideBehavior::kNoEventsOrFocusing);
@@ -278,7 +243,7 @@ class PopoverElementForAppearanceBase : public HTMLDivElement {
 // TODO(crbug.com/1511354): Rename this class to PopUpSelectType
 class MenuListSelectType final : public SelectType {
  public:
-  explicit MenuListSelectType(HTMLSelectElement& select) : SelectType(select) {}
+  explicit MenuListSelectType(HTMLSelectElement& select);
   void Trace(Visitor* visitor) const override;
 
   bool DefaultEventHandler(const Event& event) override;
@@ -351,6 +316,13 @@ class MenuListSelectType final : public SelectType {
   bool is_appearance_base_select_ = false;
   bool is_appearance_base_picker_for_display_none_ = false;
 };
+
+MenuListSelectType::MenuListSelectType(HTMLSelectElement& select)
+    : SelectType(select) {
+  // MenuList selects always have two implicitly anchored elements: the
+  // ::picker and the autofill popover.
+  select_->SetMayBeImplicitAnchor();
+}
 
 void MenuListSelectType::Trace(Visitor* visitor) const {
   visitor->Trace(popup_);
@@ -452,19 +424,6 @@ bool MenuListSelectType::DefaultEventHandler(const Event& event) {
 
     if (ShouldOpenPopupForKeyPressEvent(*key_event))
       return HandlePopupOpenKeyboardEvent();
-
-    // TODO(crbug.com/1511354): Reconsider making appearance:base-select affect
-    // keyboard behavior after a resolution here:
-    // https://github.com/openui/open-ui/issues/1087
-    if (IsAppearanceBase() && key_code == '\r') {
-      // TODO(crbug.com/1511354): Consider making form->SubmitImplicitly work
-      // here instead of PrepareForSubmission and combine with the subsequent
-      // code.
-      if (HTMLFormElement* form = select_->Form()) {
-        form->PrepareForSubmission(&event, select_);
-        return true;
-      }
-    }
 
     if (!LayoutTheme::GetTheme().PopsMenuByReturnKey() && key_code == '\r') {
       if (HTMLFormElement* form = select_->Form())
@@ -570,14 +529,6 @@ bool MenuListSelectType::ShouldOpenPopupForKeyPressEvent(
     const KeyboardEvent& event) {
   LayoutTheme& layout_theme = LayoutTheme::GetTheme();
   int key_code = event.keyCode();
-
-  // TODO(crbug.com/1511354): Reconsider making appearance:base-select affect
-  // keyboard behavior after a resolution here:
-  // https://github.com/openui/open-ui/issues/1087
-  if (IsAppearanceBase() && key_code == '\r') {
-    return false;
-  }
-
   return ((key_code == ' ' && !select_->type_ahead_.HasActiveSession(event)) ||
           (layout_theme.PopsMenuByReturnKey() && key_code == '\r'));
 }
@@ -704,7 +655,7 @@ bool MenuListSelectType::IsAppearanceBasePicker() const {
 
 bool MenuListSelectType::PickerIsPopover() const {
   if (select_->IsMultiple()) {
-    if (!RuntimeEnabledFeatures::CustomizableSelectMultiplePopupEnabled()) {
+    if (!RuntimeEnabledFeatures::SelectMobileDesktopParityEnabled()) {
       return false;
     }
     if (IsAppearanceBasePicker()) {
@@ -1228,6 +1179,7 @@ class ListBoxSelectType final : public SelectType {
   void HandleMouseRelease() override;
   void ListBoxOnChange() override;
   void ClearLastOnChangeSelection() override;
+  void SetListBoxActiveSelection(HTMLOptionElement*) override;
   void CreateShadowSubtree(ShadowRoot&) override;
   void ManuallyAssignSlots() override;
   HTMLButtonElement* SlottedButton() const override;
@@ -1655,9 +1607,8 @@ void ListBoxSelectType::ScrollToOption(HTMLOptionElement* option) {
   if (!has_pending_task) {
     select_->GetDocument()
         .GetTaskRunner(TaskType::kUserInteraction)
-        ->PostTask(FROM_HERE,
-                   WTF::BindOnce(&ListBoxSelectType::ScrollToOptionTask,
-                                 WrapPersistent(this)));
+        ->PostTask(FROM_HERE, BindOnce(&ListBoxSelectType::ScrollToOptionTask,
+                                       WrapPersistent(this)));
   }
 }
 
@@ -1875,6 +1826,11 @@ void ListBoxSelectType::ClearLastOnChangeSelection() {
   last_on_change_selection_.clear();
 }
 
+void ListBoxSelectType::SetListBoxActiveSelection(HTMLOptionElement* option) {
+  SetActiveSelectionAnchor(option);
+  SetActiveSelectionEnd(option);
+}
+
 void ListBoxSelectType::CreateShadowSubtree(ShadowRoot& root) {
   Document& doc = select_->GetDocument();
   option_slot_ = MakeGarbageCollected<HTMLSlotElement>(doc);
@@ -1994,6 +1950,8 @@ void SelectType::HandleMouseRelease() {}
 void SelectType::ListBoxOnChange() {}
 
 void SelectType::ClearLastOnChangeSelection() {}
+
+void SelectType::SetListBoxActiveSelection(HTMLOptionElement*) {}
 
 Element& SelectType::InnerElement() const {
   NOTREACHED();

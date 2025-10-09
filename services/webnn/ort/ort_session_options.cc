@@ -6,6 +6,7 @@
 
 #include "base/command_line.h"
 #include "base/strings/stringprintf.h"
+#include "services/webnn/ort/environment.h"
 #include "services/webnn/ort/ort_status.h"
 #include "services/webnn/ort/platform_functions_ort.h"
 #include "services/webnn/public/cpp/webnn_trace.h"
@@ -17,6 +18,54 @@
 namespace webnn::ort {
 
 namespace {
+
+// Execution Provider selection delegate function that selects EPs based on
+// WebNN device type.
+// TODO(crbug.com/425487285): Select EPs based on WebNN power preference.
+OrtStatus* ORT_API_CALL
+EpSelectionPolicyDelegate(const OrtEpDevice** ep_devices,
+                          size_t num_devices,
+                          const OrtKeyValuePairs* model_metadata,
+                          const OrtKeyValuePairs* runtime_metadata,
+                          const OrtEpDevice** selected,
+                          size_t max_selected,
+                          size_t* num_selected,
+                          void* state) {
+  // Early return if no devices available.
+  if (num_devices == 0) {
+    *num_selected = 0;
+    return nullptr;
+  }
+
+  mojom::Device* device_type_ptr = static_cast<mojom::Device*>(state);
+  CHECK(device_type_ptr) << "Device type must be provided in state parameter";
+  mojom::Device device_type = *device_type_ptr;
+
+  // SAFETY: ORT guarantees that `ep_devices` is valid and contains
+  // `num_devices` elements.
+  base::span<const OrtEpDevice* const> available_devices =
+      UNSAFE_BUFFERS(base::span(ep_devices, num_devices));
+
+  // ORT currently allows a maximum of 8 selected devices. The implementation
+  // here guarantees at most 3 EP devices will be selected for WebNN.
+  // According to:
+  // https://github.com/microsoft/onnxruntime/blob/f8c6262399e2c7e0a58cd494f0e58d4f4262dc43/onnxruntime/core/session/provider_policy_context.cc#L159
+  std::vector<const OrtEpDevice*> selected_devices =
+      Environment::SelectEpDevicesForDeviceType(available_devices, device_type);
+  CHECK_LE(selected_devices.size(), max_selected)
+      << "Selected device count (" << selected_devices.size()
+      << ") exceeds maximum allowed (" << max_selected << ")";
+
+  for (size_t i = 0; i < selected_devices.size(); ++i) {
+    // SAFETY: ORT guarantees that `selected` is valid and contains
+    // `max_selected` elements.
+    UNSAFE_BUFFERS(selected[i]) = selected_devices[i];
+  }
+
+  *num_selected = selected_devices.size();
+
+  return nullptr;
+}
 
 // Helper function to convert a string to GraphOptimizationLevel enum. Return
 // nullopt for invalid input to let ORT decide the optimization level.
@@ -43,7 +92,8 @@ std::optional<GraphOptimizationLevel> StringToOrtGraphOptimizationLevel(
 
 // static
 scoped_refptr<SessionOptions> SessionOptions::Create(
-    mojom::Device device_type) {
+    mojom::Device device_type,
+    scoped_refptr<Environment> env) {
   ScopedTrace scoped_trace("SessionOptions::Create");
 
   scoped_trace.AddStep("Create session options");
@@ -51,26 +101,6 @@ scoped_refptr<SessionOptions> SessionOptions::Create(
   ScopedOrtSessionOptions session_options;
   CHECK_STATUS(ort_api->CreateSessionOptions(
       ScopedOrtSessionOptions::Receiver(session_options).get()));
-
-  // TODO(crbug.com/425487285): Map WebNN power preference to ORT auto EP
-  // selection policy
-  OrtExecutionProviderDevicePolicy device_policy;
-  switch (device_type) {
-    case mojom::Device::kCpu:
-      device_policy = OrtExecutionProviderDevicePolicy::
-          OrtExecutionProviderDevicePolicy_PREFER_CPU;
-      break;
-    case mojom::Device::kGpu:
-      device_policy = OrtExecutionProviderDevicePolicy::
-          OrtExecutionProviderDevicePolicy_PREFER_GPU;
-      break;
-    case mojom::Device::kNpu:
-      device_policy = OrtExecutionProviderDevicePolicy::
-          OrtExecutionProviderDevicePolicy_PREFER_NPU;
-      break;
-  }
-  CHECK_STATUS(ort_api->SessionOptionsSetEpSelectionPolicy(
-      session_options.get(), device_policy));
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kWebNNOrtDumpModel)) {
@@ -82,6 +112,19 @@ scoped_refptr<SessionOptions> SessionOptions::Create(
         base::StringPrintf("model%d.onnx", dump_count++));
     CHECK_STATUS(ort_api->SetOptimizedModelFilePath(session_options.get(),
                                                     dump_path.value().c_str()));
+  }
+
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kWebNNOrtEnableProfiling)) {
+    std::wstring profile_prefix =
+        base::CommandLine::ForCurrentProcess()->GetSwitchValueNative(
+            switches::kWebNNOrtEnableProfiling);
+    if (profile_prefix.empty()) {
+      profile_prefix = L"WebNNOrtProfile";
+    }
+
+    CHECK_STATUS(ort_api->EnableProfiling(session_options.get(),
+                                          profile_prefix.c_str()));
   }
 
   // Enable strict shape type inference check. All inconsistencies encountered
@@ -107,14 +150,36 @@ scoped_refptr<SessionOptions> SessionOptions::Create(
     }
   }
 
-  return base::MakeRefCounted<SessionOptions>(base::PassKey<SessionOptions>(),
-                                              std::move(session_options));
+  std::vector<Environment::SessionConfigEntry> ep_config_entries =
+      env->GetEpConfigEntries(device_type);
+  for (const auto& config_entry : ep_config_entries) {
+    CHECK_STATUS(ort_api->AddSessionConfigEntry(
+        session_options.get(),
+        /*config_key=*/config_entry.key.c_str(),
+        /*config_value=*/config_entry.value.c_str()));
+  }
+
+  return base::MakeRefCounted<SessionOptions>(
+      base::PassKey<SessionOptions>(), std::move(session_options), device_type);
 }
 
 SessionOptions::SessionOptions(base::PassKey<SessionOptions>,
-                               ScopedOrtSessionOptions session_options)
-    : session_options_(std::move(session_options)) {
+                               ScopedOrtSessionOptions session_options,
+                               mojom::Device device_type)
+    : session_options_(std::move(session_options)), device_type_(device_type) {
   CHECK(session_options_.get());
+
+  const OrtApi* ort_api = PlatformFunctions::GetInstance()->ort_api();
+  // SAFETY: Passing `&device_type_` is safe because the delegate is only called
+  // synchronously during session creation, and `device_type_` is a member
+  // variable of this SessionOptions object which outlives the session creation
+  // process.
+  // NOTE: `const_cast` is safe here because `EpSelectionPolicyDelegate` only
+  // reads the `device_type_` value and never modifies it. The `void*` parameter
+  // is a C API limitation that doesn't preserve const-correctness.
+  CHECK_STATUS(ort_api->SessionOptionsSetEpSelectionPolicyDelegate(
+      session_options_.get(), EpSelectionPolicyDelegate,
+      const_cast<mojom::Device*>(&device_type_)));
 }
 
 SessionOptions::~SessionOptions() = default;

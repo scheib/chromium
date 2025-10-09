@@ -156,6 +156,10 @@ ci.builder(
         configs = [
             "gpu_tests",
             "debug_builder",
+            # TODO(https://crbug.com/449751912): Prformance overhead of
+            # symbolizing crash stacks in debug builds were causing renderer
+            # crash related tests to timeout.
+            "no_symbols",
             "remoteexec",
             "win",
             "x64",
@@ -260,10 +264,13 @@ ci.builder(
                 # crbug.com/870673
                 experiment_percentage = 100,
             ),
+            "content_browsertests": targets.mixin(
+                swarming = targets.swarming(
+                    shards = 12,
+                ),
+            ),
         },
     ),
-    # Too flaky. See crbug.com/876224 for more details.
-    gardener_rotations = args.ignore_default(None),
     tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "debug|tester",
@@ -538,14 +545,14 @@ ci.thin_tester(
             "chromium_win_rel_isolated_scripts",
         ],
         mixins = [
-            # TODO(https://crbug.com/433551587): win11-23h2->24h2 migration
-            "experiments",
             "x86-64",
             "win11-any",
             "isolate_profile_data",
         ],
         per_test_modifications = {
             "blink_web_tests": targets.mixin(
+                # TODO(https://crbug.com/433551587): Fix test failures due to win11-24h2
+                experiment_percentage = 100,
                 swarming = targets.swarming(
                     shards = 12,
                 ),

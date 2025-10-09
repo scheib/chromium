@@ -4,7 +4,6 @@
 <translation id="1000436330784933699">Pode abrir o Lens aqui.</translation>
 <translation id="1042296835509784301">Abre o Gestor de Palavras-passe no Chromium.</translation>
 <translation id="1047130070405668746">Selecione o Chromium</translation>
-<translation id="1086486568852410168">Pesquisar com o Google Lens</translation>
 <translation id="1091252999271033193">Isto significa que o Chromium irá pedir sempre o site para dispositivos móveis.</translation>
 <translation id="1115463765356382667">Conclua as ações sugeridas abaixo para tirar o máximo partido do Chromium.</translation>
 <translation id="1185134272377778587">Acerca do Chromium</translation>
@@ -43,6 +42,7 @@
 <ph name="BEGIN_LINK" />Saiba mais<ph name="END_LINK" /></translation>
 <translation id="1847960401032164406">Maps no Chromium</translation>
 <translation id="1867772173333403444">4. Selecione o Chromium</translation>
+<translation id="1965068424387304464">Dica do Chromium: guarde palavras-passe</translation>
 <translation id="2006345422933397527">O Chromium não conseguiu verificar se existem atualizações. Experimente verificar a sua ligação à Internet.</translation>
 <translation id="2042889939382983733">Veja o histórico do Chromium</translation>
 <translation id="2052320862053429062">O Chromium verifica periodicamente se as suas palavras-passe fazem parte das listas publicadas online. Ao fazê-lo, as suas palavras-passe e nomes de utilizador estão encriptados, pelo que não podem ser lidos por ninguém, incluindo a Google.</translation>
@@ -89,7 +89,6 @@ Para ver mais definições que usam dados para melhorar a sua experiência do Ch
 <translation id="2977470724722393594">O Chromium está atualizado</translation>
 <translation id="3044857325852340337">Dados do Chromium eliminados</translation>
 <translation id="3054480780637153380">Abra as definições do Chromium no iOS, toque em "App de navegador predefinida" e selecione o Chromium.</translation>
-<translation id="3102849287235003384">Para terminar sessão na sua Conta Google em todos os Websites, <ph name="BEGIN_LINK" />termine sessão no Chromium<ph name="END_LINK" />.</translation>
 <translation id="3115956258722352278">Tornar o Chromium o navegador predefinido?</translation>
 <translation id="3180939591219927904">Ative a opção "Bloquear separadores de navegação anónima quando fecha o Chromium"</translation>
 <translation id="328933489847748230">{count,plural, =1{A mostrar 1 janela do Chromium agora}other{A mostrar {count} janelas do Chromium agora}}</translation>
@@ -119,6 +118,7 @@ Experimente aguardar alguns minutos antes de mudar de conta. Se mudar de conta a
 <translation id="3816686541346279443">O Chromium vai oferecer a opção de guardar a sua palavra-passe.</translation>
 <translation id="3827545470516145620">Vai obter a proteção de segurança padrão neste dispositivo</translation>
 <translation id="3833326979834193417">O Chromium executa automaticamente a verificação de segurança todos os dias para lhe oferecer proteção contra violações de dados, Websites inseguros e muito mais. Pode encontrar mais informações sobre a verificação de segurança nas Definições.</translation>
+<translation id="3837584850181228767">Dica do Chromium: Navegação segura melhorada</translation>
 <translation id="3845223911364528001">Volte ao Chromium para carregar o ficheiro</translation>
 <translation id="3855938650519180865">Novidades do Chromium</translation>
 <translation id="3886689467633467988">Inicie sessão neste site e no Chromium para obter os seus marcadores e muito mais em todos os seus dispositivos.</translation>
@@ -199,6 +199,9 @@ Para alterar esta definição, <ph name="BEGIN_LINK" />elimine os dados do Chrom
 <translation id="5671188105328420281">Sugestões do Chromium</translation>
 <translation id="5688047395118852662">Este cartão mostra sugestões sobre como tirar o máximo partido do Chromium.</translation>
 <translation id="5700709190537129682">O Chromium não consegue verificar as suas palavras-passe.</translation>
+<translation id="5731004036450828399">Para manter as suas chaves de acesso seguras, primeiro tem de criar um PIN de recuperação.
+
+        As chaves de acesso são guardadas no Gestor de Palavras-passe, o que lhe permite usá-las no Chromium em qualquer dispositivo.</translation>
 <translation id="584550191241316896">Com sessão iniciada no Chromium</translation>
 <translation id="5862307444128926510">Bem-vindo ao Chromium</translation>
 <translation id="5889847953983052353">Quando a opção está ativada:
@@ -264,8 +267,8 @@ Só alguém com a sua frase de acesso pode ler os dados encriptados. A Google n�
 <translation id="7269362888766543920">Alguns suplementos provocam falhas no sistema do Chromium. Tente desinstalá-los.</translation>
 <translation id="7285031092584344905">Aceda às suas palavras-passe do Chromium e muito mais noutras apps.</translation>
 <translation id="7337881442233988129">Chromium</translation>
-<translation id="7357211569052832586">Os dados selecionados foram removidos do Chromium e dos dispositivos sincronizados. A sua Conta Google pode ter outras formas do histórico de navegação, como pesquisas e atividade de outros serviços Google, em history.google.com.</translation>
 <translation id="7395825497086981028">A palavra-passe será guardada no Gestor de palavras-passe para <ph name="EMAIL" />.</translation>
+<translation id="7434848749522628428">Esta chave de acesso vai ser guardada no Gestor de Palavras-passe de <ph name="USER_EMAIL" /></translation>
 <translation id="7504829997542308412">Abra o Chromium</translation>
 <translation id="7531461704633548377">Do Chromium</translation>
 <translation id="7554983317097061001">Sugestão do Chromium: mova o Chromium para a dock</translation>
@@ -299,6 +302,7 @@ Só alguém com a sua frase de acesso pode ler os dados encriptados. A Google n�
 <translation id="8254729934443216898">Explore novas funcionalidades que ajudam a tirar o máximo partido do Chromium.</translation>
 <translation id="8293572045658095405">Está na Navegação anónima do Chromium</translation>
 <translation id="830951810931292870">Abre os URLs introduzidos no Chromium na Navegação anónima.</translation>
+<translation id="8385503371191508165">Comece a guardar chaves de acesso com o Gestor de Palavras-passe</translation>
 <translation id="8390323835464055390">Inicie sessão com as suas palavras-passe e chaves de acesso guardadas a partir de qualquer app com o Chromium para o preenchimento automático</translation>
 <translation id="8409374867500149834">Tem a segurança mais avançada do Chromium contra Websites prejudiciais</translation>
 <translation id="8543509361021925846">{THRESHOLD,plural, =1{Isto acontece quando o Chromium não é usado durante {THRESHOLD} minuto. Os dados guardados apenas neste dispositivo enquanto tinha sessão iniciada vão ser eliminados. Isto pode incluir o histórico e as palavras-passe.}other{Isto acontece quando o Chromium não é usado durante {THRESHOLD} minutos. Os dados guardados apenas neste dispositivo enquanto tinha sessão iniciada vão ser eliminados. Isto pode incluir o histórico e as palavras-passe.}}</translation>

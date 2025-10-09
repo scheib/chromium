@@ -23,7 +23,6 @@
 #include "chrome/browser/speech/extension_api/tts_extension_api.h"
 #include "chrome/browser/speech/extension_api/tts_extension_api_constants.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/common/extensions/api/speech/tts_engine_manifest_handler.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -36,6 +35,7 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/process_manager.h"
+#include "extensions/common/api/speech/tts_engine_manifest_handler.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_set.h"
 #include "net/base/network_change_notifier.h"
@@ -172,7 +172,7 @@ std::unique_ptr<std::vector<extensions::TtsVoice>> GetVoicesInternal(
   }
 
   // Fall back on the extension manifest.
-  auto* manifest_voices = extensions::TtsVoices::GetTtsVoices(extension);
+  auto* manifest_voices = extensions::TtsEngine::GetTtsVoices(extension);
   if (manifest_voices) {
     return std::make_unique<std::vector<extensions::TtsVoice>>(
         *manifest_voices);
@@ -236,10 +236,11 @@ content::LanguageInstallStatus VoicePackInstallStatusFromString(
 bool CanUseEnhancedNetworkVoices(const GURL& source_url, Profile* profile) {
   // Currently only Select-to-speak and its settings page can use Enhanced
   // Network voices.
-  if (source_url.host() != extension_misc::kSelectToSpeakExtensionId &&
+  if (source_url.GetHost() != extension_misc::kSelectToSpeakExtensionId &&
       source_url != chrome::GetOSSettingsUrl(
-                        chromeos::settings::mojom::kSelectToSpeakSubpagePath))
+                        chromeos::settings::mojom::kSelectToSpeakSubpagePath)) {
     return false;
+  }
 
   // Check if these voices are disallowed by policy.
   if (!profile->GetPrefs()->GetBoolean(

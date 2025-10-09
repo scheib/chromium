@@ -37,6 +37,7 @@
 #include "build/build_config.h"
 #include "cc/test/pixel_test_utils.h"
 #include "components/ukm/test_ukm_recorder.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/browser/browser_url_handler_impl.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/renderer_host/navigation_request.h"
@@ -447,7 +448,7 @@ class FrameAncestorNavigationBrowserTest
         base::BindLambdaForTesting(
             [&](const net::test_server::HttpRequest& request) {
               base::AutoLock lock(lock_);
-              observed_request_headers_.emplace_back(request.GetURL().path(),
+              observed_request_headers_.emplace_back(request.GetURL().GetPath(),
                                                      request.headers);
             }));
     NavigationBaseBrowserTest::SetUpOnMainThread();
@@ -516,7 +517,7 @@ IN_PROC_BROWSER_TEST_P(FrameAncestorNavigationBrowserTest,
   EXPECT_THAT(
       observed_request_headers(),
       Contains(Pair(
-          inner_url.path(),
+          inner_url.GetPath(),
           testing::IsSupersetOf<HeaderMapMatchers>({
               testing::Pair("Sec-Fetch-Frame-Ancestors", expected_relation()),
           }))));
@@ -546,7 +547,7 @@ IN_PROC_BROWSER_TEST_P(FrameAncestorNavigationBrowserTest, SubframeRedirect) {
   load_observer.Wait();
 
   EXPECT_THAT(observed_request_headers(),
-              Contains(Pair(inner_url.path(),
+              Contains(Pair(inner_url.GetPath(),
                             testing::IsSupersetOf<HeaderMapMatchers>({
                                 testing::Pair("Sec-Fetch-Frame-Ancestors",
                                               expected_relation_for_redirect()),
@@ -571,7 +572,7 @@ IN_PROC_BROWSER_TEST_P(FrameAncestorNavigationBrowserTest, TopFrameRedirect) {
   // since it is same-origin with itself.
   EXPECT_THAT(observed_request_headers(),
               Contains(Pair(
-                  inner_url.path(),
+                  inner_url.GetPath(),
                   testing::IsSupersetOf<HeaderMapMatchers>({
                       testing::Pair("Sec-Fetch-Frame-Ancestors", "same-origin"),
                   }))));
@@ -603,7 +604,7 @@ IN_PROC_BROWSER_TEST_P(FrameAncestorNavigationBrowserTest,
                      JsReplace(subresource_request_script, redirecting_url)));
 
   EXPECT_THAT(observed_request_headers(),
-              Contains(Pair(inner_url.path(),
+              Contains(Pair(inner_url.GetPath(),
                             testing::IsSupersetOf<HeaderMapMatchers>({
                                 testing::Pair("Sec-Fetch-Frame-Ancestors",
                                               expected_relation_for_redirect()),
@@ -2812,7 +2813,7 @@ IN_PROC_BROWSER_TEST_F(NavigationBaseBrowserTest,
 
   {
     WebContentsConsoleObserver console_observer(web_contents());
-    console_observer.SetPattern("Refused to execute inline script *");
+    console_observer.SetPattern("Executing inline script violates *");
 
     // 1) Load main document with CSP: script-src 'none'
     // 2) Open an about:srcdoc iframe. It inherits the CSP from its parent.
@@ -2843,7 +2844,7 @@ IN_PROC_BROWSER_TEST_F(NavigationBaseBrowserTest,
 
   {
     WebContentsConsoleObserver console_observer(web_contents());
-    console_observer.SetPattern("Refused to execute inline script *");
+    console_observer.SetPattern("Executing inline script violates *");
 
     // 4) The iframe navigates back to about:srcdoc.
     web_contents()->GetController().GoBack();
@@ -2866,7 +2867,7 @@ IN_PROC_BROWSER_TEST_F(NavigationBaseBrowserTest,
 
   {
     WebContentsConsoleObserver console_observer(web_contents());
-    console_observer.SetPattern("Refused to execute inline script *");
+    console_observer.SetPattern("Executing inline script violates *");
 
     // 1) Load main document with CSP: script-src 'none'
     // 2) Open an about:srcdoc iframe. It inherits the CSP from its parent.
@@ -2897,7 +2898,7 @@ IN_PROC_BROWSER_TEST_F(NavigationBaseBrowserTest,
 
   {
     WebContentsConsoleObserver console_observer(web_contents());
-    console_observer.SetPattern("Refused to execute inline script *");
+    console_observer.SetPattern("Executing inline script violates *");
 
     // 4) The iframe navigates back to about:srcdoc.
     web_contents()->GetController().GoBack();
@@ -3886,12 +3887,12 @@ IN_PROC_BROWSER_TEST_F(NavigationBrowserTest,
 
 class GetEffectiveUrlClient : public ContentBrowserTestContentBrowserClient {
  public:
-  GURL GetEffectiveURL(content::BrowserContext* browser_context,
-                       const GURL& url) override {
+  std::optional<GURL> GetEffectiveURL(content::BrowserContext* browser_context,
+                                      const GURL& url) override {
     if (effective_url_) {
       return *effective_url_;
     }
-    return url;
+    return std::nullopt;
   }
 
   bool IsSuitableHost(RenderProcessHost* process_host,
@@ -4196,7 +4197,7 @@ IN_PROC_BROWSER_TEST_F(NavigationBrowserTest,
   TestNavigationObserver observer(web_contents());
   shell()->LoadURL(embedded_test_server()->GetURL("/virtual-url.html"));
   observer.Wait();
-  EXPECT_EQ("/title2.html", observer.last_navigation_url().path());
+  EXPECT_EQ("/title2.html", observer.last_navigation_url().GetPath());
   EXPECT_EQ(2, rewrite_count);
 }
 
@@ -4852,7 +4853,6 @@ IN_PROC_BROWSER_TEST_F(DocumentPolicyBrowserTest,
                                                       "/target.html");
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/target.html"));
-  RenderFrameSubmissionObserver frame_observer(web_contents());
   TestNavigationManager navigation_manager(web_contents(), url);
 
   // Load the document with document policy force-load-at-top set to false.
@@ -4874,9 +4874,12 @@ IN_PROC_BROWSER_TEST_F(DocumentPolicyBrowserTest,
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
   EXPECT_TRUE(WaitForRenderFrameReady(current_frame_host()));
 
-  // Scroll down the page a bit
-  EXPECT_TRUE(ExecJs(web_contents(), "window.scrollTo(0, 1000)"));
-  frame_observer.WaitForScrollOffsetAtTop(false);
+  {
+    RenderFrameSubmissionObserver frame_observer(web_contents());
+    // Scroll down the page a bit
+    EXPECT_TRUE(ExecJs(web_contents(), "window.scrollTo(0, 1000)"));
+    frame_observer.WaitForScrollOffsetAtTop(false);
+  }
 
   // Navigate away
   EXPECT_TRUE(ExecJs(web_contents(), "window.location = 'about:blank'"));
@@ -4889,9 +4892,10 @@ IN_PROC_BROWSER_TEST_F(DocumentPolicyBrowserTest,
   EXPECT_TRUE(WaitForRenderFrameReady(current_frame_host()));
 
   // Ensure scroll restoration activated
+  RenderFrameSubmissionObserver frame_observer(web_contents());
   frame_observer.WaitForScrollOffsetAtTop(false);
   const cc::RenderFrameMetadata& last_metadata =
-      RenderFrameSubmissionObserver(web_contents()).LastRenderFrameMetadata();
+      frame_observer.LastRenderFrameMetadata();
   EXPECT_FALSE(last_metadata.is_scroll_offset_at_top);
 }
 
@@ -9128,8 +9132,8 @@ class NavigationBrowserTestPaintHoldingSubframe
     }
   }
 
-  void OnCopyDone(const SkBitmap& bitmap) {
-    bitmap_ = bitmap;
+  void OnCopyDone(const viz::CopyOutputBitmapWithMetadata& result) {
+    bitmap_ = result.bitmap;
     run_loop_->Quit();
   }
 
@@ -10151,7 +10155,7 @@ IN_PROC_BROWSER_TEST_F(HstsUpgradeBrowserTest, UpgradeTopLevelOnly) {
                                 ->GetDefaultStoragePartition()
                                 ->GetNetworkContext();
     base::RunLoop run_loop;
-    network_context->AddHSTS(url_of_hsts_frame_http.host(), expiry,
+    network_context->AddHSTS(url_of_hsts_frame_http.GetHost(), expiry,
                              include_subdomains, run_loop.QuitClosure());
     run_loop.Run();
   }

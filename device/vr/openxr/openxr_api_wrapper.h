@@ -26,6 +26,7 @@
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "device/vr/public/mojom/xr_session.mojom.h"
 #include "device/vr/vr_export.h"
+#include "third_party/abseil-cpp/absl/container/flat_hash_map.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -57,6 +58,7 @@ using VisibilityChangedCallback =
 
 class OpenXrApiWrapper {
  public:
+  using XrFutureReadyCallback = base::OnceCallback<void(XrFutureEXT)>;
   OpenXrApiWrapper();
 
   OpenXrApiWrapper(const OpenXrApiWrapper&) = delete;
@@ -91,6 +93,10 @@ class OpenXrApiWrapper {
 
   XrSpace GetReferenceSpace(device::mojom::XRReferenceSpaceType type) const;
 
+  XrInstance instance() const { return instance_; }
+  XrSession session() const { return session_; }
+  XrSystemId system() const { return system_; }
+
   XrResult BeginFrame();
   XrResult EndFrame();
   bool HasPendingFrame() const;
@@ -113,6 +119,7 @@ class OpenXrApiWrapper {
       device::mojom::XRSessionMode session_mode);
 
   // Various manager getters if they exist.
+  OpenXrPlaneManager* GetPlaneManager();
   OpenXrAnchorManager* GetAnchorManager();
   OpenXrHitTestManager* GetHitTestManager();
   OpenXrLightEstimator* GetLightEstimator();
@@ -123,6 +130,14 @@ class OpenXrApiWrapper {
   void OnContextProviderLost();
 
   bool CanEnableAntiAliasing() const;
+
+  // Polls the given future until it is ready. Once ready, the provided
+  // callback will be invoked with the future. If polling fails, the callback
+  // will be invoked with XR_NULL_FUTURE_EXT.
+  void PollFuture(XrFutureEXT future,
+                  base::OnceCallback<void(XrFutureEXT)> on_ready_callback);
+
+  uint32_t GetRecommendedSwapchainSampleCount() const;
 
   static void DEVICE_VR_EXPORT SetTestHook(VRTestHook* hook);
 
@@ -142,6 +157,7 @@ class OpenXrApiWrapper {
       std::vector<XrViewConfigurationView>& view_properties) const;
   XrResult InitializeEnvironmentBlendMode(XrSystemId system);
   XrResult ProcessEvents();
+  void ProcessPendingFutures();
   void EnsureEventPolling();
 
   XrResult CreateSession();
@@ -161,10 +177,8 @@ class OpenXrApiWrapper {
   bool HasSystem() const;
   bool HasBlendMode() const;
   bool HasSession() const;
-  bool HasColorSwapChain() const;
   bool HasSpace(XrReferenceSpaceType type) const;
 
-  uint32_t GetRecommendedSwapchainSampleCount() const;
   void UpdateStageBounds();
   std::optional<gfx::Transform> GetLocalFromStage();
   std::optional<gfx::Transform> GetBaseSpaceFromSpace(
@@ -183,7 +197,6 @@ class OpenXrApiWrapper {
 
   bool ShouldCreateSharedImages() const;
   void CreateSharedMailboxes();
-  void ReleaseColorSwapchainImages();
 
   void SetXrSessionState(XrSessionState new_state);
 
@@ -230,10 +243,6 @@ class OpenXrApiWrapper {
   bool received_initial_valid_primary_views_ = false;
   uint64_t frames_before_initial_valid_primary_views_ = 0;
 
-  // The swapchain is initializd when a session begins and is re-created when
-  // the state of a secondary view configuration changes.
-  XrSwapchain color_swapchain_;
-
   // The rest of these objects store information about the current frame and are
   // updated each frame.
   XrFrameState frame_state_;
@@ -241,6 +250,8 @@ class OpenXrApiWrapper {
   OpenXrViewConfiguration primary_view_config_;
   std::unordered_map<XrViewConfigurationType, OpenXrViewConfiguration>
       secondary_view_configs_;
+
+  absl::flat_hash_map<XrFutureEXT, XrFutureReadyCallback> pending_futures_;
 
   std::unique_ptr<OpenXrDepthSensor> depth_sensor_;
   std::unique_ptr<OpenXrLightEstimator> light_estimator_;
@@ -251,6 +262,8 @@ class OpenXrApiWrapper {
   // The context provider is owned by the OpenXrRenderLoop, and may change when
   // there is a context lost.
   scoped_refptr<viz::ContextProvider> context_provider_;
+
+  raw_ptr<const OpenXrExtensionHelper> extension_helper_ = nullptr;
 
   base::WeakPtrFactory<OpenXrApiWrapper> weak_ptr_factory_{this};
 };

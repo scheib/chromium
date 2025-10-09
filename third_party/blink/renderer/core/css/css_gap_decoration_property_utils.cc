@@ -5,10 +5,15 @@
 #include "third_party/blink/renderer/core/css/css_gap_decoration_property_utils.h"
 
 #include "third_party/blink/renderer/core/css/css_property_value.h"
+#include "third_party/blink/renderer/core/css/css_repeat_value.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/core/css/properties/css_parsing_utils.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
 #include "third_party/blink/renderer/core/css/style_color.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
+#include "third_party/blink/renderer/core/style/computed_style_constants.h"
 #include "third_party/blink/renderer/core/style/gap_data_list.h"
+#include "third_party/blink/renderer/platform/text/writing_mode_utils.h"
 
 namespace blink {
 
@@ -89,6 +94,77 @@ void CSSGapDecorationUtils::AddProperties(
   css_parsing_utils::AddProperty(
       rule_color_id, rule_shorthand_id, rule_colors, important,
       css_parsing_utils::IsImplicitProperty::kNotImplicit, properties);
+}
+
+BoxSide CSSGapDecorationUtils::BoxSideFromDirection(
+    const ComputedStyle& style,
+    GridTrackSizingDirection direction) {
+  PhysicalToLogical<BoxSide> logical_sides(style.GetWritingDirection(),
+                                           BoxSide::kTop, BoxSide::kRight,
+                                           BoxSide::kBottom, BoxSide::kLeft);
+
+  return (direction == kForColumns) ? logical_sides.InlineStart()
+                                    : logical_sides.BlockStart();
+}
+
+GapDataList<int>::GapDataVector
+CSSGapDecorationUtils::GetExpandedGapDataWidthList(
+    const GapDataList<int>& gap_data_list) {
+  // Create a new GapDataList::GapDataVector with only the expanded values. Auto
+  // repeaters are not expanded.
+  GapDataList<int>::GapDataVector expanded_values;
+  for (const auto& gap_data : gap_data_list.GetGapDataList()) {
+    if (!gap_data.IsRepeaterData()) {
+      // Simple single value, add to `expanded_values`.
+      expanded_values.push_back(gap_data);
+    } else {
+      const ValueRepeater<int>* repeater = gap_data.GetValueRepeater();
+
+      if (repeater->IsAutoRepeater()) {
+        expanded_values.push_back(gap_data);
+      } else {
+        // Integer repeater, add values `count` times.
+        wtf_size_t count = repeater->RepeatCount();
+
+        for (size_t i = 0; i < count; ++i) {
+          for (const auto& value : repeater->RepeatedValues()) {
+            expanded_values.push_back(GapData<int>(value));
+          }
+        }
+      }
+    }
+  }
+
+  return expanded_values;
+}
+
+CSSValueList* CSSGapDecorationUtils::GetExpandedGapDataWidthList(
+    const CSSValueList& list,
+    const StyleResolverState& state) {
+  CSSValueList* expanded_list =
+      MakeGarbageCollected<CSSValueList>(CSSValueList::kSpaceSeparator);
+
+  for (const auto& value : list) {
+    if (auto* gap_repeat_value =
+            DynamicTo<cssvalue::CSSRepeatValue>(*value.Get())) {
+      // Auto repeaters are not expanded.
+      if (gap_repeat_value->IsAutoRepeatValue()) {
+        expanded_list->Append(*value);
+        continue;
+      } else {
+        int repeat_count = gap_repeat_value->Repetitions()->ComputeInteger(
+            state.CssToLengthConversionData());
+        for (int i = 0; i < repeat_count; ++i) {
+          for (const auto& inner_value : gap_repeat_value->Values()) {
+            expanded_list->Append(*inner_value);
+          }
+        }
+      }
+    } else {
+      expanded_list->Append(*value);
+    }
+  }
+  return expanded_list;
 }
 
 }  // namespace blink

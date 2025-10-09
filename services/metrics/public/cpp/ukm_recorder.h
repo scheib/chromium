@@ -18,6 +18,7 @@
 #include "services/metrics/public/mojom/ukm_interface.mojom-forward.h"
 #include "url/gurl.h"
 
+class AbusiveNotificationPermissionsManager;
 class ChromePermissionsClient;
 class PermissionUmaUtil;
 class PlatformNotificationServiceImpl;
@@ -39,7 +40,9 @@ class UkmRecorderInterface;
 namespace content {
 class BtmNavigationHandle;
 class BtmServiceImpl;
-class FedCmMetrics;
+namespace webid {
+class Metrics;
+}  // namespace webid
 class PaymentAppProviderUtil;
 class RenderFrameHostImpl;
 }  // namespace content
@@ -123,7 +126,7 @@ class METRICS_EXPORT UkmRecorder {
   // from the identity provider. This method should only be called in the
   // FedCmMetrics class.
   static SourceId GetSourceIdForWebIdentityFromScope(
-      base::PassKey<content::FedCmMetrics>,
+      base::PassKey<content::webid::Metrics>,
       const GURL& provider_url);
 
   static SourceId GetSourceIdForWebIdentityFromScope(
@@ -188,6 +191,12 @@ class METRICS_EXPORT UkmRecorder {
   // for recording suspicious notification interaction UKM events.
   static SourceId GetSourceIdForNotificationEvent(
       base::PassKey<safe_browsing::NotificationContentDetectionUkmUtil>,
+      const GURL& url);
+
+  // Gets a new SourceId of NOTIFICATION_ID type. This should only be used
+  // for recording abusive notification Safety Hub interaction UKM events.
+  static SourceId GetSourceIdForNotificationEvent(
+      base::PassKey<AbusiveNotificationPermissionsManager>,
       const GURL& url);
 
   // This method should be called when the system is about to shutdown, but

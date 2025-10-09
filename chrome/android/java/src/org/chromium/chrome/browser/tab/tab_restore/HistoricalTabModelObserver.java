@@ -12,7 +12,6 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Token;
 import org.chromium.base.supplier.LazyOneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -31,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** A tab model observer for managing bulk closures. */
 @NullMarked
@@ -184,8 +184,8 @@ public class HistoricalTabModelObserver implements TabModelObserver {
             // Case: Group information already lost (undoable closure). Rely on whether any unclosed
             // tabs share a tab group id with the closing group.
             TabList comprehensiveModel = mTabGroupModelFilter.getTabModel().getComprehensiveModel();
-            for (int i = 0; i < comprehensiveModel.getCount(); i++) {
-                if (tabGroupId.equals(comprehensiveModel.getTabAtChecked(i).getTabGroupId())) {
+            for (Tab tab : comprehensiveModel) {
+                if (tabGroupId.equals(tab.getTabGroupId())) {
                     return true;
                 }
             }
@@ -206,8 +206,8 @@ public class HistoricalTabModelObserver implements TabModelObserver {
             // Case: Group information already lost (undoable closure). Rely on whether the tab
             // still has a tab group ID.
             TabList comprehensiveModel = mTabGroupModelFilter.getTabModel().getComprehensiveModel();
-            for (int i = 0; i < comprehensiveModel.getCount(); i++) {
-                if (tabGroupId.equals(comprehensiveModel.getTabAtChecked(i).getTabGroupId())) {
+            for (Tab tabInComprehensiveModel : comprehensiveModel) {
+                if (tabGroupId.equals(tabInComprehensiveModel.getTabGroupId())) {
                     return false;
                 }
             }

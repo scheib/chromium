@@ -25,6 +25,10 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"
 
+namespace autofill {
+struct AutofillServerPrediction;
+}
+
 namespace password_manager {
 
 // This template allows creating methods with signature conforming to
@@ -34,7 +38,7 @@ namespace password_manager {
 template <class Context, class Store>
 scoped_refptr<RefcountedKeyedService> BuildPasswordStore(Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(new Store);
-  store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
+  store->Init(/*affiliated_match_helper=*/nullptr);
   return store;
 }
 
@@ -55,7 +59,7 @@ scoped_refptr<RefcountedKeyedService> BuildPasswordStoreWithArgs(
     Context* context) {
   scoped_refptr<password_manager::PasswordStore> store(
       new Store(std::forward<Args>(args)...));
-  store->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
+  store->Init(/*affiliated_match_helper=*/nullptr);
   return store;
 }
 
@@ -126,8 +130,7 @@ bool ContainsEqualPasswordFormsUnordered(
 // Creates a set map of `ServerPrediction`s for `form` according to the
 // specified `types`. `types` is a map of the fields index in `form.fields()` to
 // the `FieldType`.
-base::flat_map<autofill::FieldGlobalId,
-               autofill::AutofillType::ServerPrediction>
+base::flat_map<autofill::FieldGlobalId, autofill::AutofillServerPrediction>
 CreateServerPredictions(
     const autofill::FormData& form,
     const base::flat_map<size_t, autofill::FieldType>& types,

@@ -19,7 +19,7 @@
 #include "base/trace_event/trace_event.h"
 
 namespace base::android {
-BASE_FEATURE(ShouldFreezeSelf, FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kShouldFreezeSelf, FEATURE_ENABLED_BY_DEFAULT);
 
 // Max amount of compaction to do in each chunk, measured in MiB.
 BASE_FEATURE_PARAM(size_t,
@@ -35,7 +35,7 @@ BASE_FEATURE_PARAM(size_t,
                    "delay_after_tasks",
                    30);
 
-BASE_FEATURE(UseRunningCompact, FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kUseRunningCompact, FEATURE_ENABLED_BY_DEFAULT);
 BASE_FEATURE_PARAM(size_t,
                    kUseRunningCompactDelayAfterPreFreezeTasks,
                    &kUseRunningCompact,
@@ -234,6 +234,34 @@ void SelfCompactionManager::MaybeCancelCompactionInternal(
   }
   compaction_last_finished_ = compaction_last_cancelled_ =
       base::TimeTicks::Now();
+}
+
+// static
+void SelfCompactionManager::OnTriggerRunningCompact(
+    std::unique_ptr<CompactionState> state) {
+  base::AutoLock locker(lock());
+  Instance().OnTriggerCompact(std::move(state));
+}
+
+// static
+void SelfCompactionManager::RequestRunningCompactWithDelay(
+    const TimeDelta delay) {
+  TRACE_EVENT0("base", "RequestRunningCompactWithDelay");
+
+  const auto triggered_at = base::TimeTicks::Now();
+  base::AutoLock locker(lock());
+  Instance().compaction_last_triggered_ = triggered_at;
+
+  auto task_runner = base::ThreadPool::CreateSequencedTaskRunner(
+      {base::TaskPriority::BEST_EFFORT, MayBlock()});
+  auto state =
+      std::make_unique<RunningCompactionState>(task_runner, triggered_at);
+
+  task_runner->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&SelfCompactionManager::OnTriggerRunningCompact,
+                     std::move(state)),
+      delay);
 }
 
 // static

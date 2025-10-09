@@ -39,6 +39,7 @@ chromium-metrics-reviews@google.com.
   <variant name="DataSharingGroupStorage" summary="DataSharingGroupStorage"/>
   <variant name="DBSCSessions" summary="DBSCSessions"/>
   <variant name="DIPS" summary="DIPS"/>
+  <variant name="DownloadRecord" summary="DownloadRecord"/>
   <variant name="FileIndexService" summary="FileIndexService"/>
   <variant name="FirefoxImporter" summary="FirefoxImporter"/>
   <variant name="FirstPartySets" summary="FirstPartySets"/>
@@ -59,6 +60,7 @@ chromium-metrics-reviews@google.com.
   <variant name="MediaLicense" summary="MediaLicense"/>
   <variant name="OfflinePageMetadata" summary="OfflinePageMetadata"/>
   <variant name="OptOutBlacklist" summary="OptOutBlacklist"/>
+  <variant name="PageContentStore" summary="Page Content Store"/>
   <variant name="Passwords" summary="Passwords"/>
   <variant name="PermissionAuditingLogs" summary="PermissionAuditingLogs"/>
   <variant name="PersistentCache" summary="PersistentCache"/>
@@ -86,7 +88,7 @@ chromium-metrics-reviews@google.com.
 </variants>
 
 <histogram name="Sql.Database.Open.FailureReason.{DatabaseTag}"
-    enum="OpenDatabaseFailedReason" expires_after="2026-02-01">
+    enum="OpenDatabaseFailedReason" expires_after="2026-04-05">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -97,7 +99,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Database.Open.FirstAttempt.Error.{DatabaseTag}"
-    enum="SqliteResultCode" expires_after="2026-02-01">
+    enum="SqliteResultCode" expires_after="2026-04-05">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -108,7 +110,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Database.Open.SecondAttempt.Error.{DatabaseTag}"
-    enum="SqliteResultCode" expires_after="2026-02-01">
+    enum="SqliteResultCode" expires_after="2026-04-05">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -156,7 +158,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Database.Success.OpenInternalTime.{DatabaseTag}"
-    units="microseconds" expires_after="2026-01-18">
+    units="microseconds" expires_after="2026-03-22">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -169,7 +171,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Database.Success.SqliteOpenTime.{DatabaseTag}"
-    units="microseconds" expires_after="2026-01-18">
+    units="microseconds" expires_after="2026-03-22">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -182,8 +184,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Recovery.Result" enum="SqlRecoveryResult"
-    expires_after="2025-09-15">
-  <owner>asully@chromium.org</owner>
+    expires_after="2026-04-05">
+  <owner>etienneb@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>
   <summary>
     Outcome of attempting to recover a database with sql::Recovery.
@@ -191,8 +193,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Recovery.Result.{DatabaseTag}" enum="SqlRecoveryResult"
-    expires_after="2026-01-18">
-  <owner>asully@chromium.org</owner>
+    expires_after="2026-04-05">
+  <owner>etienneb@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>
   <summary>
     Outcome of attempting to recover the {DatabaseTag} database with
@@ -202,8 +204,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Recovery.ResultCode" enum="SqliteLoggedResultCode"
-    expires_after="2026-02-01">
-  <owner>asully@chromium.org</owner>
+    expires_after="2026-04-05">
+  <owner>etienneb@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>
   <summary>
     SQLite result code from attempting to recover a database with sql::Recovery.
@@ -215,8 +217,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Recovery.ResultCode.{DatabaseTag}"
-    enum="SqliteLoggedResultCode" expires_after="2025-09-15">
-  <owner>asully@chromium.org</owner>
+    enum="SqliteLoggedResultCode" expires_after="2026-02-01">
+  <owner>etienneb@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>
   <summary>
     SQLite result code from attempting to recover the {DatabaseTag} database
@@ -229,7 +231,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Statement.ExecutionTime.{DatabaseTag}"
-    units="microseconds" expires_after="2026-01-18">
+    units="microseconds" expires_after="2026-03-22">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -244,7 +246,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Statement.StepTime.{DatabaseTag}" units="microseconds"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>anthonyvd@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -257,7 +259,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sql.Statement.{DatabaseTag}.VMSteps" units="count"
-    expires_after="2025-12-28">
+    expires_after="2026-03-01">
   <owner>etienneb@chromium.org</owner>
   <owner>estade@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>
@@ -269,7 +271,7 @@ chromium-metrics-reviews@google.com.
   <token key="DatabaseTag" variants="DatabaseTag"/>
 </histogram>
 
-<histogram name="Sql.vfs.SyncTime" units="ms" expires_after="2025-12-28">
+<histogram name="Sql.vfs.SyncTime" units="ms" expires_after="2026-03-01">
   <owner>etienneb@chromium.org</owner>
   <owner>estade@chromium.org</owner>
   <owner>chrome-catan@google.com</owner>

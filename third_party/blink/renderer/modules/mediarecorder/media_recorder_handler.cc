@@ -69,9 +69,7 @@ using base::TimeTicks;
 
 namespace blink {
 
-BASE_FEATURE(kMediaRecorderSeekableWebm,
-             "MediaRecorderSeekableWebm",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kMediaRecorderSeekableWebm, base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 
@@ -281,7 +279,8 @@ MediaRecorderHandler::MediaRecorderHandler(
     scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner,
     KeyFrameRequestProcessor::Configuration key_frame_config)
     : key_frame_config_(key_frame_config),
-      main_thread_task_runner_(std::move(main_thread_task_runner)) {}
+      main_thread_task_runner_(std::move(main_thread_task_runner)),
+      media_stream_observer_(std::make_unique<MediaStreamObserver>(this)) {}
 
 bool MediaRecorderHandler::CanSupportMimeType(const String& type,
                                               const String& web_codecs) {
@@ -560,7 +559,7 @@ bool MediaRecorderHandler::Start(int timeslice,
   DCHECK(!muxer_adapter_);
 
   DCHECK(!is_media_stream_observer_);
-  media_stream_->AddObserver(this);
+  media_stream_->AddObserver(media_stream_observer_->AsWeakPtr());
   is_media_stream_observer_ = true;
 
   timeslice_ = timeslice == std::numeric_limits<int>::max()
@@ -615,8 +614,8 @@ bool MediaRecorderHandler::Start(int timeslice,
   }
 
   auto write_callback =
-      WTF::BindRepeating(&MediaRecorderHandler::WriteData,
-                         WrapPersistent(weak_factory_.GetWeakCell()));
+      blink::BindRepeating(&MediaRecorderHandler::WriteData,
+                           WrapPersistent(weak_factory_.GetWeakCell()));
   if (use_mp4_muxer) {
     muxer = std::make_unique<media::Mp4Muxer>(
         audio_codec, use_video_tracks, use_audio_tracks,
@@ -640,9 +639,8 @@ bool MediaRecorderHandler::Start(int timeslice,
              base::FeatureList::IsEnabled(kMediaRecorderSeekableWebm)) {
     // Write a seekable WebM instead of a live one.
     auto delegate = std::make_unique<media::MemoryWebmMuxerDelegate>(
-        write_callback,
-        WTF::BindOnce(&MediaRecorderHandler::OnStarted,
-                      WrapPersistent(weak_factory_.GetWeakCell())));
+        write_callback, BindOnce(&MediaRecorderHandler::OnStarted,
+                                 WrapPersistent(weak_factory_.GetWeakCell())));
     // Hold on to a raw_ptr for the delegate so we can fall back to live mode
     // if a requestData() call comes in.
     memory_muxer_delegate_ = delegate.get();
@@ -716,7 +714,7 @@ void MediaRecorderHandler::Stop() {
 
   // Unregister from media stream notifications.
   if (media_stream_ && is_media_stream_observer_) {
-    media_stream_->RemoveObserver(this);
+    media_stream_->RemoveObserver(media_stream_observer_->AsWeakPtr());
   }
   is_media_stream_observer_ = false;
 
@@ -942,8 +940,8 @@ void MediaRecorderHandler::OnStreamChanged(const String& message) {
     // https://www.w3.org/TR/mediastream-recording/#dom-mediarecorder-start
     // step 14.4.
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, WTF::BindOnce(&MediaRecorder::OnStreamChanged,
-                                 WrapWeakPersistent(recorder_.Get()), message));
+        FROM_HERE, BindOnce(&MediaRecorder::OnStreamChanged,
+                            WrapWeakPersistent(recorder_.Get()), message));
   }
 }
 
@@ -1212,8 +1210,17 @@ void MediaRecorderHandler::Trace(Visitor* visitor) const {
 void MediaRecorderHandler::OnVideoEncodingError(
     media::EncoderStatus error_status) {
   if (recorder_) {
-    recorder_->OnError(DOMExceptionCode::kEncodingError,
-                       String(media::EncoderStatusCodeToString(error_status)));
+    // The MediaRecorder::OnError callback stops the MediaRecorderHandler,
+    // which in turn invalidates a reference to the calling VideoTrackRecorder
+    // instance. To avoid access to an unallocated object, this operation is
+    // deferred to a subsequent task.
+    // See https://crbug.com/441921804 for more details.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        blink::BindOnce(
+            &MediaRecorder::OnError, WrapWeakPersistent(recorder_.Get()),
+            DOMExceptionCode::kEncodingError,
+            String(media::EncoderStatusCodeToString(error_status))));
   }
 }
 

@@ -4,9 +4,13 @@
 
 #include "chrome/browser/pdf/pdf_extension_util.h"
 
+#include <array>
 #include <string>
+#include <vector>
 
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "build/branding_buildflags.h"
@@ -17,6 +21,7 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/grit/pdf_resources_map.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/zoom/page_zoom_constants.h"
 #include "content/public/browser/browser_context.h"
@@ -38,10 +43,13 @@
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(ENABLE_PDF_INK2)
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #endif  // BUILDFLAG(ENABLE_PDF_INK2)
+
+#if BUILDFLAG(ENABLE_PDF_INK2) || BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
+#include "chrome/browser/profiles/profile.h"
+#endif  // BUILDFLAG(ENABLE_PDF_INK2) || BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
 
 namespace pdf_extension_util {
 
@@ -50,9 +58,9 @@ namespace {
 // Tags in the manifest to be replaced.
 const char kNameTag[] = "<NAME>";
 
-// Adds strings that are used both by the stand-alone PDF Viewer and the Print
+// Gets strings that are used both by the stand-alone PDF Viewer and the Print
 // Preview PDF Viewer.
-void AddCommonStrings(base::Value::Dict* dict) {
+base::Value::Dict GetCommonStrings() {
   static constexpr webui::LocalizedString kPdfResources[] = {
       {"errorDialogTitle", IDS_PDF_ERROR_DIALOG_TITLE},
       {"pageLoadFailed", IDS_PDF_PAGE_LOAD_FAILED},
@@ -64,16 +72,19 @@ void AddCommonStrings(base::Value::Dict* dict) {
       {"tooltipZoomOut", IDS_PDF_TOOLTIP_ZOOM_OUT},
       {"twoUpViewEnable", IDS_PDF_TWO_UP_VIEW_ENABLE},
   };
-  for (const auto& resource : kPdfResources)
-    dict->Set(resource.name, l10n_util::GetStringUTF16(resource.id));
+  base::Value::Dict dict;
+  for (const auto& resource : kPdfResources) {
+    dict.Set(resource.name, l10n_util::GetStringUTF16(resource.id));
+  }
 
-  dict->Set("presetZoomFactors", zoom::GetPresetZoomFactorsAsJSON());
-  dict->Set("pdfOopifEnabled",
-            chrome_pdf::features::IsOopifPdfEnabled() ? "pdfOopifEnabled" : "");
+  dict.Set("presetZoomFactors", zoom::GetPresetZoomFactorsAsJSON());
+  dict.Set("pdfOopifEnabled",
+           chrome_pdf::features::IsOopifPdfEnabled() ? "pdfOopifEnabled" : "");
+  return dict;
 }
 
-// Adds strings that are used only by the stand-alone PDF Viewer.
-void AddPdfViewerStrings(base::Value::Dict* dict) {
+// Gets strings that are used only by the stand-alone PDF Viewer.
+base::Value::Dict GetPdfViewerStrings() {
   static constexpr webui::LocalizedString kPdfResources[] = {
       {"annotationsShowToggle", IDS_PDF_ANNOTATIONS_SHOW_TOGGLE},
       {"bookmarks", IDS_PDF_BOOKMARKS},
@@ -81,7 +92,6 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
       {"downloadEdited", IDS_PDF_DOWNLOAD_EDITED},
       {"downloadOriginal", IDS_PDF_DOWNLOAD_ORIGINAL},
       {"labelPageNumber", IDS_PDF_LABEL_PAGE_NUMBER},
-      {"menu", IDS_MENU},
       {"moreActions", IDS_DOWNLOAD_MORE_ACTIONS},
       {"oversizeAttachmentWarning", IDS_PDF_OVERSIZE_ATTACHMENT_WARNING},
       {"passwordDialogTitle", IDS_PDF_PASSWORD_DIALOG_TITLE},
@@ -112,6 +122,7 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
       {"rotationStateLabel180", IDS_PDF_ROTATION_STATE_LABEL_180},
       {"rotationStateLabel270", IDS_PDF_ROTATION_STATE_LABEL_270},
       {"searchifyInProgress", IDS_PDF_SEARCHIFY_IN_PROGRESS},
+      {"sidebarLabel", IDS_PDF_SIDEBAR_LABEL},
       {"thumbnailPageAriaLabel", IDS_PDF_THUMBNAIL_PAGE_ARIA_LABEL},
       {"tooltipAttachments", IDS_PDF_TOOLTIP_ATTACHMENTS},
       {"tooltipDocumentOutline", IDS_PDF_TOOLTIP_DOCUMENT_OUTLINE},
@@ -211,17 +222,20 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
       {"ink2TextColorCyan3", IDS_PDF_INK2_ANNOTATION_COLOR_CYAN_3},
 #endif  // BUILDFLAG(ENABLE_PDF_INK2)
   };
-  for (const auto& resource : kPdfResources)
-    dict->Set(resource.name, l10n_util::GetStringUTF16(resource.id));
+  base::Value::Dict dict;
+  for (const auto& resource : kPdfResources) {
+    dict.Set(resource.name, l10n_util::GetStringUTF16(resource.id));
+  }
 
 #if BUILDFLAG(ENABLE_PDF_INK2)
   std::u16string edit_string = l10n_util::GetStringUTF16(IDS_EDIT);
   std::erase(edit_string, '&');
-  dict->Set("editButton", edit_string);
+  dict.Set("editButton", edit_string);
 #endif  // BUILDFLAG(ENABLE_PDF_INK2)
 
   webui::SetLoadTimeDataDefaults(g_browser_process->GetApplicationLocale(),
-                                 dict);
+                                 &dict);
+  return dict;
 }
 
 bool IsPrintingEnabled(content::BrowserContext* context) {
@@ -267,46 +281,88 @@ std::string GetManifest() {
   return manifest_contents;
 }
 
-void AddStrings(PdfViewerContext context, base::Value::Dict* dict) {
-  AddCommonStrings(dict);
+base::Value::Dict GetStrings(PdfViewerContext context) {
+  base::Value::Dict dict = GetCommonStrings();
   if (context == PdfViewerContext::kPdfViewer ||
       context == PdfViewerContext::kAll) {
-    AddPdfViewerStrings(dict);
+    dict.Merge(GetPdfViewerStrings());
   }
   if (context == PdfViewerContext::kPrintPreview ||
       context == PdfViewerContext::kAll) {
     // Nothing to do yet, since there are no PrintPreview-only strings.
   }
+  return dict;
 }
 
-void AddAdditionalData(content::BrowserContext* context,
-                       base::Value::Dict* dict) {
+base::Value::Dict GetAdditionalData(content::BrowserContext* context) {
   // NOTE: This function should not include any data used for $i18n{}
-  // replacements. The i18n string resources should be added using AddStrings()
+  // replacements. The i18n string resources should be added using GetStrings()
   // above instead.
-  dict->Set("printingEnabled", IsPrintingEnabled(context));
+  base::Value::Dict dict;
+  dict.Set("printingEnabled", IsPrintingEnabled(context));
 
 #if BUILDFLAG(ENABLE_PDF_INK2)
   const bool use_ink2 = IsPdfInk2AnnotationsEnabled(context);
-  dict->Set("pdfInk2Enabled", use_ink2);
-  dict->Set("pdfTextAnnotationsEnabled",
-            use_ink2 && chrome_pdf::features::kPdfInk2TextAnnotations.Get());
+  dict.Set("pdfInk2Enabled", use_ink2);
+  dict.Set("pdfTextAnnotationsEnabled",
+           use_ink2 && chrome_pdf::features::kPdfInk2TextAnnotations.Get());
 #endif  // BUILDFLAG(ENABLE_PDF_INK2)
-  dict->Set("pdfGetSaveDataInBlocks",
-            chrome_pdf::features::IsPdfGetSaveDataInBlocksEnabled());
-  dict->Set("pdfUseShowSaveFilePicker",
-            base::FeatureList::IsEnabled(
-                chrome_pdf::features::kPdfUseShowSaveFilePicker));
-  dict->Set(
+  dict.Set("pdfGetSaveDataInBlocks",
+           base::FeatureList::IsEnabled(
+               chrome_pdf::features::kPdfGetSaveDataInBlocks));
+  dict.Set("pdfUseShowSaveFilePicker",
+           base::FeatureList::IsEnabled(
+               chrome_pdf::features::kPdfUseShowSaveFilePicker));
+  dict.Set(
       "pdfSearchifySaveEnabled",
       base::FeatureList::IsEnabled(chrome_pdf::features::kPdfSearchifySave));
 
 #if BUILDFLAG(ENABLE_PDF_SAVE_TO_DRIVE)
-  dict->Set("pdfSaveToDrive", base::FeatureList::IsEnabled(
-                                  chrome_pdf::features::kPdfSaveToDrive));
-  dict->Set("pdfSaveToDriveHelpCenterURL",
-            chrome::kPdfViewerSaveToDriveHelpCenterURL);
+  const bool save_to_drive_enabled =
+      base::FeatureList::IsEnabled(chrome_pdf::features::kPdfSaveToDrive) &&
+      !Profile::FromBrowserContext(context)->IsOffTheRecord();
+  dict.Set("pdfSaveToDrive", save_to_drive_enabled);
+  dict.Set("pdfSaveToDriveHelpCenterURL",
+           chrome::kPdfViewerSaveToDriveHelpCenterURL);
 #endif
+  return dict;
+}
+
+std::vector<webui::ResourcePath> GetResources(PdfViewerContext context) {
+  static constexpr auto kExcludeFromPdfViewer =
+      std::to_array<std::string_view>({
+          "pdf/index_print.html",
+          "pdf/main_print.js",
+          "pdf/pdf_print_wrapper.js",
+      });
+  static constexpr auto kExcludeFromPrintPreview =
+      std::to_array<std::string_view>({
+          "pdf/index.html",
+          "pdf/main.js",
+          "pdf/pdf_viewer_wrapper.js",
+      });
+  base::span<const std::string_view> exclusions;
+
+  switch (context) {
+    case PdfViewerContext::kPdfViewer:
+      exclusions = kExcludeFromPdfViewer;
+      break;
+    case PdfViewerContext::kPrintPreview:
+      exclusions = kExcludeFromPrintPreview;
+      break;
+    default:
+      NOTREACHED();
+  }
+
+  std::vector<webui::ResourcePath> resources;
+  resources.reserve(std::size(kPdfResources));
+  for (const webui::ResourcePath& resource : kPdfResources) {
+    if (base::Contains(exclusions, resource.path)) {
+      continue;
+    }
+    resources.push_back(resource);
+  }
+  return resources;
 }
 
 bool MaybeDispatchSaveEvent(content::RenderFrameHost* embedder_host) {

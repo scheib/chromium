@@ -6,12 +6,13 @@ package org.chromium.chrome.browser.toolbar.menu_button;
 
 import static android.view.View.LAYOUT_DIRECTION_RTL;
 
-import static org.chromium.build.NullUtil.assertNonNull;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.animation.Animator;
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.view.View;
 
 import androidx.annotation.DrawableRes;
@@ -19,15 +20,17 @@ import androidx.annotation.IdRes;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
+import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
 import org.chromium.chrome.browser.theme.ThemeColorProvider;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonProperties.ShowBadgeProperty;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonProperties.ThemeProperty;
+import org.chromium.chrome.browser.toolbar.top.ToolbarChildButton;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuButtonHelper;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuCoordinator;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.ui.UiUtils;
 import org.chromium.ui.base.ViewUtils;
 import org.chromium.ui.base.WindowAndroid;
@@ -35,12 +38,14 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 import org.chromium.ui.util.KeyboardNavigationListener;
 
+import java.util.function.Supplier;
+
 /**
  * Root component for the app menu button on the toolbar. Owns the MenuButton view and handles
  * changes to its visual state, e.g. showing/hiding the app update badge.
  */
 @NullMarked
-public class MenuButtonCoordinator {
+public class MenuButtonCoordinator extends ToolbarChildButton {
     public interface SetFocusFunction {
         void setFocus(boolean focus, int reason);
     }
@@ -67,6 +72,7 @@ public class MenuButtonCoordinator {
     private @Nullable PropertyModelChangeProcessor mChangeProcessor;
 
     /**
+     * @param activity The Activity containing the menu button.
      * @param appMenuCoordinatorSupplier Supplier for the AppMenuCoordinator, which owns all other
      *     app menu MVC components.
      * @param controlsVisibilityDelegate Delegate for forcing persistent display of browser
@@ -85,6 +91,7 @@ public class MenuButtonCoordinator {
      * @param visibilityDelegate Delegate for handling the visibility of the menu button.
      */
     public MenuButtonCoordinator(
+            Activity activity,
             OneshotSupplier<AppMenuCoordinator> appMenuCoordinatorSupplier,
             BrowserStateBrowserControlsVisibilityDelegate controlsVisibilityDelegate,
             WindowAndroid windowAndroid,
@@ -93,11 +100,13 @@ public class MenuButtonCoordinator {
             boolean canShowAppUpdateBadge,
             Supplier<Boolean> isInOverviewModeSupplier,
             ThemeColorProvider themeColorProvider,
+            IncognitoStateProvider incognitoStateProvider,
             Supplier<MenuButtonState> menuButtonStateSupplier,
             Runnable onMenuButtonClicked,
             @IdRes int menuButtonId,
             @Nullable VisibilityDelegate visibilityDelegate) {
-        mActivity = assertNonNull(windowAndroid.getActivity().get());
+        super(activity, themeColorProvider, incognitoStateProvider);
+        mActivity = activity;
         mMenuButton = mActivity.findViewById(menuButtonId);
         mPropertyModel =
                 new PropertyModel.Builder(MenuButtonProperties.ALL_KEYS)
@@ -126,7 +135,6 @@ public class MenuButtonCoordinator {
                         canShowAppUpdateBadge,
                         () -> mActivity.isFinishing() || mActivity.isDestroyed(),
                         requestRenderRunnable,
-                        themeColorProvider,
                         isInOverviewModeSupplier,
                         controlsVisibilityDelegate,
                         setUrlBarFocusFunction,
@@ -208,6 +216,7 @@ public class MenuButtonCoordinator {
     /**
      * @return Whether the menu button is present and visible.
      */
+    @Override
     public boolean isVisible() {
         if (mVisibilityDelegate != null) {
             return mVisibilityDelegate.isMenuButtonVisible();
@@ -232,7 +241,9 @@ public class MenuButtonCoordinator {
     }
 
     @SuppressWarnings("NullAway")
+    @Override
     public void destroy() {
+        super.destroy();
         if (mMediator != null) {
             mMediator.destroy();
             mMediator = null;
@@ -262,6 +273,7 @@ public class MenuButtonCoordinator {
      *
      * @param visible Visibility state, true for visible and false for hidden.
      */
+    @Override
     public void setVisibility(boolean visible) {
         if (mMediator == null) return;
         mMediator.setVisibility(visible);
@@ -330,5 +342,27 @@ public class MenuButtonCoordinator {
     public void updateButtonBackground(@DrawableRes int backgroundResId) {
         assumeNonNull(mMenuButton);
         mMenuButton.getImageButton().setBackgroundResource(backgroundResId);
+    }
+
+    /**
+     * Gets an area of the button that are touchable/clickable.
+     *
+     * @return a {@link Rect} that contains touchable/clickable area.
+     */
+    public Rect getHitRect() {
+        assumeNonNull(mMenuButton);
+        final var rect = new Rect();
+        mMenuButton.getHitRect(rect);
+        return rect;
+    }
+
+    @Override
+    public void onTintChanged(
+            @Nullable ColorStateList tint,
+            @Nullable ColorStateList activityFocusTint,
+            @BrandedColorScheme int brandedColorScheme) {
+        super.onTintChanged(tint, activityFocusTint, brandedColorScheme);
+        if (mMediator == null) return;
+        mMediator.onTintChanged(tint, activityFocusTint, brandedColorScheme);
     }
 }

@@ -12,6 +12,7 @@ include_rules = [
   # Whenever possible, avoid adding new //chrome dependencies to this list.
   "+chrome/browser/app_mode/app_mode_utils.h",
   "+chrome/browser/ash/annotator",
+  "+chrome/browser/ash/boca/receiver",
   "+chrome/browser/ash/eche_app",
   "+chrome/browser/ash/login/demo_mode",
   "+chrome/browser/ash/mall",
@@ -35,7 +36,6 @@ include_rules = [
   "+chrome/browser/ui/webui/ash/audio",
   "+chrome/browser/ui/webui/ash/bluetooth",
   "+chrome/browser/ui/webui/ash/borealis_installer",
-  "+chrome/browser/ui/webui/ash/borealis_motd",
   "+chrome/browser/ui/webui/ash/cellular_setup",
   "+chrome/browser/ui/webui/ash/cloud_upload",
   "+chrome/browser/ui/webui/ash/crostini_installer",

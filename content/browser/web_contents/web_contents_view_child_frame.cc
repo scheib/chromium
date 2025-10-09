@@ -103,11 +103,22 @@ gfx::Rect WebContentsViewChildFrame::GetContainerBounds() const {
 }
 
 void WebContentsViewChildFrame::SetInitialFocus() {
-  NOTREACHED();
+  // This should only be reachable in Webium, not other uses.
+  CHECK(base::FeatureList::IsEnabled(features::kAttachUnownedInnerWebContents));
+
+  if (web_contents_->FocusLocationBarByDefault()) {
+    web_contents_->SetFocusToLocationBar();
+  } else {
+    Focus();
+  }
 }
 
 gfx::Rect WebContentsViewChildFrame::GetViewBounds() const {
-  NOTREACHED();
+  if (RenderWidgetHostView* view = web_contents_->GetRenderWidgetHostView()) {
+    return view->GetViewBounds();
+  }
+
+  return gfx::Rect();
 }
 
 void WebContentsViewChildFrame::CreateView(gfx::NativeView context) {
@@ -162,7 +173,20 @@ void WebContentsViewChildFrame::RestoreFocus() {
 }
 
 void WebContentsViewChildFrame::Focus() {
-  NOTIMPLEMENTED();
+  if (!base::FeatureList::IsEnabled(features::kAttachUnownedInnerWebContents)) {
+    return;
+  }
+
+  if (delegate_ && delegate_->Focus()) {
+    return;
+  }
+
+  RenderWidgetHostView* rwhv = web_contents_->GetRenderWidgetHostView();
+  if (rwhv) {
+    rwhv->Focus();
+  }
+
+  web_contents_->SetAsFocusedWebContentsIfNecessary();
 }
 
 void WebContentsViewChildFrame::StoreFocus() {
@@ -199,7 +223,10 @@ void WebContentsViewChildFrame::TakeFocus(bool reverse) {
 void WebContentsViewChildFrame::ShowContextMenu(
     RenderFrameHost& render_frame_host,
     const ContextMenuParams& params) {
-  NOTREACHED();
+  if (delegate_) {
+    delegate_->ShowContextMenu(render_frame_host, params);
+    // WARNING: we may have been deleted during the call to ShowContextMenu().
+  }
 }
 
 #if BUILDFLAG(USE_EXTERNAL_POPUP_MENU)

@@ -12,6 +12,7 @@
 #include "base/memory/values_equivalent.h"
 #include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
@@ -22,6 +23,9 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/browser_window_state.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/tabs/tab_menu_model_factory.h"
@@ -56,6 +60,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
 #include "ui/color/color_recipe.h"
 #include "ui/color/color_transform.h"
 #include "ui/display/display.h"
@@ -67,6 +72,7 @@
 #include "ui/gfx/geometry/resize_utils.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/native_theme/os_settings_provider.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 #include "url/url_constants.h"
@@ -98,40 +104,47 @@ void SetWebContentsCanAcceptLoadDrops(content::WebContents* contents,
 namespace web_app {
 
 // static
-bool AppBrowserController::IsWebApp(const Browser* browser) {
-  return browser && browser->app_controller();
+bool AppBrowserController::IsWebApp(const BrowserWindowInterface* browser) {
+  return browser && browser->GetFeatures().app_browser_controller();
 }
 
 // static
-bool AppBrowserController::IsForWebApp(const Browser* browser,
+bool AppBrowserController::IsForWebApp(const BrowserWindowInterface* browser,
                                        const webapps::AppId& app_id) {
-  return IsWebApp(browser) && browser->app_controller()->app_id() == app_id;
+  return IsWebApp(browser) &&
+         browser->GetFeatures().app_browser_controller()->app_id() == app_id;
 }
 
 // static
-Browser* AppBrowserController::FindForWebApp(const Profile& profile,
-                                             const webapps::AppId& app_id) {
-  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
-    if (browser->IsAttemptingToCloseBrowser() || browser->IsBrowserClosing()) {
-      continue;
-    }
-    if (!browser->is_type_app()) {
-      continue;
-    }
-    if (browser->profile() != &profile) {
-      continue;
-    }
-    if (!IsForWebApp(browser, app_id)) {
-      continue;
-    }
-    return browser;
-  }
-  return nullptr;
+BrowserWindowInterface* AppBrowserController::FindForWebApp(
+    const Profile& profile,
+    const webapps::AppId& app_id) {
+  BrowserWindowInterface* browser_for_web_app = nullptr;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&](BrowserWindowInterface* browser) {
+        if (browser->GetBrowserForMigrationOnly()
+                ->IsAttemptingToCloseBrowser() ||
+            browser->GetBrowserForMigrationOnly()->IsBrowserClosing()) {
+          return true;  // continue iterating
+        }
+        if (browser->GetType() != BrowserWindowInterface::TYPE_APP) {
+          return true;  // continue iterating
+        }
+        if (browser->GetProfile() != &profile) {
+          return true;  // continue iterating
+        }
+        if (!IsForWebApp(browser, app_id)) {
+          return true;  // continue iterating
+        }
+        browser_for_web_app = browser;
+        return false;  // stop iterating
+      });
+  return browser_for_web_app;
 }
 
 // static
 std::optional<int> AppBrowserController::FindTabIndexForApp(
-    Browser* browser,
+    BrowserWindowInterface* browser,
     const webapps::AppId& app_id,
     bool for_focus_existing,
     HomeTabScope home_tab_scope) {
@@ -148,17 +161,20 @@ std::optional<int> AppBrowserController::FindTabIndexForApp(
       return true;
     }
     return (home_tab_scope == HomeTabScope::kInScope) ==
-           (browser->app_controller()->GetPinnedHomeTab() == contents);
+           (browser->GetAppBrowserController()->GetPinnedHomeTab() == contents);
   };
   // The active web contents should have preference if it is in scope.
-  if (browser->tab_strip_model()->active_index() != TabStripModel::kNoTab) {
-    if (is_valid_tab(browser->tab_strip_model()->GetActiveWebContents())) {
-      return {browser->tab_strip_model()->active_index()};
+  if (browser->GetFeatures().tab_strip_model()->active_index() !=
+      TabStripModel::kNoTab) {
+    if (is_valid_tab(
+            browser->GetFeatures().tab_strip_model()->GetActiveWebContents())) {
+      return {browser->GetFeatures().tab_strip_model()->active_index()};
     }
   }
   // Otherwise, use the first one for the app.
-  for (int i = 0; i < browser->tab_strip_model()->count(); ++i) {
-    if (is_valid_tab(browser->tab_strip_model()->GetWebContentsAt(i))) {
+  for (int i = 0; i < browser->GetFeatures().tab_strip_model()->count(); ++i) {
+    if (is_valid_tab(
+            browser->GetFeatures().tab_strip_model()->GetWebContentsAt(i))) {
       return {i};
     }
   }
@@ -173,26 +189,33 @@ AppBrowserController::FindTopLevelBrowsingContextForWebApp(
     Browser::Type browser_type,
     bool for_focus_existing,
     HomeTabScope home_tab_scope) {
-  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
-    if (browser->IsAttemptingToCloseBrowser() || browser->IsBrowserClosing()) {
-      continue;
-    }
-    if (browser->type() != browser_type) {
-      continue;
-    }
-    if (browser->profile() != &profile) {
-      continue;
-    }
-    if (IsWebApp(browser) && !IsForWebApp(browser, app_id)) {
-      continue;
-    }
-    std::optional<int> tab_index =
-        FindTabIndexForApp(browser, app_id, for_focus_existing, home_tab_scope);
-    if (tab_index.has_value()) {
-      return {{browser, *tab_index}};
-    }
-  }
-  return std::nullopt;
+  std::optional<AppBrowserController::BrowserAndTabIndex>
+      browser_and_tab_index = std::nullopt;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&](BrowserWindowInterface* browser) {
+        if (browser->GetBrowserForMigrationOnly()
+                ->IsAttemptingToCloseBrowser() ||
+            browser->GetBrowserForMigrationOnly()->IsBrowserClosing()) {
+          return true;  // continue iterating
+        }
+        if (browser->GetType() != browser_type) {
+          return true;  // continue iterating
+        }
+        if (browser->GetProfile() != &profile) {
+          return true;  // continue iterating
+        }
+        if (IsWebApp(browser) && !IsForWebApp(browser, app_id)) {
+          return true;  // continue iterating
+        }
+        std::optional<int> tab_index = FindTabIndexForApp(
+            browser, app_id, for_focus_existing, home_tab_scope);
+        if (tab_index.has_value()) {
+          browser_and_tab_index = {{browser, *tab_index}};
+          return false;  // stop iterating
+        }
+        return true;  // continue iterating
+      });
+  return browser_and_tab_index;
 }
 
 // static
@@ -247,7 +270,7 @@ bool AppBrowserController::ShouldShowCustomTabBar() const {
   }
 
   GURL start_url = GetAppStartUrl();
-  std::string_view start_url_scheme = start_url.scheme_piece();
+  std::string_view start_url_scheme = start_url.scheme();
 
   bool is_internal_start_url_scheme =
       start_url_scheme == extensions::kExtensionScheme ||
@@ -350,16 +373,15 @@ std::vector<actions::ActionId> AppBrowserController::GetTitleBarPageActions()
 #if BUILDFLAG(IS_CHROMEOS)
   if (system_app()) {
     return {
+        kActionFind,
         kActionZoomNormal,
     };
   }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
   std::vector<actions::ActionId> types_enabled = {
-      kActionShowPasswordsBubbleOrPage,
-      kActionShowTranslate,
-      kActionZoomNormal,
-      kActionShowFileSystemAccess,
+      kActionFind,       kActionShowPasswordsBubbleOrPage, kActionShowTranslate,
+      kActionZoomNormal, kActionShowFileSystemAccess,
   };
 
 #if DCHECK_IS_ON()
@@ -439,6 +461,9 @@ bool AppBrowserController::HasPendingUpdate() const {
   return false;
 }
 
+void AppBrowserController::CreateMetadataAndTriggerAppUpdateDialog(
+    base::TimeTicks start_time) const {}
+
 bool AppBrowserController::IsPreventCloseEnabled() const {
   auto* provider = WebAppProvider::GetForWebApps(browser()->profile());
   if (!provider) {
@@ -465,11 +490,14 @@ const ash::SystemWebAppDelegate* AppBrowserController::system_app() const {
 std::u16string AppBrowserController::GetLaunchFlashText() const {
   // Isolated Web Apps should show the app's name instead of the origin.
   // App Short Name is considered trustworthy because manifest comes from signed
-  // web bundle.
-  // TODO:(crbug.com/b/1394199) Disable IWA launch flash text for OSs that
-  // already display name on title bar.
+  // web bundle. The flash text is not needed on platforms that already display
+  // the app name in the title bar (e.g. Mac, Windows, and Linux).
   if (IsIsolatedWebApp()) {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+    return std::u16string();
+#else   // !(BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX))
     return GetAppShortName();
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
   }
   return GetFormattedUrlOrigin();
 }
@@ -539,31 +567,26 @@ void AppBrowserController::PrimaryPageChanged(content::Page& page) {
 }
 
 std::optional<SkColor> AppBrowserController::GetThemeColor() const {
-  ui::NativeTheme* native_theme = ui::NativeTheme::GetInstanceForNativeUi();
-  if (native_theme->InForcedColorsMode()) {
-    // use system [Window ThemeColor] when enable high contrast
-    return native_theme->GetSystemThemeColor(
-        ui::NativeTheme::SystemThemeColor::kWindow);
-  }
-
-  std::optional<SkColor> result;
-  // HTML meta theme-color tag overrides manifest theme_color, see spec:
-  // https://www.w3.org/TR/appmanifest/#theme_color-member
-  content::WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  if (web_contents) {
-    std::optional<SkColor> color = web_contents->GetThemeColor();
-    if (color) {
-      result = color;
+  if (ui::NativeTheme::GetInstanceForNativeUi()->preferred_contrast() ==
+      ui::NativeTheme::PreferredContrast::kMore) {
+    if (const std::optional<SkColor> window_color =
+            ui::OsSettingsProvider::Get().Color(
+                ui::OsSettingsProvider::ColorId::kWindow)) {
+      return window_color;
     }
   }
 
-  if (!result) {
-    return std::nullopt;
+  if (content::WebContents* const web_contents =
+          browser()->tab_strip_model()->GetActiveWebContents()) {
+    // HTML meta theme-color tag overrides manifest theme_color, see spec:
+    // https://www.w3.org/TR/appmanifest/#theme_color-member
+    if (const std::optional<SkColor> color = web_contents->GetThemeColor()) {
+      // The frame/tabstrip code expects an opaque color.
+      return SkColorSetA(*color, SK_AlphaOPAQUE);
+    }
   }
 
-  // The frame/tabstrip code expects an opaque color.
-  return SkColorSetA(*result, SK_AlphaOPAQUE);
+  return std::nullopt;
 }
 
 std::optional<SkColor> AppBrowserController::GetBackgroundColor() const {
@@ -930,7 +953,8 @@ void AppBrowserController::UpdateThemePack() {
     theme_color = GetAltColor(*background_color);
   } else if (!background_color) {
     background_color =
-        ui::NativeTheme::GetInstanceForNativeUi()->ShouldUseDarkColors()
+        (ui::NativeTheme::GetInstanceForNativeUi()->preferred_color_scheme() ==
+         ui::NativeTheme::PreferredColorScheme::kDark)
             ? gfx::kGoogleGrey900
             : SK_ColorWHITE;
   }

@@ -6,41 +6,33 @@
 
 #include "base/functional/bind.h"
 #include "base/logging.h"
+#include "remoting/base/constants.h"
+#include "remoting/host/desktop_display_info.h"
+#include "remoting/host/linux/gnome_display_config.h"
 
 namespace remoting {
 
-namespace {
-
-constexpr int kDefaultDPI = 96;
-
-}  // namespace
-
 GnomeDesktopDisplayInfoMonitor::GnomeDesktopDisplayInfoMonitor(
-    base::WeakPtr<GnomeDisplayConfigDBusClient> display_config_client)
-    : display_config_client_(display_config_client) {}
+    base::WeakPtr<GnomeDisplayConfigMonitor> display_config_monitor)
+    : display_config_monitor_(display_config_monitor) {}
 
 GnomeDesktopDisplayInfoMonitor::~GnomeDesktopDisplayInfoMonitor() = default;
 
 void GnomeDesktopDisplayInfoMonitor::Start() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (display_config_client_) {
-    monitors_changed_subscription_ =
-        display_config_client_->SubscribeMonitorsChanged(base::BindRepeating(
-            &GnomeDesktopDisplayInfoMonitor::QueryDisplayInfo,
-            base::Unretained(this)));
+  if (display_config_monitor_) {
+    monitors_changed_subscription_ = display_config_monitor_->AddCallback(
+        base::BindRepeating(
+            &GnomeDesktopDisplayInfoMonitor::OnGnomeDisplayConfigReceived,
+            base::Unretained(this)),
+        /*call_with_current_config=*/true);
   }
-  QueryDisplayInfo();
 }
 
 void GnomeDesktopDisplayInfoMonitor::QueryDisplayInfo() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (display_config_client_) {
-    display_config_client_->GetMonitorsConfig(base::BindOnce(
-        &GnomeDesktopDisplayInfoMonitor::OnGnomeDisplayConfigReceived,
-        base::Unretained(this)));
-  }
+  // This is a no-op, as the display info is pushed from
+  // GnomeDisplayConfigMonitor.
 }
 
 void GnomeDesktopDisplayInfoMonitor::AddCallback(Callback callback) {
@@ -50,10 +42,18 @@ void GnomeDesktopDisplayInfoMonitor::AddCallback(Callback callback) {
 }
 
 void GnomeDesktopDisplayInfoMonitor::OnGnomeDisplayConfigReceived(
-    GnomeDisplayConfig config) {
+    const GnomeDisplayConfig& config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   DesktopDisplayInfo info;
+  switch (config.layout_mode) {
+    case GnomeDisplayConfig::LayoutMode::kPhysical:
+      info.set_pixel_type(DesktopDisplayInfo::PixelType::PHYSICAL);
+      break;
+    case GnomeDisplayConfig::LayoutMode::kLogical:
+      info.set_pixel_type(DesktopDisplayInfo::PixelType::LOGICAL);
+      break;
+  }
   for (const auto& [name, monitor] : config.monitors) {
     const GnomeDisplayConfig::MonitorMode* current_mode =
         monitor.GetCurrentMode();
@@ -62,15 +62,23 @@ void GnomeDesktopDisplayInfoMonitor::OnGnomeDisplayConfigReceived(
                    << " ignored because it has no current mode";
       continue;
     }
+    // current_mode->width/height are always in physical screen pixels, which
+    // need to be divided by the monitor scale to get the logical pixels.
+    int width = info.pixel_type() == DesktopDisplayInfo::PixelType::PHYSICAL
+                    ? current_mode->width
+                    : (current_mode->width / monitor.scale);
+    int height = info.pixel_type() == DesktopDisplayInfo::PixelType::PHYSICAL
+                     ? current_mode->height
+                     : (current_mode->height / monitor.scale);
     // Ideally we should multiply the DPI with text-scaling-factor, but that
     // causes the client to resize the display to the actual screen resolution
     // at 1x scale when "High-DPI mode" is disabled.
     // TODO: crbug.com/431816005 - fix this bug on the host and set the the DPI
-    // to `kDefaultDPI * monitor.scale * text_scaling_factor`.
-    info.AddDisplay(DisplayGeometry(
-        GnomeDisplayConfig::GetScreenId(name), monitor.x, monitor.y,
-        current_mode->width, current_mode->height, kDefaultDPI * monitor.scale,
-        /*bpp=*/24, monitor.is_primary, name));
+    // to `kDefaultDpi * monitor.scale * text_scaling_factor`.
+    info.AddDisplay(DisplayGeometry(GnomeDisplayConfig::GetScreenId(name),
+                                    monitor.x, monitor.y, width, height,
+                                    kDefaultDpi * monitor.scale,
+                                    /*bpp=*/24, monitor.is_primary, name));
   }
   callback_list_.Notify(info);
 }

@@ -34,7 +34,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "string"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 1,
           "tags": [],
           "caption": "ExampleStringPolicy caption",
@@ -45,7 +45,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "boolean"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 2,
           "tags": [],
           "caption": "ExampleBoolPolicy caption",
@@ -153,7 +153,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "boolean"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 1040,
           "tags": [],
           "caption": "ChunkZeroLastFieldBooleanPolicy caption",
@@ -164,7 +164,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "boolean"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 1041,
           "tags": [],
           "caption": "ChunkOneFirstFieldBooleanPolicy caption",
@@ -175,7 +175,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "boolean"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 1840,
           "tags": [],
           "caption": "ChunkOneLastFieldBooleanPolicy caption",
@@ -186,7 +186,7 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "string"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 1841,
           "tags": [],
           "caption": "ChunkTwoFirstFieldStringPolicy caption",
@@ -197,16 +197,69 @@ class PolicyGenerationTest(unittest.TestCase):
           "schema": {
               "type": "string"
           },
-          "supported_on": ["chrome_os:1-", "chrome.*:1-"],
+          "supported_on": ["chrome_os:1-", "chrome.*:1-", "android:1-"],
           "id": 2640,
           "tags": [],
           "caption": "ChunkTwoLastFieldStringPolicy caption",
           "desc": "ChunkTwoLastFieldStringPolicy desc"
+      }, {
+          "name": "SensitivePolicyForMultiplePlatforms",
+          "type": "main",
+          "schema": { "type": "boolean" },
+          "sensitive": True,
+          "supported_on":
+          ["chrome_os:1-", "chrome.*:1-", "android:1-"],
+          "id": 2643,
+          "tags": [],
+          "caption": "SensitivePolicyForMultiplePlatforms caption",
+          "desc": "SensitivePolicyForMultiplePlatforms desc"
+      }, {
+          "name": "SensitivePolicyForChromeOSOnly",
+          "type": "main",
+          "schema": { "type": "boolean" },
+          "sensitive": True,
+          "supported_on": ["chrome_os:1-"],
+          "id": 2644,
+          "tags": [],
+          "caption": "SensitivePolicyForChromeOSOnly caption",
+          "desc": "SensitivePolicyForChromeOSOnly desc"
+      }, {
+          "name": "SensitivePolicyForUnsupportedPlatform",
+          "type": "main",
+          "schema": { "type": "boolean" },
+          "supported_on": ["chrome.win:61-"],
+          "sensitive": True,
+          "id": 2645,
+          "tags": [],
+          "caption": "SensitivePolicyForUnsupportedPlatform caption",
+          "desc": "It should neither be generated nor listed as sensitive."
+      }, {
+          "name": "SensitivePolicyForChromeOSFuture",
+          "type": "main",
+          "schema": { "type": "boolean" },
+          "future_on": ["chrome_os"],
+          "sensitive": True,
+          "id": 2646,
+          "tags": [],
+          "caption": "SensitivePolicyForChromeOSFuture caption",
+          "desc": "SensitivePolicyForChromeOSFuture desc"
+      }, {
+          "name": "SensitivePolicyForChromeOSDeprecated",
+          "type": "main",
+          "schema": { "type": "boolean" },
+          "supported_on": ["chrome_os:1-"],
+          "deprecated": True,
+          "sensitive": True,
+          "id": 2647,
+          "tags": [],
+          "caption": "SensitivePolicyForChromeOSDeprecated caption",
+          "desc": "SensitivePolicyForChromeOSDeprecated desc"
       }],
       "policy_atomic_group_definitions": []
   }
 
   def setUp(self):
+    self.maxDiff = None  # See the full diff in the test output.
     self.chrome_major_version = 94
     self.target_platform = 'chrome_os'
     self.all_target_platforms = ['win', 'mac', 'linux', 'chromeos', 'fuchsia']
@@ -384,6 +437,17 @@ class PolicyGenerationTest(unittest.TestCase):
         self.policies, "invalid")
     self.assertEqual(0, len(invalid_metapolicies))
 
+  def testGetSensitivePolicies(self):
+    sensitive_policies = sorted([
+        p.name for p in self.policies if p.is_sensitive and p.is_supported
+    ])
+    self.assertListEqual([
+        "SensitivePolicyForChromeOSDeprecated",
+        "SensitivePolicyForChromeOSFuture",
+        "SensitivePolicyForChromeOSOnly",
+        "SensitivePolicyForMultiplePlatforms",
+    ], sensitive_policies)
+
   def testWritePolicyConstantHeader(self):
     output_path = 'mock_policy_constants_h'
 
@@ -443,13 +507,23 @@ class PolicyGenerationTest(unittest.TestCase):
 
 
   def testWriteAppRestrictions(self):
+    # Create Android-specific policies for testing Android app restrictions.
+    # This ensures we only test with policies that actually support Android.
+    android_target_platform = 'android'
+    android_policies = [
+        generate_policy_source.PolicyDetails(policy, self.chrome_major_version,
+                                             android_target_platform,
+                                             self.risk_tags.GetValidTags())
+        for policy in self.TEMPLATES_JSON['policy_definitions']
+    ]
+
     output_path = 'app_restrictions_xml'
     with patch('codecs.open', mock_open()) as mocked_file:
       with codecs.open(output_path, 'w', encoding='utf-8') as f:
         generate_policy_source._WriteAppRestrictions(
-            self.policies,
+            android_policies,
             self.policy_atomic_groups,
-            self.target_platform,
+            android_target_platform,
             f,
             self.risk_tags,
             chunking=True,

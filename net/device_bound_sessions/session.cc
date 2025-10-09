@@ -91,14 +91,9 @@ Session::~Session() = default;
 base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
     const SessionParams& params) {
   if (!params.fetcher_url.is_valid()) {
-    return base::unexpected(
-        SessionError{SessionError::ErrorType::kInvalidFetcherUrl});
-  } else if (params.refresh_url.empty()) {
-    return base::unexpected(
-        SessionError{SessionError::ErrorType::kInvalidRefreshUrl});
+    return base::unexpected(SessionError{SessionError::kInvalidFetcherUrl});
   } else if (params.session_id.empty()) {
-    return base::unexpected(
-        SessionError{SessionError::ErrorType::kInvalidSessionId});
+    return base::unexpected(SessionError{SessionError::kInvalidSessionId});
   }
 
   // If there is an origin in the scope, verify it is valid. Default to the
@@ -108,21 +103,17 @@ base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
                                  : GURL(params.scope.origin);
   url::Origin scope_origin = url::Origin::Create(scope_origin_as_url);
   if (scope_origin.opaque()) {
-    return base::unexpected(
-        SessionError{SessionError::ErrorType::kInvalidScopeOrigin});
+    return base::unexpected(SessionError{SessionError::kInvalidScopeOrigin});
   }
 
   // If there is an origin in the scope, verify it has no path (including '/').
-  if (base::FeatureList::IsEnabled(
-          features::kDeviceBoundSessionsOriginTrialFeedback) &&
+  if (features::kDeviceBoundSessionsOriginTrialFeedback.Get() &&
       !params.scope.origin.empty()) {
     std::string_view origin_view =
         base::TrimWhitespaceASCII(params.scope.origin, base::TRIM_ALL);
-    if ((scope_origin_as_url.has_path() &&
-         scope_origin_as_url.path_piece() != "/") ||
+    if ((scope_origin_as_url.has_path() && scope_origin_as_url.path() != "/") ||
         base::EndsWith(origin_view, "/")) {
-      return base::unexpected(
-          SessionError{SessionError::ErrorType::kInvalidScopeOrigin});
+      return base::unexpected(SessionError{SessionError::kInvalidScopeOrigin});
     }
   }
 
@@ -130,7 +121,7 @@ base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
   if (net::SchemefulSite(scope_origin_as_url) !=
       net::SchemefulSite(params.fetcher_url)) {
     return base::unexpected(
-        SessionError{SessionError::ErrorType::kScopeOriginSameSiteMismatch});
+        SessionError{SessionError::kScopeOriginSameSiteMismatch});
   }
 
   // The refresh endpoint can be a full URL (samesite with request origin)
@@ -146,15 +137,14 @@ base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
   // Check if the refresh URL is valid, secure.
   if (!candidate_refresh_endpoint.is_valid() ||
       !IsSecure(candidate_refresh_endpoint)) {
-    return base::unexpected(
-        SessionError{SessionError::ErrorType::kInvalidRefreshUrl});
+    return base::unexpected(SessionError{SessionError::kInvalidRefreshUrl});
   }
 
   // Check if the refresh URL is same-site with the fetcher URL.
   if (net::SchemefulSite(candidate_refresh_endpoint) !=
       net::SchemefulSite(params.fetcher_url)) {
     return base::unexpected(
-        SessionError{SessionError::ErrorType::kRefreshUrlSameSiteMismatch});
+        SessionError{SessionError::kRefreshUrlSameSiteMismatch});
   }
 
   ASSIGN_OR_RETURN(SessionInclusionRules session_inclusion_rules,
@@ -165,18 +155,12 @@ base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
                   candidate_refresh_endpoint));
 
   for (const auto& cred : params.credentials) {
-    if (cred.name.empty()) {
-      return base::unexpected(
-          SessionError{SessionError::ErrorType::kInvalidCredentials});
-    }
-
     std::optional<CookieCraving> craving = CookieCraving::Create(
         params.fetcher_url, cred.name, cred.attributes, base::Time::Now());
     if (craving) {
       session->cookie_cravings_.push_back(*craving);
     } else {
-      return base::unexpected(
-          SessionError{SessionError::ErrorType::kInvalidCredentials});
+      return base::unexpected(SessionError{SessionError::kInvalidCredentials});
     }
   }
 
@@ -187,7 +171,7 @@ base::expected<std::unique_ptr<Session>, SessionError> Session::CreateIfValid(
   for (const std::string& initiator : params.allowed_refresh_initiators) {
     if (!IsValidHostPattern(initiator)) {
       return base::unexpected(
-          SessionError{SessionError::ErrorType::kInvalidRefreshInitiators});
+          SessionError{SessionError::kInvalidRefreshInitiators});
     }
   }
   session->set_allowed_refresh_initiators(
@@ -282,10 +266,6 @@ proto::Session Session::ToProto() const {
 bool Session::ShouldDeferRequest(
     URLRequest* request,
     const net::FirstPartySetMetadata& first_party_set_metadata) const {
-  if (request->device_bound_session_usage() < SessionUsage::kNoUsage) {
-    request->set_device_bound_session_usage(SessionUsage::kNoUsage);
-  }
-
   if (!IncludesUrl(request->url())) {
     // Request is not in scope for this session.
     return false;
@@ -316,8 +296,7 @@ bool Session::ShouldDeferRequest(
         return dict;
       });
 
-  if (base::FeatureList::IsEnabled(
-          features::kDeviceBoundSessionsOriginTrialFeedback) &&
+  if (features::kDeviceBoundSessionsOriginTrialFeedback.Get() &&
       !AllowedToInitiateRefresh(request->initiator())) {
     request->net_log().AddEvent(
         net::NetLogEventType::CHECK_DBSC_REFRESH_REQUIRED,
@@ -502,6 +481,10 @@ void Session::InformOfRefreshResult(SessionError::ErrorType error_type) {
     case kMissingScope:
     case kNoCredentials:
     case kInvalidScopeIncludeSite:
+    case kFederatedKeyThumbprintMismatch:
+    case kInvalidFederatedSessionUrl:
+    case kInvalidFederatedSession:
+    case kInvalidFederatedKey:
 
     // We do not want to back off on many network connection errors
     // (e.g. internet disconnected), so we do not hit our maximum
@@ -510,14 +493,63 @@ void Session::InformOfRefreshResult(SessionError::ErrorType error_type) {
     case kNetError:
       break;
     case kTransientHttpError:
+    case kBoundCookieSetForbidden:
       backoff_.InformOfRequest(/*succeeded=*/false);
       break;
     // Registration-only errors
-    case kWellKnownUnavailable:
+    case kSubdomainRegistrationWellKnownUnavailable:
     case kSubdomainRegistrationUnauthorized:
-    case kWellKnownMalformed:
+    case kSubdomainRegistrationWellKnownMalformed:
+    case kFederatedNotAuthorized:
+    case kSessionProviderWellKnownUnavailable:
+    case kSessionProviderWellKnownMalformed:
+    case kRelyingPartyWellKnownUnavailable:
+    case kRelyingPartyWellKnownMalformed:
+    case kTooManyRelyingOriginLabels:
       NOTREACHED();
   }
+}
+
+bool Session::CanSetBoundCookie(
+    const URLRequest& request,
+    const FirstPartySetMetadata& first_party_set_metadata) const {
+  // TODO(crbug.com/438783631): Refactor this.
+  // The below is all copied from
+  // UrlRequestHttpJob::SaveCookiesAndNotifyHeadersComplete. We should refactor
+  // it.
+  CookieStore* cookie_store = request.context()->cookie_store();
+  if ((request.load_flags() & LOAD_DO_NOT_SAVE_COOKIES) || !cookie_store) {
+    return false;
+  }
+
+  bool force_ignore_site_for_cookies = request.force_ignore_site_for_cookies();
+  if (cookie_store->cookie_access_delegate() &&
+      cookie_store->cookie_access_delegate()->ShouldIgnoreSameSiteRestrictions(
+          request.url(), request.site_for_cookies())) {
+    force_ignore_site_for_cookies = true;
+  }
+  bool is_main_frame_navigation =
+      IsolationInfo::RequestType::kMainFrame ==
+          request.isolation_info().request_type() ||
+      request.force_main_frame_for_same_site_cookies();
+  CookieOptions::SameSiteCookieContext same_site_context =
+      cookie_util::ComputeSameSiteContextForResponse(
+          request.url_chain(), request.site_for_cookies(), request.initiator(),
+          is_main_frame_navigation, force_ignore_site_for_cookies);
+
+  CookieOptions options;
+  options.set_return_excluded_cookies();
+  options.set_include_httponly();
+  options.set_same_site_cookie_context(same_site_context);
+
+  for (const CookieCraving& cookie_craving : cookie_cravings_) {
+    if (cookie_craving.CanSetBoundCookie(request, first_party_set_metadata,
+                                         &options)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }  // namespace net::device_bound_sessions

@@ -6,6 +6,7 @@
 
 #include "base/base64.h"
 #include "base/base_switches.h"
+#include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
@@ -47,9 +48,7 @@ void ExitWithMessage(const std::string& message) {
 namespace variations {
 
 #if !BUILDFLAG(IS_CHROMEOS)
-BASE_FEATURE(kFeedbackIncludeVariations,
-             "FeedbackIncludeVariations",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kFeedbackIncludeVariations, base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
 void MaybeUnpackVariationsStateFile() {

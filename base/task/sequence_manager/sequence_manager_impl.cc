@@ -52,7 +52,8 @@ namespace {
 
 // Whether SequenceManagerImpl records crash keys. Enable via Finch when needed
 // for an investigation. Disabled by default to avoid unnecessary overhead.
-BASE_FEATURE(RecordSequenceManagerCrashKeys, base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kRecordSequenceManagerCrashKeys,
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 constinit thread_local internal::SequenceManagerImpl*
     thread_local_sequence_manager = nullptr;
@@ -64,9 +65,7 @@ class TracedBaseValue : public trace_event::ConvertableToTraceFormat {
 
   void AppendAsTraceFormat(std::string* out) const override {
     if (!value_.is_none()) {
-      std::string tmp;
-      JSONWriter::Write(value_, &tmp);
-      *out += tmp;
+      *out += WriteJson(value_).value_or("");
     } else {
       *out += "{}";
     }
@@ -1140,9 +1139,7 @@ TaskQueue::Handle SequenceManagerImpl::CreateTaskQueue(
 std::string SequenceManagerImpl::DescribeAllPendingTasks() const {
   Value::Dict value =
       AsValueWithSelectorResult(nullptr, /* force_verbose */ true);
-  std::string result;
-  JSONWriter::Write(value, &result);
-  return result;
+  return WriteJson(value).value_or("");
 }
 
 void SequenceManagerImpl::AddDestructionObserver(

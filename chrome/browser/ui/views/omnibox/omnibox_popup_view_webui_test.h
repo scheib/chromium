@@ -12,14 +12,14 @@
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/omnibox/omnibox_controller.h"
+#include "chrome/browser/ui/omnibox/omnibox_edit_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_popup_presenter.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_popup_view_webui.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "components/omnibox/browser/omnibox_controller.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
 #include "ui/views/widget/widget.h"
 
 // Base class for omnibox browser and ui tests.
@@ -55,7 +55,8 @@ class OmniboxPopupViewWebUITest : public InProcessBrowserTest {
   OmniboxController* controller() { return omnibox_view()->controller(); }
   OmniboxEditModel* edit_model() { return omnibox_view()->model(); }
   OmniboxPopupViewWebUI* popup_view() {
-    return static_cast<OmniboxPopupViewWebUI*>(edit_model()->get_popup_view());
+    return static_cast<OmniboxPopupViewWebUI*>(
+        location_bar()->GetOmniboxPopupView());
   }
 
   SkColor GetSelectedColor(Browser* browser) {
@@ -68,12 +69,6 @@ class OmniboxPopupViewWebUITest : public InProcessBrowserTest {
     return BrowserView::GetBrowserViewForBrowser(browser)
         ->GetColorProvider()
         ->GetColor(kColorOmniboxResultsBackground);
-  }
-
-  void SetUseDarkColor(bool use_dark) {
-    BrowserView* browser_view =
-        BrowserView::GetBrowserViewForBrowser(browser());
-    browser_view->GetNativeTheme()->set_use_dark_colors(use_dark);
   }
 
   // Some tests relies on the light/dark variants of the result background to be

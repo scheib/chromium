@@ -39,7 +39,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "url/gurl.h"
 
 using password_manager::MockPasswordFormManagerForUI;
@@ -1161,4 +1161,41 @@ TEST_F(SaveUpdatePasswordMessageDelegateTest, CredentialUsingAccountStorage) {
   EXPECT_TRUE(edit_dialog_delegate->IsUsingAccountStorage(kUsername));
 
   DismissMessage(messages::DismissReason::UNKNOWN);
+}
+
+TEST_F(SaveUpdatePasswordMessageDelegateTest,
+       CredentialUpdatedWithBackupPassword) {
+  base::HistogramTester histogram_tester;
+  ukm::TestAutoSetUkmRecorder test_ukm_recorder;
+
+  const std::u16string backup_password = u"test_backup1";
+  SetPendingCredentials(kUsername, backup_password);
+  std::vector<PasswordForm> best_matches = {
+      CreatePasswordForm(kUsername, kPassword)};
+  best_matches[0].SetPasswordBackupNote(backup_password);
+  best_matches[0].type =
+      password_manager::PasswordForm::Type::kChangeSubmission;
+  auto form_manager = CreateFormManager(GURL(kDefaultUrl), best_matches);
+  EXPECT_CALL(*form_manager, Save());
+  EnqueueMessage(std::move(form_manager), /*user_signed_in=*/true,
+                 /*update_password=*/true);
+  EXPECT_NE(nullptr, GetMessageWrapper());
+  TriggerActionClick();
+  EXPECT_EQ(nullptr, GetMessageWrapper());
+
+  CommitPasswordFormMetrics();
+  histogram_tester.ExpectUniqueSample(
+      "PasswordManager.PasswordChangeRecoveryFlow",
+      password_manager::metrics_util::PasswordChangeRecoveryFlowState::
+          kPrimaryPasswordUpdated,
+      1);
+  const auto& entries = test_ukm_recorder.GetEntriesByName(
+      ukm::builders::PasswordManager_ChangeRecovery::kEntryName);
+  test_ukm_recorder.ExpectEntryMetric(
+      entries[0],
+      ukm::builders::PasswordManager_ChangeRecovery::
+          kPasswordChangeRecoveryFlowName,
+      static_cast<int>(
+          password_manager::metrics_util::PasswordChangeRecoveryFlowState::
+              kPrimaryPasswordUpdated));
 }

@@ -20,7 +20,6 @@
 #include "ui/base/interaction/interaction_sequence.h"
 #include "ui/base/interaction/interaction_test_util.h"
 #include "ui/base/test/ui_controls.h"
-#include "ui/gfx/native_widget_types.h"
 #include "ui/views/interaction/interaction_test_util_mouse.h"
 #include "ui/views/interaction/interaction_test_util_views.h"
 #include "ui/views/view_tracker.h"
@@ -31,7 +30,6 @@
 
 namespace views::test {
 
-using ui::test::internal::SpecifyElement;
 using GestureParams = InteractionTestUtilMouse::GestureParams;
 
 namespace {
@@ -115,7 +113,7 @@ InteractiveViewsTestApi::StepBuilder InteractiveViewsTestApi::MoveMouseTo(
   RequireInteractiveTest();
   StepBuilder step;
   step.SetDescription("MoveMouseTo()");
-  SpecifyElement(step, reference);
+  step.SetElement(reference);
   step.SetStartCallback(base::BindOnce(
       [](InteractiveViewsTestApi* test, RelativePositionCallback pos_callback,
          ui::InteractionSequence* seq, ui::TrackedElement* el) {
@@ -177,7 +175,7 @@ InteractiveViewsTestApi::StepBuilder InteractiveViewsTestApi::DragMouseTo(
   RequireInteractiveTest();
   StepBuilder step;
   step.SetDescription("DragMouseTo()");
-  SpecifyElement(step, reference);
+  step.SetElement(reference);
   step.SetStartCallback(base::BindOnce(
       [](InteractiveViewsTestApi* test, RelativePositionCallback pos_callback,
          bool release, ui::InteractionSequence* seq, ui::TrackedElement* el) {

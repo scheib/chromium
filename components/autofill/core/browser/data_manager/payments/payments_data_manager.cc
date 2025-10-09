@@ -25,7 +25,7 @@
 #include "components/autofill/core/browser/data_model/payments/ewallet.h"
 #include "components/autofill/core/browser/data_model/payments/payment_instrument.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
-#include "components/autofill/core/browser/integrators/optimization_guide/autofill_optimization_guide.h"
+#include "components/autofill/core/browser/integrators/optimization_guide/autofill_optimization_guide_decider.h"
 #include "components/autofill/core/browser/metrics/autofill_settings_metrics.h"
 #include "components/autofill/core/browser/metrics/payments/bnpl_metrics.h"
 #include "components/autofill/core/browser/metrics/payments/card_metadata_metrics.h"
@@ -239,8 +239,10 @@ PaymentsDataManager::PaymentsDataManager(
     syncer::SyncService* sync_service,
     signin::IdentityManager* identity_manager,
     GeoIpCountryCode variations_country_code,
-    std::string app_locale)
+    std::string app_locale,
+    AutofillOptimizationGuideDecider* autofill_optimization_guide_decider)
     : image_fetcher_(image_fetcher),
+      autofill_optimization_guide_decider_(autofill_optimization_guide_decider),
       shared_storage_handler_(std::move(shared_storage_handler)),
       sync_service_(sync_service),
       identity_manager_(identity_manager),
@@ -468,6 +470,10 @@ void PaymentsDataManager::OnWebDataServiceRequestDone(
     PaymentsDataCleaner(this).CleanupPaymentsData();
   }
 
+  if (autofill_optimization_guide_decider_) {
+    autofill_optimization_guide_decider_->OnPaymentsDataLoaded(*this);
+  }
+
   NotifyObservers();
 }
 
@@ -515,6 +521,12 @@ void PaymentsDataManager::OnStateChanged(syncer::SyncService* sync_service) {
   // SyncService::IsSyncFeatureEnabled() are deleted from the codebase.
   database_helper_->SetUseAccountStorageForServerData(
       sync_service && !sync_service->IsSyncFeatureEnabled());
+}
+
+void PaymentsDataManager::OnSyncShutdown(syncer::SyncService*) {
+  // Unreachable, since the service owning this instance is Shutdown() before
+  // the SyncService.
+  NOTREACHED();
 }
 
 void PaymentsDataManager::OnAccountsCookieDeletedByUserAction() {
@@ -673,7 +685,7 @@ std::u16string
 PaymentsDataManager::GetApplicableBenefitDescriptionForCardAndOrigin(
     const CreditCard& credit_card,
     const url::Origin& origin,
-    const AutofillOptimizationGuide* optimization_guide) const {
+    const AutofillOptimizationGuideDecider* optimization_guide) const {
   // Ensures that benefit suggestions can be displayed.
   if (ShouldBlockCardBenefitSuggestionLabels()) {
     return std::u16string();
@@ -1087,6 +1099,20 @@ void PaymentsDataManager::SetAutofillHasSeenBnpl() {
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||
         // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
 
+bool PaymentsDataManager::IsAutofillAmountExtractionAiTermsSeenPrefEnabled()
+    const {
+  return base::FeatureList::IsEnabled(
+             features::kAutofillEnableAiBasedAmountExtraction) &&
+         prefs::AmountExtractionAiTermsSeen(pref_service_);
+}
+
+void PaymentsDataManager::SetAutofillAmountExtractionAiTermsSeen() {
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableAiBasedAmountExtraction)) {
+    prefs::SetAutofillAmountExtractionAiTermsSeen(pref_service_);
+  }
+}
+
 bool PaymentsDataManager::IsAutofillWalletImportEnabled() const {
   if (is_syncing_for_test_) {
     return true;
@@ -1307,10 +1333,14 @@ void PaymentsDataManager::
   prefs::IncrementPaymentMethodsMandatoryReauthPromoShownCounter(pref_service_);
 }
 
-bool PaymentsDataManager::IsPaymentCvcStorageEnabled() {
+bool PaymentsDataManager::IsPaymentCvcStorageEnabled() const {
   return base::FeatureList::IsEnabled(
              features::kAutofillEnableCvcStorageAndFilling) &&
          prefs::IsPaymentCvcStorageEnabled(pref_service_);
+}
+
+void PaymentsDataManager::SetPaymentsCvcStorageEnabled(bool enabled) {
+  prefs::SetPaymentCvcStorage(pref_service_, enabled);
 }
 
 base::span<const VirtualCardUsageData>
@@ -1569,6 +1599,19 @@ void PaymentsDataManager::CleanupForCrbug411681430() {
   Refresh();
 }
 
+#if BUILDFLAG(IS_IOS)
+void PaymentsDataManager::CleanupForCrbug445879524() {
+  if (!GetLocalDatabase()) {
+    return;
+  }
+
+  GetLocalDatabase()->CleanupForCrbug445879524();
+
+  // Refresh our local cache and send notifications to observers.
+  Refresh();
+}
+#endif  // BUILDFLAG(IS_IOS)
+
 void PaymentsDataManager::ClearAllServerDataForTesting() {
   // This could theoretically be called before we get the data back from the
   // database on startup, and it could get called when the wallet pref is
@@ -1792,6 +1835,11 @@ bool PaymentsDataManager::ShouldSuggestServerPaymentMethods() const {
 
   // Server payment methods should be suggested if the sync service is active.
   return sync_service_->GetActiveDataTypes().Has(syncer::AUTOFILL_WALLET_DATA);
+}
+
+base::WeakPtr<const PaymentsDataManager> PaymentsDataManager::GetWeakPtr()
+    const {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void PaymentsDataManager::LoadCreditCards() {
@@ -2257,6 +2305,15 @@ void PaymentsDataManager::CacheIfLinkedBnplPaymentInstrument(
     return;
   }
 
+  // Ensures the server does not return any duplicate issuers. Should never
+  // happen, but servers should never be trusted and responses must be handled
+  // gracefully.
+  if (base::Contains(linked_bnpl_issuers_,
+                     ConvertToBnplIssuerIdEnum(bnpl_issuer_details.issuer_id()),
+                     &BnplIssuer::issuer_id)) {
+    return;
+  }
+
   std::vector<BnplIssuer::EligiblePriceRange> eligible_price_ranges;
   eligible_price_ranges.reserve(
       bnpl_issuer_details.eligible_price_range_size());
@@ -2282,9 +2339,14 @@ void PaymentsDataManager::CacheIfLinkedBnplPaymentInstrument(
   // and flag 'kAutofillEnableBuyNowPayLaterForExternallyLinked` is enabled.
   // Note: `action_required_size()` is checked first so that the experiment
   // groups only contain users having nonempty`action_required` info.
-  if (payment_instrument.action_required_size() > 0 &&
-      base::FeatureList::IsEnabled(
-          features::kAutofillEnableBuyNowPayLaterForExternallyLinked)) {
+  if (payment_instrument.action_required_size() > 0) {
+    // Issuers with `action_required` are not supported when flag
+    // `kAutofillEnableBuyNowPayLaterForExternallyLinked` is disabled. Skip
+    // adding the current issuer.
+    if (!base::FeatureList::IsEnabled(
+            features::kAutofillEnableBuyNowPayLaterForExternallyLinked)) {
+      return;
+    }
     for (int action_required_sync : payment_instrument.action_required()) {
       switch (action_required_sync) {
         case sync_pb::PaymentInstrument_ActionRequired_ACTION_REQUIRED_UNKNOWN:
@@ -2358,6 +2420,15 @@ void PaymentsDataManager::CacheIfBnplPaymentInstrumentCreationOption(
   // If `payment_instrument_creation_option` has an unsupported issuer ID, do
   // not cache it.
   if (!payments::BnplManager::IsBnplIssuerSupported(bnpl_issuer.issuer_id())) {
+    return;
+  }
+
+  // Ensures the server does not return any duplicate issuers. Should never
+  // happen, but servers should never be trusted and responses must be handled
+  // gracefully.
+  if (base::Contains(unlinked_bnpl_issuers_,
+                     ConvertToBnplIssuerIdEnum(bnpl_issuer.issuer_id()),
+                     &BnplIssuer::issuer_id)) {
     return;
   }
 

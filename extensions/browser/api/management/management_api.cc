@@ -38,6 +38,7 @@
 #include "extensions/browser/requirements_checker.h"
 #include "extensions/browser/supervised_user_extensions_delegate.h"
 #include "extensions/browser/uninstall_reason.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/management.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/extension.h"
@@ -57,6 +58,8 @@
 #include "services/data_decoder/public/cpp/data_decoder.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using content::BrowserThread;
 using extensions::mojom::ManifestLocation;
@@ -80,6 +83,15 @@ AutoConfirmForTest auto_confirm_for_test = AutoConfirmForTest::kDoNotSkip;
 // API.
 bool ShouldExposeViaManagementAPI(const Extension& extension) {
   return !Manifest::IsComponentLocation(extension.location());
+}
+
+// Utility function to make the code below less ifdef-y.
+bool IsRunningOnAndroid() {
+#if BUILDFLAG(IS_ANDROID)
+  return true;
+#else
+  return false;
+#endif
 }
 
 std::vector<std::string> CreateWarningsList(const Extension* extension) {
@@ -376,7 +388,7 @@ void ManagementGetPermissionWarningsByManifestFunction::OnParse(
       return Error(keys::kManifestParseError);
     }
 
-    std::string error;
+    std::u16string error;
     scoped_refptr<Extension> extension =
         Extension::Create(base::FilePath(), ManifestLocation::kInvalidLocation,
                           *parsed_manifest, Extension::NO_FLAGS, &error);
@@ -395,6 +407,9 @@ void ManagementGetPermissionWarningsByManifestFunction::OnParse(
 }
 
 ExtensionFunction::ResponseAction ManagementLaunchAppFunction::Run() {
+  if (IsRunningOnAndroid()) {
+    return RespondNow(Error(keys::kLaunchAppNotSupported));
+  }
   std::optional<management::LaunchApp::Params> params =
       management::LaunchApp::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
@@ -478,8 +493,6 @@ ExtensionFunction::ResponseAction ManagementSetEnabledFunction::Run() {
         << "Implied by IsSupervisedExtensionApprovalFlowRequired";
     supervised_user_extensions_delegate->RequestToEnableExtensionOrShowError(
         *target_extension, GetSenderWebContents(),
-        SupervisedUserExtensionParentApprovalEntryPoint::
-            kOnExtensionManagementSetEnabledOperation,
         std::move(approval_callback));
     return RespondLater();
   }
@@ -489,11 +502,13 @@ ExtensionFunction::ResponseAction ManagementSetEnabledFunction::Run() {
     const ManagementAPIDelegate* delegate = ManagementAPI::GetFactoryInstance()
                                                 ->Get(browser_context())
                                                 ->GetDelegate();
-    delegate->DisableExtension(
-        browser_context(), extension(), extension_id_,
-        Manifest::IsPolicyLocation(target_extension->location())
-            ? disable_reason::DISABLE_BLOCKED_BY_POLICY
-            : disable_reason::DISABLE_USER_ACTION);
+    auto reason = (extension() &&
+                   (Manifest::IsPolicyLocation(extension()->location()) ||
+                    Manifest::IsComponentLocation(extension()->location())))
+                      ? disable_reason::DISABLE_BLOCKED_BY_POLICY
+                      : disable_reason::DISABLE_USER_ACTION;
+    delegate->DisableExtension(browser_context(), extension(), extension_id_,
+                               reason);
     return RespondNow(NoArguments());
   }
 
@@ -897,6 +912,10 @@ void ManagementCreateAppShortcutFunction::OnCloseShortcutPrompt(bool created) {
 }
 
 ExtensionFunction::ResponseAction ManagementCreateAppShortcutFunction::Run() {
+  if (IsRunningOnAndroid()) {
+    return RespondNow(Error(keys::kCreateAppShortcutNotSupported));
+  }
+
   if (ExtensionsBrowserClient::Get()->IsRunningInForcedAppMode()) {
     return RespondNow(Error(keys::kNotAllowedInKioskError));
   }
@@ -1028,6 +1047,10 @@ void ManagementGenerateAppForLinkFunction::FinishCreateWebApp(
 }
 
 ExtensionFunction::ResponseAction ManagementGenerateAppForLinkFunction::Run() {
+  if (IsRunningOnAndroid()) {
+    return RespondNow(Error(keys::kGenerateAppForLinkNotSupported));
+  }
+
   if (ExtensionsBrowserClient::Get()->IsRunningInForcedAppMode()) {
     return RespondNow(Error(keys::kNotAllowedInKioskError));
   }

@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.webshare;
 import static org.chromium.build.NullUtil.assumeNonNull;
 
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.share.ChromeShareExtras;
@@ -23,9 +22,11 @@ import org.chromium.services.service_manager.InterfaceFactory;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.webshare.mojom.ShareService;
 
+import java.util.function.Supplier;
+
 /** Factory that creates instances of ShareService. */
 @NullMarked
-public class ShareServiceImplementationFactory implements InterfaceFactory<ShareService> {
+public class ShareServiceImplementationFactory implements InterfaceFactory<@Nullable ShareService> {
     private final WebContents mWebContents;
     private @Nullable Supplier<ShareDelegate> mShareDelegateSupplier;
     private @Nullable WindowAndroid mWindowAndroid;

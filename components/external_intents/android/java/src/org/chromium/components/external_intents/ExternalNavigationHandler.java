@@ -41,8 +41,8 @@ import org.chromium.base.PathUtils;
 import org.chromium.base.RequiredCallback;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.BuildConfig;
+import org.chromium.build.annotations.Contract;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.components.embedder_support.util.UrlConstants;
@@ -56,6 +56,8 @@ import org.chromium.components.messages.MessageDispatcherProvider;
 import org.chromium.components.messages.MessageIdentifier;
 import org.chromium.components.messages.MessageScopeType;
 import org.chromium.components.messages.PrimaryActionClickBehavior;
+import org.chromium.components.url_formatter.SchemeDisplay;
+import org.chromium.components.url_formatter.UrlFormatter;
 import org.chromium.components.webapk.lib.client.ChromeWebApkHostSignature;
 import org.chromium.components.webapk.lib.client.WebApkValidator;
 import org.chromium.content_public.browser.WebContents;
@@ -68,8 +70,10 @@ import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.mojom.WindowOpenDisposition;
 import org.chromium.ui.permissions.PermissionCallback;
 import org.chromium.url.GURL;
+import org.chromium.url.Origin;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -81,11 +85,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
- * Logic related to the URL overriding/intercepting functionality.
- * This feature supports conversion of certain navigations to Android Intents allowing
- * applications like Youtube to direct users clicking on a http(s) link to their native app.
+ * Logic related to the URL overriding/intercepting functionality. This feature supports conversion
+ * of certain navigations to Android Intents allowing applications like Youtube to direct users
+ * clicking on a http(s) link to their native app.
  */
 @NullMarked
 public class ExternalNavigationHandler {
@@ -99,6 +104,10 @@ public class ExternalNavigationHandler {
     private static final String PLAY_APP_PATH = "/store/apps/details";
     private static final String PLAY_HOSTNAME = "play.google.com";
     @VisibleForTesting public static final String PLAY_APP_PACKAGE = "com.android.vending";
+
+    private static final String MDOC_SCHEME = "mdoc";
+    private static final String HAIP_SCHEME = "haip";
+    private static final String OPENID4VP_SCHEME_PREFIX_SUFFIX = "openid4vp";
 
     private static final String PDF_EXTENSION = "pdf";
     private static final String PDF_VIEWER = "com.google.android.apps.docs";
@@ -159,16 +168,16 @@ public class ExternalNavigationHandler {
     }
 
     // A Supplier that only evaluates when needed then caches the value.
-    protected static class LazySupplier<T> implements Supplier<T> {
+    protected static class LazySupplier<T extends @Nullable Object> implements Supplier<T> {
         private @Nullable T mValue;
         private @Nullable Supplier<T> mInnerSupplier;
 
         public LazySupplier(Supplier<T> innerSupplier) {
-            assert innerSupplier != null : "innerSupplier cannot be null";
             mInnerSupplier = innerSupplier;
         }
 
         @Override
+        @SuppressWarnings("NullAway") // Using mInnerSupplier as condition for mValue.
         public T get() {
             if (mInnerSupplier != null) {
                 mValue = mInnerSupplier.get();
@@ -177,12 +186,7 @@ public class ExternalNavigationHandler {
                 // references it may have held.
                 mInnerSupplier = null;
             }
-            return assumeNonNull(mValue);
-        }
-
-        @Override
-        public boolean hasValue() {
-            return true;
+            return mValue;
         }
     }
 
@@ -190,7 +194,7 @@ public class ExternalNavigationHandler {
         protected final Intent mIntent;
         private @Nullable Intent mIntentCopy;
 
-        public IntentBasedSupplier(Intent intent, Supplier<T> innerSupplier) {
+        IntentBasedSupplier(Intent intent, Supplier<T> innerSupplier) {
             super(innerSupplier);
             mIntent = intent;
         }
@@ -213,41 +217,55 @@ public class ExternalNavigationHandler {
         }
     }
 
-    @VisibleForTesting
-    // A delegate responsible for showing a confirmation dialog in Incognito session, which upon
-    // positive user confirmation would result in navigations outside of Incognito.
-    class IncognitoDialogDelegate implements ModalDialogProperties.Controller {
-        private final Context mContext;
-        private final ExternalNavigationParams mParams;
-        private final Intent mIntent;
-        private final GURL mFallbackUrl;
+    /**
+     * A delegate responsible for showing a warning dialog that intercepts navigations to external
+     * apps. This class handles the lifecycle of the dialog, including creation, showing, and
+     * dismissal due to user action or navigation events.
+     */
+    abstract class InterstitialDialogDelegate implements ModalDialogProperties.Controller {
+        protected final Context mContext;
+        protected final ExternalNavigationParams mParams;
+        protected final Intent mIntent;
+
         // https://crbug.com/1412842, https://crbug.com/1474846: It seems dialogs sometimes end up
         // with multiple results chosen.
         private final AtomicBoolean mDialogResultChosen = new AtomicBoolean(false);
 
-        private @Nullable PropertyModel mPropertyModel;
+        protected @Nullable PropertyModel mPropertyModel;
 
-        IncognitoDialogDelegate(
-                Context context, ExternalNavigationParams params, Intent intent, GURL fallbackUrl) {
+        /**
+         * @param context The {@link Context} for creating the dialog.
+         * @param params The {@link ExternalNavigationParams} for the navigation being intercepted.
+         * @param intent The {@link Intent} that will be launched if the user confirms.
+         */
+        InterstitialDialogDelegate(
+                Context context, ExternalNavigationParams params, Intent intent) {
             mContext = context;
             mParams = params;
             mIntent = intent;
-            mFallbackUrl = fallbackUrl;
         }
+
+        /** Called when the user confirms the dialog, typically by pressing the positive button. */
+        protected abstract void onConfirmed();
+
+        /**
+         * Called when the user cancels the dialog, by pressing the negative button, back button, or
+         * clicking outside the dialog.
+         */
+        protected abstract void onCancelled();
 
         @Override
         public void onClick(
                 @Nullable PropertyModel model, @ModalDialogProperties.ButtonType int buttonType) {
+            if (mDialogResultChosen.get()) return;
+            mDialogResultChosen.set(true);
+
             if (ModalDialogProperties.ButtonType.POSITIVE == buttonType) {
-                if (mDialogResultChosen.get()) return;
-                mDialogResultChosen.set(true);
-                onUserDecidedWhetherToLaunchIncognitoIntent(true, mParams, mIntent, mFallbackUrl);
+                onConfirmed();
                 mModalDialogManager.dismissDialog(
                         mPropertyModel, DialogDismissalCause.POSITIVE_BUTTON_CLICKED);
             } else if (ModalDialogProperties.ButtonType.NEGATIVE == buttonType) {
-                if (mDialogResultChosen.get()) return;
-                mDialogResultChosen.set(true);
-                onUserDecidedWhetherToLaunchIncognitoIntent(false, mParams, mIntent, mFallbackUrl);
+                onCancelled();
                 mModalDialogManager.dismissDialog(
                         mPropertyModel, DialogDismissalCause.NEGATIVE_BUTTON_CLICKED);
             }
@@ -263,72 +281,165 @@ public class ExternalNavigationHandler {
             if (mDialogResultChosen.get()) return;
             mDialogResultChosen.set(true);
 
-            onUserDecidedWhetherToLaunchIncognitoIntent(false, mParams, mIntent, mFallbackUrl);
-            mIncognitoDialogDelegate = null;
+            onCancelled();
         }
 
+        /**
+         * Builds the {@link PropertyModel} for a standard interstitial dialog.
+         *
+         * @param title The title of the dialog.
+         * @param message The message body of the dialog.
+         * @param positiveButtonText The text for the positive button.
+         * @param negativeButtonText The text for the negative button.
+         * @return The constructed {@link PropertyModel}.
+         */
+        protected PropertyModel buildPropertyModelBase(
+                String title,
+                CharSequence message,
+                String positiveButtonText,
+                String negativeButtonText) {
+            return new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                    .with(ModalDialogProperties.CONTROLLER, this)
+                    .with(
+                            ModalDialogProperties.BUTTON_TAP_PROTECTION_PERIOD_MS,
+                            UiUtils.PROMPT_INPUT_PROTECTION_SHORT_DELAY_MS)
+                    .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
+                    .with(
+                            ModalDialogProperties.BUTTON_STYLES,
+                            ModalDialogProperties.ButtonStyles.PRIMARY_OUTLINE_NEGATIVE_OUTLINE)
+                    .with(ModalDialogProperties.TITLE, title)
+                    .with(ModalDialogProperties.MESSAGE_PARAGRAPH_1, message)
+                    .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT, positiveButtonText)
+                    .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT, negativeButtonText)
+                    .build();
+        }
+
+        /** Builds the specific {@link PropertyModel} for the dialog. */
+        protected abstract PropertyModel buildPropertyModel();
+
+        /** Builds and shows the dialog. */
         void showDialog() {
             if (isShowing()) {
                 assert false : "Previous dialog is still being shown.";
                 return;
             }
 
-            mPropertyModel =
-                    new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                            .with(ModalDialogProperties.CONTROLLER, this)
-                            .with(
-                                    ModalDialogProperties.BUTTON_TAP_PROTECTION_PERIOD_MS,
-                                    UiUtils.PROMPT_INPUT_PROTECTION_SHORT_DELAY_MS)
-                            .with(
-                                    ModalDialogProperties.TITLE,
-                                    mContext.getString(
-                                            R.string.external_app_leave_incognito_warning_title))
-                            .with(
-                                    ModalDialogProperties.MESSAGE_PARAGRAPH_1,
-                                    mContext.getString(
-                                            R.string.external_app_leave_incognito_warning))
-                            .with(
-                                    ModalDialogProperties.POSITIVE_BUTTON_TEXT,
-                                    mContext.getString(R.string.external_app_leave_incognito_leave))
-                            .with(
-                                    ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
-                                    mContext.getString(R.string.external_app_leave_incognito_stay))
-                            .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
-                            .with(
-                                    ModalDialogProperties.BUTTON_STYLES,
-                                    ModalDialogProperties.ButtonStyles
-                                            .PRIMARY_OUTLINE_NEGATIVE_OUTLINE)
-                            .build();
-
+            mPropertyModel = buildPropertyModel();
             mModalDialogManager.showDialog(mPropertyModel, ModalDialogManager.ModalDialogType.TAB);
         }
 
-        /** Browser initiated cancellation. */
+        /**
+         * Programmatically cancels the dialog. This is typically used when a new navigation starts,
+         * making the current dialog obsolete.
+         */
         void cancelDialog() {
             mModalDialogManager.dismissDialog(mPropertyModel, DialogDismissalCause.NAVIGATE);
         }
 
-        /** Browser initiated cancellation. */
+        /**
+         * Called when a new navigation starts. Cancels the dialog if the new navigation is not the
+         * one this dialog is for.
+         *
+         * @param navigationId The ID of the navigation that started.
+         */
         void onNavigationStarted(long navigationId) {
             if (navigationId == mParams.getNavigationId()) return;
             // Cancel the dialog if a different navigation is started.
             cancelDialog();
         }
 
-        /** Browser initiated cancellation. */
+        /**
+         * Called when a navigation finishes. Cancels the dialog if a different navigation has
+         * finished.
+         *
+         * @param navigationId The ID of the navigation that finished.
+         */
         void onNavigationFinished(long navigationId) {
             if (navigationId == mParams.getNavigationId()) return;
             // Cancel the dialog if a different navigation is finished.
             cancelDialog();
         }
 
+        /**
+         * @return Whether the dialog is currently being shown.
+         */
         boolean isShowing() {
             return mPropertyModel != null && mModalDialogManager.isShowing();
         }
 
+        /** Simulates a click on a dialog button for testing purposes. */
         @VisibleForTesting
         void performClick(@ModalDialogProperties.ButtonType int buttonType) {
             onClick(mPropertyModel, buttonType);
+        }
+    }
+
+    @VisibleForTesting
+    // A delegate responsible for showing a confirmation dialog in Incognito session, which upon
+    // positive user confirmation would result in navigations outside of Incognito.
+    class IncognitoDialogDelegate extends InterstitialDialogDelegate {
+        private final GURL mFallbackUrl;
+
+        IncognitoDialogDelegate(
+                Context context, ExternalNavigationParams params, Intent intent, GURL fallbackUrl) {
+            super(context, params, intent);
+            mFallbackUrl = fallbackUrl;
+        }
+
+        @Override
+        protected void onConfirmed() {
+            onUserDecidedWhetherToLaunchIncognitoIntent(true, mParams, mIntent, mFallbackUrl);
+        }
+
+        @Override
+        protected void onCancelled() {
+            onUserDecidedWhetherToLaunchIncognitoIntent(false, mParams, mIntent, mFallbackUrl);
+        }
+
+        @Override
+        protected PropertyModel buildPropertyModel() {
+            return buildPropertyModelBase(
+                    mContext.getString(R.string.external_app_leave_incognito_warning_title),
+                    mContext.getString(R.string.external_app_leave_incognito_warning),
+                    mContext.getString(R.string.external_app_leave_incognito_leave),
+                    mContext.getString(R.string.external_app_leave_incognito_stay));
+        }
+    }
+
+    @VisibleForTesting
+    // A delegate responsible for showing a warning dialog for Digital Credentials navigations.
+    class DigitalCredentialsWarningDialogDelegate extends InterstitialDialogDelegate {
+        DigitalCredentialsWarningDialogDelegate(
+                Context context, ExternalNavigationParams params, Intent intent) {
+            super(context, params, intent);
+        }
+
+        @Override
+        protected void onConfirmed() {
+            onUserDecidedWhetherToLaunchDigitalCredentialsIntent(true, mParams, mIntent);
+        }
+
+        @Override
+        protected void onCancelled() {
+            onUserDecidedWhetherToLaunchDigitalCredentialsIntent(false, mParams, mIntent);
+        }
+
+        @Override
+        protected PropertyModel buildPropertyModel() {
+            Origin origin = mParams.getInitiatorOrigin();
+            assumeNonNull(origin);
+            String bodyText =
+                    mContext.getString(
+                            R.string.digital_identity_interstitial_low_risk_dialog_text,
+                            UrlFormatter.formatOriginForSecurityDisplay(
+                                    origin, SchemeDisplay.OMIT_CRYPTOGRAPHIC));
+
+            return buildPropertyModelBase(
+                    mContext.getString(R.string.digital_identity_interstitial_dialog_title),
+                    bodyText,
+                    mContext.getString(R.string.continue_button),
+                    mContext.getString(
+                            R.string.digital_identity_interstitial_low_risk_negative_button_text));
         }
     }
 
@@ -337,7 +448,7 @@ public class ExternalNavigationHandler {
         // We need the query to include non-default intent filters, but should not return
         // them for clients that don't explicitly need to check non-default filters.
         private static class QueryNonDefaultSupplier extends LazySupplier<List<ResolveInfo>> {
-            public QueryNonDefaultSupplier(Intent intent) {
+            QueryNonDefaultSupplier(Intent intent) {
                 super(
                         () ->
                                 PackageManagerUtils.queryIntentActivities(
@@ -534,6 +645,10 @@ public class ExternalNavigationHandler {
     private final ModalDialogManager mModalDialogManager;
     @VisibleForTesting protected @Nullable IncognitoDialogDelegate mIncognitoDialogDelegate;
 
+    @VisibleForTesting
+    protected @Nullable DigitalCredentialsWarningDialogDelegate
+            mDigitalCredentialsWarningDialogDelegate;
+
     /**
      * Constructs a new instance of {@link ExternalNavigationHandler}, using the injected {@link
      * ExternalNavigationDelegate}.
@@ -592,6 +707,13 @@ public class ExternalNavigationHandler {
         assert canLaunchExternalFallbackResult.get() != null;
         RecordHistogram.recordTimesHistogram(
                 "Android.StrictMode.OverrideUrlLoadingTime", SystemClock.elapsedRealtime() - time);
+
+        // Measure how many navigations would be affected if enabling feature flag
+        // AUXILIARY_NAVIGATION_STAYS_IN_BROWSER for all windowing modes.
+        RecordHistogram.recordBooleanHistogram(
+                "Android.Intent.OverrideBrowserAuxiliaryNavigation",
+                isBrowserAuxiliaryNavigation(params)
+                        && result.getResultType() != OverrideUrlLoadingResultType.NO_OVERRIDE);
 
         if (result.getResultType() == OverrideUrlLoadingResultType.NO_OVERRIDE) {
             result =
@@ -972,7 +1094,8 @@ public class ExternalNavigationHandler {
         return false;
     }
 
-    private boolean externalIntentRequestsDisabledForUrl(ExternalNavigationParams params) {
+    private boolean externalIntentRequestsDisabledForUrl(
+            ExternalNavigationParams params, Intent intent) {
         // TODO(changwan): check if we need to handle URL even when external intent is off.
         if (CommandLine.getInstance()
                 .hasSwitch(ExternalIntentsSwitches.DISABLE_EXTERNAL_INTENT_REQUESTS)) {
@@ -980,7 +1103,7 @@ public class ExternalNavigationHandler {
             return true;
         }
 
-        if (mDelegate.shouldDisableExternalIntentRequestsForUrl(params.getUrl())) {
+        if (mDelegate.shouldDisableExternalIntentRequestsForUrl(params, intent)) {
             if (debug()) Log.i(TAG, "Delegate disables external intent requests for URL.");
             return true;
         }
@@ -1183,7 +1306,8 @@ public class ExternalNavigationHandler {
                 && params.isInDesktopWindowingMode()
                 && params.isInitialNavigationInFrame()
                 && params.isTabInPWA()
-                && !params.isFromIntent()) {
+                && !params.isFromIntent()
+                && UrlUtilities.isHttpOrHttps(params.getUrl())) {
             if (debug()) Log.i(TAG, "No specialized handler found, reparent to browser.");
             return OverrideUrlLoadingResult.forReparentToBrowser();
         }
@@ -1453,38 +1577,57 @@ public class ExternalNavigationHandler {
             final ExternalNavigationParams params,
             final Intent intent,
             final GURL fallbackUrl) {
-        if (shouldLaunch) {
-            try {
-                startActivity(intent, params);
-                if (params.getRequiredAsyncActionTakenCallback() != null) {
-                    params.getRequiredAsyncActionTakenCallback()
-                            .onResult(
-                                    AsyncActionTakenParams.forExternalIntentLaunched(
-                                            mDelegate.canCloseTabOnIncognitoIntentLaunch(),
-                                            params));
-                }
-                return;
-            } catch (ActivityNotFoundException e) {
-                // The activity that we thought was going to handle the intent
-                // no longer exists, so catch the exception and fall through to handling the
-                // fallback URL.
-            }
-        }
-
-        OverrideUrlLoadingResult result = handleFallbackUrl(params, fallbackUrl, false);
-        if (params.getRequiredAsyncActionTakenCallback() != null) {
-            if (result.getResultType() == OverrideUrlLoadingResultType.NO_OVERRIDE) {
-                // There was no fallback URL and we can't handle the URL the intent was targeting.
-                // In this case we'll return to the last committed URL.
-                params.getRequiredAsyncActionTakenCallback()
-                        .onResult(AsyncActionTakenParams.forNoAction());
-            } else {
-                assert result.getResultType()
-                        == OverrideUrlLoadingResultType.OVERRIDE_WITH_NAVIGATE_TAB;
+        mIncognitoDialogDelegate = null;
+        if (shouldLaunch
+                && startActivity(intent, params).getResultType()
+                        != OverrideUrlLoadingResultType.NO_OVERRIDE) {
+            // The external intent was launched successfully.
+            if (params.getRequiredAsyncActionTakenCallback() != null) {
                 params.getRequiredAsyncActionTakenCallback()
                         .onResult(
-                                AsyncActionTakenParams.forNavigate(result.getTargetUrl(), params));
+                                AsyncActionTakenParams.forExternalIntentLaunched(
+                                        mDelegate.canCloseTabOnIntentLaunch(), params));
             }
+            return;
+        }
+
+        // Handle fallback logic if the user declined or launching the intent failed.
+        if (params.getRequiredAsyncActionTakenCallback() == null) return;
+
+        OverrideUrlLoadingResult result = handleFallbackUrl(params, fallbackUrl, false);
+        if (result.getResultType() == OverrideUrlLoadingResultType.OVERRIDE_WITH_NAVIGATE_TAB) {
+            params.getRequiredAsyncActionTakenCallback()
+                    .onResult(AsyncActionTakenParams.forNavigate(result.getTargetUrl(), params));
+        } else {
+            // There was no fallback URL and we can't handle the URL the intent was targeting.
+            // In this case we'll return to the last committed URL.
+            assert result.getResultType() == OverrideUrlLoadingResultType.NO_OVERRIDE;
+            params.getRequiredAsyncActionTakenCallback()
+                    .onResult(AsyncActionTakenParams.forNoAction());
+        }
+    }
+
+    private void onUserDecidedWhetherToLaunchDigitalCredentialsIntent(
+            final boolean shouldLaunch,
+            final ExternalNavigationParams params,
+            final Intent intent) {
+        mDigitalCredentialsWarningDialogDelegate = null;
+        if (shouldLaunch
+                && startActivity(intent, params).getResultType()
+                        != OverrideUrlLoadingResultType.NO_OVERRIDE) {
+            // The external intent was launched successfully.
+            if (params.getRequiredAsyncActionTakenCallback() != null) {
+                params.getRequiredAsyncActionTakenCallback()
+                        .onResult(
+                                AsyncActionTakenParams.forExternalIntentLaunched(
+                                        mDelegate.canCloseTabOnIntentLaunch(), params));
+            }
+            return;
+        }
+
+        if (params.getRequiredAsyncActionTakenCallback() != null) {
+            params.getRequiredAsyncActionTakenCallback()
+                    .onResult(AsyncActionTakenParams.forNoAction());
         }
     }
 
@@ -1559,6 +1702,64 @@ public class ExternalNavigationHandler {
                 || ignoreBackForwardNav(params);
     }
 
+    /** Returns whether a Tab instance should be reparented from the PWA to the browser. */
+    public boolean shouldReparentTab(
+            GURL url,
+            boolean isTabInPWA,
+            boolean isInitialNavigationInFrame,
+            boolean isInDesktopWindowingMode) {
+        WebContents webContents = mDelegate.getWebContents();
+        return ExternalIntentsFeatures.REPARENT_AUXILIARY_NAVIGATION_FROM_PWA.isEnabled()
+                && isInitialNavigationInFrame
+                && isTabInPWA
+                && isInDesktopWindowingMode
+                && webContents != null
+                && webContents.hasOpener()
+                && webContents.getOriginalWindowOpenDisposition()
+                        == WindowOpenDisposition.NEW_FOREGROUND_TAB
+                && UrlUtilities.isHttpOrHttps(url);
+    }
+
+    // A new auxiliary browsing context navigation starting in the browser should not be captured.
+    private boolean isBrowserAuxiliaryNavigation(ExternalNavigationParams params) {
+        // TODO(crbug.com/424781882): open discussion on whether self navigations in auxiliary page
+        // should be capturable or not. If opening apps is desirable, add
+        // `isInitialNavigationInFrame()` in
+        // the return statement below, otherwise remove it.
+        WebContents webContents = mDelegate.getWebContents();
+        if (params.isTabInBrowser()
+                && webContents != null
+                && webContents.hasOpener()
+                && webContents.getOriginalWindowOpenDisposition()
+                        == WindowOpenDisposition.NEW_FOREGROUND_TAB
+                && UrlUtilities.isHttpOrHttps(params.getUrl())) {
+            if (debug()) {
+                Log.i(TAG, "Auxiliary browsing context navigation from browser is not overridden.");
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // A new auxiliary browsing context navigation starting in the PWA should not be captured.
+    private boolean isPWAAuxiliaryNavigationInFullscreenWM(ExternalNavigationParams params) {
+        WebContents webContents = mDelegate.getWebContents();
+        if (ExternalIntentsFeatures.AUXILIARY_NAVIGATION_STAYS_IN_PWA.isEnabled()
+                && params.isTabInPWA()
+                && !params.isInDesktopWindowingMode()
+                && webContents != null
+                && webContents.hasOpener()
+                && webContents.getOriginalWindowOpenDisposition()
+                        == WindowOpenDisposition.NEW_FOREGROUND_TAB
+                && UrlUtilities.isHttpOrHttps(params.getUrl())) {
+            if (debug()) {
+                Log.i(TAG, "Do not override auxiliary browsing context navigation from a PWA.");
+            }
+            return true;
+        }
+        return false;
+    }
+
     private OverrideUrlLoadingResult shouldOverrideUrlLoadingInternal(
             ExternalNavigationParams params,
             Intent targetIntent,
@@ -1568,9 +1769,7 @@ public class ExternalNavigationHandler {
         sanitizeQueryIntentActivitiesIntent(targetIntent);
 
         // Any subsequent navigations should cancel the existing dialog.
-        if (mIncognitoDialogDelegate != null && mIncognitoDialogDelegate.isShowing()) {
-            mIncognitoDialogDelegate.cancelDialog();
-        }
+        cancelDialogs();
 
         // Don't allow external fallback URLs by default.
         canLaunchExternalFallbackResult.set(false);
@@ -1615,9 +1814,34 @@ public class ExternalNavigationHandler {
             return OverrideUrlLoadingResult.forAsyncAction();
         }
 
+        // All cases where a navigation that starts in a PWA should cause a Tab reparenting towards
+        // the Chrome browser.
+        // TODO(crbug.com/416562397): consider in-scope PWAs in the reparenting process.
+        // TODO(crbug.com/415926894): do not override navigations with WindowOpenDisposition POPUP
+        if (shouldReparentTab(
+                params.getUrl(),
+                params.isTabInPWA(),
+                params.isInitialNavigationInFrame(),
+                params.isInDesktopWindowingMode())) {
+            if (debug()) {
+                Log.i(TAG, "Reparent auxiliary browsing context navigation from a PWA.");
+            }
+            return OverrideUrlLoadingResult.forReparentToBrowser();
+        }
+
+        if (ExternalIntentsFeatures.AUXILIARY_NAVIGATION_STAYS_IN_BROWSER.isEnabled(
+                params.isInDesktopWindowingMode()) &&
+                isBrowserAuxiliaryNavigation(params)) {
+            return OverrideUrlLoadingResult.forNoOverride();
+        }
+
+        if (isPWAAuxiliaryNavigationInFullscreenWM(params)) {
+            return OverrideUrlLoadingResult.forNoOverride();
+        }
+
         // This should come after file intents, but before any returns of
         // OVERRIDE_WITH_EXTERNAL_INTENT.
-        if (externalIntentRequestsDisabledForUrl(params)) {
+        if (externalIntentRequestsDisabledForUrl(params, targetIntent)) {
             return OverrideUrlLoadingResult.forNoOverride();
         }
 
@@ -1737,6 +1961,10 @@ public class ExternalNavigationHandler {
                     browserFallbackUrl);
         }
 
+        if (handleDigitalCredentialsIntent(params, targetIntent)) {
+            return OverrideUrlLoadingResult.forAsyncAction();
+        }
+
         if (launchWebApkIfSoleIntentHandler(resolvingInfos, targetIntent, params)) {
             return OverrideUrlLoadingResult.forExternalIntent();
         }
@@ -1843,6 +2071,35 @@ public class ExternalNavigationHandler {
         // The intent is staying in the app, so we can simply navigate to the intent's URL,
         // while staying in incognito.
         return handleFallbackUrl(params, fallbackUrl, false);
+    }
+
+    private boolean handleDigitalCredentialsIntent(
+            ExternalNavigationParams params, Intent targetIntent) {
+        final String scheme = params.getUrl().getScheme();
+        if (scheme != null
+                && (scheme.startsWith(OPENID4VP_SCHEME_PREFIX_SUFFIX)
+                        || scheme.endsWith(OPENID4VP_SCHEME_PREFIX_SUFFIX)
+                        || scheme.equals(MDOC_SCHEME)
+                        || scheme.equals(HAIP_SCHEME))) {
+            if (debug()) Log.i(TAG, "Digital Credentials intent detected");
+            Context context = mDelegate.getContext();
+            assumeNonNull(context);
+            mDigitalCredentialsWarningDialogDelegate =
+                    new DigitalCredentialsWarningDialogDelegate(context, params, targetIntent);
+            mDigitalCredentialsWarningDialogDelegate.showDialog();
+            return true;
+        }
+        return false;
+    }
+
+    private void cancelDialogs() {
+        if (mIncognitoDialogDelegate != null && mIncognitoDialogDelegate.isShowing()) {
+            mIncognitoDialogDelegate.cancelDialog();
+        }
+        if (mDigitalCredentialsWarningDialogDelegate != null
+                && mDigitalCredentialsWarningDialogDelegate.isShowing()) {
+            mDigitalCredentialsWarningDialogDelegate.cancelDialog();
+        }
     }
 
     /**
@@ -2276,7 +2533,7 @@ public class ExternalNavigationHandler {
                 pickerIntent,
                 new WindowAndroid.IntentCallback() {
                     @Override
-                    public void onIntentCompleted(int resultCode, Intent data) {
+                    public void onIntentCompleted(int resultCode, @Nullable Intent data) {
                         RequiredCallback<AsyncActionTakenParams> callback =
                                 params.getRequiredAsyncActionTakenCallback();
                         assert callback != null;
@@ -2529,11 +2786,19 @@ public class ExternalNavigationHandler {
         if (mIncognitoDialogDelegate != null && mIncognitoDialogDelegate.isShowing()) {
             mIncognitoDialogDelegate.onNavigationStarted(navigationId);
         }
+        if (mDigitalCredentialsWarningDialogDelegate != null
+                && mDigitalCredentialsWarningDialogDelegate.isShowing()) {
+            mDigitalCredentialsWarningDialogDelegate.onNavigationStarted(navigationId);
+        }
     }
 
     public void onNavigationFinished(long navigationId) {
         if (mIncognitoDialogDelegate != null && mIncognitoDialogDelegate.isShowing()) {
             mIncognitoDialogDelegate.onNavigationFinished(navigationId);
+        }
+        if (mDigitalCredentialsWarningDialogDelegate != null
+                && mDigitalCredentialsWarningDialogDelegate.isShowing()) {
+            mDigitalCredentialsWarningDialogDelegate.onNavigationFinished(navigationId);
         }
     }
 
@@ -2630,11 +2895,13 @@ public class ExternalNavigationHandler {
 
     /**
      * Parses the scheme out of the URL if possible, trimming and getting rid of unsafe characters.
-     * This is useful for determining if a URL has a sneaky, unsafe scheme, e.g. "java  script" or
+     * This is useful for determining if a URL has a sneaky, unsafe scheme, e.g. "java script" or
      * "j$a$r". See: http://crbug.com/248398
+     *
      * @return The sanitized URL scheme or null if no scheme is specified.
      */
-    public static @Nullable String getSanitizedUrlScheme(String url) {
+    @Contract("null -> null")
+    public static @Nullable String getSanitizedUrlScheme(@Nullable String url) {
         if (url == null) {
             return null;
         }

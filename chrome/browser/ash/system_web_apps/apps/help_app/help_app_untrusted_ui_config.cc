@@ -8,7 +8,6 @@
 #include <string_view>
 
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/rgb_keyboard/rgb_keyboard_manager.h"
 #include "ash/shell.h"
 #include "ash/webui/help_app_ui/help_app_untrusted_ui.h"
@@ -99,7 +98,7 @@ void PopulateLoadTimeData(content::WebUI* web_ui,
   Profile* profile = Profile::FromWebUI(web_ui);
 
   // Features the background page does not need to query:
-  if (web_ui->GetWebContents()->GetVisibleURL().path() != "/background") {
+  if (web_ui->GetWebContents()->GetVisibleURL().GetPath() != "/background") {
     // Flags for showing or hiding educational content about some feature.
     bool isEditorSwitchAllowed = false;
     if (chromeos::features::IsOrcaEnabled()) {
@@ -146,8 +145,8 @@ void PopulateLoadTimeData(content::WebUI* web_ui,
     source->AddBoolean(
         "HelpAppOnboardingRevamp",
         base::FeatureList::IsEnabled(ash::features::kHelpAppOnboardingRevamp));
-    source->AddBoolean("HelpAppAppMall",
-                       chromeos::features::IsCrosMallSwaEnabled());
+    // TODO(crbug.com/370386104): Clean up flag in Showoff code.
+    source->AddBoolean("HelpAppAppMall", true);
     // Only use the action URL if the install URI is enabled.
     // TODO(b/346687914): Clean up flag in Showoff code.
     source->AddBoolean("UseActionUrl", true);
@@ -180,8 +179,7 @@ void PopulateLoadTimeData(content::WebUI* web_ui,
   source->AddBoolean(
       "multiDeviceFeaturesAllowed",
       multidevice_setup::AreAnyMultiDeviceFeaturesAllowed(pref_service));
-  source->AddBoolean("tabletMode",
-                     display::Screen::GetScreen()->InTabletMode());
+  source->AddBoolean("tabletMode", display::Screen::Get()->InTabletMode());
   // Whether or not RGB Keyboard is supported and configurable from the
   // Personalization Hub.
   RgbKeyboardManager* rgb_keyboard_manager =
@@ -213,8 +211,7 @@ void PopulateLoadTimeData(content::WebUI* web_ui,
   source->AddBoolean(
       "assistantAllowed",
       assistant_allowed_state == assistant::AssistantAllowedState::ALLOWED);
-  source->AddBoolean("assistantEnabled",
-                     AssistantState::Get()->settings_enabled().value_or(false));
+  source->AddBoolean("assistantEnabled", false);
   source->AddBoolean("playStoreEnabled",
                      arc::IsArcPlayStoreEnabledForProfile(profile));
   source->AddBoolean("pinEnabled", quick_unlock::IsPinEnabled());

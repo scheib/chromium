@@ -35,7 +35,7 @@
 #include "base/functional/callback_forward.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink-forward.h"
 #include "third_party/blink/public/web/web_performance_metrics_for_reporting.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_function.h"
@@ -162,8 +162,7 @@ class CORE_EXPORT Performance : public EventTarget {
   // getEntriesByType will only return all entries for existing types in
   // PerformanceEntry.IsValidTimelineEntryType.
   PerformanceEntryVector getBufferedEntriesByType(
-      const AtomicString& entry_type,
-      bool include_triggered_by_soft_navigation = false);
+      const AtomicString& entry_type);
 
   // Get performance entries of the current frame by type, and optionally,
   // nested same-origin iframes.
@@ -358,8 +357,7 @@ class CORE_EXPORT Performance : public EventTarget {
 
   PerformanceEntryVector getEntriesByTypeInternal(
       PerformanceEntry::EntryType type,
-      const AtomicString& maybe_name = g_null_atom,
-      bool include_triggered_by_soft_navigation = false);
+      const AtomicString& maybe_name = g_null_atom);
 
   // Get performance entries of the current frame, with an optional name filter.
   PerformanceEntryVector GetEntriesForCurrentFrame(
@@ -446,7 +444,7 @@ class CORE_EXPORT Performance : public EventTarget {
 
   // A map from entry types to the number of dropped entries of that given entry
   // type. Entries are dropped when the buffer from that entry type is full.
-  WTF::HashMap<PerformanceEntry::EntryType, int> dropped_entries_count_map_;
+  HashMap<PerformanceEntry::EntryType, int> dropped_entries_count_map_;
 
   // See crbug.com/1181774.
   Member<BackgroundTracingHelper> background_tracing_helper_;

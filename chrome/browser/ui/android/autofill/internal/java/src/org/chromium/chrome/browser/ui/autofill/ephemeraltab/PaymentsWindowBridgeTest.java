@@ -24,16 +24,19 @@ import org.chromium.url.GURL;
 public class PaymentsWindowBridgeTest {
     private static final String TAB_TITLE = "Issuer Name";
     private static final GURL ISSUER_URL = new GURL("https://www.example.com/");
+    private static final long AUTOFILL_PAYMENTS_WINDOW_BRIDGE_NATIVE_POINTER = 100L;
 
     @Rule public MockitoRule mockitoRule = MockitoJUnit.rule();
-    @Mock private WebContents mWebContents;
+    @Mock private WebContents mMerchantWebContents;
     @Mock private PaymentsWindowCoordinator mPaymentsWindowCoordinator;
+    @Mock private PaymentsWindowBridge.Natives mNativeMock;
 
     private PaymentsWindowBridge mPaymentsWindowBridge;
 
     @Before
     public void setUp() {
-        mPaymentsWindowBridge = new PaymentsWindowBridge(mWebContents);
+        mPaymentsWindowBridge =
+                new PaymentsWindowBridge(AUTOFILL_PAYMENTS_WINDOW_BRIDGE_NATIVE_POINTER);
     }
 
     @Test
@@ -45,9 +48,10 @@ public class PaymentsWindowBridgeTest {
     public void testOpenEphemeralTab() {
         mPaymentsWindowBridge.setPaymentsWindowCoordinatorForTesting(mPaymentsWindowCoordinator);
 
-        mPaymentsWindowBridge.openEphemeralTab(ISSUER_URL, TAB_TITLE);
+        mPaymentsWindowBridge.openEphemeralTab(ISSUER_URL, TAB_TITLE, mMerchantWebContents);
 
-        verify(mPaymentsWindowCoordinator).openEphemeralTab(ISSUER_URL, TAB_TITLE);
+        verify(mPaymentsWindowCoordinator)
+                .openEphemeralTab(ISSUER_URL, TAB_TITLE, mMerchantWebContents);
     }
 
     @Test
@@ -57,5 +61,24 @@ public class PaymentsWindowBridgeTest {
         mPaymentsWindowBridge.closeEphemeralTab();
 
         verify(mPaymentsWindowCoordinator).closeEphemeralTab();
+    }
+
+    @Test
+    public void testOnNavigationFinished() {
+        PaymentsWindowBridgeJni.setInstanceForTesting(mNativeMock);
+
+        mPaymentsWindowBridge.onNavigationFinished(ISSUER_URL);
+
+        verify(mNativeMock)
+                .onNavigationFinished(AUTOFILL_PAYMENTS_WINDOW_BRIDGE_NATIVE_POINTER, ISSUER_URL);
+    }
+
+    @Test
+    public void testOnWebContentsDestroyed() {
+        PaymentsWindowBridgeJni.setInstanceForTesting(mNativeMock);
+
+        mPaymentsWindowBridge.onWebContentsDestroyed();
+
+        verify(mNativeMock).onWebContentsDestroyed(AUTOFILL_PAYMENTS_WINDOW_BRIDGE_NATIVE_POINTER);
     }
 }

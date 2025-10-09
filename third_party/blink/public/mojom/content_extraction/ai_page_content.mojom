@@ -62,11 +62,32 @@ enum AIPageContentAnnotatedRole {
 };
 
 struct AIPageContentGeometry {
-  // The bounding box of the content node, in the page coordinate system.
+  // The bounding box of the content node mapped to the viewport ignoring any
+  // ancestor clips (including the viewport clip). This can be thought of as the
+  // where the element would be relative to the viewport if it "popped out" of
+  // the page and was painted on top of all the content. A few use-case for this
+  // are:
+  //
+  // - If empty, this implies the node is not hit-testable, even once
+  //   scrolled onscreen.
+  // - The rect's origin indicates whether it starts above or below the
+  //   viewport. A negative y-coordinate means the node's content starts
+  //   above the viewport.
   gfx.mojom.Rect outer_bounding_box;
 
-  // Subset of this node visible on the page. Empty if offscreen.
+  // The bounding box of the content node relative to the viewport after
+  // applying all ancestor and viewport clipping. These are the element
+  // bounds visible to the user and immediately hit-testable (even without
+  // scrolling). Empty if fully offscreen or has no area.
   gfx.mojom.Rect visible_bounding_box;
+
+  // Multiple boxes are used when there are multiple rectangles belonging to
+  // the same node, e.g.: across multiple lines, columns or pages. In layout
+  // terms, a node that does this is called a fragmentainer.
+  // Each rectangle represents a hit testable fragment belonging to the node.
+  // An empty array indicates that the node is not fragmented or is entirely
+  // offscreen. Relative to viewport origin.
+  array<gfx.mojom.Rect> fragment_visible_bounding_boxes;
 
   // Whether the content node is fixed or sticky position. This may suggest
   // that the node is a header, footer, or sidebar.
@@ -128,7 +149,16 @@ enum AIPageContentClickabilityReason {
 
   // The node has mouse event handlers like mouseup, mousedown, mouseover and
   // mouseenter.
+  //
+  // TODO(linnan): Remove this once consumers move to use kMouseClick and
+  // kMouseHover.
   kMouseEvents,
+
+    // The node has mouse event handlers like mouseup and mousedown.
+  kMouseClick,
+
+  // The node has mouse event handlers like mouseover and mouseenter.
+  kMouseHover,
 
   // The node has keyboard event handlers like keydown, keypress, keyup.
   kKeyEvents,
@@ -309,19 +339,34 @@ struct AIPageContentFrameData {
   array<ScriptTool> script_tools;
 };
 
+// Provides metadata for local redacted frames.
+struct RedactedFrameMetadata {
+  enum Reason {
+    // This iframe was redacted because it is not on the same eTLD+1 site as
+    // the top-level frame.
+    kCrossSite,
+    // This iframe was redacted because it is not on the same origin as the
+    // top-level frame.
+    kCrossOrigin,
+  };
+  // Reason this iframe was redacted.
+  Reason reason;
+};
+
+union AIPageContentIframeContent {
+  AIPageContentFrameData local_frame_data;
+  RedactedFrameMetadata redacted_frame_metadata;
+};
+
 // Provides metadata for frames (local and remote) accessible from the
 // LocalFrameRoot of the corresponding AIPageContentAgent.
 struct AIPageContentIframeData {
   blink.mojom.FrameToken frame_token;
 
-  // Indicates whether the iframe is likely to be an ad frame. This is set for
-  // both the root ad frame and its descendants.
-  bool likely_ad_frame;
-
   // Data common to all local frames (main and embedded). If this is a remote
   // frame, this metadata will be part of the AIPageContent pulled from the
   // local frame's renderer process.
-  AIPageContentFrameData? local_frame_data;
+  AIPageContentIframeContent? content;
 };
 
 struct AIPageContentTableData {
@@ -360,6 +405,12 @@ struct AIPageContentSelectOption {
   bool disabled;
 };
 
+enum AIPageContentRedactionDecision {
+  kNoRedactionNecessary,  // No redaction necessary for this input type.
+  kUnredacted_EmptyPassword,  // Empty password inputs are not redacted.
+  kRedacted_HasBeenPassword  // Is a password input or was in the past.
+};
+
 struct AIPageContentFormControlData {
   // The type of control for this form field.
   FormControlType form_control_type;
@@ -381,6 +432,9 @@ struct AIPageContentFormControlData {
 
   // Whether the field is required.
   bool is_required;
+
+// Redaction decision for form fields.
+  AIPageContentRedactionDecision redaction_decision;
 };
 
 struct AIPageContentAttributes {
@@ -442,6 +496,10 @@ struct AIPageContentAttributes {
   // If this node is a label associated with an input node, provides the
   // dom_node_id for the corresponding input node.
   int32? label_for_dom_node_id;
+
+  // Indicates whether the contents of this element have been determined to be
+  // an ad.
+  bool is_ad_related;
 };
 
 // A semantic chunk of information on a page. It can represent text, structured
@@ -492,6 +550,10 @@ struct AIPageContentOptions {
   // Note: This option is not folded into AIPageContentMode since this
   // information is not added to the proto.
   int32 max_meta_elements = 0;
+
+  // If enabled, only include frames that are same-site with the top level
+  // frame's origin. This implies same-site cross-origin frames are included.
+  bool include_same_site_only = false;
 };
 
 // Used to obtain the AIPageContent representation for Documents. Lives in the

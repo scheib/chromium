@@ -36,15 +36,11 @@
 #include "device/fido/public_key_credential_rp_entity.h"
 #include "device/fido/public_key_credential_user_entity.h"
 #include "device/fido/virtual_fido_device.h"
-#include "third_party/microsoft_webauthn/webauthn.h"
+#include "third_party/microsoft_webauthn/src/webauthn.h"
 
 namespace device {
 
 namespace {
-
-constexpr std::array<uint8_t, kAaguidLength> kTestWindowsAaguid = {
-    {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
-     0x0d, 0x0e, 0x0f, 0x10}};
 
 std::unique_ptr<VirtualFidoDevice::PrivateKey> MakePrivateKey(
     PCWEBAUTHN_COSE_CREDENTIAL_PARAMETERS cose_credential_parameters,
@@ -300,10 +296,12 @@ HRESULT FakeWinWebAuthnApi::AuthenticatorMakeCredential(
   attestation->win_attestation.bLargeBlobSupported =
       options->dwLargeBlobSupport != WEBAUTHN_LARGE_BLOB_SUPPORT_NONE &&
       version_ >= WEBAUTHN_API_VERSION_3 && large_blob_supported_;
-  attestation->win_attestation.dwUsedTransport =
-      attachment == WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM
-          ? WEBAUTHN_CTAP_TRANSPORT_INTERNAL
-          : transport_;
+  if (version_ >= WEBAUTHN_API_VERSION_6) {
+    attestation->win_attestation.dwUsedTransport =
+        attachment == WEBAUTHN_AUTHENTICATOR_ATTACHMENT_PLATFORM
+            ? WEBAUTHN_CTAP_TRANSPORT_INTERNAL
+            : transport_;
+  }
 
   *credential_attestation_ptr = &attestation->win_attestation;
   returned_attestations_.push_back(std::move(attestation));
@@ -486,6 +484,9 @@ HRESULT FakeWinWebAuthnApi::GetPlatformCredentialList(
       std::make_unique<WEBAUTHN_GET_CREDENTIALS_OPTIONS>(*options);
   if (result_override_ != S_OK) {
     return result_override_;
+  }
+  if (simulate_rdp_) {
+    return NTE_NOT_FOUND;
   }
   auto credential_list = std::make_unique<CredentialInfoList>();
   for (const auto& registration : registrations_) {

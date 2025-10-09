@@ -18,6 +18,7 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "extensions/buildflags/buildflags.h"
 
 namespace features {
 
@@ -42,14 +43,19 @@ BASE_DECLARE_FEATURE(kClearUserDataUponProfileDestruction);
 
 #if BUILDFLAG(IS_LINUX)
 BASE_DECLARE_FEATURE(kDbusSecretPortal);
-BASE_DECLARE_FEATURE(kUseFreedesktopSecretKeyProvider);
 #endif
 
 BASE_DECLARE_FEATURE(kDestroyProfileOnBrowserClose);
 BASE_DECLARE_FEATURE(kDestroySystemProfiles);
+BASE_DECLARE_FEATURE(kDelayOnProfileCreatedForFullBrowserTransition);
 
 BASE_DECLARE_FEATURE(kFlexOrgManagementDisclosure);
 BASE_DECLARE_FEATURE(kIncomingCallNotifications);
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// Controls whether to load the initial sideloaded external extensions or not.
+BASE_DECLARE_FEATURE(kInitialExternalExtensions);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if !BUILDFLAG(IS_ANDROID)
 BASE_DECLARE_FEATURE(kMuteNotificationSnoozeAction);
@@ -59,9 +65,13 @@ BASE_DECLARE_FEATURE(kNetworkAnnotationMonitoring);
 BASE_DECLARE_FEATURE(kNewTabPageTriggerForPrerender2);
 BASE_DECLARE_FEATURE(kNewTabPageTriggerForPrefetch);
 const base::FeatureParam<int>
-    kNewTabPagePreconnectStartDelayOnMouseHoverByMiliSeconds{
+    kNewTabPagePreconnectStartDelayOnMouseHoverByMilliSeconds{
         &features::kNewTabPageTriggerForPrerender2,
         "preconnect_start_delay_on_mouse_hover_ms", 100};
+const base::FeatureParam<int>
+    kNewTabPagePrefetchStartDelayOnMouseHoverByMilliSeconds{
+        &features::kNewTabPageTriggerForPrefetch,
+        "prefetch_start_delay_on_mouse_hover_ms", 300};
 
 #if BUILDFLAG(IS_ANDROID)
 BASE_DECLARE_FEATURE(kNotificationOneTapUnsubscribe);
@@ -83,7 +93,6 @@ BASE_DECLARE_FEATURE(kSandboxExternalProtocolBlockedWarning);
 
 #if BUILDFLAG(IS_LINUX)
 BASE_DECLARE_FEATURE(kSecretPortalKeyProviderUseForEncryption);
-BASE_DECLARE_FEATURE(kUseFreedesktopSecretKeyProviderForEncryption);
 #endif
 
 BASE_DECLARE_FEATURE(kTriggerNetworkDataMigration);

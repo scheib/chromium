@@ -521,8 +521,6 @@ CreateReportResult AttributionResolverImpl::MaybeCreateAndStoreReport(
     AttributionTrigger trigger) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  SCOPED_UMA_HISTOGRAM_TIMER("Conversions.MaybeCreateAndStoreReportTime");
-
   const attribution_reporting::TriggerRegistration& trigger_registration =
       trigger.registration();
 
@@ -668,10 +666,6 @@ CreateReportResult AttributionResolverImpl::MaybeCreateAndStoreReport(
     return assemble_report_result(CreateReportResult::InternalError(),
                                   CreateReportResult::InternalError());
   }
-
-  base::UmaHistogramBoolean(
-      "Conversions.TriggerTimeLessThanSourceTime",
-      trigger_time < source_to_attribute->source.source_time());
 
   const bool top_level_filters_match =
       source_to_attribute->source.filter_data().Matches(

@@ -12,13 +12,16 @@
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/notimplemented.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/android/media_codec_util.h"
 #include "media/base/bitstream_buffer.h"
 #include "media/base/encoder_status.h"
 #include "media/base/media_serializers_base.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/android/video_accelerator_util.h"
+#include "media/gpu/command_buffer_helper.h"
 #include "media/parsers/h264_level_limits.h"
 #include "media/parsers/h264_parser.h"
 #include "media/parsers/temporal_scalability_id_extractor.h"
@@ -36,6 +39,9 @@ namespace {
 // the same default value we use on Windows.
 constexpr uint32_t kDefaultGOPLength = 3000;
 
+constexpr auto kSupportedSharedImagePixelFormats =
+    std::to_array({PIXEL_FORMAT_ABGR, PIXEL_FORMAT_XBGR});
+
 // Deliberately breaking naming convention rules, to match names from
 // MediaCodec SDK.
 constexpr int32_t BUFFER_FLAG_KEY_FRAME = 1;
@@ -44,6 +50,7 @@ enum PixelFormat {
   // Subset of MediaCodecInfo.CodecCapabilities.
   COLOR_FORMAT_YUV420_PLANAR = 19,
   COLOR_FORMAT_YUV420_SEMIPLANAR = 21,  // Same as NV12
+  COLOR_FORMAT_SURFACE = 0x7f000789,
 };
 
 struct AMediaFormatDeleter {
@@ -468,11 +475,32 @@ bool ProfileNeedsConfigDataInBitstream(VideoCodecProfile profile) {
   }
 }
 
+void WaitForSyncTokenOnGpuThread(
+    scoped_refptr<CommandBufferHelper> command_buffer_helper,
+    gpu::SyncToken sync_token,
+    base::OnceClosure done_cb) {
+  command_buffer_helper->WaitForSyncToken(sync_token, std::move(done_cb));
+}
 }  // namespace
+
+NdkVideoEncodeAccelerator::PendingEncode::PendingEncode(
+    scoped_refptr<VideoFrame> frame,
+    const VideoEncoder::EncodeOptions& options)
+    : frame(std::move(frame)), options(options) {}
+NdkVideoEncodeAccelerator::PendingEncode::~PendingEncode() = default;
+NdkVideoEncodeAccelerator::PendingEncode::PendingEncode(PendingEncode&&) =
+    default;
+NdkVideoEncodeAccelerator::PendingEncode&
+NdkVideoEncodeAccelerator::PendingEncode::operator=(PendingEncode&&) = default;
 
 NdkVideoEncodeAccelerator::NdkVideoEncodeAccelerator(
     scoped_refptr<base::SequencedTaskRunner> runner)
-    : task_runner_(std::move(runner)) {}
+    : task_runner_(std::move(runner)),
+      // We just need an arbitrary non-zero value for the first timestamp
+      // due to issues with EGL surface path.
+      next_timestamp_(base::TimeTicks::Now().since_origin()),
+      use_surface_as_input_(base::FeatureList::IsEnabled(
+          media::kEnableSurfaceInputForAndroidVEA)) {}
 
 NdkVideoEncodeAccelerator::~NdkVideoEncodeAccelerator() {
   // It's supposed to be cleared by Destroy(), it basically checks
@@ -487,6 +515,13 @@ NdkVideoEncodeAccelerator::GetSupportedProfiles() {
   SupportedProfiles profiles;
   for (auto& info : GetEncoderInfoCache()) {
     profiles.push_back(info.profile);
+    if (use_surface_as_input_) {
+      auto& profile = profiles.back();
+      profile.supports_gpu_shared_images = true;
+      profile.gpu_supported_pixel_formats =
+          std::vector(kSupportedSharedImagePixelFormats.begin(),
+                      kSupportedSharedImagePixelFormats.end());
+    }
   }
   return profiles;
 }
@@ -510,13 +545,6 @@ EncoderStatus NdkVideoEncodeAccelerator::Initialize(
   // These should already be filtered out by VideoEncodeAcceleratorUtil.
   if (codec != VideoCodec::kH264) {
     config_.required_encoder_type = EncoderType::kHardware;
-  }
-
-  if (config.input_format != PIXEL_FORMAT_I420 &&
-      config.input_format != PIXEL_FORMAT_NV12) {
-    MEDIA_LOG(ERROR, log_) << "Unexpected combo: " << config.input_format
-                           << ", " << GetProfileName(config.output_profile);
-    return {EncoderStatus::Codes::kEncoderInitializationError};
   }
 
   effective_framerate_ = config.framerate;
@@ -568,8 +596,9 @@ void NdkVideoEncodeAccelerator::NotifyEncoderInfo() {
     }
   }
 
-  encoder_info_.implementation_name =
-      "NdkVideoEncodeAccelerator(" + codec_name + ")";
+  encoder_info_.implementation_name = base::StringPrintf(
+      "NdkVideoEncodeAccelerator(%s) input: %s", codec_name.c_str(),
+      use_surface_as_input_ ? "surface" : "buffer");
   encoder_info_.supports_native_handle = false;
   encoder_info_.has_trusted_rate_controller = false;
   encoder_info_.is_hardware_accelerated = IsHardwareCodec(codec_name);
@@ -579,21 +608,37 @@ void NdkVideoEncodeAccelerator::NotifyEncoderInfo() {
     encoder_info_.reports_average_qp = false;
   }
   encoder_info_.supports_frame_size_change = false;
+  if (use_surface_as_input_) {
+    encoder_info_.supports_gpu_shared_images = true;
+    encoder_info_.gpu_supported_pixel_formats =
+        std::vector(kSupportedSharedImagePixelFormats.begin(),
+                    kSupportedSharedImagePixelFormats.end());
+  } else {
+    encoder_info_.supports_gpu_shared_images = false;
+    encoder_info_.gpu_supported_pixel_formats.clear();
+  }
   task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&VideoEncodeAccelerator::Client::NotifyEncoderInfoChange,
                      client_ptr_factory_->GetWeakPtr(), encoder_info_));
 }
 
-void NdkVideoEncodeAccelerator::Encode(scoped_refptr<VideoFrame> frame,
-                                       bool force_keyframe) {
+void NdkVideoEncodeAccelerator::Encode(
+    scoped_refptr<VideoFrame> frame,
+    const VideoEncoder::EncodeOptions& options) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(media_codec_);
-  VideoEncoder::PendingEncode encode;
-  encode.frame = std::move(frame);
-  encode.options = VideoEncoder::EncodeOptions(force_keyframe);
+  PendingEncode encode(std::move(frame), options);
+  if (encode.frame->HasSharedImage()) {
+    encode.sync_state = SyncState::kNeedsSync;
+  }
   pending_frames_.push_back(std::move(encode));
   FeedInput();
+}
+
+void NdkVideoEncodeAccelerator::Encode(scoped_refptr<VideoFrame> frame,
+                                       bool force_keyframe) {
+  Encode(std::move(frame), VideoEncoder::EncodeOptions(force_keyframe));
 }
 
 void NdkVideoEncodeAccelerator::UseOutputBitstreamBuffer(
@@ -649,6 +694,7 @@ void NdkVideoEncodeAccelerator::Destroy() {
     // functions will use it via saved `userdata` pointers.
     media_codec_.reset();
   }
+  gl_renderer_.reset();
   delete this;
 }
 
@@ -663,6 +709,37 @@ bool NdkVideoEncodeAccelerator::IsFlushSupported() {
   // outputs given enough time and recreating codecs is expensive, we opt to not
   // implement flush and have VEA clients instead wait for all outputs to flush.
   return false;
+}
+
+void NdkVideoEncodeAccelerator::SetCommandBufferHelperCB(
+    base::RepeatingCallback<scoped_refptr<CommandBufferHelper>()>
+        get_command_buffer_helper_cb,
+    scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner) {
+  if (!use_surface_as_input_) {
+    return;
+  }
+  gpu_task_runner_ = std::move(gpu_task_runner);
+  gpu_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(get_command_buffer_helper_cb),
+      base::BindOnce(&NdkVideoEncodeAccelerator::OnCommandBufferHelperAvailable,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
+
+void NdkVideoEncodeAccelerator::OnCommandBufferHelperAvailable(
+    scoped_refptr<CommandBufferHelper> command_buffer_helper) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  command_buffer_helper_ = std::move(command_buffer_helper);
+  if (!command_buffer_helper_) {
+    NotifyErrorStatus({EncoderStatus::Codes::kEncoderInitializationError,
+                       "Can't obtain CommandBufferHelper"});
+    return;
+  }
+  gl_renderer_->SetSharedImageManager(
+      command_buffer_helper_->GetSharedImageManager());
+
+  // Call FeedInput() in case we have pending frames waiting for
+  // synchronization.
+  FeedInput();
 }
 
 bool NdkVideoEncodeAccelerator::SetInputBufferLayout(
@@ -746,20 +823,60 @@ void NdkVideoEncodeAccelerator::FeedInput() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(media_codec_);
 
-  if (error_occurred_)
+  if (error_occurred_) {
+    // Do not feed more data if an error has occurred.
     return;
+  }
 
-  if (!media_codec_->HasInput() || pending_frames_.empty()) {
+  if (pending_frames_.empty()) {
+    // There are no frames to be encoded.
+    return;
+  }
+
+  if (!media_codec_->HasInput() && !use_surface_as_input_) {
+    // The encode is in a mode where it uses input buffers to feed new frames,
+    // but we have no input buffers available.
     return;
   }
 
   if (pending_color_space_) {
+    // The encoder is being reconfigured to handle a new color space.
     return;
   }
 
-  size_t buffer_idx = media_codec_->TakeInput();
+  auto& next_encode = pending_frames_.front();
+  auto& frame = next_encode.frame;
+  bool key_frame = next_encode.options.key_frame;
+  // Handle frame synchronization before encoding, this dos nothing for
+  // frames that don't have shared images.
+  switch (next_encode.sync_state) {
+    case SyncState::kReadyForEncoding:
+      // The frame is ready, so we can proceed with encoding.
+      break;
+    case SyncState::kNeedsSync: {
+      // This frame requires synchronization. We start the sync process and
+      // transition the state to kSyncInProgress.
+      if (!command_buffer_helper_) {
+        // We don't have CommandBufferHelper yet, let's wait till it's set.
+        return;
+      }
+      next_encode.sync_state = SyncState::kSyncInProgress;
+      auto sync_done_callback = base::BindPostTaskToCurrentDefault(
+          base::BindOnce(&NdkVideoEncodeAccelerator::OnSyncDone,
+                         weak_ptr_factory_.GetWeakPtr(), frame->unique_id()));
+      gpu_task_runner_->PostTask(
+          FROM_HERE,
+          base::BindOnce(&WaitForSyncTokenOnGpuThread, command_buffer_helper_,
+                         frame->acquire_sync_token(),
+                         std::move(sync_done_callback)));
+      return;
+    }
+    case SyncState::kSyncInProgress:
+      // Synchronization is already in progress for this frame, so we wait.
+      return;
+  }
 
-  const auto frame_cs = pending_frames_.front().frame->ColorSpace();
+  const auto frame_cs = frame->ColorSpace();
   if (!encoder_color_space_ || *encoder_color_space_ != frame_cs) {
     if (!have_encoded_frames_) {
       encoder_color_space_ = frame_cs;
@@ -767,9 +884,7 @@ void NdkVideoEncodeAccelerator::FeedInput() {
     } else {
       // Flush codec and wait for outputs to recreate the codec.
       pending_color_space_ = frame_cs;
-      media_status_t status = AMediaCodec_queueInputBuffer(
-          media_codec_->codec(), buffer_idx, /*offset=*/0, 0, 0,
-          AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+      media_status_t status = SendEndOfStream();
       if (status != AMEDIA_OK) {
         NotifyMediaCodecError(EncoderStatus::Codes::kEncoderHardwareDriverError,
                               status, "Failed to queueInputBuffer");
@@ -777,11 +892,6 @@ void NdkVideoEncodeAccelerator::FeedInput() {
       return;
     }
   }
-
-  have_encoded_frames_ = true;
-  scoped_refptr<VideoFrame> frame = std::move(pending_frames_.front().frame);
-  bool key_frame = pending_frames_.front().options.key_frame;
-  pending_frames_.pop_front();
 
   if (key_frame) {
     // AMEDIACODEC_KEY_REQUEST_SYNC_FRAME is not exposed until SDK 31.
@@ -799,6 +909,42 @@ void NdkVideoEncodeAccelerator::FeedInput() {
     }
   }
 
+  // MediaCodec uses timestamps for rate control purposes, but we can't rely
+  // on real frame timestamps to be consistent with configured frame rate.
+  // That's why we map real frame timestamps to generate ones that a
+  // monotonically increase according to the configured frame rate.
+  // We do the opposite for each output buffer, to restore accurate frame
+  // timestamps.
+  auto timestamp = AssignMonotonicTimestamp(frame->timestamp());
+
+  if (use_surface_as_input_) {
+    FeedGLSurface(std::move(frame), timestamp);
+  } else {
+    FeedInputBuffer(std::move(frame), timestamp);
+  }
+  have_encoded_frames_ = true;
+  pending_frames_.pop_front();
+}
+
+void NdkVideoEncodeAccelerator::OnSyncDone(VideoFrame::ID frame_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (pending_frames_.empty() ||
+      pending_frames_.front().frame->unique_id() != frame_id) {
+    // This can happen if an error occurred and the queue was cleared.
+    return;
+  }
+
+  DCHECK_EQ(pending_frames_.front().sync_state, SyncState::kSyncInProgress);
+  pending_frames_.front().sync_state = SyncState::kReadyForEncoding;
+
+  // Now when the sync token for a shared image frame has been waited on
+  // we should initiate encoding again.
+  FeedInput();
+}
+
+void NdkVideoEncodeAccelerator::FeedInputBuffer(scoped_refptr<VideoFrame> frame,
+                                                base::TimeDelta timestamp) {
+  const size_t buffer_idx = media_codec_->TakeInput();
   auto mc_input_buffer = media_codec_->GetInputBuffer(buffer_idx);
   if (mc_input_buffer.empty()) {
     NotifyErrorStatus({EncoderStatus::Codes::kEncoderHardwareDriverError,
@@ -868,20 +1014,45 @@ void NdkVideoEncodeAccelerator::FeedInput() {
     return;
   }
 
-  // MediaCodec uses timestamps for rate control purposes, but we can't rely
-  // on real frame timestamps to be consistent with configured frame rate.
-  // That's why we map real frame timestamps to generate ones that a
-  // monotonically increase according to the configured frame rate.
-  // We do the opposite for each output buffer, to restore accurate frame
-  // timestamps.
-  auto generate_timestamp = AssignMonotonicTimestamp(frame->timestamp());
   uint64_t flags = 0;  // Unfortunately BUFFER_FLAG_KEY_FRAME has no effect here
   media_status_t status = AMediaCodec_queueInputBuffer(
       media_codec_->codec(), buffer_idx, /*offset=*/0, queued_size,
-      generate_timestamp.InMicroseconds(), flags);
+      timestamp.InMicroseconds(), flags);
   if (status != AMEDIA_OK) {
     NotifyMediaCodecError(EncoderStatus::Codes::kEncoderHardwareDriverError,
                           status, "Failed to queueInputBuffer");
+    return;
+  }
+}
+
+media_status_t NdkVideoEncodeAccelerator::SendEndOfStream() {
+  if (use_surface_as_input_) {
+    return AMediaCodec_signalEndOfInputStream(media_codec_->codec());
+  }
+  size_t buffer_idx = media_codec_->TakeInput();
+  return AMediaCodec_queueInputBuffer(
+      media_codec_->codec(), buffer_idx, /*offset=*/0, /*size=*/0,
+      /*presentationTimeUs=*/0,
+      /*flags=*/AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
+}
+
+void NdkVideoEncodeAccelerator::FeedGLSurface(scoped_refptr<VideoFrame> frame,
+                                              base::TimeDelta timestamp) {
+  DCHECK(use_surface_as_input_);
+  if (!gl_renderer_) {
+    NotifyErrorStatus({EncoderStatus::Codes::kEncoderHardwareDriverError,
+                       "GL renderer is not initialized"});
+    return;
+  }
+
+  // RenderVideoFrame() submits the rendered frame to the MediaCodec's input
+  // surface.
+  auto render_status =
+      gl_renderer_->RenderVideoFrame(frame, timestamp + base::TimeTicks());
+  if (!render_status.is_ok()) {
+    NotifyErrorStatus(std::move(render_status));
+    MEDIA_LOG(ERROR, log_) << "Most recent frame: "
+                           << frame->AsHumanReadableString();
     return;
   }
 }
@@ -898,10 +1069,8 @@ void NdkVideoEncodeAccelerator::NotifyMediaCodecError(
 void NdkVideoEncodeAccelerator::NotifyErrorStatus(EncoderStatus status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(!status.is_ok());
-  MEDIA_LOG(ERROR, log_) << status.message();
-  LOG(ERROR) << "Call NotifyErrorStatus(): code="
-             << static_cast<int>(status.code())
-             << ", message=" << status.message();
+  MEDIA_LOG(ERROR, log_) << EncoderStatusCodeToString(status.code()) << " "
+                         << status.message();
   if (!error_occurred_) {
     task_runner_->PostTask(
         FROM_HERE,
@@ -919,6 +1088,15 @@ void NdkVideoEncodeAccelerator::OnInputAvailable() {
 void NdkVideoEncodeAccelerator::OnOutputAvailable() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DrainOutput();
+  // When using a surface as input, the `OnInputAvailable()` callback is not
+  // triggered because we are not using input buffers. Instead, we feed frames
+  // by rendering them to a surface. Backpressure is handled by the rendering
+  // pipeline, which means the `pending_frames_` queue is usually empty.
+  //
+  // We call `FeedInput()` here to handle cases where we were waiting for the
+  // encoder to reconfigure with a new color space. This call is unconditional
+  // because `FeedInput()` already performs all the necessary checks.
+  FeedInput();
 }
 
 void NdkVideoEncodeAccelerator::OnError(media_status_t error) {
@@ -1086,6 +1264,7 @@ EncoderStatus NdkVideoEncodeAccelerator::ResetMediaCodec() {
     media_codec_->Stop();
     media_codec_.reset();
   }
+  gl_renderer_.reset();
 
   auto name = FindMediaCodecFor(config_);
   if (!name) {
@@ -1095,10 +1274,12 @@ EncoderStatus NdkVideoEncodeAccelerator::ResetMediaCodec() {
   }
 
   auto configured_size = aligned_size_.value_or(config_.input_visible_size);
-  auto media_format =
-      CreateVideoFormat(config_, effective_framerate_, configured_size,
-                        effective_bitrate_, encoder_color_space_,
-                        num_temporal_layers_, COLOR_FORMAT_YUV420_SEMIPLANAR);
+  PixelFormat pixel_format = use_surface_as_input_
+                                 ? COLOR_FORMAT_SURFACE
+                                 : COLOR_FORMAT_YUV420_SEMIPLANAR;
+  auto media_format = CreateVideoFormat(
+      config_, effective_framerate_, configured_size, effective_bitrate_,
+      encoder_color_space_, num_temporal_layers_, pixel_format);
   if (!media_format) {
     MEDIA_LOG(ERROR, log_) << "Fail to create media format for: "
                            << config_.AsHumanReadableString();
@@ -1123,6 +1304,35 @@ EncoderStatus NdkVideoEncodeAccelerator::ResetMediaCodec() {
     if (status != AMEDIA_OK) {
       MEDIA_LOG(ERROR, log_) << "Can't configure media codec. Error " << status;
       return {EncoderStatus::Codes::kEncoderInitializationError};
+    }
+
+    if (use_surface_as_input_) {
+      ANativeWindow* surface;
+      status = AMediaCodec_createInputSurface(media_codec_->codec(), &surface);
+      if (status != AMEDIA_OK) {
+        MEDIA_LOG(ERROR, log_)
+            << "Can't create input surface. Error " << status;
+        return {EncoderStatus::Codes::kEncoderInitializationError};
+      }
+
+      input_surface_ = gl::ScopedANativeWindow::Adopt(surface);
+      gl_renderer_ = std::make_unique<VideoFrameGLSurfaceRenderer>(
+          std::move(input_surface_));
+      if (command_buffer_helper_) {
+        gl_renderer_->SetSharedImageManager(
+            command_buffer_helper_->GetSharedImageManager());
+      }
+      auto gl_renderer_status = gl_renderer_->Initialize();
+      if (!gl_renderer_status.is_ok()) {
+        MEDIA_LOG(ERROR, log_) << "Failed to initialize GL renderer: "
+                               << gl_renderer_status.message();
+        return gl_renderer_status;
+      }
+
+      // We exit the "loop", since the reset of the code below deals with
+      // the layout and workarounds for input buffers, which are unused
+      // for surface input.
+      break;
     }
 
     if (!SetInputBufferLayout(configured_size)) {
@@ -1172,6 +1382,7 @@ EncoderStatus NdkVideoEncodeAccelerator::ResetMediaCodec() {
 void NdkVideoEncodeAccelerator::SetEncoderColorSpace() {
   DCHECK(!have_encoded_frames_);
   DCHECK(encoder_color_space_);
+
   if (!encoder_color_space_->IsValid()) {
     return;
   }

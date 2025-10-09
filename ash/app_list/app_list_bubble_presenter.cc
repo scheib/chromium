@@ -20,7 +20,6 @@
 #include "ash/public/cpp/app_list/app_list_client.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
-#include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/scanner/scanner_metrics.h"
 #include "ash/shelf/home_button.h"
@@ -37,7 +36,6 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
-#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
@@ -64,7 +62,7 @@ constexpr int kExtraTopOfScreenSpacing = 16;
 
 gfx::Rect GetWorkAreaForBubble(aura::Window* root_window) {
   display::Display display =
-      display::Screen::GetScreen()->GetDisplayNearestWindow(root_window);
+      display::Screen::Get()->GetDisplayNearestWindow(root_window);
   gfx::RectF work_area(display.work_area());
 
   // Subtract the shelf's bounds from the work area, since the shelf should
@@ -443,7 +441,7 @@ void AppListBubblePresenter::OnPressOutsideBubble(
 int64_t AppListBubblePresenter::GetDisplayId() const {
   if (!is_target_visibility_show_ || !bubble_widget_)
     return display::kInvalidDisplayId;
-  return display::Screen::GetScreen()
+  return display::Screen::Get()
       ->GetDisplayNearestView(bubble_widget_->GetNativeView())
       .id();
 }

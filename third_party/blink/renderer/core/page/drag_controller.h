@@ -84,7 +84,7 @@ class CORE_EXPORT DragController final
 
   Operation DragEnteredOrUpdated(DragData*, LocalFrame& local_root);
   void DragExited(DragData*, LocalFrame& local_root);
-  void PerformDrag(DragData*,
+  void PerformDrop(DragData*,
                    LocalFrame& local_root,
                    const Operation& browser_drag_operation);
 
@@ -127,6 +127,7 @@ class CORE_EXPORT DragController final
   void Trace(Visitor*) const final;
 
   std::optional<PointerId> drag_pointer_id() const { return drag_pointer_id_; }
+  bool did_initiate_drag() const { return did_initiate_drag_; }
 
  private:
   DispatchEventResult DispatchTextInputEventFor(LocalFrame*, DragData*);

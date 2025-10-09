@@ -47,6 +47,7 @@
 #include "cc/test/pixel_test_utils.h"
 #include "components/input/render_widget_host_input_event_router.h"
 #include "components/viz/client/frame_evictor.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/browser/file_system/file_system_manager_impl.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "content/browser/renderer_host/cross_process_frame_connector.h"
@@ -2014,7 +2015,7 @@ EvalJsResult EvalJsAfterLifecycleUpdate(
 
   if (!result.is_ok() &&
       base::StartsWith(result.ExtractError(),
-                       "a JavaScript error: \"EvalError: Refused",
+                       "a JavaScript error: \"EvalError: Evaluating",
                        base::CompareCase::SENSITIVE)) {
     return EvalJsResult(base::Value(),
                         base::StrCat({"EvalJsAfterLifecycleUpdate encountered "
@@ -2927,7 +2928,8 @@ bool RequestFrame(WebContents* web_contents) {
 
 RenderFrameSubmissionObserver::RenderFrameSubmissionObserver(
     RenderFrameMetadataProviderImpl* render_frame_metadata_provider)
-    : render_frame_metadata_provider_(render_frame_metadata_provider) {
+    : render_frame_metadata_provider_(
+          render_frame_metadata_provider->GetWeakPtr()) {
   render_frame_metadata_provider_->AddObserver(this);
   render_frame_metadata_provider_->ReportAllFrameSubmissionsForTesting(true);
 }
@@ -2950,8 +2952,10 @@ RenderFrameSubmissionObserver::RenderFrameSubmissionObserver(
           RenderFrameMetadataProviderFromRenderFrameHost(rfh)) {}
 
 RenderFrameSubmissionObserver::~RenderFrameSubmissionObserver() {
-  render_frame_metadata_provider_->RemoveObserver(this);
-  render_frame_metadata_provider_->ReportAllFrameSubmissionsForTesting(false);
+  if (render_frame_metadata_provider_) {
+    render_frame_metadata_provider_->RemoveObserver(this);
+    render_frame_metadata_provider_->ReportAllFrameSubmissionsForTesting(false);
+  }
 }
 
 void RenderFrameSubmissionObserver::WaitForAnyFrameSubmission() {
@@ -3983,8 +3987,9 @@ void DevToolsInspectorLogWatcher::DispatchProtocolMessage(
     base::span<const uint8_t> message) {
   std::string_view message_str(reinterpret_cast<const char*>(message.data()),
                                message.size());
-  auto parsed_message =
-      std::move(base::JSONReader::Read(message_str)->GetDict());
+  auto parsed_message = std::move(
+      base::JSONReader::Read(message_str, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+          ->GetDict());
   std::optional<int> command_id = parsed_message.FindInt("id");
   if (command_id.has_value()) {
     switch (command_id.value()) {
@@ -4461,7 +4466,9 @@ bool CompareWebContentsOutputToReference(
     base::RunLoop run_loop;
     rwh->GetView()->CopyFromSurface(
         gfx::Rect(), gfx::Size(),
-        base::BindLambdaForTesting([&](const SkBitmap& bitmap) {
+        base::BindLambdaForTesting([&](const viz::CopyOutputBitmapWithMetadata&
+                                           result) {
+          const SkBitmap& bitmap = result.bitmap;
           base::ScopedAllowBlockingForTesting allow_blocking;
           ASSERT_FALSE(bitmap.drawsNothing());
 

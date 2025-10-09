@@ -10,9 +10,11 @@
 
 #include "base/callback_list.h"
 #include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/contents_container_view.h"
+#include "components/prefs/pref_change_registrar.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/resize_area_delegate.h"
@@ -31,12 +33,14 @@ class WebContents;
 }  // namespace content
 
 namespace gfx {
-class Canvas;
+class RoundedCornersF;
 }  // namespace gfx
 
 namespace views {
 class WebView;
 }  // namespace views
+
+class MultiContentsBackgroundView;
 
 // MultiContentsView shows up to two contents web views side by side, and
 // manages their layout relative to each other.
@@ -50,8 +54,6 @@ class MultiContentsView : public views::View,
     double start_width = 0;
     double resize_width = 0;
     double end_width = 0;
-
-    double drop_target_width = 0;
   };
 
   static constexpr int kSplitViewContentInset = 8;
@@ -62,16 +64,26 @@ class MultiContentsView : public views::View,
   MultiContentsView& operator=(const MultiContentsView&) = delete;
   ~MultiContentsView() override;
 
-  ContentsContainerView* GetActiveContentsContainerView();
-  ContentsContainerView* GetInactiveContentsContainerView();
+  ContentsContainerView* GetActiveContentsContainerView() const;
+  ContentsContainerView* GetInactiveContentsContainerView() const;
   ContentsContainerView* GetContentsContainerViewFor(
-      content::WebContents* web_contents);
+      content::WebContents* web_contents) const;
 
   // Returns the currently active ContentsWebView.
-  ContentsWebView* GetActiveContentsView();
+  ContentsWebView* GetActiveContentsView() const;
 
   // Returns the currently inactive ContentsWebView.
-  ContentsWebView* GetInactiveContentsView();
+  ContentsWebView* GetInactiveContentsView() const;
+
+  const gfx::RoundedCornersF& background_radii() const;
+  void SetBackgroundRadii(const gfx::RoundedCornersF& radii);
+
+  // Returns the size of the contents area. If in split view, this captures the
+  // entire area starting from the origin of the first contents to the bottom
+  // right of the last contents.
+  // TODO(crbug.com/441514755): Determine how we should handle size for split
+  // views.
+  gfx::Size GetContentsSize() const;
 
   // Returns true if more than one WebContents is displayed.
   bool IsInSplitView() const;
@@ -97,8 +109,8 @@ class MultiContentsView : public views::View,
   // Updates the size of the contents views based on |ratio|.
   void UpdateSplitRatio(double ratio);
 
-  // Sets whether a scrim should show over the inactive contents view.
-  void SetInactiveScrimVisibility(bool show_inactive_scrim);
+  // Sets whether the active contents view is highlighted.
+  void SetHighlightActiveContentsView(bool needs_attention);
 
   // Helper method to execute an arbitrary callback on each visible contents
   // view. Will execute the callback on the active contents view first.
@@ -125,24 +137,20 @@ class MultiContentsView : public views::View,
   void OnResize(int resize_amount, bool done_resizing) override;
 
   // views::View:
-  void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
 
-  std::vector<ContentsContainerView*> contents_container_views() {
+  std::vector<ContentsContainerView*> contents_container_views() const {
     return contents_container_views_;
   }
 
-  MultiContentsViewDropTargetController& drop_target_controller() {
-    return *drop_target_controller_;
-  }
+  MultiContentsViewDropTargetController& drop_target_controller() const;
 
-  gfx::Insets& start_contents_view_inset() {
-    return start_contents_view_inset_;
-  }
+  bool IsDragAndDropEnabled() const;
+  void OnDragAndDropPrefStateChange();
 
-  gfx::Insets& end_contents_view_inset() { return end_contents_view_inset_; }
-
-  bool is_drag_and_drop_enabled() const { return is_drag_and_drop_enabled_; }
+  void SetShouldShowTopSeparator(bool should_show);
+  void SetShouldShowLeadingSeparator(bool should_show);
+  void SetShouldShowTrailingSeparator(bool should_show);
 
   void set_min_contents_width_for_testing(int width) {
     min_contents_width_for_testing_ = std::make_optional(width);
@@ -164,7 +172,29 @@ class MultiContentsView : public views::View,
     return contents_container_views_[index]->mini_toolbar();
   }
 
+  MultiContentsBackgroundView* background_view_for_testing() const {
+    return background_view_;
+  }
+
  private:
+  FRIEND_TEST_ALL_PREFIXES(MultiContentsViewBrowserTest, DropTargetLayout);
+  FRIEND_TEST_ALL_PREFIXES(MultiContentsViewBrowserTest, SeparatorLayout);
+
+  // Encapsulates the views required to draw a separator around contents.
+  struct ContentsSeparators {
+    void Reset();
+
+    raw_ptr<views::View> top_separator = nullptr;
+    raw_ptr<views::View> leading_separator = nullptr;
+    raw_ptr<views::View> trailing_separator = nullptr;
+    raw_ptr<views::View> top_leading_rounded_corner = nullptr;
+    raw_ptr<views::View> top_trailing_rounded_corner = nullptr;
+
+    bool should_show_top = false;
+    bool should_show_leading = false;
+    bool should_show_trailing = false;
+  };
+
   static constexpr int kMinWebContentsWidth = 200;
   static constexpr double kMinWebContentsWidthPercentage = 0.1;
 
@@ -172,10 +202,23 @@ class MultiContentsView : public views::View,
   views::ProposedLayout CalculateProposedLayout(
       const views::SizeBounds& size_bounds) const override;
 
-  int GetInactiveIndex();
+  // Adds the drop target layout to the given list and return the remaining
+  // available space after the layout.
+  gfx::Rect CalculateDropTargetLayout(
+      const gfx::Rect& available_space,
+      std::vector<views::ChildLayout>& child_layouts) const;
+
+  // Adds separator layouts to the given list and returns the remaining
+  // space after the layout.
+  gfx::Rect CalculateSeparatorLayouts(
+      const gfx::Rect& available_space,
+      std::vector<views::ChildLayout>& child_layouts) const;
+
+  int GetInactiveIndex() const;
 
   void OnWebContentsFocused(views::WebView*);
   void OnNtpFooterFocused(views::WebView*);
+  void OnActorOverlayFocused(views::WebView*);
 
   ViewWidths GetViewWidths(gfx::Rect available_space) const;
 
@@ -189,10 +232,11 @@ class MultiContentsView : public views::View,
   double CalculateRatioWithSnapPoints(double end_width,
                                       double total_width) const;
 
-  bool SupportsSplitViewDragAndDrop() const;
-
   raw_ptr<BrowserView> browser_view_;
   std::unique_ptr<MultiContentsViewDelegate> delegate_;
+
+  raw_ptr<MultiContentsBackgroundView> background_view_;
+  ContentsSeparators contents_separators_;
 
   // Holds ContentsContainerViews, when not in a split view the second
   // ContentsContainerView is not visible.
@@ -206,6 +250,11 @@ class MultiContentsView : public views::View,
   // Holds subscriptions for when the attached web contents to NtpFooterView
   // is focused.
   std::vector<base::CallbackListSubscription> ntp_footer_focused_subscriptions_;
+
+  // Holds subscriptions for when the attached web contents to
+  // ActorOverlayWebView is focused.
+  std::vector<base::CallbackListSubscription>
+      actor_overlay_focused_subscriptions_;
 
   // The handle responsible for resizing the two contents views as relative to
   // each other.
@@ -235,16 +284,17 @@ class MultiContentsView : public views::View,
   gfx::Insets start_contents_view_inset_;
   gfx::Insets end_contents_view_inset_;
 
-  bool show_inactive_scrim_ = false;
-
-  // This returns true if we support split view drag and drop.
-  bool is_drag_and_drop_enabled_ = true;
+  bool active_contents_view_highlighted_ = false;
 
   std::optional<int> min_contents_width_for_testing_ = std::nullopt;
 
   // Width ratios that a split view will snap to when resize is within a
   // snap distance (kSideBySideSnapDistance).
   std::vector<double> snap_points_ = {0.5};
+
+  // Tracks and handles drag and drop settings change.
+  PrefChangeRegistrar pref_change_registrar_;
+  bool is_drag_drop_pref_enabled_ = false;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_MULTI_CONTENTS_VIEW_H_

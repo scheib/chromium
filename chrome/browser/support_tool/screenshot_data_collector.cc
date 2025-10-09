@@ -25,6 +25,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -33,7 +34,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 #include "ui/gfx/image/image.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/snapshot/snapshot.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -95,6 +96,9 @@ void ScreenshotDataCollector::SetPickerFactoryForTesting(
 void ScreenshotDataCollector::ConvertDesktopFrameToBase64JPEG(
     std::unique_ptr<webrtc::DesktopFrame> frame,
     std::string& image_base64) {
+  // TODO(crbug.com/352187279): Support other pixel formats.
+  CHECK_EQ(frame->pixel_format(), webrtc::FOURCC_ARGB);
+
   // First converts `frame` to SkBitmap.
   SkBitmap bitmap;
   bitmap.allocN32Pixels(frame->size().width(), frame->size().height(), true);
@@ -285,8 +289,10 @@ void ScreenshotDataCollector::OnScreenshotTaken(
   std::move(data_collector_done_callback_).Run(error);
 }
 #else
-void ScreenshotDataCollector::OnTabCaptured(const SkBitmap& bitmap) {
+void ScreenshotDataCollector::OnTabCaptured(
+    const viz::CopyOutputBitmapWithMetadata& result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  const SkBitmap& bitmap = result.bitmap;
   std::optional<std::vector<uint8_t>> jpeg_encoded_data;
   if (bitmap.drawsNothing() ||
       !(jpeg_encoded_data = gfx::JPEGCodec::Encode(bitmap, kDefaultQuality))) {

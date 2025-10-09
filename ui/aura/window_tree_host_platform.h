@@ -11,7 +11,7 @@
 #include "ui/aura/client/window_types.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/platform_window/platform_window_delegate.h"
 
 namespace ui {
@@ -101,6 +101,8 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
       ui::PlatformWindowOcclusionState occlusion_state) override;
   int64_t OnStateUpdate(const PlatformWindowDelegate::State& old,
                         const PlatformWindowDelegate::State& latest) override;
+  void OnDisplayColorSpacesChanged(
+      scoped_refptr<gfx::DisplayColorSpacesRef> color_spaces) override;
 
   // Overridden from aura::WindowTreeHost:
   gfx::Point GetLocationOnScreenInPixels() const override;

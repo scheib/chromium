@@ -6,11 +6,11 @@
 
 #include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/win/windows_version.h"
 #include "components/stylus_handwriting/win/features.h"
 #include "content/browser/renderer_host/input/stylus_handwriting_callback_sink_win.h"
 #include "content/public/browser/browser_thread.h"
-#include "ui/base/ime/text_input_client.h"
 #include "ui/base/ime/win/tsf_bridge.h"
 #include "ui/events/win/stylus_handwriting_properties_win.h"
 
@@ -18,8 +18,6 @@ namespace content {
 
 namespace {
 
-inline constexpr uint32_t kHandwritingSupportMinBuild = 26100;
-inline constexpr uint32_t kHandwritingSupportMinPatch = 3624;
 StylusHandwritingControllerWin* g_instance = nullptr;
 ITfThreadMgr* g_thread_manager_instance_for_testing = nullptr;
 bool g_bind_interfaces_called_for_testing = false;
@@ -65,23 +63,27 @@ bool StylusHandwritingControllerWin::IsHandwritingAPIAvailable() {
 
 // static
 bool StylusHandwritingControllerWin::StylusHandwritingSupportedOnBuild() {
-  const uint32_t build =
-      base::win::OSInfo::GetInstance()->version_number().build;
+  const base::win::Version build = static_cast<base::win::Version>(
+      base::win::OSInfo::GetInstance()->version_number().build);
   const uint32_t patch =
       base::win::OSInfo::GetInstance()->version_number().patch;
-  return (build == kHandwritingSupportMinBuild &&
-          patch >= kHandwritingSupportMinPatch) ||
-         (build > kHandwritingSupportMinBuild);
+  // These range checks are helpful in determining safe builds for providing the
+  // handwriting experience. We can't remove the version checks and solely rely
+  // on the presence of handwriting APIs because there are currently builds that
+  // have the handwriting APIs (which would cause the QI to pass), but lack some
+  // necessary OS fixes. We don't want users to trigger handwriting on those
+  // builds. Additionally, the Windows team can't backport fixes to all
+  // handwriting supported builds due to code divergence.
+  return (((build == base::win::Version::WIN11_22H2) ||
+           (build == base::win::Version::WIN11_23H2)) &&
+          patch >= 5126) ||
+         ((build == base::win::Version::WIN11_24H2) && patch >= 3624) ||
+         (build > base::win::Version::WIN11_24H2);
 }
 
 // static
 void StylusHandwritingControllerWin::Initialize() {
   CHECK_CURRENTLY_ON(content::BrowserThread::UI);
-
-  // TODO(arakeri): This is being done as a workaround for an OS bug (see
-  // crbug.com/372506009). The Windows team has fixed it but hasn't fully
-  // backported it to older builds where the issue still exists. This guard will
-  // be removed once the backporting is complete.
   static bool handwriting_supported_on_winbuild =
       StylusHandwritingSupportedOnBuild();
 
@@ -133,32 +135,29 @@ StylusHandwritingControllerWin::GetCallbackSinkForTesting() const {
 
 void StylusHandwritingControllerWin::OnStartStylusWriting(
     OnFocusHandwritingTargetCallback callback,
-    const ui::StylusHandwritingPropertiesWin& properties,
-    ui::TextInputClient& text_input_client) {
+    const ui::StylusHandwritingPropertiesWin& properties) {
   BOOL accepted;
   Microsoft::WRL::ComPtr<ITfHandwritingRequest> handwriting_request = nullptr;
   HRESULT hr = handwriting_->RequestHandwritingForPointer(
       properties.handwriting_pointer_id, properties.handwriting_stroke_id,
       &accepted, &handwriting_request);
 
-  if (SUCCEEDED(hr) && accepted) {
+  if (SUCCEEDED(hr) && accepted && handwriting_request) {
     handwriting_callback_sink_->SetCallback(std::move(callback));
     handwriting_request->SetInputEvaluation(
         ::TfInputEvaluation::TF_IE_HANDWRITING);
   }
 
-  // TODO(crbug.com/355578906): Record instances when
-  // RequestHandwritingForPointer() failed.
+  base::UmaHistogramSparse("Stylus.Handwriting.RequestHandwritingForPointer",
+                           hr);
 }
 
-void StylusHandwritingControllerWin::OnFocusHandled(
-    ui::TextInputClient& text_input_client) {
+void StylusHandwritingControllerWin::OnFocusHandled() {
   CHECK(handwriting_callback_sink_);
   handwriting_callback_sink_->OnFocusHandled();
 }
 
-void StylusHandwritingControllerWin::OnFocusFailed(
-    ui::TextInputClient& text_input_client) {
+void StylusHandwritingControllerWin::OnFocusFailed() {
   CHECK(handwriting_callback_sink_);
   handwriting_callback_sink_->OnFocusFailed();
 }

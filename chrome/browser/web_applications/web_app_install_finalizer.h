@@ -114,6 +114,7 @@ class WebAppInstallFinalizer {
   virtual ~WebAppInstallFinalizer();
 
   // Write the WebApp data to disk and register the app.
+  // TODO(https://crbug.com/445700226): Move to a job, and remove copies.
   void FinalizeInstall(const WebAppInstallInfo& web_app_info,
                        const FinalizeOptions& options,
                        InstallFinalizedCallback callback);
@@ -123,6 +124,7 @@ class WebAppInstallFinalizer {
   // if the app window needing update closes at the same time as Chrome.
   // Therefore, the manifest may not always update as expected.
   // Virtual for testing.
+  // TODO(https://crbug.com/445700226): Move to a job, and remove copies.
   virtual void FinalizeUpdate(const WebAppInstallInfo& web_app_info,
                               InstallFinalizedCallback callback);
 
@@ -148,14 +150,21 @@ class WebAppInstallFinalizer {
   void UpdateIsolationDataAndResetPendingUpdateInfo(
       WebApp* web_app,
       const IsolatedWebAppStorageLocation& location,
-      const base::Version& version,
+      const IwaVersion& version,
       std::optional<IsolatedWebAppIntegrityBlockData> integrity_block_data);
+
+  void OnOriginAssociationValidatedForUpdate(
+      WebAppInstallInfo web_app_info,
+      InstallFinalizedCallback callback,
+      webapps::AppId app_id,
+      ScopeExtensions validated_scope_extensions);
 
   void SetWebAppManifestFieldsAndWriteData(
       const WebAppInstallInfo& web_app_info,
       std::unique_ptr<WebApp> web_app,
       CommitCallback commit_callback,
-      bool skip_icon_writes_on_download_failure);
+      bool skip_icon_writes_on_download_failure,
+      bool overwrite_trusted_icons_with_manifest_ones);
 
   void WriteTranslations(
       const webapps::AppId& app_id,
@@ -177,6 +186,7 @@ class WebAppInstallFinalizer {
   void OnDatabaseCommitCompletedForInstall(InstallFinalizedCallback callback,
                                            webapps::AppId app_id,
                                            FinalizeOptions finalize_options,
+                                           std::optional<WebAppScope> old_scope,
                                            bool success);
 
   void OnInstallHooksFinished(InstallFinalizedCallback callback,
@@ -189,6 +199,7 @@ class WebAppInstallFinalizer {
       std::string old_name,
       FileHandlerUpdateAction file_handlers_need_os_update,
       const WebAppInstallInfo& web_app_info,
+      std::optional<WebAppScope> old_scope,
       bool success);
 
   void OnUpdateHooksFinished(InstallFinalizedCallback callback,

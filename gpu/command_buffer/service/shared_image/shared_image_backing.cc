@@ -16,7 +16,6 @@
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
-#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 
@@ -65,6 +64,8 @@ const char* BackingTypeToString(SharedImageBackingType type) {
       return "DXGISwapChain";
     case SharedImageBackingType::kWrappedGraphiteTexture:
       return "WrappedGraphiteTexture";
+    case SharedImageBackingType::kDawn:
+      return "DawnImageBacking";
   }
   NOTREACHED();
 }
@@ -251,7 +252,8 @@ std::unique_ptr<DawnBufferRepresentation> SharedImageBacking::ProduceDawnBuffer(
     SharedImageManager* manager,
     MemoryTypeTracker* tracker,
     const wgpu::Device& device,
-    wgpu::BackendType backend_type) {
+    wgpu::BackendType backend_type,
+    scoped_refptr<SharedContextState> context_state) {
   return nullptr;
 }
 
@@ -376,19 +378,6 @@ const MemoryTracker* SharedImageBacking::GetMemoryTracker() const {
     return nullptr;
 
   return refs_[0]->tracker()->memory_tracker();
-}
-
-void SharedImageBacking::RegisterImageFactory(SharedImageFactory* factory) {
-  DCHECK_CALLED_ON_VALID_THREAD(factory_thread_checker_);
-  DCHECK(!factory_);
-
-  factory_ = factory;
-}
-
-void SharedImageBacking::UnregisterImageFactory() {
-  DCHECK_CALLED_ON_VALID_THREAD(factory_thread_checker_);
-
-  factory_ = nullptr;
 }
 
 void SharedImageBacking::SetSharedImagePoolId(SharedImagePoolId pool_id) {

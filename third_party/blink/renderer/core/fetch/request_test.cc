@@ -230,16 +230,16 @@ TEST(ServiceWorkerRequestTest, FromAndToFetchAPIRequest) {
   EXPECT_EQ(method, request->method());
   EXPECT_EQ(V8RequestDestination::Enum::kAudio, request->destination());
   EXPECT_EQ(referrer, request->referrer());
-  EXPECT_EQ("navigate", request->mode());
+  EXPECT_EQ(V8RequestMode::Enum::kNavigate, request->mode());
 
   Headers* request_headers = request->getHeaders();
 
-  WTF::HashMap<String, String> headers_map;
+  HashMap<String, String> headers_map;
   for (const auto& header : headers) {
     headers_map.insert(header.key, header.value);
   }
   EXPECT_EQ(headers_map.size(), request_headers->HeaderList()->size());
-  for (WTF::HashMap<String, String>::iterator iter = headers_map.begin();
+  for (HashMap<String, String>::iterator iter = headers_map.begin();
        iter != headers_map.end(); ++iter) {
     DummyExceptionStateForTesting exception_state;
     EXPECT_EQ(iter->value, request_headers->get(iter->key, exception_state));

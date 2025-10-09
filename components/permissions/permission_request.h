@@ -16,10 +16,10 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/permissions/permission_decision.h"
-#include "components/permissions/permission_hats_trigger_helper.h"
 #include "components/permissions/permission_request_data.h"
 #include "components/permissions/permission_request_enums.h"
 #include "components/permissions/request_type.h"
+#include "components/permissions/resolvers/permission_prompt_options.h"
 #include "content/public/browser/global_routing_id.h"
 #include "url/gurl.h"
 
@@ -161,6 +161,14 @@ class PermissionRequest {
   // element.
   bool IsEmbeddedPermissionElementInitiated() const;
 
+  // Whether the request was initiated by the user clicking on the geolocation
+  // element.
+  bool IsGeolocationElementInitiated() const;
+
+  // Returns if a request can be auto-granted heuristically. No prompt will be
+  // shown for the request.
+  bool IsEligibleForHeuristicAutoGrant() const;
+
   // Returns the position of the element that caused the prompt to open.
   std::optional<gfx::Rect> GetAnchorElementPosition() const;
 
@@ -190,6 +198,9 @@ class PermissionRequest {
   // Used to store the prompt options for the permission request.
   void SetPromptOptions(PromptOptions prompt_options);
 
+  // Return stored prompt options.
+  PromptOptions prompt_options() const { return data_->prompt_options; }
+
   virtual const std::vector<std::string>& GetRequestedAudioCaptureDeviceIds()
       const;
   virtual const std::vector<std::string>& GetRequestedVideoCaptureDeviceIds()
@@ -218,12 +229,6 @@ class PermissionRequest {
 
   bool uses_automatic_embargo() const { return uses_automatic_embargo_; }
 
-  std::optional<PermissionHatsTriggerHelper::PreviewParametersForHats>
-  get_preview_parameters() const;
-
-  void set_preview_parameters(
-      PermissionHatsTriggerHelper::PreviewParametersForHats preview_parmeters);
-
  protected:
   // Sets whether this request is permission element initiated, for testing
   // subclasses only.
@@ -241,9 +246,6 @@ class PermissionRequest {
   base::OnceClosure request_finished_callback_;
 
   const bool uses_automatic_embargo_ = true;
-
-  std::optional<PermissionHatsTriggerHelper::PreviewParametersForHats>
-      preview_parameters_;
 
   base::WeakPtrFactory<PermissionRequest> weak_factory_{this};
 };

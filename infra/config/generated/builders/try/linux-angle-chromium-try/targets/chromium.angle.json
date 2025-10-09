@@ -12,6 +12,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//gpu:gl_tests",
+        "module_scheme": "gtest",
         "name": "gl_tests_passthrough",
         "swarming": {
           "containment_type": "AUTO",
@@ -35,6 +37,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//ui/gl:gl_unittests",
+        "module_scheme": "gtest",
         "name": "gl_unittests",
         "precommit_args": [
           "--gerrit-issue=${patch_issue}",
@@ -74,6 +78,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "info_collection_tests",
         "resultdb": {
           "enable": true,
@@ -107,6 +113,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "trace_test",
         "resultdb": {
           "enable": true,
@@ -142,6 +150,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "webgl2_conformance_gl_passthrough_tests",
         "resultdb": {
           "enable": true,
@@ -177,6 +187,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "webgl_conformance_gl_passthrough_tests",
         "resultdb": {
           "enable": true,
@@ -210,6 +222,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//gpu:gl_tests",
+        "module_scheme": "gtest",
         "name": "gl_tests_passthrough",
         "swarming": {
           "containment_type": "AUTO",
@@ -233,6 +247,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//ui/gl:gl_unittests",
+        "module_scheme": "gtest",
         "name": "gl_unittests",
         "precommit_args": [
           "--gerrit-issue=${patch_issue}",
@@ -272,6 +288,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "info_collection_tests",
         "resultdb": {
           "enable": true,
@@ -305,6 +323,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "trace_test",
         "resultdb": {
           "enable": true,
@@ -340,6 +360,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "webgl2_conformance_gl_passthrough_tests",
         "resultdb": {
           "enable": true,
@@ -375,6 +397,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_isolated_script_merge.py"
         },
+        "module_name": "//chrome/test:telemetry_gpu_integration_test",
+        "module_scheme": "flat",
         "name": "webgl_conformance_gl_passthrough_tests",
         "resultdb": {
           "enable": true,

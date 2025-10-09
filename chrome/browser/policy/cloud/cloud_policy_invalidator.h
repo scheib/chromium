@@ -37,10 +37,6 @@ class CloudPolicyInvalidator
       public CloudPolicyCore::Observer,
       public CloudPolicyStore::Observer {
  public:
-  // The number of minutes to delay a policy refresh after receiving an
-  // invalidation with no payload.
-  static constexpr base::TimeDelta kMissingPayloadDelay = base::Minutes(5);
-
   // The value for minimal delay of triggering a policy refresh after an
   // received invalidation.
   static constexpr base::TimeDelta kMinFetchDelay = base::Milliseconds(20);
@@ -153,10 +149,8 @@ class CloudPolicyInvalidator
    private:
     void set_max_fetch_delay(base::TimeDelta delay);
 
-    // Refresh the policy.
-    // |is_missing_payload| is set to true if the callback is being invoked in
-    // response to an invalidation with a missing payload.
-    void RefreshPolicy(bool is_missing_payload);
+    // Performs the policy fetch.
+    void RefreshPolicy();
 
     // Returns true if invalidations have been enabled for a while.
     // This is a heuristic attempt to avoid counting initial policy fetches as
@@ -174,10 +168,10 @@ class CloudPolicyInvalidator
     // invalidations are considered disabled.
     std::optional<base::Time> invalidations_enabled_time_;
 
-    // If set, contains a version of currently handled invalidation, i.e. a
+    // If set, contains the currently handled invalidation, i.e. a
     // policy refresh has been triggered due to it, but the policy refresh has
     // not finished yet.
-    std::optional<int64_t> in_progress_invalidation_version_;
+    std::optional<invalidation::DirectInvalidation> in_progress_invalidation_;
 
     // The highest invalidation version that was handled already.
     int64_t highest_handled_invalidation_version_ = 0;

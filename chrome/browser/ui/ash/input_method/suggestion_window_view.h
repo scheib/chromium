@@ -16,7 +16,7 @@
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/chromeos/ui_chromeos_export.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view.h"
 
@@ -59,7 +59,7 @@ class UI_CHROMEOS_EXPORT SuggestionWindowView
                                       Orientation orientation);
 
   // views::BubbleDialogDelegateView:
-  std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
+  std::unique_ptr<views::FrameView> CreateFrameView(
       views::Widget* widget) override;
 
   void Show(const SuggestionDetails& details);

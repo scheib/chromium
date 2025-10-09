@@ -14,6 +14,7 @@
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/android/webapk/webapk_sync_service_factory.h"
+#include "chrome/browser/autofill/account_setting_service_factory.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/browser_process.h"
@@ -21,6 +22,7 @@
 #include "chrome/browser/commerce/product_specifications/product_specifications_service_factory.h"
 #include "chrome/browser/consent_auditor/consent_auditor_factory.h"
 #include "chrome/browser/data_sharing/data_sharing_service_factory.h"
+#include "chrome/browser/data_sharing/personal_collaboration_data/personal_collaboration_data_service_factory.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -30,7 +32,6 @@
 #include "chrome/browser/password_manager/password_receiver_service_factory.h"
 #include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/plus_addresses/plus_address_setting_service_factory.h"
-#include "chrome/browser/power_bookmarks/power_bookmark_service_factory.h"
 #include "chrome/browser/prefs/pref_service_syncable_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_key.h"
@@ -72,7 +73,7 @@
 #include "components/browser_sync/common_controller_builder.h"
 #include "components/collaboration/public/collaboration_service.h"
 #include "components/password_manager/core/browser/sharing/password_receiver_service.h"
-#include "components/plus_addresses/webdata/plus_address_webdata_service.h"
+#include "components/plus_addresses/core/browser/webdata/plus_address_webdata_service.h"
 #include "components/saved_tab_groups/public/features.h"
 #include "components/saved_tab_groups/public/tab_group_sync_service.h"
 #include "components/send_tab_to_self/send_tab_to_self_sync_service.h"
@@ -187,6 +188,8 @@ syncer::DataTypeController::TypeVector CreateCommonControllers(
 #endif  // DCHECK_IS_ON()
 
   browser_sync::CommonControllerBuilder builder;
+  builder.SetAccountSettingService(
+      autofill::AccountSettingServiceFactory::GetForBrowserContext(profile));
   // A callback is needed here because `autofill::PersonalDataManagerFactory`
   // already depends on `SyncServiceFactory`.
   builder.SetAddressDataManagerGetter(
@@ -203,6 +206,9 @@ syncer::DataTypeController::TypeVector CreateCommonControllers(
       collaboration::CollaborationServiceFactory::GetForProfile(profile));
   builder.SetDataSharingService(
       data_sharing::DataSharingServiceFactory::GetForProfile(profile));
+  builder.SetPersonalCollaborationDataService(
+      data_sharing::personal_collaboration_data::
+          PersonalCollaborationDataServiceFactory::GetForProfile(profile));
   builder.SetDeviceInfoSyncService(
       DeviceInfoSyncServiceFactory::GetForProfile(profile));
   builder.SetDualReadingListModel(
@@ -231,8 +237,6 @@ syncer::DataTypeController::TypeVector CreateCommonControllers(
       PlusAddressSettingServiceFactory::GetForBrowserContext(profile),
       WebDataServiceFactory::GetPlusAddressWebDataForProfile(
           profile, ServiceAccessType::IMPLICIT_ACCESS));
-  builder.SetPowerBookmarkService(
-      PowerBookmarkServiceFactory::GetForBrowserContext(profile));
   builder.SetPrefService(profile->GetPrefs());
   builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
   builder.SetProductSpecificationsService(
@@ -391,6 +395,9 @@ std::unique_ptr<KeyedService> BuildSyncService(
       content::GetNetworkConnectionTracker();
   init_params.channel = chrome::GetChannel();
   init_params.debug_identifier = profile->GetDebugName();
+  if (base::FeatureList::IsEnabled(syncer::kSyncUseOsCryptAsync)) {
+    init_params.os_crypt_async = g_browser_process->os_crypt_async();
+  }
 
   bool local_sync_backend_enabled = false;
   // Only check the local sync backend pref on the supported platforms of
@@ -508,6 +515,7 @@ SyncServiceFactory::SyncServiceFactory()
   // destruction order. Note that some of the dependencies are listed here but
   // actually plumbed in ChromeSyncClient, which this factory constructs.
   DependsOn(AboutSigninInternalsFactory::GetInstance());
+  DependsOn(autofill::AccountSettingServiceFactory::GetInstance());
   DependsOn(AccountBookmarkSyncServiceFactory::GetInstance());
   DependsOn(AccountPasswordStoreFactory::GetInstance());
   DependsOn(BookmarkModelFactory::GetInstance());
@@ -518,6 +526,8 @@ SyncServiceFactory::SyncServiceFactory()
   DependsOn(DataTypeStoreServiceFactory::GetInstance());
   DependsOn(DeviceInfoSyncServiceFactory::GetInstance());
   DependsOn(data_sharing::DataSharingServiceFactory::GetInstance());
+  DependsOn(data_sharing::personal_collaboration_data::
+                PersonalCollaborationDataServiceFactory::GetInstance());
   DependsOn(FaviconServiceFactory::GetInstance());
   DependsOn(gcm::GCMProfileServiceFactory::GetInstance());
   DependsOn(GoogleGroupsManagerFactory::GetInstance());
@@ -532,7 +542,6 @@ SyncServiceFactory::SyncServiceFactory()
   DependsOn(PlusAddressSettingServiceFactory::GetInstance());
   DependsOn(commerce::ProductSpecificationsServiceFactory::GetInstance());
   DependsOn(ProfilePasswordStoreFactory::GetInstance());
-  DependsOn(PowerBookmarkServiceFactory::GetInstance());
 
   DependsOn(SecurityEventRecorderFactory::GetInstance());
   DependsOn(SendTabToSelfSyncServiceFactory::GetInstance());

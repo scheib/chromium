@@ -146,9 +146,6 @@ BASE_DECLARE_FEATURE(kRelatedWebsiteSetsDevUI);
 
 // Privacy UX features start
 
-COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
-BASE_DECLARE_FEATURE(kAlwaysBlock3pcsIncognito);
-
 // Enables fingerprinting protection setting UX.
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
 BASE_DECLARE_FEATURE(kFingerprintingProtectionUx);
@@ -161,10 +158,6 @@ BASE_DECLARE_FEATURE(kIpProtectionUx);
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
 BASE_DECLARE_FEATURE(kActUserBypassUx);
 
-// Enables TRACKING_PROTECTION content setting changes in 3pc User Bypass UI.
-COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
-BASE_DECLARE_FEATURE(kTrackingProtectionContentSettingIn3pcUx);
-
 // Enables TRACKING_PROTECTION content settings to control 3pcb.
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
 BASE_DECLARE_FEATURE(kTrackingProtectionContentSettingFor3pcb);
@@ -173,21 +166,15 @@ BASE_DECLARE_FEATURE(kTrackingProtectionContentSettingFor3pcb);
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
 BASE_DECLARE_FEATURE(kRelatedWebsiteSetsUi);
 
+// Feature for rolling back Mode B.
+COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
+BASE_DECLARE_FEATURE(kRollBackModeB);
+
+// Forces Mode B rollback without checking the 3pcd onboarding pref.
+COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
+extern const base::FeatureParam<bool> kRollBackModeBForced;
+
 // Privacy UX features end
-
-#if BUILDFLAG(IS_ANDROID)
-// Enables UserBypass logic for Progressive Web Apps on Android
-COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
-BASE_DECLARE_FEATURE(kTrackingProtectionUserBypassPwa);
-
-// Triggers UserBypass logic for Progressive Web Apps on Android
-COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
-BASE_DECLARE_FEATURE(kTrackingProtectionUserBypassPwaTrigger);
-
-// Enables wildcard display on the Clank content settings UI.
-COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
-BASE_DECLARE_FEATURE(kDisplayWildcardInContentSettings);
-#endif  // BUILDFLAG(IS_ANDROID)
 
 // Enables the notice storage for pref storage.
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
@@ -199,6 +186,10 @@ BASE_DECLARE_FEATURE(kPrivacySandboxActivityTypeStorage);
 
 COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
 extern const char kPrivacySandboxActivityTypeStorageLastNLaunchesName[];
+
+// GetRequiredPrompt returns the NoticeService's output.
+COMPONENT_EXPORT(PRIVACY_SANDBOX_FEATURES)
+BASE_DECLARE_FEATURE(kPrivacySandboxGetPromptFromNoticeService);
 
 // Enables chrome://privacy-sandbox-internals/private-state-tokens DevUI
 // page. Relies on PrivacySandboxInternalsDevUI also being enabled.

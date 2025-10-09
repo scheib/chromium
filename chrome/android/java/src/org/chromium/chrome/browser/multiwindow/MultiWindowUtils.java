@@ -4,6 +4,9 @@
 
 package org.chromium.chrome.browser.multiwindow;
 
+import static android.os.Build.VERSION.SDK_INT;
+import static android.os.Build.VERSION.SDK_INT_FULL;
+
 import static org.chromium.chrome.browser.tabwindow.TabWindowManager.INVALID_WINDOW_ID;
 
 import android.app.Activity;
@@ -17,6 +20,8 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
+import android.os.Build.VERSION_CODES;
+import android.os.Build.VERSION_CODES_FULL;
 import android.provider.Browser;
 import android.text.TextUtils;
 import android.util.SparseBooleanArray;
@@ -29,7 +34,6 @@ import org.chromium.base.ActivityState;
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
-import org.chromium.base.BuildInfo;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.DeviceInfo;
 import org.chromium.base.IntentUtils;
@@ -39,7 +43,6 @@ import org.chromium.base.TimeUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
@@ -69,7 +72,6 @@ import org.chromium.components.messages.MessageIdentifier;
 import org.chromium.components.messages.PrimaryActionClickBehavior;
 import org.chromium.components.ukm.UkmRecorder;
 import org.chromium.ui.modelutil.PropertyModel;
-import org.chromium.ui.util.XrUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -77,6 +79,7 @@ import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Utilities for detecting multi-window/multi-instance support.
@@ -95,6 +98,7 @@ public class MultiWindowUtils implements ActivityStateListener {
     static final String HISTOGRAM_DESKTOP_WINDOW_COUNT_NEW_INSTANCE_SUFFIX = ".NewInstance";
     static final String HISTOGRAM_DESKTOP_WINDOW_COUNT_EXISTING_INSTANCE_SUFFIX =
             ".ExistingInstance";
+    static final String OPEN_ADJACENTLY_PARAM = "open_adjacently";
 
     private static MultiWindowUtils sInstance = new MultiWindowUtils();
     protected static @Nullable Supplier<Activity> sActivitySupplierForTesting;
@@ -105,7 +109,6 @@ public class MultiWindowUtils implements ActivityStateListener {
     private final boolean mMultiInstanceApi31Enabled;
     private static @Nullable Boolean sIsMultiInstanceApi31Enabled;
 
-    private static final String OPEN_ADJACENTLY_PARAM = "open_adjacently";
 
     // Used to keep track of whether ChromeTabbedActivity2 is running. A tri-state Boolean is
     // used in case both activities die in the background and MultiWindowUtils is recreated.
@@ -210,7 +213,7 @@ public class MultiWindowUtils implements ActivityStateListener {
             return TabWindowManager.MAX_SELECTORS_S;
         }
 
-        if (DeviceInfo.isDesktop() || XrUtils.isXrDevice()) {
+        if (DeviceInfo.isDesktop() || DeviceInfo.isXr()) {
             return TabWindowManager.MAX_SELECTORS;
         }
 
@@ -259,7 +262,7 @@ public class MultiWindowUtils implements ActivityStateListener {
         if (activity == null) return false;
         if (!isInMultiWindowMode(activity) && !isInMultiDisplayMode(activity)) return false;
         // Automotive is currently restricted to a single window.
-        if (BuildInfo.getInstance().isAutomotive) return false;
+        if (DeviceInfo.isAutomotive()) return false;
 
         return getOpenInOtherWindowActivity(activity) != null;
     }
@@ -272,7 +275,7 @@ public class MultiWindowUtils implements ActivityStateListener {
     public boolean isMoveToOtherWindowSupported(
             Activity activity, TabModelSelector tabModelSelector) {
         // Not supported on automotive devices.
-        if (BuildInfo.getInstance().isAutomotive) return false;
+        if (DeviceInfo.isAutomotive()) return false;
 
         // Do not allow move for last tab when homepage enabled and is set to a custom url.
         if (hasAtMostOneTabWithHomepageEnabled(tabModelSelector)) {
@@ -348,7 +351,7 @@ public class MultiWindowUtils implements ActivityStateListener {
      */
     public boolean canEnterMultiWindowMode() {
         // Automotive is currently restricted to a single window.
-        if (BuildInfo.getInstance().isAutomotive) return false;
+        if (DeviceInfo.isAutomotive()) return false;
 
         return aospMultiWindowModeSupported() || customMultiWindowModeSupported();
     }
@@ -457,6 +460,29 @@ public class MultiWindowUtils implements ActivityStateListener {
     }
 
     /**
+     * @param intent The {@link Intent} to determine whether creation of a new instance is
+     *     preferred.
+     * @return {@code true} if creation of a new instance from {@code intent} is preferred, {@code
+     *     false} otherwise.
+     */
+    public static boolean getExtraPreferNewFromIntent(Intent intent) {
+        // Default to creating a new instance when FLAG_ACTIVITY_MULTIPLE_TASK is set. This is
+        // required to fulfill new window creation requests initiated for MAIN intents from the OS.
+        // This logic is gated behind the OS version that includes a fix that this assumption is
+        // dependent on, see crbug.com/436477060 for more details.
+        int flags = intent.getFlags();
+        boolean preferNew = false;
+        if (SDK_INT >= VERSION_CODES.BAKLAVA) {
+            preferNew =
+                    SDK_INT_FULL > VERSION_CODES_FULL.BAKLAVA
+                            && Intent.ACTION_MAIN.equals(intent.getAction())
+                            && (flags & Intent.FLAG_ACTIVITY_MULTIPLE_TASK) != 0
+                            && (flags & Intent.FLAG_ACTIVITY_NEW_TASK) != 0;
+        }
+        return IntentUtils.safeGetBooleanExtra(intent, IntentHandler.EXTRA_PREFER_NEW, preferNew);
+    }
+
+    /**
      * @return The number of Chrome instances that can switch to or launch.
      */
     public static int getInstanceCount() {
@@ -469,6 +495,15 @@ public class MultiWindowUtils implements ActivityStateListener {
             }
         }
         return count;
+    }
+
+    /**
+     * @return The number of active Chrome instances, that are associated with a live task.
+     */
+    public static int getActiveInstanceCount() {
+        return MultiInstanceManagerApi31.getPersistedInstanceIds(
+                        MultiInstanceManagerApi31.PersistedInstanceType.ACTIVE)
+                .size();
     }
 
     /**
@@ -684,11 +719,10 @@ public class MultiWindowUtils implements ActivityStateListener {
             ChromeTabbedActivity lastResumedActivity = mLastResumedTabbedActivity.get();
             if (lastResumedActivity != null) {
                 Class<?> lastResumedClassName = lastResumedActivity.getClass();
-                if (tabbedTaskRunning && lastResumedClassName.equals(ChromeTabbedActivity.class)) {
+                if (lastResumedClassName.equals(ChromeTabbedActivity.class)) {
                     return ChromeTabbedActivity.class;
                 }
-                if (tabbed2TaskRunning
-                        && lastResumedClassName.equals(ChromeTabbedActivity2.class)) {
+                if (lastResumedClassName.equals(ChromeTabbedActivity2.class)) {
                     return ChromeTabbedActivity2.class;
                 }
             }
@@ -911,17 +945,41 @@ public class MultiWindowUtils implements ActivityStateListener {
         int maxInstances = MultiWindowUtils.getMaxInstances();
         if (preferNew && MultiWindowUtils.getInstanceCount() < maxInstances) return windowId;
 
-        SparseIntArray windowIdsOfRunningTabbedActivities =
-                MultiInstanceManagerApi31.getWindowIdsOfRunningTabbedActivities();
-        for (int i : MultiInstanceManagerApi31.getAllPersistedInstanceIds()) {
-            // Exclude instance IDs of non-running activities.
-            if (windowIdsOfRunningTabbedActivities.indexOfValue(i) < 0) continue;
-            if (MultiWindowUtils.readLastAccessedTime(i)
-                    > MultiWindowUtils.readLastAccessedTime(windowId)) {
-                windowId = i;
+        return getLastAccessedWindowIdInternal(/* includeRunningActivitiesOnly= */ true);
+    }
+
+    /**
+     * @return The instance ID of the Chrome window that was last accessed. This will return {@code
+     *     INVALID_WINDOW_ID} if no persisted instance state is found.
+     */
+    public static int getLastAccessedWindowId() {
+        return getLastAccessedWindowIdInternal(/* includeRunningActivitiesOnly= */ false);
+    }
+
+    private static int getLastAccessedWindowIdInternal(boolean includeRunningActivitiesOnly) {
+        int lastAccessedWindowId = INVALID_WINDOW_ID;
+        long maxAccessedTime = 0;
+
+        SparseIntArray windowIdsOfRunningTabbedActivities = null;
+        if (includeRunningActivitiesOnly) {
+            windowIdsOfRunningTabbedActivities =
+                    MultiInstanceManagerApi31.getWindowIdsOfRunningTabbedActivities();
+        }
+
+        Set<Integer> persistedIds = MultiInstanceManagerApi31.getAllPersistedInstanceIds();
+
+        for (int id : persistedIds) {
+            if (includeRunningActivitiesOnly && windowIdsOfRunningTabbedActivities != null) {
+                if (windowIdsOfRunningTabbedActivities.indexOfValue(id) < 0) continue;
+            }
+
+            long accessedTime = readLastAccessedTime(id);
+            if (accessedTime > maxAccessedTime) {
+                maxAccessedTime = accessedTime;
+                lastAccessedWindowId = id;
             }
         }
-        return windowId;
+        return lastAccessedWindowId;
     }
 
     /**
@@ -933,7 +991,9 @@ public class MultiWindowUtils implements ActivityStateListener {
      */
     public static boolean shouldOpenInAdjacentWindow() {
         return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                ChromeFeatureList.ROBUST_WINDOW_MANAGEMENT, OPEN_ADJACENTLY_PARAM, true);
+                ChromeFeatureList.ROBUST_WINDOW_MANAGEMENT_EXPERIMENTAL,
+                OPEN_ADJACENTLY_PARAM,
+                true);
     }
 
     /**
@@ -1034,8 +1094,7 @@ public class MultiWindowUtils implements ActivityStateListener {
         List<TabModel> models = tabModelSelector.getModels();
         int totalCount = 0;
         for (TabModel model : models) {
-            for (int i = 0; i < model.getCount(); i++) {
-                Tab tab = model.getTabAtChecked(i);
+            for (Tab tab : model) {
                 if (!TabPersistentStore.shouldSkipTab(tab)) {
                     totalCount++;
                 }
@@ -1122,8 +1181,7 @@ public class MultiWindowUtils implements ActivityStateListener {
                         .with(MessageBannerProperties.ICON_RESOURCE_ID, R.drawable.ic_chrome)
                         .with(
                                 MessageBannerProperties.PRIMARY_BUTTON_TEXT,
-                                resources.getString(
-                                        R.string.multi_instance_restoration_message_button))
+                                resources.getString(R.string.multi_instance_message_button))
                         .with(
                                 MessageBannerProperties.ON_PRIMARY_ACTION,
                                 () -> {
@@ -1136,6 +1194,51 @@ public class MultiWindowUtils implements ActivityStateListener {
         ChromeSharedPreferences.getInstance()
                 .writeBoolean(ChromePreferenceKeys.MULTI_INSTANCE_RESTORATION_MESSAGE_SHOWN, true);
         return true;
+    }
+
+    /**
+     * Creates and shows a message to notify a user that a new window cannot be created because
+     * {@link MultiWindowUtils#getMaxInstances()} activities already exist.
+     *
+     * @param messageDispatcher The {@link MessageDispatcher} to enqueue the message.
+     * @param context The current context.
+     * @param primaryActionRunnable The {@link Runnable} that will be executed when the message
+     *     primary action button is clicked.
+     */
+    public static void showInstanceCreationLimitMessage(
+            @Nullable MessageDispatcher messageDispatcher,
+            Context context,
+            Runnable primaryActionRunnable) {
+        if (messageDispatcher == null) return;
+
+        Resources resources = context.getResources();
+        PropertyModel message =
+                new PropertyModel.Builder(MessageBannerProperties.ALL_KEYS)
+                        .with(
+                                MessageBannerProperties.MESSAGE_IDENTIFIER,
+                                MessageIdentifier.MULTI_INSTANCE_CREATION_LIMIT)
+                        .with(
+                                MessageBannerProperties.TITLE,
+                                resources.getString(
+                                        R.string.multi_instance_creation_limit_message_title,
+                                        getMaxInstances()))
+                        .with(
+                                MessageBannerProperties.DESCRIPTION,
+                                resources.getString(
+                                        R.string.multi_instance_creation_limit_message_description))
+                        .with(MessageBannerProperties.ICON_RESOURCE_ID, R.drawable.ic_chrome)
+                        .with(
+                                MessageBannerProperties.PRIMARY_BUTTON_TEXT,
+                                resources.getString(R.string.multi_instance_message_button))
+                        .with(
+                                MessageBannerProperties.ON_PRIMARY_ACTION,
+                                () -> {
+                                    primaryActionRunnable.run();
+                                    return PrimaryActionClickBehavior.DISMISS_IMMEDIATELY;
+                                })
+                        .build();
+
+        messageDispatcher.enqueueWindowScopedMessage(message, false);
     }
 
     public static void setInstanceForTesting(MultiWindowUtils instance) {

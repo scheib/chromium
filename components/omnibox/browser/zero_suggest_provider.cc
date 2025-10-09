@@ -143,7 +143,8 @@ bool ShouldCacheResultTypeInContext(const ResultType result_type,
                                     const OEP::PageClassification page_class) {
   switch (result_type) {
     case ResultType::kRemoteNoURL:
-      return !omnibox::IsLensSearchbox(page_class);
+      return !(omnibox::IsLensSearchbox(page_class) ||
+               omnibox::IsComposebox(page_class));
     case ResultType::kRemoteSendURL:
       return omnibox::IsSearchResultsPage(page_class)
                  ? base::FeatureList::IsEnabled(
@@ -272,6 +273,13 @@ ResultType ResultTypeForInput(const AutocompleteInput& input) {
     }
   }
 
+  // Composebox
+  if (omnibox::IsComposebox(page_class)) {
+    if (input.type() == OIT::EMPTY) {
+      return ResultType::kRemoteNoURL;
+    }
+  }
+
   // Lens unimodal, multimodal, and contextual searchboxes.
   if (omnibox::IsLensSearchbox(page_class)) {
     if (input.type() == OIT::EMPTY) {
@@ -341,7 +349,8 @@ void MaybeAddContextualSuggestParams(
     std::string_view contextual_url_suggest_param =
         omnibox_feature_configs::ContextualSearch::Get()
             .contextual_url_suggest_param;
-    if (!contextual_url_suggest_param.empty()) {
+    if (client->ShouldSendContextualUrlSuggestParam() &&
+        !contextual_url_suggest_param.empty()) {
       additional_query_params.push_back(
           base::StrCat({"ctxus=", contextual_url_suggest_param}));
     }
@@ -352,7 +361,7 @@ void MaybeAddContextualSuggestParams(
         client->IsPersonalizedUrlDataCollectionActive()) {
       std::string page_title = EncodeURIComponent(base::UTF16ToUTF8(
           TruncateUTF16(input.current_title(), kMaxPageTitleLength)));
-      if (!page_title.empty()) {
+      if (client->ShouldSendPageTitleSuggestParam() && !page_title.empty()) {
         additional_query_params.push_back(
             base::StrCat({"pageTitle=", page_title}));
       }

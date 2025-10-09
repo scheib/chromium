@@ -4,8 +4,6 @@
 
 #include "components/omnibox/browser/autocomplete_match.h"
 
-#include "third_party/omnibox_proto/types.pb.h"
-
 #include <algorithm>
 #include <string>
 #include <string_view>
@@ -34,7 +32,6 @@
 #include "components/omnibox/browser/actions/omnibox_action.h"
 #include "components/omnibox/browser/actions/omnibox_action_concepts.h"
 #include "components/omnibox/browser/actions/omnibox_action_in_suggest.h"
-#include "components/omnibox/browser/actions/omnibox_answer_action.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/document_provider.h"
@@ -52,6 +49,7 @@
 #include "third_party/omnibox_proto/answer_type.pb.h"
 #include "third_party/omnibox_proto/groups.pb.h"
 #include "third_party/omnibox_proto/suggest_template_info.pb.h"
+#include "third_party/omnibox_proto/types.pb.h"
 #include "ui/base/device_form_factor.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -85,7 +83,7 @@ bool WordMatchesURLContent(
     const std::vector<std::u16string>& terms_prefixed_by_http_or_https,
     const GURL& url) {
   size_t prefix_length =
-      url.scheme().length() + strlen(url::kStandardSchemeSeparator);
+      url.GetScheme().length() + strlen(url::kStandardSchemeSeparator);
   DCHECK_GE(url.spec().length(), prefix_length);
   const std::u16string& formatted_url = url_formatter::FormatUrl(
       url, url_formatter::kFormatUrlOmitNothing, base::UnescapeRule::NORMAL,
@@ -272,9 +270,7 @@ AutocompleteMatch::AutocompleteMatch(const AutocompleteMatch& match)
       suggest_type(match.suggest_type),
       subtypes(match.subtypes),
       has_tab_match(match.has_tab_match),
-      associated_keyword(match.associated_keyword
-                             ? new AutocompleteMatch(*match.associated_keyword)
-                             : nullptr),
+      associated_keyword(match.associated_keyword),
       keyword(match.keyword),
       from_keyword(match.from_keyword),
       actions(match.actions),
@@ -430,10 +426,7 @@ AutocompleteMatch& AutocompleteMatch::operator=(
   suggest_type = match.suggest_type;
   subtypes = match.subtypes;
   has_tab_match = match.has_tab_match;
-  associated_keyword.reset(
-      match.associated_keyword
-          ? new AutocompleteMatch(*match.associated_keyword)
-          : nullptr);
+  associated_keyword = match.associated_keyword;
   keyword = match.keyword;
   from_keyword = match.from_keyword;
   actions = match.actions;
@@ -668,7 +661,9 @@ const gfx::VectorIcon& AutocompleteMatch::GetVectorIcon(
     case Type::FEATURED_ENTERPRISE_SEARCH:
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       if (turl && turl->CreatedByEnterpriseSearchAggregatorPolicy()) {
-        return vector_icons::kGoogleAgentspaceMonochromeLogoIcon;
+        return base::FeatureList::IsEnabled(omnibox::kUseAgentspace25Logo)
+                   ? vector_icons::kGoogleAgentspaceMonochromeLogo25Icon
+                   : vector_icons::kGoogleAgentspaceMonochromeLogoIcon;
       }
 #endif
       return omnibox::kPageChromeRefreshIcon;
@@ -1019,7 +1014,7 @@ GURL AutocompleteMatch::GURLToStrippedGURL(
   // from history that differ only by some obscure query param from each other
   // or from the search/keyword provider matches.
   const TemplateURL* template_url = GetTemplateURLWithKeyword(
-      template_url_service, keyword, stripped_destination_url.host());
+      template_url_service, keyword, stripped_destination_url.GetHost());
   if (template_url && template_url->SupportsReplacement(
                           template_url_service->search_terms_data())) {
     using CacheKey = std::tuple<const TemplateURL*, GURL, bool>;
@@ -1048,7 +1043,7 @@ GURL AutocompleteMatch::GURLToStrippedGURL(
   // Remove the www. prefix from the host.
   static const char prefix[] = "www.";
   static const size_t prefix_len = std::size(prefix) - 1;
-  std::string host = stripped_destination_url.host();
+  std::string host = stripped_destination_url.GetHost();
   if (host.compare(0, prefix_len, prefix) == 0 && host.length() > prefix_len) {
     replacements.SetHostStr(std::string_view(host).substr(prefix_len));
     needs_replacement = true;
@@ -1091,12 +1086,11 @@ void AutocompleteMatch::GetMatchComponents(
 
   size_t host_pos = parsed.CountCharactersBefore(url::Parsed::HOST, false);
 
-  bool has_subdomain =
-      domain_length > 0 && domain_length < url.host_piece().length();
+  bool has_subdomain = domain_length > 0 && domain_length < url.host().length();
   // Subtract an extra character from the domain start to exclude the '.'
   // delimiter between subdomain and domain.
   size_t subdomain_end =
-      has_subdomain ? host_pos + url.host_piece().length() - domain_length - 1
+      has_subdomain ? host_pos + url.host().length() - domain_length - 1
                     : std::string::npos;
 
   for (auto& position : match_positions) {
@@ -1137,7 +1131,7 @@ void AutocompleteMatch::LogSearchEngineUsed(
     TemplateURLService* template_url_service) {
   DCHECK(template_url_service);
 
-  TemplateURL* template_url = match.GetTemplateURL(template_url_service, false);
+  TemplateURL* template_url = match.GetTemplateURL(template_url_service);
   if (!template_url) {
     return;
   }
@@ -1151,7 +1145,7 @@ void AutocompleteMatch::LogSearchEngineUsed(
   // no longer necessary to track these additional search engine types.
   if (search_engine_type == SEARCH_ENGINE_OTHER) {
     if (match.destination_url.is_valid() &&
-        url::DomainIs(match.destination_url.host_piece(), "siteadvisor.com")) {
+        url::DomainIs(match.destination_url.host(), "siteadvisor.com")) {
       search_engine_type = SEARCH_ENGINE_MCAFEE;
     }
   }
@@ -1266,12 +1260,12 @@ bool AutocompleteMatch::IsActionCompatible() const {
 }
 
 bool AutocompleteMatch::HasInstantKeyword(
-    TemplateURLService* template_url_service) const {
-  if (!associated_keyword) {
+    const TemplateURLService* template_url_service) const {
+  if (associated_keyword.empty()) {
     return false;
   }
-  TemplateURL* turl =
-      associated_keyword->GetTemplateURL(template_url_service, false);
+  const TemplateURL* turl =
+      GetTemplateURLWithKeyword(template_url_service, associated_keyword, "");
   return turl && (turl->starter_pack_id() != 0 || turl->featured_by_policy());
 }
 
@@ -1281,14 +1275,13 @@ void AutocompleteMatch::GetKeywordUIState(
     std::u16string* keyword_out,
     std::u16string* keyword_placeholder_out,
     bool* is_keyword_hint) const {
-  *is_keyword_hint = associated_keyword != nullptr;
+  *is_keyword_hint = !associated_keyword.empty();
   keyword_out->assign(
       *is_keyword_hint
-          ? associated_keyword->keyword
+          ? associated_keyword
           : GetSubstitutingExplicitlyInvokedKeyword(template_url_service));
-  *keyword_placeholder_out =
-      GetKeywordPlaceholder(GetTemplateURL(template_url_service, false),
-                            is_history_embeddings_enabled);
+  *keyword_placeholder_out = GetKeywordPlaceholder(
+      GetTemplateURL(template_url_service), is_history_embeddings_enabled);
 }
 
 std::u16string AutocompleteMatch::GetSubstitutingExplicitlyInvokedKeyword(
@@ -1298,7 +1291,7 @@ std::u16string AutocompleteMatch::GetSubstitutingExplicitlyInvokedKeyword(
     return std::u16string();
   }
 
-  const TemplateURL* t_url = GetTemplateURL(template_url_service, false);
+  const TemplateURL* t_url = GetTemplateURL(template_url_service);
   return (t_url &&
           t_url->SupportsReplacement(template_url_service->search_terms_data()))
              ? keyword
@@ -1350,12 +1343,8 @@ std::u16string AutocompleteMatch::GetKeywordPlaceholder(
 }
 
 TemplateURL* AutocompleteMatch::GetTemplateURL(
-    TemplateURLService* template_url_service,
-    bool allow_fallback_to_destination_host) const {
-  return GetTemplateURLWithKeyword(template_url_service, keyword,
-                                   allow_fallback_to_destination_host
-                                       ? destination_url.host()
-                                       : std::string());
+    TemplateURLService* template_url_service) const {
+  return GetTemplateURLWithKeyword(template_url_service, keyword, "");
 }
 
 GURL AutocompleteMatch::ImageUrl() const {
@@ -1437,7 +1426,6 @@ AutocompleteMatch::GetOmniboxEventResultType(int action_index) const {
         return OmniboxEventProto::Suggestion::TAB_SWITCH;
       case OmniboxActionId::HISTORY_CLUSTERS:
       case OmniboxActionId::ACTION_IN_SUGGEST:
-      case OmniboxActionId::ANSWER_ACTION:
       case OmniboxActionId::EXTENSION_ACTION:
       case OmniboxActionId::CONTEXTUAL_SEARCH_FULFILLMENT:
         // Preserve existing behavior by continuing on to use the match `type`.
@@ -1588,11 +1576,6 @@ int AutocompleteMatch::GetSortingOrder() const {
     return 3;
   }
 #endif  // !BUILDFLAG(IS_IOS)
-
-  if (answer_template && actions.size() > 0 &&
-      OmniboxFieldTrial::kAnswerActionsShowAboveKeyboard.Get()) {
-    return 4;
-  }
 
   switch (enterprise_search_aggregator_type) {
     case EnterpriseSearchAggregatorType::NONE:
@@ -1808,20 +1791,9 @@ void AutocompleteMatch::FilterAndSortActionsInSuggest() {
     return ais != nullptr;
   });
 
-  for (auto pair : actions_in_suggest_to_reinsert) {
+  for (const auto& pair : actions_in_suggest_to_reinsert) {
     actions.emplace_back(std::move(pair.second));
   }
-}
-
-void AutocompleteMatch::RemoveAnswerActions() {
-  if (actions.empty()) {
-    return;
-  }
-
-  std::erase_if(actions, [&](const auto& action) {
-    auto* ans_action = OmniboxAnswerAction::FromAction(action.get());
-    return ans_action != nullptr;
-  });
 }
 
 bool AutocompleteMatch::IsTrivialAutocompletion() const {
@@ -1958,9 +1930,7 @@ void AutocompleteMatch::UpgradeMatchWithPropertiesFrom(
   // Absorb the `actions` and `takeover_action` so they won't be buried.
   // Don't absorb answer actions; they should always be created fresh.
   if (actions.empty() && !duplicate_match.actions.empty() &&
-      IsActionCompatible() &&
-      OmniboxAnswerAction::FromAction(duplicate_match.actions[0].get()) ==
-          nullptr) {
+      IsActionCompatible()) {
     actions = std::move(duplicate_match.actions);
     takeover_action = std::move(duplicate_match.takeover_action);
   }

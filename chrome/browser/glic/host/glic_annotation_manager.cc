@@ -13,20 +13,22 @@
 #include "base/types/expected.h"
 #include "chrome/browser/glic/glic_metrics.h"
 #include "chrome/browser/glic/glic_pref_names.h"
-#include "chrome/browser/glic/host/context/glic_sharing_manager_impl.h"
 #include "chrome/browser/glic/host/glic.mojom.h"
+#include "chrome/browser/glic/public/context/glic_sharing_manager.h"
 #include "chrome/browser/glic/public/glic_keyed_service.h"
 #include "chrome/common/chrome_features.h"
 #include "components/optimization_guide/content/browser/page_content_proto_provider.h"
 #include "components/pdf/common/constants.h"
 #include "components/prefs/pref_service.h"
 #include "components/shared_highlighting/core/common/text_fragment.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "pdf/buildflags.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
+#include "ui/views/widget/widget.h"
 
 #if BUILDFLAG(ENABLE_PDF)
 #include "components/pdf/browser/pdf_document_helper.h"
@@ -312,9 +314,9 @@ GlicAnnotationManager::AnnotationTask::AnnotationTask(
   CHECK(service);
   // Using base::Unretained is safe here because `this` owns the subscription.
   tab_change_subscription_ =
-      static_cast<GlicSharingManagerImpl&>(service->sharing_manager())
-          .AddFocusedTabChangedCallback(base::BindRepeating(
-              &AnnotationTask::OnFocusedTabChanged, base::Unretained(this)));
+      service->sharing_manager().AddFocusedTabChangedCallback(
+          base::BindRepeating(&AnnotationTask::OnFocusedTabChanged,
+                              base::Unretained(this)));
 
   // Using base::Unretained is safe because `this` owns the receiver.
   annotation_agent_host_receiver_.set_disconnect_handler(base::BindOnce(
@@ -493,7 +495,7 @@ void GlicAnnotationManager::AnnotationTask::PrimaryPageChanged(
 // as well.
 void GlicAnnotationManager::AnnotationTask::PanelStateChanged(
     const mojom::PanelState& panel_state,
-    Browser* attached_browser) {
+    const GlicWindowController::PanelStateContext& context) {
   if (panel_state.kind != mojom::PanelState_Kind::kHidden) {
     return;
   }

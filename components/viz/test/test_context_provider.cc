@@ -193,17 +193,6 @@ scoped_refptr<TestContextProvider> TestContextProvider::Create(
                                  /*sii=*/nullptr, support_locking);
 }
 
-// static
-scoped_refptr<TestContextProvider> TestContextProvider::Create(
-    scoped_refptr<gpu::TestSharedImageInterface> sii) {
-  DCHECK(sii);
-  constexpr bool support_locking = false;
-  return new TestContextProvider(
-      std::make_unique<TestContextSupport>(),
-      std::make_unique<TestGLES2InterfaceForContextProvider>(),
-      /*raster=*/nullptr, std::move(sii), support_locking);
-}
-
 TestContextProvider::TestContextProvider(
     std::unique_ptr<TestContextSupport> support,
     std::unique_ptr<TestRasterInterface> raster,
@@ -349,7 +338,6 @@ class GrDirectContext* TestContextProvider::GrContext() {
   gr_context_ = std::make_unique<skia_bindings::GrContextForGLES2Interface>(
       context_gl_.get(), support_.get(), context_gl_->test_capabilities(),
       max_resource_cache_bytes, max_glyph_cache_texture_bytes, true);
-  cache_controller_->SetGrContext(gr_context_->get());
 
   // If GlContext is already lost, also abandon the new GrContext.
   if (ContextGL()->GetGraphicsResetStatusKHR() != GL_NO_ERROR)

@@ -95,7 +95,7 @@ def __step_config(ctx, step_config):
                 "*.svg",
                 "*.xml",
             ],
-            "remote": remote_run,
+            "remote": remote_run and not config.get(ctx, "no-remote-javac"),
             "platform_ref": "large",
             "canonicalize_dir": True,
             "timeout": "2m",
@@ -137,7 +137,7 @@ def __step_config(ctx, step_config):
             # However, this is harmful for remote build cache hits.
             "ignore_extra_input_pattern": ".*srcjars.*\\.java",
             "ignore_extra_output_pattern": ".*srcjars.*\\.java",
-            "remote": remote_run,
+            "remote": remote_run and not config.get(ctx, "no-remote-javac"),
             "platform_ref": "large",
             "canonicalize_dir": True,
             "timeout": "2m",
@@ -156,7 +156,7 @@ def __step_config(ctx, step_config):
                 "*.pak",
                 "*.sql",
             ],
-            "remote": remote_run_static_analysis,
+            "remote": remote_run_static_analysis and not config.get(ctx, "no-remote-javac"),
             "platform_ref": "large",
             "canonicalize_dir": True,
             # obj/chrome/android/chrome_java__errorprone.stamp step takes too
@@ -390,7 +390,7 @@ def __android_compile_java_handler(ctx, cmd):
 
     inputs = []
     for i, arg in enumerate(cmd.args):
-        for k in ["--classpath=", "--bootclasspath=", "--processorpath="]:
+        for k in ["--classpath=", "--additional-siso-input=", "--processorpath="]:
             if arg.startswith(k):
                 arg = arg.removeprefix(k)
                 fn, v = __filearg(ctx, arg)

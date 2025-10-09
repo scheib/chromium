@@ -28,6 +28,8 @@ BASE_DECLARE_FEATURE(kAllowEyeDropperWGCScreenCapture);
 
 BASE_DECLARE_FEATURE(kCloseOmniboxPopupOnInactiveAreaClick);
 
+BASE_DECLARE_FEATURE(kCreateNewTabGroupAppMenuTopLevel);
+
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 BASE_DECLARE_FEATURE(kFewerUpdateConfirmations);
 #endif
@@ -44,6 +46,7 @@ BASE_DECLARE_FEATURE(kExtensionsCollapseMainMenu);
 #if BUILDFLAG(IS_WIN)
 BASE_DECLARE_FEATURE(kOfferPinToTaskbarWhenSettingToDefault);
 BASE_DECLARE_FEATURE(kOfferPinToTaskbarInFirstRunExperience);
+BASE_DECLARE_FEATURE(kOfferPinToTaskbarInSettings);
 #endif
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
@@ -58,6 +61,10 @@ BASE_DECLARE_FEATURE_PARAM(PdfInfoBarTrigger, kPdfInfoBarTrigger);
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
 // When enabled, user may see the session restore UI flow.
 BASE_DECLARE_FEATURE(kSessionRestoreInfobar);
+
+// When this param is true, the session restore preference will have
+// continue where you left off as default behavior
+BASE_DECLARE_FEATURE_PARAM(bool, kSetDefaultToContinueSession);
 #endif
 
 BASE_DECLARE_FEATURE(kPreloadTopChromeWebUI);
@@ -138,13 +145,15 @@ BASE_DECLARE_FEATURE(kPressAndHoldEscToExitBrowserFullscreen);
 
 BASE_DECLARE_FEATURE(kReloadSelectionModel);
 
-BASE_DECLARE_FEATURE(kScrimForBrowserWindowModal);
+BASE_DECLARE_FEATURE(kCloseActiveTabInSplitViewViaHotkey);
 
-BASE_DECLARE_FEATURE(KScrimForTabModal);
+BASE_DECLARE_FEATURE(kScrimForBrowserWindowModal);
 
 BASE_DECLARE_FEATURE(kSideBySide);
 
 BASE_DECLARE_FEATURE_PARAM(base::TimeDelta, kSideBySideShowDropTargetDelay);
+BASE_DECLARE_FEATURE_PARAM(base::TimeDelta, kSideBySideHideDropTargetDelay);
+BASE_DECLARE_FEATURE_PARAM(base::TimeDelta, kSideBySideShowNudgeDelay);
 
 // Feature params for the width of the multi-contents drop target.
 // If the `kSideBySideDropTargetNudge` feature is enabled, then these only
@@ -152,6 +161,11 @@ BASE_DECLARE_FEATURE_PARAM(base::TimeDelta, kSideBySideShowDropTargetDelay);
 BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetMinWidth);
 BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetMaxWidth);
 BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetTargetWidthPercentage);
+
+// The size of the edge of the screen where the Split View drop target is hidden
+// will be the max of the width and the percentage times the screen width.
+BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetHideForOSWidth);
+BASE_DECLARE_FEATURE_PARAM(double, kSideBySideDropTargetHideForOSPercentage);
 
 // Feature and params to control the "nudge" behavior of drop targets.
 BASE_DECLARE_FEATURE(kSideBySideDropTargetNudge);
@@ -166,6 +180,11 @@ BASE_DECLARE_FEATURE_PARAM(
     kSideBySideDropTargetNudgeToFullTargetWidthPercentage);
 // The ratio of window width that will trigger a nudge to show/hide.
 BASE_DECLARE_FEATURE_PARAM(double, kSideBySideDropTargetNudgeShowRatio);
+// The total amount of times the nudge may be shown before we stop showing it.
+BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetNudgeShownLimit);
+// The total amount of times the drop target may be used with a link before we
+// stop showing the nudge.
+BASE_DECLARE_FEATURE_PARAM(int, kSideBySideDropTargetNudgeUsedLimit);
 
 enum class MiniToolbarActiveConfiguration {
   // Hides the toolbar in the active view.
@@ -181,11 +200,17 @@ BASE_DECLARE_FEATURE_PARAM(MiniToolbarActiveConfiguration,
 
 BASE_DECLARE_FEATURE_PARAM(int, kSideBySideSnapDistance);
 
+BASE_DECLARE_FEATURE_PARAM(int, kSideBySideIphTabSwitchCount);
+
 BASE_DECLARE_FEATURE(kSideBySideSessionRestore);
 
 bool IsRestoringSplitViewEnabled();
 
 BASE_DECLARE_FEATURE(kSideBySideLinkMenuNewBadge);
+
+BASE_DECLARE_FEATURE(kSideBySideKeyboardShortcut);
+
+bool IsSideBySideKeyboardShortcutEnabled();
 
 BASE_DECLARE_FEATURE(kTabDuplicateMetrics);
 
@@ -194,10 +219,18 @@ BASE_DECLARE_FEATURE(kTabScrollingButtonPosition);
 inline constexpr char kTabScrollingButtonPositionParameterName[] =
     "buttonPosition";
 
-BASE_DECLARE_FEATURE(kSidePanelResizing);
 BASE_DECLARE_FEATURE(kSidePanelSearchCompanion);
 
 BASE_DECLARE_FEATURE(kTabGroupsCollapseFreezing);
+BASE_DECLARE_FEATURE(kTabGroupHoverCards);
+
+#if !BUILDFLAG(IS_ANDROID)
+// General improvements to tab group menus
+BASE_DECLARE_FEATURE(kTabGroupMenuImprovements);
+BASE_DECLARE_FEATURE(kTabGroupMenuMoreEntryPoints);
+bool IsTabGroupMenuMoreEntryPointsEnabled();
+
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 BASE_DECLARE_FEATURE(kTabHoverCardImages);
 
@@ -289,17 +322,11 @@ BASE_DECLARE_FEATURE(kThreeButtonPasswordSaveDialog);
 
 bool IsToolbarPinningEnabled();
 
-BASE_DECLARE_FEATURE(kEnterpriseProfileBadgingForAvatar);
 BASE_DECLARE_FEATURE(kEnterpriseProfileBadgingForMenu);
 BASE_DECLARE_FEATURE(kEnterpriseBadgingForNtpFooter);
 BASE_DECLARE_FEATURE(kNTPFooterBadgingPolicies);
-BASE_DECLARE_FEATURE(kEnterpriseProfileBadgingPolicies);
 BASE_DECLARE_FEATURE(kEnterpriseManagementDisclaimerUsesCustomLabel);
 BASE_DECLARE_FEATURE(kManagedProfileRequiredInterstitial);
-
-// Enables using the same colors used for the default app menu button for the
-// avatar button states using default colors.
-BASE_DECLARE_FEATURE(kEnableAppMenuButtonColorsForDefaultAvatarButtonStates);
 
 BASE_DECLARE_FEATURE(kWebUITabStrip);
 
@@ -351,7 +378,6 @@ BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationFileSystemAccess);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationPwaInstall);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationPriceInsights);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationDiscounts);
-BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationProductSpecifications);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationManagePasswords);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationCookieControls);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationAutofillAddress);
@@ -360,10 +386,17 @@ BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationCollaborationMessaging);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationPriceTracking);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationAutofillMandatoryReauth);
 BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationClickToCall);
+BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationSharingHub);
+BASE_DECLARE_FEATURE_PARAM(bool, kPageActionsMigrationAiMode);
 
 // Determines whether the "save password" page action displays different UI if
 // the user has said to never save passwords for that site.
 BASE_DECLARE_FEATURE(kSavePasswordsContextualUi);
+
+#if BUILDFLAG(IS_MAC)
+// Add tab group colours when viewing tab groups using the top mac OS menu bar.
+BASE_DECLARE_FEATURE(kShowTabGroupsMacSystemMenu);
+#endif  // BUILDFLAG(IS_MAC)
 
 // Controls whether browser tab loading animations are driven by the compositor
 // vs. a repeating timer.
@@ -401,6 +434,15 @@ BASE_DECLARE_FEATURE(kNonMilestoneUpdateToast);
 BASE_DECLARE_FEATURE(kBookmarkTabGroupConversion);
 
 bool IsBookmarkTabGroupConversionEnabled();
+
+#if BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kAndroidAnimatedProgressBarInBrowser);
+
+bool IsAndroidAnimatedProgressBarInBrowserEnabled();
+#endif  // BUILDFLAG(IS_ANDROID)
+
+// Controls whether the updated What's New page is enabled.
+BASE_DECLARE_FEATURE(kWhatsNewDesktopRefresh);
 
 }  // namespace features
 

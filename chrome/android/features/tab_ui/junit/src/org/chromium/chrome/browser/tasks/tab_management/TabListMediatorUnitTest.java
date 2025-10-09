@@ -94,12 +94,12 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 
 import org.chromium.base.Callback;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.FeatureOverrides;
 import org.chromium.base.Token;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
@@ -191,7 +191,6 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModel.ReadableObjectPropertyKey;
 import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
-import org.chromium.ui.util.XrUtils;
 import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
 
@@ -208,12 +207,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /** Tests for {@link TabListMediator}. */
 @SuppressWarnings({
     "ArraysAsListWithZeroOrOneArgument",
     "ResultOfMethodCallIgnored",
-    "ConstantConditions"
+    "ConstantConditions",
+    "DirectInvocationOnMock"
 })
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(
@@ -438,6 +439,8 @@ public class TabListMediatorUnitTest {
         mViewHolder2 = prepareViewHolder(TAB2_ID, POSITION2);
         mFakeViewHolder1 = prepareFakeViewHolder(mItemView1, POSITION1);
         mFakeViewHolder2 = prepareFakeViewHolder(mItemView2, POSITION2);
+        when(mItemView1.isAttachedToWindow()).thenReturn(true);
+        when(mItemView2.isAttachedToWindow()).thenReturn(true);
         List<Tab> tabs1 = new ArrayList<>(Arrays.asList(mTab1));
         List<Tab> tabs2 = new ArrayList<>(Arrays.asList(mTab2));
         mSavedTabGroup1 = prepareSavedTabGroup(SYNC_GROUP_ID1, GROUP_TITLE, SYNC_GROUP_COLOR1, 1);
@@ -466,7 +469,10 @@ public class TabListMediatorUnitTest {
         doReturn(mTab2).when(mIncognitoTabModel).getTabAt(POSITION2);
         doNothing().when(mTab1).addObserver(mTabObserverCaptor.capture());
         doReturn(0).when(mTabModel).index();
+        when(mTabModel.iterator()).thenAnswer(invocation -> List.of(mTab1, mTab2).iterator());
         doReturn(2).when(mTabModel).getCount();
+        when(mIncognitoTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, mTab2).iterator());
         doReturn(2).when(mIncognitoTabModel).getCount();
         doNothing()
                 .when(mTabListFaviconProvider)
@@ -1105,6 +1111,9 @@ public class TabListMediatorUnitTest {
         when(mTabModel.getTabAt(3)).thenReturn(tab4);
         View itemView3 = mock(View.class);
         View itemView4 = mock(View.class);
+        when(itemView3.isAttachedToWindow()).thenReturn(true);
+        when(itemView4.isAttachedToWindow()).thenReturn(true);
+
         RecyclerView.ViewHolder fakeViewHolder3 = prepareFakeViewHolder(itemView3, 2);
         RecyclerView.ViewHolder fakeViewHolder4 = prepareFakeViewHolder(itemView4, 3);
 
@@ -1330,6 +1339,8 @@ public class TabListMediatorUnitTest {
         // Assert old tab is still marked as selected.
         assertThat(mModelList.get(0).model.get(TabProperties.IS_SELECTED), equalTo(true));
 
+        when(mTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, mTab2, newTab).iterator());
         when(mTabModel.getTabAt(2)).thenReturn(newTab);
         when(mTabModel.getCount()).thenReturn(3);
 
@@ -1376,6 +1387,8 @@ public class TabListMediatorUnitTest {
         // Assert old tab is still marked as selected
         assertThat(mModelList.get(0).model.get(TabProperties.IS_SELECTED), equalTo(true));
 
+        when(mTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, mTab2, newTab).iterator());
         when(mTabModel.getTabAt(2)).thenReturn(newTab);
         when(mTabModel.getCount()).thenReturn(3);
 
@@ -1435,6 +1448,7 @@ public class TabListMediatorUnitTest {
         doReturn(newTab).when(mTabGroupModelFilter).getRepresentativeTabAt(0);
         when(mTabModel.getTabAt(0)).thenReturn(newTab);
         when(mTabModel.getCount()).thenReturn(1);
+        when(mTabModel.iterator()).thenAnswer(invocation -> List.of(newTab).iterator());
         when(mTabGroupModelFilter.getRepresentativeTabAt(0)).thenReturn(newTab);
         when(mTabGroupModelFilter.getRepresentativeTabAt(1)).thenReturn(null);
         when(mTabGroupModelFilter.getRepresentativeTabAt(2)).thenReturn(null);
@@ -1507,6 +1521,8 @@ public class TabListMediatorUnitTest {
         doReturn(true).when(mTabGroupModelFilter).isTabModelRestored();
 
         Tab newTab = prepareTab(TAB3_ID, TAB3_TITLE, TAB3_URL);
+        when(mTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, mTab2, newTab).iterator());
         doReturn(3).when(mTabModel).getCount();
         doReturn(Arrays.asList(mTab1, mTab2, newTab))
                 .when(mTabGroupModelFilter)
@@ -1533,6 +1549,8 @@ public class TabListMediatorUnitTest {
         doReturn(true).when(mTabGroupModelFilter).isTabModelRestored();
 
         Tab newTab = prepareTab(TAB3_ID, TAB3_TITLE, TAB3_URL);
+        when(mTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, newTab, mTab2).iterator());
         doReturn(3).when(mTabModel).getCount();
         doReturn(Arrays.asList(mTab1, newTab, mTab2))
                 .when(mTabGroupModelFilter)
@@ -2624,6 +2642,8 @@ public class TabListMediatorUnitTest {
         // Assume there are 3 tabs in TabModel, tab3, tab4, just grouped with mTab1;
         Tab tab3 = prepareTab(TAB3_ID, TAB3_TITLE, TAB3_URL);
         Tab tab4 = prepareTab(TAB4_ID, TAB4_TITLE, TAB4_URL);
+        when(mTabModel.iterator())
+                .thenAnswer(invocation -> List.of(mTab1, mTab2, tab3, tab4).iterator());
         doReturn(4).when(mTabModel).getCount();
         List<Tab> tabs = new ArrayList<>(Arrays.asList(mTab1));
         mMediator.resetWithListOfTabs(tabs, null, false);
@@ -4357,6 +4377,7 @@ public class TabListMediatorUnitTest {
         assertEquals(
                 TabActionButtonType.CLOSE,
                 mModelList.get(POSITION1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+        assertFalse(mModelList.get(POSITION1).model.get(TabProperties.IS_PINNED));
 
         // Scenario 2: Tab is PINNED
         // Mock the tab at POSITION1 as pinned.
@@ -4368,6 +4389,183 @@ public class TabListMediatorUnitTest {
         assertEquals(
                 TabActionButtonType.PIN,
                 mModelList.get(POSITION1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+        assertTrue(mModelList.get(POSITION1).model.get(TabProperties.IS_PINNED));
+    }
+
+    @Test
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
+    public void testOnTabPinnedStateChanged() {
+        mMediator.setComponentNameForTesting(TabSwitcherPaneCoordinator.COMPONENT_NAME);
+
+        List<Tab> tabsInModel = new ArrayList<>();
+        for (int i = 0; i < mTabModel.getCount(); i++) {
+            tabsInModel.add(mTabModel.getTabAt(i));
+        }
+        Tab tabToTest = tabsInModel.get(POSITION1);
+
+        // Set initial state to unpinned.
+        doReturn(false).when(tabToTest).getIsPinned();
+        mMediator.resetWithListOfTabs(tabsInModel, null, false);
+        assertFalse(mModelList.get(POSITION1).model.get(TabProperties.IS_PINNED));
+
+        // Pin the tab and notify the observer.
+        doReturn(true).when(tabToTest).getIsPinned();
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(tabToTest, true);
+        assertTrue(mModelList.get(POSITION1).model.get(TabProperties.IS_PINNED));
+        assertEquals(
+                TabActionButtonType.PIN,
+                mModelList.get(POSITION1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+
+        // Unpin the tab and notify the observer.
+        doReturn(false).when(tabToTest).getIsPinned();
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(tabToTest, false);
+        assertFalse(mModelList.get(POSITION1).model.get(TabProperties.IS_PINNED));
+        assertEquals(
+                TabActionButtonType.CLOSE,
+                mModelList.get(POSITION1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+    }
+
+    @Test
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
+    public void testOnTabPinnedStateChanged_MovesTab() {
+        mMediator.setComponentNameForTesting(TabSwitcherPaneCoordinator.COMPONENT_NAME);
+
+        Tab tab3 = prepareTab(TAB3_ID, TAB3_TITLE, TAB3_URL);
+        doReturn(false).when(mTab1).getIsPinned();
+        doReturn(false).when(mTab2).getIsPinned();
+        doReturn(false).when(tab3).getIsPinned();
+
+        when(mTabModel.getCount()).thenReturn(3);
+        when(mTabModel.getTabAt(0)).thenReturn(mTab1);
+        when(mTabModel.getTabAt(1)).thenReturn(mTab2);
+        when(mTabModel.getTabAt(2)).thenReturn(tab3);
+        when(mTabModel.iterator()).thenAnswer(invocation -> List.of(mTab1, mTab2, tab3).iterator());
+
+        when(mTabModel.indexOf(mTab1)).thenReturn(0);
+        when(mTabModel.indexOf(mTab2)).thenReturn(1);
+        when(mTabModel.indexOf(tab3)).thenReturn(2);
+
+        when(mTabGroupModelFilter.getIndividualTabAndGroupCount()).thenReturn(3);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(0)).thenReturn(mTab1);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(1)).thenReturn(mTab2);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(2)).thenReturn(tab3);
+
+        List<Tab> tabsInModel = new ArrayList<>(Arrays.asList(mTab1, mTab2, tab3));
+        mMediator.resetWithListOfTabs(tabsInModel, null, false);
+        assertEquals(TAB1_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB2_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB3_ID, mModelList.get(2).model.get(TabProperties.TAB_ID));
+        assertFalse(mModelList.get(1).model.get(TabProperties.IS_PINNED));
+
+        // Pin mTab2. It should move to the front.
+        doReturn(true).when(mTab2).getIsPinned();
+        when(mTabModel.indexOf(mTab2)).thenReturn(0);
+        when(mTabModel.indexOf(mTab1)).thenReturn(1);
+        when(mTabModel.indexOf(tab3)).thenReturn(2);
+
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(mTab2, true);
+
+        // Verify mTab2 is now at the front and pinned.
+        assertEquals(TAB2_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertTrue(mModelList.get(0).model.get(TabProperties.IS_PINNED));
+        assertEquals(TAB1_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB3_ID, mModelList.get(2).model.get(TabProperties.TAB_ID));
+        assertEquals(
+                TabActionButtonType.PIN,
+                mModelList.get(0).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+
+        // Pin mTab1. It should not move.
+        doReturn(true).when(mTab1).getIsPinned();
+        when(mTabModel.indexOf(mTab2)).thenReturn(0);
+        when(mTabModel.indexOf(mTab1)).thenReturn(1);
+        when(mTabModel.indexOf(tab3)).thenReturn(2);
+
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(mTab1, true);
+
+        assertEquals(TAB2_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB1_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertTrue(mModelList.get(1).model.get(TabProperties.IS_PINNED));
+        assertEquals(TAB3_ID, mModelList.get(2).model.get(TabProperties.TAB_ID));
+        assertEquals(
+                TabActionButtonType.PIN,
+                mModelList.get(1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+
+        // Unpin mTab2. It should return to its original position.
+        doReturn(false).when(mTab2).getIsPinned();
+        when(mTabModel.indexOf(mTab1)).thenReturn(0);
+        when(mTabModel.indexOf(mTab2)).thenReturn(1);
+        when(mTabModel.indexOf(tab3)).thenReturn(2);
+
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(mTab2, false);
+
+        assertEquals(TAB1_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB2_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertFalse(mModelList.get(1).model.get(TabProperties.IS_PINNED));
+        assertEquals(TAB3_ID, mModelList.get(2).model.get(TabProperties.TAB_ID));
+        assertNotEquals(
+                TabActionButtonType.PIN,
+                mModelList.get(1).model.get(TabProperties.TAB_ACTION_BUTTON_DATA).type);
+    }
+
+    @Test
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
+    public void testOnTabPinnedStateChanged_MovesTab_OutOfBounds() {
+        mMediator.setComponentNameForTesting(TabSwitcherPaneCoordinator.COMPONENT_NAME);
+
+        Tab tab3 = prepareTab(TAB3_ID, TAB3_TITLE, TAB3_URL);
+        // Start with tab1 pinned, others not.
+        doReturn(true).when(mTab1).getIsPinned();
+        doReturn(false).when(mTab2).getIsPinned();
+        doReturn(false).when(tab3).getIsPinned();
+
+        // TabModel has all 3 tabs, with pinned tab first.
+        when(mTabModel.getCount()).thenReturn(3);
+        when(mTabModel.getTabAt(0)).thenReturn(mTab1);
+        when(mTabModel.getTabAt(1)).thenReturn(mTab2);
+        when(mTabModel.getTabAt(2)).thenReturn(tab3);
+        when(mTabModel.iterator()).thenAnswer(invocation -> List.of(mTab1, mTab2, tab3).iterator());
+
+        when(mTabModel.indexOf(mTab1)).thenReturn(0);
+        when(mTabModel.indexOf(mTab2)).thenReturn(1);
+        when(mTabModel.indexOf(tab3)).thenReturn(2);
+
+        // TabGroupModelFilter also represents all 3.
+        when(mTabGroupModelFilter.getIndividualTabAndGroupCount()).thenReturn(3);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(0)).thenReturn(mTab1);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(1)).thenReturn(mTab2);
+        when(mTabGroupModelFilter.getRepresentativeTabAt(2)).thenReturn(tab3);
+        when(mTabGroupModelFilter.getRelatedTabList(TAB1_ID)).thenReturn(List.of(mTab1));
+        when(mTabGroupModelFilter.getRelatedTabList(TAB2_ID)).thenReturn(List.of(mTab2));
+        when(mTabGroupModelFilter.getRelatedTabList(TAB3_ID)).thenReturn(List.of(tab3));
+
+        // But TabListModel only has the first two.
+        List<Tab> tabsInModel = new ArrayList<>(Arrays.asList(mTab1, mTab2));
+        mMediator.resetWithListOfTabs(tabsInModel, null, false);
+        assertEquals(2, mModelList.size());
+        assertEquals(TAB1_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB2_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertTrue(mModelList.get(0).model.get(TabProperties.IS_PINNED));
+
+        // Now, unpin tab1. After this, its position in TabModel will be at the end of the
+        // unpinned tabs. With tab2 and tab3 unpinned, and assuming stable sort, tab1 will go
+        // after tab3. Let's say the new order is [tab2, tab3, tab1].
+        doReturn(false).when(mTab1).getIsPinned();
+        when(mTabModel.indexOf(mTab1)).thenReturn(2);
+        when(mTabModel.indexOf(mTab2)).thenReturn(0);
+        when(mTabModel.indexOf(tab3)).thenReturn(1);
+
+        // Trigger the observer.
+        mTabObserverCaptor.getValue().onTabPinnedStateChanged(mTab1, false);
+
+        // `index` of tab1 in model is 0.
+        // `indexOf` tab1 in TabModel is 2.
+        // `indexOfNthTabCard(2)` on a model with 2 tabs returns 2.
+        // This would call move(0, 2) on a list of size 2, which would crash.
+        // With the fix, it should call move(0, 1). The list should become [tab2, tab1].
+        assertEquals(2, mModelList.size());
+        assertEquals(TAB2_ID, mModelList.get(0).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB1_ID, mModelList.get(1).model.get(TabProperties.TAB_ID));
+        assertFalse(mModelList.get(1).model.get(TabProperties.IS_PINNED));
     }
 
     @Test
@@ -4959,7 +5157,7 @@ public class TabListMediatorUnitTest {
 
     @Test
     public void testGetSpanCount_OnXrDevice() {
-        XrUtils.setXrDeviceForTesting(true);
+        DeviceInfo.setIsXrForTesting(true);
         // Perform action and validate for compact width.
         assertEquals(
                 TabListCoordinator.GRID_LAYOUT_SPAN_COUNT_MEDIUM,
@@ -5156,9 +5354,6 @@ public class TabListMediatorUnitTest {
         mMediator.setDefaultGridCardSize(new Size(100, 200));
         mMediator.resetWithListOfTabs(null, syncIds, false);
 
-        PropertyModel model = mock(PropertyModel.class);
-        when(model.get(CARD_TYPE)).thenReturn(TAB_GROUP);
-        when(model.get(TabProperties.TAB_GROUP_SYNC_ID)).thenReturn(SYNC_GROUP_ID1);
         assertEquals(1, mModelList.size());
 
         // Assert removing a tab type does nothing.
@@ -5174,25 +5369,89 @@ public class TabListMediatorUnitTest {
     public void testMediaState_TabAudible() {
         assertEquals(MediaState.NONE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
 
-        when(mTab1.getMediaState()).thenReturn(MediaState.AUDIBLE);
-        mTabObserverCaptor.getValue().onMediaStateChanged(mTab1, MediaState.AUDIBLE);
-
+        updateTabMediaState(mTab1, MediaState.AUDIBLE);
         assertEquals(
                 MediaState.AUDIBLE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
     }
 
     @Test
     @EnableFeatures(ChromeFeatureList.MEDIA_INDICATORS_ANDROID)
-    public void testMediaState_TabNone() {
-        when(mTab1.getMediaState()).thenReturn(MediaState.AUDIBLE);
-        mTabObserverCaptor.getValue().onMediaStateChanged(mTab1, MediaState.AUDIBLE);
+    public void testMediaState_TabMuted() {
+        assertEquals(MediaState.NONE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+
+        updateTabMediaState(mTab1, MediaState.AUDIBLE);
         assertEquals(
                 MediaState.AUDIBLE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
 
-        when(mTab1.getMediaState()).thenReturn(MediaState.NONE);
-        mTabObserverCaptor.getValue().onMediaStateChanged(mTab1, MediaState.NONE);
+        updateTabMediaState(mTab1, MediaState.MUTED);
+        assertEquals(MediaState.MUTED, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+    }
 
+    @Test
+    @EnableFeatures(ChromeFeatureList.MEDIA_INDICATORS_ANDROID)
+    public void testMediaState_TabNone() {
+        updateTabMediaState(mTab1, MediaState.AUDIBLE);
+        assertEquals(
+                MediaState.AUDIBLE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+
+        updateTabMediaState(mTab1, MediaState.NONE);
         assertEquals(MediaState.NONE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+    }
+
+    @Test
+    @EnableFeatures(ChromeFeatureList.MEDIA_INDICATORS_ANDROID)
+    public void testMediaState_TabGroup() {
+        when(mTab1.getMediaState()).thenReturn(MediaState.MUTED);
+        when(mTab2.getMediaState()).thenReturn(MediaState.AUDIBLE);
+
+        List<Tab> tabs = new ArrayList<>(Arrays.asList(mTab1, mTab2));
+        createTabGroup(tabs, TAB1_ID, TAB_GROUP_ID);
+        mMediator.resetWithListOfTabs(tabs, null, false);
+
+        // AUDIBLE has priority over MUTED.
+        assertEquals(
+                MediaState.AUDIBLE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+
+        updateTabMediaState(mTab2, MediaState.MUTED);
+        assertEquals(MediaState.MUTED, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+
+        updateTabMediaState(mTab1, MediaState.AUDIBLE);
+        assertEquals(
+                MediaState.AUDIBLE, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+
+        // MUTED has priority over NONE.
+        updateTabMediaState(mTab1, MediaState.NONE);
+        assertEquals(MediaState.MUTED, mModelList.get(0).model.get(TabProperties.MEDIA_INDICATOR));
+    }
+
+    @Test
+    public void testContextClickListener() {
+        mMediator =
+                new TabListMediator(
+                        mActivity,
+                        mModelList,
+                        TabListMode.GRID,
+                        mModalDialogManager,
+                        mCurrentTabGroupModelFilterSupplier,
+                        getTabThumbnailCallback(),
+                        mTabListFaviconProvider,
+                        /* actionOnRelatedTabs= */ true,
+                        () -> mSelectionDelegate,
+                        /* gridCardOnClickListenerProvider= */ null,
+                        /* dialogHandler= */ null,
+                        /* priceWelcomeMessageControllerSupplier= */ null,
+                        getClass().getSimpleName(),
+                        TabProperties.TabActionState.CLOSABLE,
+                        mDataSharingTabManager,
+                        /* onTabGroupCreation= */ null,
+                        /* undoBarExplicitTrigger= */ null);
+        mMediator.initWithNative(mProfile);
+
+        initAndAssertAllProperties();
+        assertNotNull(mModelList.get(0).model.get(TabProperties.TAB_CONTEXT_CLICK_LISTENER));
+
+        mMediator.setTabActionState(TabActionState.SELECTABLE);
+        assertNull(mModelList.get(0).model.get(TabProperties.TAB_CONTEXT_CLICK_LISTENER));
     }
 
     private void setUpTabGroupCardDescriptionString() {
@@ -5502,11 +5761,13 @@ public class TabListMediatorUnitTest {
             assertNull(
                     "Expected property to be unset, property=" + objectKey, model.get(objectKey));
         } else {
-            assert false : "Unsupported key type passed to function, add it to #assertUnset";
+            throw new AssertionError(
+                    "Unsupported key type passed to function, add it to #assertUnset");
         }
     }
 
     @Test
+    @EnableFeatures(ChromeFeatureList.TAB_COLLECTION_ANDROID)
     public void tabMergeIntoGroup_Gts_UpdatesCards() {
         // Setup with two tabs, but pretend tab 1's card is already gone.
         initAndAssertAllProperties();
@@ -5531,6 +5792,7 @@ public class TabListMediatorUnitTest {
     }
 
     @Test
+    @EnableFeatures(ChromeFeatureList.TAB_COLLECTION_ANDROID)
     public void tabMoveOutOfGroup_Gts_UpdatesCards() {
         // Setup with a single group of two tabs.
         initAndAssertAllProperties();
@@ -5555,5 +5817,10 @@ public class TabListMediatorUnitTest {
         savedTabGroup.title = GROUP_TITLE;
         savedTabGroup.collaborationId = isShared ? COLLABORATION_ID1 : null;
         when(mTabGroupSyncService.getGroup(any(LocalTabGroupId.class))).thenReturn(savedTabGroup);
+    }
+
+    private void updateTabMediaState(Tab tab, @MediaState int mediaState) {
+        when(tab.getMediaState()).thenReturn(mediaState);
+        mTabObserverCaptor.getValue().onMediaStateChanged(tab, mediaState);
     }
 }

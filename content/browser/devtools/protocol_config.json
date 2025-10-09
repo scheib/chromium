@@ -21,7 +21,7 @@
                 "domain": "Browser",
                 "include": ["getVersion", "getHistograms", "getHistogram", "getBrowserCommandLine", "grantPermissions", "setDownloadBehavior", "cancelDownload", "resetPermissions", "crash", "crashGpuProcess", "setPermission",
                 "addPrivacySandboxCoordinatorKeyConfig"],
-                "async": ["addPrivacySandboxCoordinatorKeyConfig"]
+                "async": ["addPrivacySandboxCoordinatorKeyConfig", "grantPermissions", "resetPermissions", "setPermission"]
             },
             {
                 "domain": "DOM",
@@ -102,9 +102,52 @@
             },
             {
                 "domain": "Network",
-                "include": ["enable", "disable", "clearBrowserCache", "clearBrowserCookies", "getCookies", "getAllCookies", "deleteCookies", "setCookie", "setCookies", "setExtraHTTPHeaders", "canEmulateNetworkConditions", "emulateNetworkConditions", "setBypassServiceWorker", "setRequestInterception", "continueInterceptedRequest", "getResponseBody", "getResponseBodyForInterception", "setCacheDisabled", "takeResponseBodyForInterceptionAsStream", "getSecurityIsolationStatus", "loadNetworkResource", "setAcceptedEncodings", "clearAcceptedEncodingsOverride", "enableReportingApi", "setCookieControls"],
+                "include": [
+                  "enable",
+                  "disable",
+                  "clearBrowserCache",
+                  "clearBrowserCookies",
+                  "getCookies",
+                  "getAllCookies",
+                  "deleteCookies",
+                  "setCookie",
+                  "setCookies",
+                  "setExtraHTTPHeaders",
+                  "canEmulateNetworkConditions",
+                  "emulateNetworkConditions",
+                  "emulateNetworkConditionsByRule",
+                  "setBypassServiceWorker",
+                  "setRequestInterception",
+                  "continueInterceptedRequest",
+                  "getResponseBody",
+                  "getResponseBodyForInterception",
+                  "setCacheDisabled",
+                  "takeResponseBodyForInterceptionAsStream",
+                  "getSecurityIsolationStatus",
+                  "loadNetworkResource",
+                  "setAcceptedEncodings",
+                  "clearAcceptedEncodingsOverride",
+                  "enableReportingApi",
+                  "setCookieControls",
+                  "getIPProtectionProxyStatus",
+                  "setIPProtectionProxyBypassEnabled"
+                ],
                 "include_events": ["requestWillBeSent", "responseReceived", "loadingFinished", "loadingFailed", "requestIntercepted", "signedExchangeReceived", "requestWillBeSentExtraInfo", "responseReceivedExtraInfo", "responseReceivedEarlyHints", "trustTokenOperationDone", "subresourceWebBundleMetadataReceived", "subresourceWebBundleMetadataError", "subresourceWebBundleInnerResponseParsed", "subresourceWebBundleInnerResponseError", "policyUpdated", "reportingApiReportAdded", "reportingApiReportUpdated", "reportingApiEndpointsChangedForOrigin"],
-                "async": ["clearBrowserCookies", "clearBrowserCache", "getCookies", "getAllCookies", "deleteCookies", "setCookie", "setCookies", "continueInterceptedRequest", "getResponseBody", "getResponseBodyForInterception", "takeResponseBodyForInterceptionAsStream", "loadNetworkResource"]
+                "async": [
+                  "clearBrowserCookies",
+                  "clearBrowserCache",
+                  "getCookies",
+                  "getAllCookies",
+                  "deleteCookies",
+                  "setCookie",
+                  "setCookies",
+                  "continueInterceptedRequest",
+                  "getResponseBody",
+                  "getResponseBodyForInterception",
+                  "takeResponseBodyForInterceptionAsStream",
+                  "loadNetworkResource",
+                  "getIPProtectionProxyStatus"
+                ]
             },
             {
                 "domain": "Overlay",

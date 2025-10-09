@@ -31,7 +31,6 @@
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
-#import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
 #import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
 #import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
@@ -280,7 +279,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   std::set<const BookmarkNode*> editedNodes;
   editedNodes.insert(_folder);
   [self.snackbarCommandsHandler
-      showSnackbarMessage:bookmark_utils_ios::DeleteBookmarksWithUndoToast(
+      showSnackbarMessage:bookmark_utils_ios::DeleteBookmarksWithUndoSnackbar(
                               editedNodes, _bookmarkModel.get(), self.profile,
                               FROM_HERE)];
   [self.delegate bookmarksFolderEditorDidDeleteEditedFolder:self];
@@ -307,7 +306,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       base::AutoReset<BOOL> autoReset(&_ignoresOwnMove, YES);
       std::vector<const BookmarkNode*> bookmarksVector{_folder};
       [self.snackbarCommandsHandler
-          showSnackbarMessage:bookmark_utils_ios::MoveBookmarksWithUndoToast(
+          showSnackbarMessage:bookmark_utils_ios::MoveBookmarksWithUndoSnackbar(
                                   bookmarksVector, _bookmarkModel.get(),
                                   _parentFolder, self.profile,
                                   _authService->GetWeakPtr(), _syncService)];

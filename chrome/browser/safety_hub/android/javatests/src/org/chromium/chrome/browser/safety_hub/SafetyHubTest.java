@@ -38,8 +38,10 @@ import static org.chromium.ui.test.util.ViewUtils.onViewWaiting;
 
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.view.View;
 
 import androidx.test.espresso.contrib.RecyclerViewActions;
@@ -60,6 +62,7 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.TimeUtils;
@@ -75,9 +78,12 @@ import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.base.test.util.RequiresRestart;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.build.BuildConfig;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.customtabs.CustomTabActivity;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelper;
+import org.chromium.chrome.browser.password_manager.PasswordCheckupClientHelperFactory;
 import org.chromium.chrome.browser.password_manager.PasswordManagerTestHelper;
 import org.chromium.chrome.browser.password_manager.PasswordStoreBridge;
 import org.chromium.chrome.browser.password_manager.PasswordStoreCredential;
@@ -116,11 +122,63 @@ import java.util.List;
 /** Tests for various Safety Hub settings surfaces. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@Features.EnableFeatures(ChromeFeatureList.SAFETY_HUB)
 @Features.DisableFeatures(ChromeFeatureList.EDGE_TO_EDGE_EVERYWHERE)
 @Batch(Batch.PER_CLASS)
 @Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
+@DisableIf.Build(
+        sdk_equals = Build.VERSION_CODES.Q,
+        message = "crbug.com/447426928, crashing emulator with --disable-field-trial-config")
 public final class SafetyHubTest {
+    // This test suite currently expects that calls to password check via PasswordManagerHelper
+    // cause an exception, so the state of the UI can be controlled by setting prefs in
+    // setAccountCompromisedPasswordsCount() and friends.
+    private static class FailingPasswordCheckupClientHelper implements PasswordCheckupClientHelper {
+        @Override
+        public void getPasswordCheckupIntent(
+                int referrer,
+                @Nullable String accountName,
+                Callback<PendingIntent> successCallback,
+                Callback<Exception> failureCallback) {
+            failureCallback.onResult(new Exception("error"));
+        }
+
+        @Override
+        public void runPasswordCheckupInBackground(
+                int referrer,
+                @Nullable String accountName,
+                Callback<Void> successCallback,
+                Callback<Exception> failureCallback) {
+            failureCallback.onResult(new Exception("error"));
+        }
+
+        @Override
+        public void getBreachedCredentialsCount(
+                int referrer,
+                @Nullable String accountName,
+                Callback<Integer> successCallback,
+                Callback<Exception> failureCallback) {
+            failureCallback.onResult(new Exception("error"));
+        }
+
+        @Override
+        public void getWeakCredentialsCount(
+                int referrer,
+                @Nullable String accountName,
+                Callback<Integer> successCallback,
+                Callback<Exception> failureCallback) {
+            failureCallback.onResult(new Exception("error"));
+        }
+
+        @Override
+        public void getReusedCredentialsCount(
+                int referrer,
+                @Nullable String accountName,
+                Callback<Integer> successCallback,
+                Callback<Exception> failureCallback) {
+            failureCallback.onResult(new Exception("error"));
+        }
+    }
+
     private static final PermissionsData PERMISSIONS_DATA_1 =
             PermissionsData.create(
                     "http://example1.com",
@@ -229,6 +287,15 @@ public final class SafetyHubTest {
 
         mPage = mActivityTestRule.startOnBlankPage();
         mProfile = mActivityTestRule.getProfile(/* incognito= */ false);
+
+        PasswordCheckupClientHelper helper = new FailingPasswordCheckupClientHelper();
+        PasswordCheckupClientHelperFactory.setFactoryForTesting(
+                new PasswordCheckupClientHelperFactory() {
+                    @Override
+                    public PasswordCheckupClientHelper createHelper() {
+                        return helper;
+                    }
+                });
 
         // Reset state to the default of the compromised passwords count and the browsing data
         // state.
@@ -2338,11 +2405,15 @@ public final class SafetyHubTest {
     }
 
     private void verifyButtonsNextToTextVisibility(String text, boolean visible) {
-        onView(
-                        allOf(
-                                withId(R.id.buttons_container),
-                                hasSibling(withChild(withChild(withText(text))))))
-                .check(matches(visible ? isDisplayed() : not(isDisplayed())));
+        Matcher<View> viewMatcher =
+                allOf(
+                        withId(R.id.buttons_container),
+                        hasSibling(withChild(withChild(withText(text)))));
+        if (visible) {
+            onViewWaiting(allOf(viewMatcher, isDisplayed())).check(matches(isDisplayed()));
+        } else {
+            onView(viewMatcher).check(matches(not(isDisplayed())));
+        }
     }
 
     private void verifySummaryNextToTextVisibility(String text, boolean visible) {
@@ -2463,7 +2534,7 @@ public final class SafetyHubTest {
 
     private void signIn() {
         mSigninTestRule.addAccountThenSignin(TestAccounts.ACCOUNT1);
-        PasswordManagerTestHelper.setAccountForPasswordStore(SigninTestRule.TEST_ACCOUNT_EMAIL);
+        PasswordManagerTestHelper.setAccountForPasswordStore(TestAccounts.ACCOUNT1.getEmail());
     }
 
     private void addCredentialToAccountStore() {

@@ -52,8 +52,8 @@ class TextEncoding;
 //
 // KURL is Blink's URL class and is the analog to GURL in other Chromium
 // code. KURL and GURL both share the same underlying URL parser, whose code is
-// located in //url, but KURL is backed by Blink specific WTF::Strings. This
-// means that KURLs are usually cheap to copy due to WTF::Strings being
+// located in //url, but KURL is backed by Blink specific blink::Strings. This
+// means that KURLs are usually cheap to copy due to blink::Strings being
 // internally ref-counted. However, please don't copy KURLs if you can use a
 // const ref, since the size of the parsed structure and related metadata is
 // non-trivial.
@@ -299,21 +299,12 @@ class PLATFORM_EXPORT KURL {
 PLATFORM_EXPORT bool operator==(const KURL&, const KURL&);
 PLATFORM_EXPORT bool operator==(const KURL&, const String&);
 PLATFORM_EXPORT bool operator==(const String&, const KURL&);
-PLATFORM_EXPORT bool operator!=(const KURL&, const KURL&);
-PLATFORM_EXPORT bool operator!=(const KURL&, const String&);
-PLATFORM_EXPORT bool operator!=(const String&, const KURL&);
 // Resolve ambiguity when comparing a string literal and a KURL.
 inline bool operator==(const char* literal, const KURL& url) {
   return String(literal) == url;
 }
 inline bool operator==(const KURL& url, const char* literal) {
   return String(literal) == url;
-}
-inline bool operator!=(const char* literal, const KURL& url) {
-  return String(literal) != url;
-}
-inline bool operator!=(const KURL& url, const char* literal) {
-  return String(literal) != url;
 }
 
 // Pretty printer for gtest and base/logging.*.  It prepends and appends

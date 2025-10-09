@@ -200,7 +200,8 @@ const char kPrintPdfAsImage[] = "printPdfAsImage";
 // Gets the print job settings dictionary from |json_str|. Assumes the Print
 // Preview WebUI does not send over invalid data.
 base::Value::Dict GetSettingsDictionary(const std::string& json_str) {
-  std::optional<base::Value> settings = base::JSONReader::Read(json_str);
+  std::optional<base::Value> settings =
+      base::JSONReader::Read(json_str, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   base::Value::Dict dict = std::move(*settings).TakeDict();
   CHECK(!dict.empty());
   return dict;
@@ -720,9 +721,9 @@ void PrintPreviewHandler::HandleDoPrint(const base::Value::List& args) {
     return;
   }
 
-  scoped_refptr<base::RefCountedMemory> data;
-  print_preview_ui()->GetPrintPreviewDataForIndex(
-      COMPLETE_PREVIEW_DOCUMENT_INDEX, &data);
+  scoped_refptr<base::RefCountedMemory> data =
+      print_preview_ui()->GetPrintPreviewDataForIndex(
+          COMPLETE_PREVIEW_DOCUMENT_INDEX);
   if (!data) {
     // Nothing to print, no preview available.
     RejectJavascriptCallback(base::Value(callback_id), base::Value("NO_DATA"));

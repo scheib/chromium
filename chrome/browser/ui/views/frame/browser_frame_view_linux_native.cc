@@ -40,11 +40,11 @@ bool BrowserFrameViewLinuxNative::DrawFrameButtonParams::operator==(
 }
 
 BrowserFrameViewLinuxNative::BrowserFrameViewLinuxNative(
-    BrowserFrame* frame,
+    BrowserWidget* widget,
     BrowserView* browser_view,
     BrowserFrameViewLayoutLinuxNative* layout,
     std::unique_ptr<ui::NavButtonProvider> nav_button_provider)
-    : BrowserFrameViewLinux(frame, browser_view, layout),
+    : BrowserFrameViewLinux(widget, browser_view, layout),
       nav_button_provider_(std::move(nav_button_provider)),
       layout_(layout) {}
 
@@ -56,7 +56,7 @@ void BrowserFrameViewLinuxNative::Layout(PassKey) {
   // DesktopWindowTreeHostPlatform::On{Window,Activation}StateChanged() does a
   // layout any time the maximized and activation state changes, respectively.
   MaybeUpdateCachedFrameButtonImages();
-  LayoutSuperclass<OpaqueBrowserFrameView>(this);
+  LayoutSuperclass<BrowserFrameViewLinux>(this);
 }
 
 BrowserFrameViewLinuxNative::FrameButtonStyle

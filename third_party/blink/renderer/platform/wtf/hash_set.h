@@ -262,11 +262,6 @@ bool operator==(const HashSet<T, U, V>& a, const HashSet<T, U, V>& b) {
 }
 
 template <typename T, typename U, typename V>
-inline bool operator!=(const HashSet<T, U, V>& a, const HashSet<T, U, V>& b) {
-  return !(a == b);
-}
-
-template <typename T, typename U, typename V>
 inline wtf_size_t HashSet<T, U, V>::size() const {
   return impl_.size();
 }
@@ -379,10 +374,5 @@ inline auto HashSet<T, U, V>::TakeAny() -> ValueType {
 }
 
 }  // namespace blink
-
-// TODO(crbug.com/422768753): Remove this `using` directive.
-namespace WTF {
-using blink::HashSet;
-}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_HASH_SET_H_

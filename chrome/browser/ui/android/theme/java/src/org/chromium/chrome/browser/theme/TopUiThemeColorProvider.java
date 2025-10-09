@@ -10,7 +10,6 @@ import android.content.res.ColorStateList;
 import androidx.annotation.ColorInt;
 
 import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.tab.CurrentTabObserver;
@@ -19,11 +18,15 @@ import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabState;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
+import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.ui.util.ColorUtils;
+
+import java.util.function.Supplier;
 
 /**
  * Manages the theme color used on the top part of the UI based on Tab's theme color and other
  * conditions such as dark mode settings, incognito mode, security state, etc.
+ *
  * <p>The theme color is only updated when the supplied tab is non-null.
  */
 @NullMarked
@@ -125,7 +128,7 @@ public class TopUiThemeColorProvider extends ThemeColorProvider {
         // This method is used not only for the current tab but also for
         // any given tab. Therefore it should not alter any class state.
         if (!isUsingTabThemeColor(tab, themeColor)) {
-            themeColor = SurfaceColorUpdateUtils.getDefaultThemeColor(mContext, tab.isIncognito());
+            themeColor = ChromeColors.getDefaultThemeColor(mContext, tab.isIncognito());
             if (isThemingAllowed(tab)) {
                 int customThemeColor = mActivityThemeColorSupplier.get();
                 if (customThemeColor != TabState.UNSPECIFIED_THEME_COLOR) {

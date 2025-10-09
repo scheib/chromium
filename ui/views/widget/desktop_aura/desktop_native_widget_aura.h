@@ -128,7 +128,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   void InitNativeWidget(Widget::InitParams params) override;
   void OnWidgetInitDone() override;
   void ReparentNativeViewImpl(gfx::NativeView new_parent) override;
-  std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
+  std::unique_ptr<FrameView> CreateFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
   void FrameTypeChanged() override;
@@ -155,8 +155,7 @@ class VIEWS_EXPORT DesktopNativeWidgetAura
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
                       const gfx::ImageSkia& app_icon) override;
   void InitModalType(ui::mojom::ModalType modal_type) override;
-  void OnWidgetThemeChanged(ui::ColorProviderKey::ColorMode color_mode,
-                            std::optional<SkColor> background_color) override;
+  void SetBackgroundColor(SkColor background_color) override;
   gfx::Rect GetWindowBoundsInScreen() const override;
   gfx::Rect GetClientAreaBoundsInScreen() const override;
   gfx::Rect GetRestoredBounds() const override;

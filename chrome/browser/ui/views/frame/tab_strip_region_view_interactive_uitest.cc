@@ -5,6 +5,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/frame/window_frame_util.h"
 #include "chrome/browser/ui/layout_constants.h"
@@ -13,6 +14,7 @@
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/tab_strip_region_view.h"
+#include "chrome/browser/ui/views/interaction/browser_elements_views.h"
 #include "chrome/browser/ui/views/tabs/new_tab_button.h"
 #include "chrome/browser/ui/views/tabs/tab_search_button.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
@@ -35,22 +37,21 @@ class TabStripRegionViewBrowserBaseTest : public InProcessBrowserTest {
 
   void AppendTab() { chrome::AddTabAt(browser(), GURL(), -1, false); }
 
-  BrowserView* browser_view() {
-    return BrowserView::GetBrowserViewForBrowser(browser());
-  }
-
   TabStripRegionView* tab_strip_region_view() {
-    return browser_view()->tab_strip_region_view();
+    return views::AsViewClass<TabStripRegionView>(
+        BrowserView::GetBrowserViewForBrowser(browser())->tab_strip_view());
   }
 
-  TabStrip* tab_strip() { return browser_view()->tabstrip(); }
+  TabStrip* tab_strip() { return tab_strip_region_view()->tab_strip(); }
 
   TabSearchContainer* tab_search_container() {
-    return tab_strip_region_view()->tab_search_container_for_testing();
+    return BrowserElementsViews::From(browser())->GetViewAs<TabSearchContainer>(
+        kTabSearchContainerElementId);
   }
 
   TabSearchButton* tab_search_button() {
-    return tab_strip_region_view()->GetTabSearchButton();
+    return BrowserElementsViews::From(browser())->GetViewAs<TabSearchButton>(
+        kTabSearchButtonElementId);
   }
 
   views::View* new_tab_button() {

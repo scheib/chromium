@@ -8,17 +8,17 @@
 
 #include "base/containers/contains.h"
 #include "content/browser/webid/config_fetcher.h"
-#include "content/browser/webid/federated_auth_request_impl.h"
 #include "content/browser/webid/flags.h"
 #include "content/browser/webid/mappers.h"
+#include "content/browser/webid/request_service.h"
 #include "content/browser/webid/webid_utils.h"
 #include "content/public/browser/render_frame_host.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-data-view.h"
 
 using ::blink::mojom::FederatedAuthRequestResult;
 using LoginState = content::IdentityRequestAccount::LoginState;
-using SignInStateMatchStatus = content::FedCmSignInStateMatchStatus;
-using TokenStatus = content::FedCmRequestIdTokenStatus;
+using SignInStateMatchStatus = content::webid::SignInStateMatchStatus;
+using TokenStatus = content::webid::RequestIdTokenStatus;
 
 namespace content::webid {
 
@@ -27,6 +27,23 @@ static constexpr char kVcSdJwt[] = "vc+sd-jwt";
 
 bool IsFrameActive(RenderFrameHost* frame) {
   return frame && frame->IsActive();
+}
+
+bool ValidateWellKnownFormatForClientMetadata(
+    const IdpNetworkRequestManager::WellKnown& well_known,
+    bool has_client_metadata_endpoint) {
+  if (!has_client_metadata_endpoint) {
+    return true;
+  }
+
+  // client_metadata endpoint exists - require direct endpoints format
+  // Check if both accounts_endpoint and login_url are present (direct endpoints
+  // format)
+  if (well_known.accounts.is_empty() || well_known.login_url.is_empty()) {
+    return false;
+  }
+
+  return true;
 }
 }  // namespace
 
@@ -74,7 +91,7 @@ AccountsFetcher::AccountsFetcher(
     FederatedIdentityApiPermissionContextDelegate* api_permission_delegate,
     FederatedIdentityPermissionContextDelegate* permission_delegate,
     FedCmFetchingParams params,
-    FederatedAuthRequestImpl* federated_auth_request_impl)
+    RequestService* federated_auth_request_impl)
     : render_frame_host_(render_frame_host),
       network_manager_(network_manager),
       api_permission_delegate_(api_permission_delegate),
@@ -187,6 +204,22 @@ void AccountsFetcher::OnAllConfigAndWellKnownFetched(
       continue;
     }
 
+    if (IsWellKnownEndpointValidationEnabled()) {
+      // Check if this IDP has a client_metadata endpoint
+      bool has_client_metadata_endpoint =
+          !fetch_result.endpoints.client_metadata.is_empty();
+
+      if (!ValidateWellKnownFormatForClientMetadata(
+              fetch_result.wellknown, has_client_metadata_endpoint)) {
+        federated_auth_request_impl_->OnFetchDataForIdpFailed(
+            std::move(idp_info),
+            FederatedAuthRequestResult::kWellKnownInvalidResponse,
+            TokenStatus::kWellKnownInvalidResponse,
+            /*should_delay_callback=*/false);
+        continue;
+      }
+    }
+
     if (IsIdPRegistrationEnabled()) {
       if (get_info_it->second.provider->config->type) {
         if (!base::Contains(fetch_result.metadata->types,
@@ -248,15 +281,21 @@ void AccountsFetcher::OnAllConfigAndWellKnownFetched(
     }
 
     GURL accounts_endpoint = idp_info->endpoints.accounts;
+    // Do not fetch accounts if the IDP is registered.
+    if (idp_info->provider->config->from_idp_registration_api) {
+      accounts_endpoint = GURL();
+    }
     std::string client_id = idp_info->provider->config->client_id;
     const GURL& config_url = idp_info->provider->config->config_url;
 
-    network_manager_->SendAccountsRequest(
-        url::Origin::Create(config_url), accounts_endpoint, client_id,
-        base::BindOnce(&AccountsFetcher::OnAccountsResponseReceived,
-                       weak_ptr_factory_.GetWeakPtr(), std::move(idp_info)));
-    federated_auth_request_impl_->fedcm_metrics()->RecordAccountsRequestSent(
-        config_url);
+    if (network_manager_->SendAccountsRequest(
+            url::Origin::Create(config_url), accounts_endpoint, client_id,
+            base::BindOnce(&AccountsFetcher::OnAccountsResponseReceived,
+                           weak_ptr_factory_.GetWeakPtr(),
+                           std::move(idp_info)))) {
+      federated_auth_request_impl_->fedcm_metrics()->RecordAccountsRequestSent(
+          config_url);
+    }
   }
 }
 
@@ -283,6 +322,7 @@ void AccountsFetcher::OnAccountsResponseReceived(
     return;
   }
   RecordRawAccountsSize(accounts.size());
+  RecordAccountFieldsType(accounts);
   FilterAccountsWithLabel(idp_info->metadata.requested_label, accounts);
   FilterAccountsWithLoginHint(idp_info->provider->login_hint, accounts);
   FilterAccountsWithDomainHint(idp_info->provider->domain_hint, accounts);
@@ -338,7 +378,7 @@ void AccountsFetcher::OnAccountsFetchSucceeded(
   bool need_client_metadata = false;
   if (IsIframeOriginEnabled()) {
     // For cross-site iframes, we need to fetch client metadata in case the
-    // IDP sends `client_matches_top_frame_origin: false`.
+    // IDP sends `client_is_third_party_to_top_frame_origin: true`.
     url::Origin embedding_origin =
         render_frame_host_->GetMainFrame()->GetLastCommittedOrigin();
     url::Origin rp_origin = render_frame_host_->GetLastCommittedOrigin();
@@ -419,8 +459,8 @@ void AccountsFetcher::OnFetchDataForIdpSucceeded(
                      client_metadata.brand_icon_url, rp_brand_icon},
       idp_info->rp_context, idp_info->format, disclosure_fields,
       /*has_login_status_mismatch=*/false);
-  idp_info->client_matches_top_frame_origin =
-      client_metadata.client_matches_top_frame_origin;
+  idp_info->client_is_third_party_to_top_frame_origin =
+      client_metadata.client_is_third_party_to_top_frame_origin;
   for (auto& account : accounts) {
     account->identity_provider = idp_info->data;
   }
@@ -490,7 +530,7 @@ void AccountsFetcher::FilterAccountsWithDomainHint(
     if (account->is_filtered_out) {
       continue;
     }
-    if (domain_hint == FederatedAuthRequestImpl::kWildcardDomainHint) {
+    if (domain_hint == RequestService::kWildcardDomainHint) {
       if (account->domain_hints.empty()) {
         account->is_filtered_out = true;
         continue;

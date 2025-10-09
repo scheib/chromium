@@ -10,6 +10,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//third_party/blink/renderer/platform:blink_platform_unittests",
+        "module_scheme": "gtest",
         "name": "blink_platform_unittests",
         "precommit_args": [
           "--gerrit-issue=${patch_issue}",
@@ -34,6 +36,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//third_party/blink/renderer/controller:blink_unittests",
+        "module_scheme": "gtest",
         "name": "blink_unittests",
         "swarming": {
           "dimensions": {
@@ -53,6 +57,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//chrome/test:browser_tests",
+        "module_scheme": "gtest",
         "name": "browser_tests",
         "swarming": {
           "dimensions": {
@@ -73,6 +79,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//cc:cc_unittests",
+        "module_scheme": "gtest",
         "name": "cc_unittests",
         "swarming": {
           "dimensions": {
@@ -92,6 +100,8 @@
         "merge": {
           "script": "//testing/merge_scripts/standard_gtest_merge.py"
         },
+        "module_name": "//content/test:content_browsertests",
+        "module_scheme": "gtest",
         "name": "content_browsertests",
         "swarming": {
           "dimensions": {
@@ -118,6 +128,8 @@
           ],
           "script": "//third_party/blink/tools/merge_web_test_results.py"
         },
+        "module_name": "//:blink_web_tests",
+        "module_scheme": "webtest",
         "name": "blink_web_tests",
         "resultdb": {
           "enable": true,

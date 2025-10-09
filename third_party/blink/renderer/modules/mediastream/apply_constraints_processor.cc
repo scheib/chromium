@@ -118,7 +118,7 @@ void ApplyConstraintsProcessor::ProcessVideoRequest() {
   const blink::MediaStreamDevice& device_info = video_source_->device();
   if (device_info.type == blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE) {
     ProcessVideoDeviceRequest();
-  } else if (video_source_->GetSubCaptureTargetVersion() == 0 &&
+  } else if (video_source_->GetCaptureVersion().sub_capture == 0 &&
              (device_info.type ==
                   mojom::blink::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE ||
               device_info.type ==
@@ -162,9 +162,8 @@ void ApplyConstraintsProcessor::ProcessVideoDeviceRequest() {
   // to know all the formats potentially supported by the source.
   GetMediaDevicesDispatcher()->GetAllVideoInputDeviceFormats(
       String(video_source_->device().id.data()),
-      WTF::BindOnce(
-          &ApplyConstraintsProcessor::MaybeStopVideoDeviceSourceForRestart,
-          WrapWeakPersistent(this)));
+      BindOnce(&ApplyConstraintsProcessor::MaybeStopVideoDeviceSourceForRestart,
+               WrapWeakPersistent(this)));
 }
 
 void ApplyConstraintsProcessor::ProcessVideoContentRequest() {
@@ -177,6 +176,7 @@ void ApplyConstraintsProcessor::ProcessVideoContentRequest() {
   // TODO(crbug.com/768205): Support restarting the source even if there is more
   // than one track in the source.
   if (video_source_->NumTracks() > 1U) {
+    video_source_->RequestRefreshFrame();
     FinalizeVideoRequest();
     return;
   }
@@ -205,9 +205,9 @@ void ApplyConstraintsProcessor::MaybeStopVideoDeviceSourceForRestart(
     if (video_device_request_trace_)
       video_device_request_trace_->AddStep("StopForRestart");
 
-    video_source_->StopForRestart(WTF::BindOnce(
-        &ApplyConstraintsProcessor::MaybeDeviceSourceStoppedForRestart,
-        WrapWeakPersistent(this)));
+    video_source_->StopForRestart(
+        BindOnce(&ApplyConstraintsProcessor::MaybeDeviceSourceStoppedForRestart,
+                 WrapWeakPersistent(this)));
   }
 }
 
@@ -234,7 +234,7 @@ void ApplyConstraintsProcessor::MaybeStopVideoContentSourceForRestart() {
     ApplyConstraintsSucceeded();
     GetCurrentVideoTrack()->NotifyConstraintsConfigurationComplete();
   } else {
-    video_source_->StopForRestart(WTF::BindOnce(
+    video_source_->StopForRestart(BindOnce(
         &ApplyConstraintsProcessor::MaybeRestartStoppedVideoContentSource,
         WrapWeakPersistent(this)));
   }
@@ -258,9 +258,8 @@ void ApplyConstraintsProcessor::MaybeDeviceSourceStoppedForRestart(
   DCHECK_EQ(result, blink::MediaStreamVideoSource::RestartResult::IS_STOPPED);
   GetMediaDevicesDispatcher()->GetAvailableVideoInputDeviceFormats(
       String(video_source_->device().id.data()),
-      WTF::BindOnce(
-          &ApplyConstraintsProcessor::FindNewFormatAndRestartDeviceSource,
-          WrapWeakPersistent(this)));
+      BindOnce(&ApplyConstraintsProcessor::FindNewFormatAndRestartDeviceSource,
+               WrapWeakPersistent(this)));
 }
 
 void ApplyConstraintsProcessor::MaybeRestartStoppedVideoContentSource(
@@ -286,8 +285,8 @@ void ApplyConstraintsProcessor::MaybeRestartStoppedVideoContentSource(
   video_source_->Restart(
       settings.HasValue() ? settings.Format()
                           : *video_source_->GetCurrentFormat(),
-      WTF::BindOnce(&ApplyConstraintsProcessor::MaybeSourceRestarted,
-                    WrapWeakPersistent(this)));
+      BindOnce(&ApplyConstraintsProcessor::MaybeSourceRestarted,
+               WrapWeakPersistent(this)));
 }
 
 void ApplyConstraintsProcessor::FindNewFormatAndRestartDeviceSource(
@@ -308,8 +307,8 @@ void ApplyConstraintsProcessor::FindNewFormatAndRestartDeviceSource(
   video_source_->Restart(
       settings.HasValue() ? settings.Format()
                           : *video_source_->GetCurrentFormat(),
-      WTF::BindOnce(&ApplyConstraintsProcessor::MaybeSourceRestarted,
-                    WrapWeakPersistent(this)));
+      BindOnce(&ApplyConstraintsProcessor::MaybeSourceRestarted,
+               WrapWeakPersistent(this)));
 }
 
 void ApplyConstraintsProcessor::MaybeSourceRestarted(
@@ -455,10 +454,9 @@ void ApplyConstraintsProcessor::ApplyConstraintsSucceeded() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   task_runner_->PostTask(
       FROM_HERE,
-      WTF::BindOnce(&ApplyConstraintsProcessor::CleanupRequest,
-                    WrapWeakPersistent(this),
-                    WTF::BindOnce(&RequestSucceeded,
-                                  WrapPersistent(current_request_.Get()))));
+      blink::BindOnce(
+          &ApplyConstraintsProcessor::CleanupRequest, WrapWeakPersistent(this),
+          BindOnce(&RequestSucceeded, WrapPersistent(current_request_.Get()))));
 }
 
 void ApplyConstraintsProcessor::ApplyConstraintsFailed(
@@ -466,21 +464,21 @@ void ApplyConstraintsProcessor::ApplyConstraintsFailed(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   task_runner_->PostTask(
       FROM_HERE,
-      WTF::BindOnce(
+      blink::BindOnce(
           &ApplyConstraintsProcessor::CleanupRequest, WrapWeakPersistent(this),
-          WTF::BindOnce(&RequestFailed, WrapPersistent(current_request_.Get()),
-                        String(failed_constraint_name),
-                        String("Cannot satisfy constraints"))));
+          BindOnce(&RequestFailed, WrapPersistent(current_request_.Get()),
+                   String(failed_constraint_name),
+                   String("Cannot satisfy constraints"))));
 }
 
 void ApplyConstraintsProcessor::CannotApplyConstraints(const String& message) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   task_runner_->PostTask(
       FROM_HERE,
-      WTF::BindOnce(
+      blink::BindOnce(
           &ApplyConstraintsProcessor::CleanupRequest, WrapWeakPersistent(this),
-          WTF::BindOnce(&RequestFailed, WrapPersistent(current_request_.Get()),
-                        String(), message)));
+          BindOnce(&RequestFailed, WrapPersistent(current_request_.Get()),
+                   String(), message)));
 }
 
 void ApplyConstraintsProcessor::CleanupRequest(

@@ -24,6 +24,7 @@
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_io_thread.h"
+#include "base/test/trace_test_utils.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
 #include "base/trace_event/memory_dump_manager_test_utils.h"
@@ -40,7 +41,6 @@
 using testing::_;
 using testing::AtMost;
 using testing::Between;
-using testing::Invoke;
 using testing::Return;
 
 namespace base::trace_event {
@@ -118,10 +118,8 @@ class MockMemoryDumpProvider : public MemoryDumpProvider {
 
   MockMemoryDumpProvider() {
     ON_CALL(*this, OnMemoryDump(_, _))
-        .WillByDefault(
-            Invoke([](const MemoryDumpArgs&, ProcessMemoryDump* pmd) -> bool {
-              return true;
-            }));
+        .WillByDefault([](const MemoryDumpArgs&,
+                          ProcessMemoryDump* pmd) -> bool { return true; });
   }
   ~MockMemoryDumpProvider() override {
     if (enable_mock_destructor) {
@@ -188,6 +186,7 @@ class MemoryDumpManagerTest : public testing::Test {
     InitializeMemoryDumpManagerForInProcessTesting(is_coordinator_);
 
     task_environment_ = std::make_unique<test::TaskEnvironment>();
+    tracing_environment_ = std::make_unique<test::TracingEnvironment>();
   }
 
   void TearDown() override {
@@ -196,7 +195,7 @@ class MemoryDumpManagerTest : public testing::Test {
     // Tear down the MemoryDumpManager while single-threaded to mirror logic in
     // SetUp().
     mdm_.reset();
-    TraceLog::ResetForTesting();
+    tracing_environment_.reset();
   }
 
  protected:
@@ -261,6 +260,7 @@ class MemoryDumpManagerTest : public testing::Test {
   ShadowingAtExitManager at_exit_manager_;
 
   std::unique_ptr<test::TaskEnvironment> task_environment_;
+  std::unique_ptr<test::TracingEnvironment> tracing_environment_;
 
   // Whether the test MemoryDumpManager should be initialized as the
   // coordinator.
@@ -479,11 +479,11 @@ TEST_F(MemoryDumpManagerTest, RespectTaskRunnerAffinity) {
     RegisterDumpProvider(mdp, task_runner, kDefaultOptions);
     EXPECT_CALL(*mdp, OnMemoryDump(_, _))
         .Times(i)
-        .WillRepeatedly(Invoke(
+        .WillRepeatedly(
             [task_runner](const MemoryDumpArgs&, ProcessMemoryDump*) -> bool {
               EXPECT_TRUE(task_runner->RunsTasksInCurrentSequence());
               return true;
-            }));
+            });
   }
   EnableForTracing();
 
@@ -594,11 +594,10 @@ TEST_F(MemoryDumpManagerTest, RegisterDumperWhileDumping) {
   EXPECT_CALL(mdp1, OnMemoryDump(_, _))
       .Times(4)
       .WillOnce(Return(true))
-      .WillOnce(
-          Invoke([&mdp2](const MemoryDumpArgs&, ProcessMemoryDump*) -> bool {
-            RegisterDumpProvider(&mdp2, nullptr);
-            return true;
-          }))
+      .WillOnce([&mdp2](const MemoryDumpArgs&, ProcessMemoryDump*) -> bool {
+        RegisterDumpProvider(&mdp2, nullptr);
+        return true;
+      })
       .WillRepeatedly(Return(true));
 
   // Depending on the insertion order (before or after mdp1), mdp2 might be
@@ -628,11 +627,10 @@ TEST_F(MemoryDumpManagerTest, UnregisterDumperWhileDumping) {
   EXPECT_CALL(mdp1, OnMemoryDump(_, _))
       .Times(4)
       .WillOnce(Return(true))
-      .WillOnce(
-          Invoke([&mdp2](const MemoryDumpArgs&, ProcessMemoryDump*) -> bool {
-            MemoryDumpManager::GetInstance()->UnregisterDumpProvider(&mdp2);
-            return true;
-          }))
+      .WillOnce([&mdp2](const MemoryDumpArgs&, ProcessMemoryDump*) -> bool {
+        MemoryDumpManager::GetInstance()->UnregisterDumpProvider(&mdp2);
+        return true;
+      })
       .WillRepeatedly(Return(true));
 
   // Depending on the insertion order (before or after mdp1), mdp2 might have
@@ -683,9 +681,7 @@ TEST_F(MemoryDumpManagerTest, UnregisterDumperFromThreadWhileDumping) {
 
     // OnMemoryDump is called once for the provider that dumps first, and zero
     // times for the other provider.
-    EXPECT_CALL(*mdp, OnMemoryDump(_, _))
-        .Times(AtMost(1))
-        .WillOnce(Invoke(on_dump));
+    EXPECT_CALL(*mdp, OnMemoryDump(_, _)).Times(AtMost(1)).WillOnce(on_dump);
   }
 
   EnableForTracing();
@@ -731,9 +727,7 @@ TEST_F(MemoryDumpManagerTest, TearDownThreadWhileDumping) {
 
     // OnMemoryDump is called once for the provider that dumps first, and zero
     // times for the other provider.
-    EXPECT_CALL(*mdp, OnMemoryDump(_, _))
-        .Times(AtMost(1))
-        .WillOnce(Invoke(on_dump));
+    EXPECT_CALL(*mdp, OnMemoryDump(_, _)).Times(AtMost(1)).WillOnce(on_dump);
   }
 
   EnableForTracing();
@@ -782,9 +776,7 @@ TEST_F(MemoryDumpManagerTest, UnregisterAndDeleteDumpProviderSoon) {
   for (int i = 0; i < kNumProviders; ++i) {
     std::unique_ptr<MockMemoryDumpProvider> mdp(new MockMemoryDumpProvider);
     mdp->enable_mock_destructor = true;
-    EXPECT_CALL(*mdp, Destructor()).WillOnce(Invoke([&dtor_count] {
-      dtor_count++;
-    }));
+    EXPECT_CALL(*mdp, Destructor()).WillOnce([&dtor_count] { dtor_count++; });
     RegisterDumpProvider(mdp.get(), nullptr, kDefaultOptions);
     mdps.push_back(std::move(mdp));
   }
@@ -822,10 +814,10 @@ TEST_F(MemoryDumpManagerTest, UnregisterAndDeleteDumpProviderSoonDuringDump) {
   };
   EXPECT_CALL(*mdp, OnMemoryDump(_, _))
       .Times(1)
-      .WillOnce(Invoke(self_unregister_from_another_thread));
-  EXPECT_CALL(*mdp, Destructor()).Times(1).WillOnce(Invoke([&thread_ref] {
+      .WillOnce(self_unregister_from_another_thread);
+  EXPECT_CALL(*mdp, Destructor()).Times(1).WillOnce([&thread_ref] {
     EXPECT_EQ(thread_ref, PlatformThread::CurrentRef());
-  }));
+  });
 
   EnableForTracing();
   for (int i = 0; i < 2; ++i) {

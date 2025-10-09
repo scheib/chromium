@@ -10,6 +10,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
 #include "base/dcheck_is_on.h"
+#include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "device/vr/openxr/openxr_extension_handler_factories.h"
 #include "device/vr/openxr/openxr_extension_handler_factory.h"
@@ -107,6 +108,9 @@ OpenXrExtensionHelper::OpenXrExtensionHelper(
     : extension_enumeration_(extension_enumeration) {
   // Failure to query a method results in a nullptr
 
+  // General methods
+  OPENXR_LOAD_FN(xrPollFutureEXT);
+
   // Hand tracking methods
   OPENXR_LOAD_FN(xrCreateHandTrackerEXT);
   OPENXR_LOAD_FN(xrDestroyHandTrackerEXT);
@@ -128,6 +132,22 @@ OpenXrExtensionHelper::OpenXrExtensionHelper(
   OPENXR_LOAD_FN(xrGetSceneComponentsMSFT);
   OPENXR_LOAD_FN(xrLocateSceneComponentsMSFT);
   OPENXR_LOAD_FN(xrGetSceneMeshBuffersMSFT);
+
+  // Spatial Entities
+  OPENXR_LOAD_FN(xrCreateSpatialContextAsyncEXT);
+  OPENXR_LOAD_FN(xrCreateSpatialContextCompleteEXT);
+  OPENXR_LOAD_FN(xrCreateSpatialDiscoverySnapshotAsyncEXT);
+  OPENXR_LOAD_FN(xrCreateSpatialDiscoverySnapshotCompleteEXT);
+  OPENXR_LOAD_FN(xrCreateSpatialUpdateSnapshotEXT);
+  OPENXR_LOAD_FN(xrDestroySpatialContextEXT);
+  OPENXR_LOAD_FN(xrDestroySpatialEntityEXT);
+  OPENXR_LOAD_FN(xrDestroySpatialSnapshotEXT);
+  OPENXR_LOAD_FN(xrEnumerateSpatialCapabilitiesEXT);
+  OPENXR_LOAD_FN(xrEnumerateSpatialCapabilityComponentTypesEXT);
+  OPENXR_LOAD_FN(xrQuerySpatialComponentDataEXT);
+
+  // Spatial Anchors
+  OPENXR_LOAD_FN(xrCreateSpatialAnchorEXT);
 
 #if BUILDFLAG(IS_WIN)
   OPENXR_LOAD_FN(xrConvertWin32PerformanceCounterToTimeKHR);
@@ -161,6 +181,7 @@ bool OpenXrExtensionHelper::IsFeatureSupported(
     case device::mojom::XRSessionFeature::HAND_INPUT:
     case device::mojom::XRSessionFeature::HIT_TEST:
     case device::mojom::XRSessionFeature::LIGHT_ESTIMATION:
+    case device::mojom::XRSessionFeature::PLANE_DETECTION:
     case device::mojom::XRSessionFeature::REF_SPACE_UNBOUNDED:
       return std::ranges::any_of(
           GetExtensionHandlerFactories(),
@@ -223,7 +244,7 @@ OpenXrExtensionHelper::CreateLightEstimator(XrSession session,
 
 std::unique_ptr<OpenXRSceneUnderstandingManager>
 OpenXrExtensionHelper::CreateSceneUnderstandingManager(
-    XrSession session,
+    OpenXrApiWrapper* openxr,
     XrSpace base_space,
     const std::vector<mojom::XRSessionFeature>& required_features,
     const std::vector<mojom::XRSessionFeature>& optional_features) const {
@@ -273,7 +294,7 @@ OpenXrExtensionHelper::CreateSceneUnderstandingManager(
     // then use it.
     if (supported_optional_features_count ==
         optional_features_requested_count) {
-      return factory->CreateSceneUnderstandingManager(*this, session,
+      return factory->CreateSceneUnderstandingManager(*this, openxr,
                                                       base_space);
     }
 
@@ -287,12 +308,18 @@ OpenXrExtensionHelper::CreateSceneUnderstandingManager(
     }
   }
 
+  std::unique_ptr<OpenXRSceneUnderstandingManager> manager;
   if (best_factory) {
-    return best_factory->CreateSceneUnderstandingManager(*this, session,
-                                                         base_space);
+    manager = best_factory->CreateSceneUnderstandingManager(*this, openxr,
+                                                            base_space);
   }
 
-  return nullptr;
+  UMA_HISTOGRAM_ENUMERATION("XR.OpenXR.SceneUnderstandingManagerType",
+                            manager
+                                ? manager->GetType()
+                                : OpenXrSceneUnderstandingManagerType::kNone);
+
+  return manager;
 }
 
 std::unique_ptr<OpenXrStageBoundsProvider>

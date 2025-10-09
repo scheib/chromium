@@ -25,8 +25,10 @@
 #include "components/page_load_metrics/browser/navigation_handle_user_data.h"
 #include "components/search_engines/template_url_service.h"
 #include "content/public/browser/devtools_agent_host.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/preload_pipeline_info.h"
 #include "content/public/browser/preloading.h"
 #include "content/public/browser/preloading_data.h"
 #include "content/public/browser/prerender_handle.h"
@@ -74,8 +76,6 @@ content::PreloadingFailureReason ToPreloadingFailureReason(
 }
 
 }  // namespace
-
-PrerenderManager::~PrerenderManager() = default;
 
 class PrerenderManager::SearchPrerenderTask {
  public:
@@ -165,6 +165,8 @@ class PrerenderManager::SearchPrerenderTask {
   // Stores the search term that `search_prerender_handle_` is prerendering.
   const GURL prerendered_canonical_search_url_;
 };
+
+PrerenderManager::~PrerenderManager() = default;
 
 void PrerenderManager::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {

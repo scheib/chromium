@@ -8,12 +8,12 @@ import '//resources/cr_elements/icons.html.js';
 
 import {assert} from '//resources/js/assert.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import type {Tab as TabData, TabGroupVisualData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
 
 import {TabElement} from './tab_element.js';
 import {getCss} from './tab_strip.css.js';
 import {getHtml} from './tab_strip.html.js';
-import type {Tab as TabData, TabGroupVisualData} from './tab_strip_api_data_model.mojom-webui.js';
-import type {NodeId} from './tab_strip_api_types.mojom-webui.js';
 import {TabStripController} from './tab_strip_controller.js';
 
 export interface TabStrip {
@@ -133,7 +133,6 @@ export class TabStrip extends CrLitElement {
       this.outOfBoundsDragX = e.clientX;
       this.outOfBoundsDragY = e.clientY;
       this.$.tabstrip.classList.add('nodrag');
-      this.tabElement.classList.add('raised');
       this.activateTab(this.tabElement.tabId);
       this.requestUpdate();
     }
@@ -150,7 +149,6 @@ export class TabStrip extends CrLitElement {
     this.tabOrderX = 0;
     this.tabInitialX = 0;
     this.$.tabstrip.classList.remove('nodrag');
-    this.tabElement.classList.remove('raised');
 
     // Reset the transform back to 0.
     this.tabs_.forEach(tabElement => {

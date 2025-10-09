@@ -95,7 +95,7 @@
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image_chrome_client.h"
-#include "third_party/blink/renderer/core/svg/svg_resource_document_cache.h"
+#include "third_party/blink/renderer/core/svg/svg_document_resource_tracker.h"
 #include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -226,7 +226,7 @@ Page* Page::CreateOrdinary(
     const base::UnguessableToken& browsing_context_group_token,
     const ColorProviderColorMaps* color_provider_colors,
     blink::mojom::PartitionedPopinParamsPtr partitioned_popin_params,
-    const std::optional<uint64_t>& canvas_noise_token) {
+    const std::optional<NoiseToken>& canvas_noise_token) {
   Page* page = MakeGarbageCollected<Page>(
       base::PassKey<Page>(), chrome_client, agent_group_scheduler,
       browsing_context_group_token, color_provider_colors,
@@ -256,7 +256,7 @@ Page::Page(base::PassKey<Page>,
            const base::UnguessableToken& browsing_context_group_token,
            const ColorProviderColorMaps* color_provider_colors,
            blink::mojom::PartitionedPopinParamsPtr partitioned_popin_params,
-           const std::optional<uint64_t>& canvas_noise_token,
+           const std::optional<NoiseToken>& canvas_noise_token,
            bool is_ordinary)
     : SettingsDelegate(std::make_unique<Settings>()),
       main_frame_(nullptr),
@@ -383,9 +383,8 @@ void Page::CloseSoon() {
   if (!close_task_handler_ && MainFrame()) {
     close_task_handler_ = MakeGarbageCollected<Page::CloseTaskHandler>(this);
     GetPageScheduler()->GetAgentGroupScheduler().DefaultTaskRunner()->PostTask(
-        FROM_HERE,
-        WTF::BindOnce(&Page::CloseTaskHandler::DoDeferredClose,
-                      WrapWeakPersistent(close_task_handler_.Get())));
+        FROM_HERE, BindOnce(&Page::CloseTaskHandler::DoDeferredClose,
+                            WrapWeakPersistent(close_task_handler_.Get())));
   }
 }
 
@@ -546,11 +545,11 @@ Page::GetPartitionedPopinOpenerProperties() const {
   return *partitioned_popin_opener_properties_;
 }
 
-void Page::SetCanvasNoiseToken(std::optional<uint64_t> canvas_noise_token) {
+void Page::SetCanvasNoiseToken(std::optional<NoiseToken> canvas_noise_token) {
   canvas_noise_token_ = canvas_noise_token;
 }
 
-const std::optional<uint64_t> Page::CanvasNoiseToken() {
+std::optional<NoiseToken> Page::CanvasNoiseToken() const {
   return canvas_noise_token_;
 }
 
@@ -583,13 +582,15 @@ SpatialNavigationController& Page::GetSpatialNavigationController() {
   return *spatial_navigation_controller_;
 }
 
-SVGResourceDocumentCache& Page::GetSVGResourceDocumentCache() {
-  if (!svg_resource_document_cache_) {
-    svg_resource_document_cache_ =
-        MakeGarbageCollected<SVGResourceDocumentCache>(
-            GetPageScheduler()->GetAgentGroupScheduler().DefaultTaskRunner());
+SVGDocumentResourceTracker& Page::GetSVGDocumentResourceTracker() {
+  if (!svg_document_resource_tracker_) {
+    svg_document_resource_tracker_ =
+        MakeGarbageCollected<SVGDocumentResourceTracker>(
+            GetPageScheduler()->GetAgentGroupScheduler().DefaultTaskRunner(),
+            SVGDocumentResourceTracker::MakeCacheIdentifier(
+                String(BrowsingContextGroupToken().ToString())));
   }
-  return *svg_resource_document_cache_;
+  return *svg_document_resource_tracker_;
 }
 
 void Page::UsesOverlayScrollbarsChanged() {
@@ -1320,10 +1321,10 @@ void Page::DidCommitLoad(LocalFrame* frame) {
     // would update the previous history item, Page::didCommitLoad is called
     // after a new history item is created in FrameLoader.
     // See crbug.com/642279
-    GetVisualViewport().SetScrollOffset(ScrollOffset(),
-                                        mojom::blink::ScrollType::kProgrammatic,
-                                        mojom::blink::ScrollBehavior::kInstant,
-                                        ScrollableArea::ScrollCallback());
+    GetVisualViewport().SetScrollOffset(
+        ScrollOffset(), mojom::blink::ScrollType::kProgrammatic,
+        cc::ScrollSourceType::kNone, mojom::blink::ScrollBehavior::kInstant,
+        ScrollableArea::ScrollCallback());
   }
   // crbug/1312107: If DevTools has "Highlight ad frames" checked when the
   // main frame is refreshed or the ad frame is navigated to a different
@@ -1377,7 +1378,7 @@ void Page::Trace(Visitor* visitor) const {
   visitor->Trace(visual_viewport_);
   visitor->Trace(link_highlight_);
   visitor->Trace(spatial_navigation_controller_);
-  visitor->Trace(svg_resource_document_cache_);
+  visitor->Trace(svg_document_resource_tracker_);
   visitor->Trace(main_frame_);
   visitor->Trace(previous_main_frame_for_local_swap_);
   visitor->Trace(plugin_data_);
@@ -1435,8 +1436,8 @@ void Page::WillBeDestroyed() {
     next_related_page_ = nullptr;
   }
 
-  if (svg_resource_document_cache_) {
-    svg_resource_document_cache_->WillBeDestroyed();
+  if (svg_document_resource_tracker_) {
+    svg_document_resource_tracker_->WillBeDestroyed();
   }
 
   if (scrolling_coordinator_)

@@ -37,6 +37,7 @@
 #include "ui/color/color_recipe.h"
 #include "ui/color/color_test_ids.h"
 #include "ui/color/dynamic_color/palette_factory.h"
+#include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
@@ -183,6 +184,11 @@ BrowserThemePackTest::BrowserThemePackTest()
 // static
 std::map<int, SkColor> BrowserThemePackTest::GetDefaultColorMap() {
   std::map<int, SkColor> colors;
+
+  for (int i = TP::COLOR_BOOKMARK_TEXT; i <= TP::COLOR_TOOLBAR_TEXT; ++i) {
+    colors[i] = GetDefaultColor(i);
+  }
+
   GenerateDefaultFrameColor(&colors, TP::COLOR_FRAME_ACTIVE, TP::TINT_FRAME,
                             false);
   GenerateDefaultFrameColor(&colors, TP::COLOR_FRAME_INACTIVE,
@@ -191,12 +197,6 @@ std::map<int, SkColor> BrowserThemePackTest::GetDefaultColorMap() {
                             TP::TINT_FRAME, true);
   GenerateDefaultFrameColor(&colors, TP::COLOR_FRAME_INACTIVE_INCOGNITO,
                             TP::TINT_FRAME_INACTIVE, true);
-
-  // For the rest, use default colors.
-  for (int i = TP::COLOR_FRAME_INACTIVE_INCOGNITO + 1;
-       i <= TP::COLOR_CONTROL_BUTTON_BACKGROUND; ++i) {
-    colors[i] = GetDefaultColor(i);
-  }
 
   return colors;
 }
@@ -213,7 +213,9 @@ void BrowserThemePackTest::VerifyColorMap(
 }
 
 void BrowserThemePackTest::LoadColorJSON(const std::string& json) {
-  LoadColorDictionary(&base::JSONReader::Read(json)->GetDict());
+  LoadColorDictionary(
+      &base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+           ->GetDict());
 }
 
 void BrowserThemePackTest::LoadColorDictionary(const base::Value::Dict* value) {
@@ -222,7 +224,9 @@ void BrowserThemePackTest::LoadColorDictionary(const base::Value::Dict* value) {
 }
 
 void BrowserThemePackTest::LoadTintJSON(const std::string& json) {
-  LoadTintDictionary(&base::JSONReader::Read(json)->GetDict());
+  LoadTintDictionary(
+      &base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+           ->GetDict());
 }
 
 void BrowserThemePackTest::LoadTintDictionary(const base::Value::Dict* value) {
@@ -230,7 +234,9 @@ void BrowserThemePackTest::LoadTintDictionary(const base::Value::Dict* value) {
 }
 
 void BrowserThemePackTest::LoadDisplayPropertiesJSON(const std::string& json) {
-  LoadDisplayPropertiesDictionary(&base::JSONReader::Read(json)->GetDict());
+  LoadDisplayPropertiesDictionary(
+      &base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+           ->GetDict());
 }
 
 void BrowserThemePackTest::LoadDisplayPropertiesDictionary(
@@ -256,7 +262,8 @@ void BrowserThemePackTest::ResetTabGroupColorPaletteShades() {
 void BrowserThemePackTest::LoadTabGroupColorPaletteShadesJSON(
     const std::string& json) {
   LoadTabGroupColorPaletteShadesDictionary(
-      &base::JSONReader::Read(json)->GetDict());
+      &base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+           ->GetDict());
 }
 
 void BrowserThemePackTest::LoadTabGroupColorPaletteShadesDictionary(
@@ -324,11 +331,12 @@ void BrowserThemePackTest::BuildFromUnpackedExtension(
       deserializer.Deserialize(nullptr, &error);
   EXPECT_EQ("", error);
   ASSERT_TRUE(valid_value.get() && valid_value->is_dict());
+  std::u16string utf16_error;
   scoped_refptr<Extension> extension(Extension::Create(
       extension_path, extensions::mojom::ManifestLocation::kInvalidLocation,
-      valid_value->GetDict(), Extension::NO_FLAGS, &error));
+      valid_value->GetDict(), Extension::NO_FLAGS, &utf16_error));
   ASSERT_TRUE(extension.get());
-  ASSERT_EQ("", error);
+  ASSERT_EQ(u"", utf16_error);
   BrowserThemePack::BuildFromExtension(extension.get(), pack);
 }
 
@@ -605,6 +613,15 @@ SkColor BrowserThemePackTest::BuildThirdOpacity(SkColor color_link) {
 
 // static
 SkColor BrowserThemePackTest::GetDefaultColor(int id) {
+  // These colors are no longer provided by `ThemeProperties`, since the theme
+  // code does not query for them directly.
+  if (id == TP::COLOR_BOOKMARK_TEXT || id == TP::COLOR_OMNIBOX_BACKGROUND ||
+      id == TP::COLOR_OMNIBOX_TEXT ||
+      id == TP::COLOR_TAB_FOREGROUND_ACTIVE_FRAME_ACTIVE ||
+      id == TP::COLOR_TOOLBAR_BUTTON_ICON) {
+    return gfx::kPlaceholderColor;
+  }
+
   // Direct incognito IDs need to be mapped back to the non-incognito versions
   // (plus passing "true" for |incognito|) to avoid DCHECK failures.
   switch (id) {

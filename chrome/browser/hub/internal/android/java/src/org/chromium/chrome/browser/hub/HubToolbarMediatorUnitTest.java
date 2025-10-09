@@ -91,6 +91,7 @@ public class HubToolbarMediatorUnitTest {
     @Mock private Pane mIncognitoTabSwitcherPane;
     @Mock private Pane mTabGroupsPane;
     @Mock private Pane mBookmarksPane;
+    @Mock private Pane mHistoryPane;
     @Mock private PaneOrderController mPaneOrderController;
     @Mock private DisplayButtonData mDisplayButtonData;
     @Mock private PropertyObserver<PropertyKey> mPropertyObserver;
@@ -109,6 +110,12 @@ public class HubToolbarMediatorUnitTest {
     private ObservableSupplierImpl<Boolean> mRegularHubSearchEnabledStateSupplier;
     private ObservableSupplierImpl<Boolean> mIncognitoHubSearchEnabledStateSupplier;
     private ObservableSupplierImpl<Boolean> mGroupsHubSearchEnabledStateSupplier;
+    private ObservableSupplierImpl<Boolean> mHistoryHubSearchEnabledStateSupplier;
+    private ObservableSupplierImpl<Boolean> mTabSwitcherSearchBoxVisibilitySupplier;
+    private ObservableSupplierImpl<Boolean> mIncognitoTabSwitcherSearchBoxVisibilitySupplier;
+    private ObservableSupplierImpl<Boolean> mTabGroupsSearchBoxVisibilitySupplier;
+    private ObservableSupplierImpl<Boolean> mBookmarksSearchBoxVisibilitySupplier;
+    private ObservableSupplierImpl<Boolean> mHistorySearchBoxVisibilitySupplier;
     private ObservableSupplierImpl<DisplayButtonData>
             mIncognitoTabSwitcherReferenceButtonDataSupplier2;
     private ObservableSupplierImpl<Tab> mCurrentTabSupplier;
@@ -123,6 +130,12 @@ public class HubToolbarMediatorUnitTest {
         mRegularHubSearchEnabledStateSupplier = new ObservableSupplierImpl<>();
         mIncognitoHubSearchEnabledStateSupplier = new ObservableSupplierImpl<>();
         mGroupsHubSearchEnabledStateSupplier = new ObservableSupplierImpl<>();
+        mHistoryHubSearchEnabledStateSupplier = new ObservableSupplierImpl<>();
+        mTabSwitcherSearchBoxVisibilitySupplier = new ObservableSupplierImpl<>();
+        mIncognitoTabSwitcherSearchBoxVisibilitySupplier = new ObservableSupplierImpl<>();
+        mTabGroupsSearchBoxVisibilitySupplier = new ObservableSupplierImpl<>();
+        mBookmarksSearchBoxVisibilitySupplier = new ObservableSupplierImpl<>();
+        mHistorySearchBoxVisibilitySupplier = new ObservableSupplierImpl<>();
         mCurrentTabSupplier = new ObservableSupplierImpl<>();
         mFocusedPaneSupplier = new ObservableSupplierImpl<>();
         mModel =
@@ -144,13 +157,26 @@ public class HubToolbarMediatorUnitTest {
                 .thenReturn(mIncognitoTabSwitcherPane);
         when(mPaneManager.getPaneForId(PaneId.TAB_GROUPS)).thenReturn(mTabGroupsPane);
         when(mPaneManager.getPaneForId(PaneId.BOOKMARKS)).thenReturn(mBookmarksPane);
+        when(mPaneManager.getPaneForId(PaneId.HISTORY)).thenReturn(mHistoryPane);
 
         when(mTabSwitcherPane.getHubSearchEnabledStateSupplier())
                 .thenReturn(mRegularHubSearchEnabledStateSupplier);
+        when(mTabSwitcherPane.getHubSearchBoxVisibilitySupplier())
+                .thenReturn(mTabSwitcherSearchBoxVisibilitySupplier);
+        when(mIncognitoTabSwitcherPane.getHubSearchBoxVisibilitySupplier())
+                .thenReturn(mIncognitoTabSwitcherSearchBoxVisibilitySupplier);
+        when(mTabGroupsPane.getHubSearchBoxVisibilitySupplier())
+                .thenReturn(mTabGroupsSearchBoxVisibilitySupplier);
+        when(mBookmarksPane.getHubSearchBoxVisibilitySupplier())
+                .thenReturn(mBookmarksSearchBoxVisibilitySupplier);
+        when(mHistoryPane.getHubSearchBoxVisibilitySupplier())
+                .thenReturn(mHistorySearchBoxVisibilitySupplier);
         when(mIncognitoTabSwitcherPane.getHubSearchEnabledStateSupplier())
                 .thenReturn(mIncognitoHubSearchEnabledStateSupplier);
         when(mTabGroupsPane.getHubSearchEnabledStateSupplier())
                 .thenReturn(mGroupsHubSearchEnabledStateSupplier);
+        when(mHistoryPane.getHubSearchEnabledStateSupplier())
+                .thenReturn(mHistoryHubSearchEnabledStateSupplier);
 
         when(mTabSwitcherPane.getReferenceButtonDataSupplier())
                 .thenReturn(mTabSwitcherReferenceButtonDataSupplier1);
@@ -164,6 +190,7 @@ public class HubToolbarMediatorUnitTest {
         when(mIncognitoTabSwitcherPane.getColorScheme()).thenReturn(HubColorScheme.INCOGNITO);
 
         when(mTabGroupsPane.getPaneId()).thenReturn(PaneId.TAB_GROUPS);
+        when(mHistoryPane.getPaneId()).thenReturn(PaneId.HISTORY);
 
         mTabSwitcherReferenceButtonDataSupplier1.set(mDisplayButtonData);
         mIncognitoTabSwitcherReferenceButtonDataSupplier2.set(mDisplayButtonData);
@@ -581,6 +608,7 @@ public class HubToolbarMediatorUnitTest {
 
     @Test
     @SmallTest
+    @EnableFeatures(OmniboxFeatureList.ANDROID_HUB_SEARCH_TAB_GROUPS)
     public void testSearchBoxToGroups_TogglePanesSearchBoxVisibility_Tablet() {
         mConfiguration.screenWidthDp = WIDE_SCREEN_WIDTH_DP;
 
@@ -651,6 +679,11 @@ public class HubToolbarMediatorUnitTest {
         mFocusedPaneSupplier.set(mTabGroupsPane);
         mModel.get(SEARCH_LISTENER).run();
         verify(mSearchActivityClient, times(3)).requestOmniboxForResult(any());
+
+        // Toggle to history pane, which is not enabled for hub search
+        mFocusedPaneSupplier.set(mHistoryPane);
+        mModel.get(SEARCH_LISTENER).run();
+        verify(mSearchActivityClient, times(3)).requestOmniboxForResult(any());
         histograms.assertExpected();
     }
 
@@ -696,6 +729,11 @@ public class HubToolbarMediatorUnitTest {
 
         // Toggle to tab groups pane
         mFocusedPaneSupplier.set(mTabGroupsPane);
+        mModel.get(SEARCH_LISTENER).run();
+        verify(mSearchActivityClient, times(3)).requestOmniboxForResult(any());
+
+        // Toggle to history pane, which is not enabled for hub search
+        mFocusedPaneSupplier.set(mHistoryPane);
         mModel.get(SEARCH_LISTENER).run();
         verify(mSearchActivityClient, times(3)).requestOmniboxForResult(any());
         histograms.assertExpected();
@@ -822,6 +860,39 @@ public class HubToolbarMediatorUnitTest {
         // Should now show search box (phone behavior)
         assertTrue(mModel.get(SEARCH_BOX_VISIBLE));
         assertFalse(mModel.get(SEARCH_LOUPE_VISIBLE));
+    }
+
+    @Test
+    @SmallTest
+    public void testSearchBoxVisibilitySupplier_PaneSupplier() {
+        when(mTabSwitcherPane.getPaneId()).thenReturn(PaneId.TAB_SWITCHER);
+        mFocusedPaneSupplier.set(mTabSwitcherPane);
+        HubToolbarMediator mediator =
+                new HubToolbarMediator(
+                        Robolectric.buildActivity(Activity.class).get(),
+                        mModel,
+                        mPaneManager,
+                        mTracker,
+                        mSearchActivityClient,
+                        mCurrentTabSupplier,
+                        mExitHubRunnable);
+        assertTrue(mModel.get(SEARCH_BOX_VISIBLE));
+
+        // Setting supplier to false should hide the search box.
+        mTabSwitcherSearchBoxVisibilitySupplier.set(false);
+        assertFalse(mModel.get(SEARCH_BOX_VISIBLE));
+
+        // Setting supplier to true should show it again.
+        mTabSwitcherSearchBoxVisibilitySupplier.set(true);
+        assertTrue(mModel.get(SEARCH_BOX_VISIBLE));
+
+        // On tablet, search box should remain hidden regardless of supplier.
+        mConfiguration.screenWidthDp = WIDE_SCREEN_WIDTH_DP;
+        mediator.triggerConfigurationChangeForTesting(mConfiguration);
+        assertFalse(mModel.get(SEARCH_BOX_VISIBLE));
+
+        mTabSwitcherSearchBoxVisibilitySupplier.set(false);
+        assertFalse(mModel.get(SEARCH_BOX_VISIBLE));
     }
 
     private void mockSearchActivityClient() {

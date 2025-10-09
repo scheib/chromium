@@ -6,7 +6,10 @@
 
 #include <memory>
 
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "components/sync/base/features.h"
+#include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/test/data_type_store_test_util.h"
 #include "components/sync/test/mock_data_type_local_change_processor.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -15,6 +18,12 @@
 namespace data_sharing::personal_collaboration_data {
 
 namespace {
+
+using testing::_;
+using testing::Return;
+using testing::ReturnRef;
+
+const char kStorageKey[] = "storage_key";
 
 class MockObserver : public PersonalCollaborationDataService::Observer {
  public:
@@ -33,14 +42,30 @@ class PersonalCollaborationDataServiceImplTest : public testing::Test {
  public:
   PersonalCollaborationDataServiceImplTest()
       : data_type_store_(
-            syncer::DataTypeStoreTestUtil::CreateInMemoryStoreForTest()) {}
+            syncer::DataTypeStoreTestUtil::CreateInMemoryStoreForTest()) {
+    feature_list_.InitAndEnableFeature(syncer::kSyncSharedTabGroupAccountData);
+  }
 
   void SetUp() override {
+    ON_CALL(mock_processor_, IsTrackingMetadata()).WillByDefault(Return(true));
+    ON_CALL(mock_processor_, GetPossiblyTrimmedRemoteSpecifics(_))
+        .WillByDefault(ReturnRef(sync_pb::EntitySpecifics::default_instance()));
+
+    base::RunLoop run_loop;
+    base::RepeatingClosure quit_closure = run_loop.QuitClosure();
+    EXPECT_CALL(mock_processor_, ModelReadyToSync).WillOnce([&]() {
+      quit_closure.Run();
+    });
+    EXPECT_CALL(mock_observer_, OnInitialized());
+
     service_ = std::make_unique<PersonalCollaborationDataServiceImpl>(
         mock_processor_.CreateForwardingProcessor(),
         syncer::DataTypeStoreTestUtil::FactoryForForwardingStore(
             data_type_store_.get()));
     service_->AddObserver(&mock_observer_);
+
+    run_loop.Run();
+    ASSERT_TRUE(service_->IsInitialized());
   }
 
  protected:
@@ -49,15 +74,93 @@ class PersonalCollaborationDataServiceImplTest : public testing::Test {
   testing::NiceMock<syncer::MockDataTypeLocalChangeProcessor> mock_processor_;
   std::unique_ptr<PersonalCollaborationDataServiceImpl> service_;
   testing::StrictMock<MockObserver> mock_observer_;
+  base::test::ScopedFeatureList feature_list_;
 };
 
-TEST_F(PersonalCollaborationDataServiceImplTest, TestServiceConstruction) {
-  EXPECT_FALSE(service_->IsInitialized());
+TEST_F(PersonalCollaborationDataServiceImplTest,
+       ShouldQueueActionsBeforeInitialization) {
+  // Create a service without waiting for it to be initialized.
+  auto data_type_store =
+      syncer::DataTypeStoreTestUtil::CreateInMemoryStoreForTest();
+  testing::NiceMock<syncer::MockDataTypeLocalChangeProcessor> mock_processor;
+  ON_CALL(mock_processor, IsTrackingMetadata()).WillByDefault(Return(false));
+  ON_CALL(mock_processor, GetPossiblyTrimmedRemoteSpecifics(_))
+      .WillByDefault(ReturnRef(sync_pb::EntitySpecifics::default_instance()));
+
+  auto service = std::make_unique<PersonalCollaborationDataServiceImpl>(
+      mock_processor.CreateForwardingProcessor(),
+      syncer::DataTypeStoreTestUtil::FactoryForForwardingStore(
+          data_type_store.get()));
+  MockObserver mock_observer;
+  service->AddObserver(&mock_observer);
+
+  ASSERT_FALSE(service->IsInitialized());
+
+  // These actions should be queued.
+  EXPECT_CALL(mock_processor, Put(_, _, _)).Times(0);
+  EXPECT_CALL(mock_processor, Delete(_, _, _)).Times(0);
+  const std::string kStorageKey1 = "storage_key1";
+  const std::string kStorageKey2 = "storage_key2";
+
+  service->CreateOrUpdateSpecifics(
+      PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics,
+      kStorageKey1,
+      base::BindOnce(
+          [](sync_pb::SharedTabGroupAccountDataSpecifics* specifics) {
+            specifics->mutable_shared_tab_details();
+          }));
+  service->CreateOrUpdateSpecifics(
+      PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics,
+      kStorageKey2,
+      base::BindOnce(
+          [](sync_pb::SharedTabGroupAccountDataSpecifics* specifics) {
+            specifics->mutable_shared_tab_details();
+          }));
+  service->DeleteSpecifics(
+      PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics,
+      kStorageKey2);
+  testing::Mock::VerifyAndClearExpectations(&mock_processor);
+
+  // Now, let the service initialize. The queued actions should be executed.
+  base::RunLoop run_loop;
+  EXPECT_CALL(mock_observer, OnInitialized()).WillOnce([&]() {
+    run_loop.Quit();
+  });
+  ON_CALL(mock_processor, IsTrackingMetadata()).WillByDefault(Return(true));
+
+  // The service queues a Put for key1, a Put for key2, then a Delete for key2.
+  EXPECT_CALL(mock_processor, Put(_, _, _)).Times(2);
+  EXPECT_CALL(mock_processor, Delete(_, _, _)).Times(1);
+
+  // The store will finish loading and call ModelReadyToSync, which will trigger
+  // OnInitialized on the service, which will run the queued tasks.
+  run_loop.Run();
+  ASSERT_TRUE(service->IsInitialized());
+}
+
+TEST_F(PersonalCollaborationDataServiceImplTest,
+       CreateOrUpdateSpecificsForTab) {
+  sync_pb::EntitySpecifics entity_specifics;
+  entity_specifics.mutable_shared_tab_group_account_data();
+  EXPECT_CALL(mock_processor_, GetPossiblyTrimmedRemoteSpecifics(_))
+      .WillOnce(ReturnRef(entity_specifics));
+  service_->CreateOrUpdateSpecifics(
+      PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics,
+      kStorageKey,
+      base::BindOnce(
+          [](sync_pb::SharedTabGroupAccountDataSpecifics* specifics) {
+            specifics->mutable_shared_tab_details();
+          }));
+  std::optional<sync_pb::SharedTabGroupAccountDataSpecifics> specifics =
+      service_->GetSpecifics(
+          PersonalCollaborationDataService::SpecificsType::kSharedTabSpecifics,
+          kStorageKey);
+  EXPECT_TRUE(specifics.has_value());
+  EXPECT_TRUE(specifics->has_shared_tab_details());
 }
 
 TEST_F(PersonalCollaborationDataServiceImplTest,
        OnEntityAddedOrUpdatedFromSync_SharedTabGroup) {
-  const std::string kStorageKey = "test_key";
   sync_pb::SharedTabGroupAccountDataSpecifics specifics;
   specifics.mutable_shared_tab_group_details();
 
@@ -71,7 +174,6 @@ TEST_F(PersonalCollaborationDataServiceImplTest,
 
 TEST_F(PersonalCollaborationDataServiceImplTest,
        OnEntityAddedOrUpdatedFromSync_SharedTab) {
-  const std::string kStorageKey = "test_key";
   sync_pb::SharedTabGroupAccountDataSpecifics specifics;
   specifics.mutable_shared_tab_details();
 

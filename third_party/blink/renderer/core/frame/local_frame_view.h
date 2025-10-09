@@ -790,7 +790,7 @@ class CORE_EXPORT LocalFrameView final
   void EnqueueStartOfLifecycleTask(base::OnceClosure);
 
   // For testing way to steal the start-of-lifecycle tasks.
-  WTF::Vector<base::OnceClosure> TakeStartOfLifecycleTasksForTest() {
+  Vector<base::OnceClosure> TakeStartOfLifecycleTasksForTest() {
     return std::move(start_of_lifecycle_tasks_);
   }
 
@@ -1037,7 +1037,9 @@ class CORE_EXPORT LocalFrameView final
       ComputeIntersectionsContext&) override;
   void DeliverSynchronousIntersectionObservations();
 
-  bool RunScrollSnapshotClientSteps();
+  // https://drafts.csswg.org/cssom-view/#post-layout-snapshot
+  bool RunSnapshotPostLayoutStateSteps();
+
   bool ShouldDeferLayoutSnap() const;
 
   bool NotifyResizeObservers();
@@ -1078,7 +1080,7 @@ class CORE_EXPORT LocalFrameView final
 
   // Append view transition requests from this view into the given vector.
   void AppendViewTransitionRequests(
-      WTF::Vector<std::unique_ptr<ViewTransitionRequest>>&);
+      Vector<std::unique_ptr<ViewTransitionRequest>>&);
 
   bool AnyFrameIsPrintingOrPaintingPreview();
 
@@ -1260,7 +1262,7 @@ class CORE_EXPORT LocalFrameView final
   std::unique_ptr<StickyAdDetector> sticky_ad_detector_;
 
   // These tasks will be run at the beginning of the next lifecycle.
-  WTF::Vector<base::OnceClosure> start_of_lifecycle_tasks_;
+  Vector<base::OnceClosure> start_of_lifecycle_tasks_;
 
   // Filter used for inverting the document background for forced darkening.
   std::unique_ptr<DarkModeFilter> dark_mode_filter_;

@@ -37,12 +37,20 @@ class TabStripModelAdapterImpl : public TabStripModelAdapter {
   void MoveCollection(const NodeId& id, const Position& position) override;
   mojom::ContainerPtr GetTabStripTopology() override;
   std::optional<const tab_groups::TabGroupId> FindGroupIdFor(
-      const tabs::TabCollection::Handle& collection_handle) override;
+      const tabs::TabCollection::Handle& collection_handle) const override;
   void UpdateTabGroupVisuals(
       const tab_groups::TabGroupId& group,
       const tab_groups::TabGroupVisualData& visual_data) override;
   void SetTabSelection(const std::vector<tabs::TabHandle>& handles_to_select,
                        tabs::TabHandle to_activate) override;
+  std::optional<tab_groups::TabGroupId> GetTabGroupForTab(
+      int index) const override;
+  tabs::TabCollectionHandle GetCollectionHandleForTabGroupId(
+      tab_groups::TabGroupId group_id) const override;
+  tabs_api::Position GetPositionForAbsoluteIndex(
+      int absolute_index) const override;
+  InsertionParams CalculateInsertionParams(
+      const std::optional<tabs_api::Position>& pos) const override;
   // TabStripModelAdapterImpl uses passkeys to access experimental API methods
   // in TabStripModel or TabCollections.
   // PassKeyForTesting provides a passkey for testing purposes. Note that by
@@ -53,6 +61,9 @@ class TabStripModelAdapterImpl : public TabStripModelAdapter {
   }
 
  private:
+  tabs::TabCollectionHandle GetPinnedTabsCollectionHandle() const;
+  tabs::TabCollectionHandle GetUnpinnedTabsCollectionHandle() const;
+
   raw_ptr<TabStripModel> tab_strip_model_;
 };
 

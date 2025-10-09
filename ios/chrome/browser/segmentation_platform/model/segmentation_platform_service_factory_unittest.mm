@@ -33,6 +33,7 @@
 #import "ios/chrome/browser/commerce/model/shopping_service_factory.h"
 #import "ios/chrome/browser/segmentation_platform/model/ukm_data_manager_test_utils.h"
 #import "ios/chrome/browser/shared/model/profile/test/test_profile_ios.h"
+#import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
@@ -127,7 +128,6 @@ class SegmentationPlatformServiceFactoryTest : public PlatformTest {
         {{optimization_guide::features::kOptimizationTargetPrediction, {}},
          {features::kSegmentationPlatformFeature, {}},
          {features::kSegmentationPlatformUkmEngine, {}},
-         {features::kContextualPageActionShareModel, {}},
          {features::kSegmentationPlatformEphemeralCardRanker, {}},
          {commerce::kPriceTrackingPromo, {}}},
         {});
@@ -225,7 +225,7 @@ class SegmentationPlatformServiceFactoryTest : public PlatformTest {
               .Then(SegmentationPlatformServiceFactory::GetDefaultFactory()));
       builder.AddTestingFactory(
           commerce::ShoppingServiceFactory::GetInstance(),
-          base::BindRepeating([](web::BrowserState*)
+          base::BindRepeating([](ProfileIOS* profile)
                                   -> std::unique_ptr<KeyedService> {
             std::unique_ptr<bookmarks::BookmarkNode> bookmark =
                 std::make_unique<bookmarks::BookmarkNode>(
@@ -245,12 +245,11 @@ class SegmentationPlatformServiceFactoryTest : public PlatformTest {
     ProfileData(ProfileData&) = delete;
 
     // Setup environment required to create the SegmentationPlatformService.
-    web::BrowserState* SetUpEnvironment(web::BrowserState* context) {
-      ProfileIOS* setup_profile = ProfileIOS::FromBrowserState(context);
+    ProfileIOS* SetUpEnvironment(ProfileIOS* setup_profile) {
       setup_profile->GetPrefs()->SetString(kSegmentationClientResultPrefs,
                                            result_pref);
       test_utils->SetupForProfile(setup_profile);
-      return context;
+      return setup_profile;
     }
 
     const std::string result_pref;
@@ -313,6 +312,7 @@ class SegmentationPlatformServiceFactoryTest : public PlatformTest {
 
   std::unique_ptr<UkmDataManagerTestUtils> test_utils_;
   std::unique_ptr<ProfileData> profile_data_;
+  IOSChromeScopedTestingLocalState scoped_testing_local_state_;
 };
 
 TEST_F(SegmentationPlatformServiceFactoryTest, Test) {

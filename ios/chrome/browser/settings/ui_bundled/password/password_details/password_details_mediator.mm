@@ -270,6 +270,7 @@ bool AreMatchingCredentials(const CredentialUIEntry& credential,
 - (void)disconnect {
   _passwordCheckObserver.reset();
   _manager = nullptr;
+  _prefService = nullptr;
 }
 
 - (void)removeCredential:(CredentialDetails*)credentialDetails {

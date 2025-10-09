@@ -47,7 +47,6 @@ IPC_STRUCT_TRAITS_END()
 
 IPC_STRUCT_TRAITS_BEGIN(gpu::Capabilities)
   IPC_STRUCT_TRAITS_MEMBER(max_texture_size)
-  IPC_STRUCT_TRAITS_MEMBER(max_copy_texture_chromium_size)
 
   IPC_STRUCT_TRAITS_MEMBER(egl_image_external)
   IPC_STRUCT_TRAITS_MEMBER(texture_format_bgra8888)
@@ -96,7 +95,6 @@ IPC_STRUCT_TRAITS_BEGIN(gpu::GLCapabilities)
   IPC_STRUCT_TRAITS_MEMBER(max_vertex_uniform_vectors)
   IPC_STRUCT_TRAITS_MEMBER(num_compressed_texture_formats)
   IPC_STRUCT_TRAITS_MEMBER(num_shader_binary_formats)
-  IPC_STRUCT_TRAITS_MEMBER(bind_generates_resource_chromium)
 
   IPC_STRUCT_TRAITS_MEMBER(max_3d_texture_size)
   IPC_STRUCT_TRAITS_MEMBER(max_array_texture_layers)

@@ -166,7 +166,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </variants>
 
 <histogram name="Privacy.3PCD.AdsHeuristicAddedToOverrides"
-    enum="AdsHeuristicCookieOverride" expires_after="2026-01-18">
+    enum="AdsHeuristicCookieOverride" expires_after="2026-03-22">
   <owner>linnan@chromium.org</owner>
   <owner>src/chrome/browser/tpcd/OWNERS</owner>
   <summary>
@@ -179,8 +179,38 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
   </summary>
 </histogram>
 
+<histogram name="Privacy.3PCD.RollbackNotice.Action"
+    enum="RollBack3pcdNoticeAction" expires_after="2026-03-31">
+  <owner>fmacintosh@google.com</owner>
+  <owner>koilos@google.com</owner>
+  <summary>
+    Records the user action, if any, taken on the 3PCD rollback notice.
+  </summary>
+</histogram>
+
+<histogram name="Privacy.3PCD.RollbackNotice.AutomaticallyDismissed"
+    enum="Boolean" expires_after="2026-03-31">
+  <owner>fmacintosh@google.com</owner>
+  <owner>koilos@google.com</owner>
+  <summary>
+    Logged when the 3PCD rollback notice is dismissed. Records whether this
+    dismissal was automatic or the result of a user action.
+  </summary>
+</histogram>
+
+<histogram name="Privacy.3PCD.RollbackNotice.ShouldShow" enum="Boolean"
+    expires_after="2026-03-31">
+  <owner>fmacintosh@google.com</owner>
+  <owner>koilos@google.com</owner>
+  <summary>
+    Logged at startup after the user is removed from the 3PCD 1% experiment.
+    Records whether or not the user should be notified of this rollback via a
+    rollback notice.
+  </summary>
+</histogram>
+
 <histogram name="Privacy.3PCD.SecCookieDeprecationHeaderStatus"
-    enum="SecCookieDeprecationHeaderStatus" expires_after="2026-01-18">
+    enum="SecCookieDeprecationHeaderStatus" expires_after="2026-03-22">
   <owner>linnan@chromium.org</owner>
   <owner>src/chrome/browser/tpcd/OWNERS</owner>
   <summary>
@@ -216,20 +246,6 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
   <summary>
     Tracks whether the tabs deletion is disabled in Clear Browsing Data due to
     the user having multiple windows.
-  </summary>
-</histogram>
-
-<histogram name="Privacy.ClearOnExitSyncEvent" enum="ClearOnExitSyncEvent"
-    expires_after="M103">
-  <owner>sauski@google.com</owner>
-  <owner>chrome-privacy-controls@google.com</owner>
-  <summary>
-    Interactions between sync and the cookies clear on exit setting. Only
-    recorded when the user has cookies clear on exit enabled.
-
-    Recorded on all profiles, including for profiles such as guest profiles that
-    do not allow modification of this setting. (This value logged on those cases
-    is the default value for the setting.)
   </summary>
 </histogram>
 
@@ -328,7 +344,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DeleteBrowsingData.Dialog"
-    enum="DeleteBrowsingDataDialogAction" expires_after="2026-01-18">
+    enum="DeleteBrowsingDataDialogAction" expires_after="2026-03-22">
   <owner>fsenra@google.com</owner>
   <owner>alimariam@google.com</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
@@ -342,7 +358,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="Privacy.DeleteBrowsingData.Duration.TabsClosureAnimationDuration"
-    units="microseconds" expires_after="2025-12-14">
+    units="microseconds" expires_after="2026-02-22">
   <owner>fsenra@chromium.org</owner>
   <owner>alimariam@chromium.org</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
@@ -357,7 +373,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="Privacy.DeleteBrowsingData.Duration.TabsClosureAnimationStartDelay"
-    units="microseconds" expires_after="2025-12-14">
+    units="microseconds" expires_after="2026-02-22">
   <owner>fsenra@chromium.org</owner>
   <owner>alimariam@chromium.org</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
@@ -389,7 +405,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.BounceCategory{DIPSRedirectType}{DIPSCookieMode}"
-    enum="DIPSRedirectCategory" expires_after="2025-12-14">
+    enum="DIPSRedirectCategory" expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -406,7 +422,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.BounceStatusCode.{DIPSCachedResponseStatus}"
-    enum="HttpResponseCode" expires_after="2025-12-14">
+    enum="HttpResponseCode" expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -417,7 +433,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.ClearedSitesCount{DIPSCookieMode}" units="sites"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -442,7 +458,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.Database.Operation.{DIPSDatabaseOperation}Time"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>etienneb@chromium.org</owner>
   <owner>jdh@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
@@ -470,7 +486,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.DatabaseErrors" enum="SqliteLoggedResultCode"
-    expires_after="2025-12-14">
+    expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -504,7 +520,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.DatabaseSize" units="KB"
-    expires_after="2025-12-21">
+    expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -535,7 +551,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.DeletionLatency2" units="ms"
-    expires_after="2025-12-14">
+    expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -550,7 +566,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.Deletion{DIPSCookieMode}"
-    enum="DIPSDeletionAction" expires_after="2026-01-18">
+    enum="DIPSDeletionAction" expires_after="2026-03-22">
   <owner>njeunje@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -564,7 +580,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.DIPSErrorCodes" enum="DIPSErrorCode"
-    expires_after="2026-01-11">
+    expires_after="2026-03-15">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -580,7 +596,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.ServerBounceChainDelay" units="ms"
-    expires_after="2025-12-14">
+    expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -591,7 +607,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.DIPS.ServerBounceDelay" units="ms"
-    expires_after="2025-12-14">
+    expires_after="2026-02-22">
   <owner>liu@chromium.org</owner>
   <owner>src/content/browser/btm/OWNERS</owner>
   <summary>
@@ -647,7 +663,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.PageInfo.SiteExceptionsScopeType"
-    enum="ContentSettingPatternScope" expires_after="2025-12-28">
+    enum="ContentSettingPatternScope" expires_after="2026-03-01">
   <owner>olesiamarukhno@google.com</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
   <summary>
@@ -661,7 +677,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.QuickDelete" enum="QuickDeleteAction"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>fsenra@google.com</owner>
   <owner>zalmashni@google.com</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
@@ -682,7 +698,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.SiteExceptionsAdded.ContentSettingType"
-    enum="ContentType" expires_after="2025-12-28">
+    enum="ContentType" expires_after="2026-03-01">
   <owner>olesiamarukhno@google.com</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
   <summary>
@@ -692,7 +708,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="Privacy.SiteExceptionsAdded.ScopeType"
-    enum="ContentSettingPatternScope" expires_after="2025-12-28">
+    enum="ContentSettingPatternScope" expires_after="2026-03-01">
   <owner>olesiamarukhno@google.com</owner>
   <owner>chrome-browser-privacy-team@google.com</owner>
   <summary>
@@ -808,7 +824,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.ActSurvey.Status"
-    enum="PrivacySandboxActSurveyStatus" expires_after="2026-01-11">
+    enum="PrivacySandboxActSurveyStatus" expires_after="2026-03-15">
   <owner>kjarosz@google.com</owner>
   <owner>polonium@google.com</owner>
   <summary>
@@ -831,7 +847,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.AggregationService.KeyFetcher.Status2"
     enum="PrivacySandboxAggregationServiceKeyFetcherStatus"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -915,8 +931,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.ScheduledRequests.AssemblyTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -929,10 +944,10 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.ScheduledRequests.DelayFromOriginalReportTime"
-    units="ms" expires_after="2025-12-14">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-02-22">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the duration of time between a request's original scheduled report
     time and the actual send completion time. This delay may be expected, e.g.
@@ -946,7 +961,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.ScheduledRequests.NumRetriesBeforeSuccess"
-    units="retries" expires_after="2025-12-28">
+    units="retries" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -958,8 +973,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.ScheduledRequests.SendAttemptTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -971,7 +985,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.AggregationService.ScheduledRequests.Status"
-    enum="AggregationServiceObserverReportStatus" expires_after="2025-12-14">
+    enum="AggregationServiceObserverReportStatus" expires_after="2026-02-22">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -982,10 +996,10 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.AggregationService.Scheduler.TimerFireDelay"
-    units="ms" expires_after="2025-10-26">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the difference between the time the AggregatableReportScheduler
     timer actually fires and when it was supposed to fire. A large positive
@@ -998,8 +1012,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.Storage.RequestsRetrievalTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1010,7 +1023,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.AggregationService.Storage.Sql.CreationTime2"
-    units="ms" expires_after="2025-11-01">
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1022,8 +1035,8 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.AggregationService.Storage.Sql.Error"
-    enum="SqliteLoggedResultCode" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    enum="SqliteLoggedResultCode" expires_after="2026-05-01">
+  <owner>alexmt@chromium.org</owner>
   <owner>apaseltiner@chromium.org</owner>
   <summary>
     Records SQLite database errors encountered by the aggregation service's
@@ -1035,7 +1048,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.AggregationService.Storage.Sql.InitStatus"
     enum="PrivacySandboxAggregationServiceStorageSqlInitStatus"
-    expires_after="2025-11-01">
+    expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1046,8 +1059,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.Storage.Sql.RequestDelayFromUpdatedReportTime2"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1065,7 +1077,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.Storage.Sql.StoredRequestsPerReportingOrigin"
-    units="requests" expires_after="2025-10-26">
+    units="requests" expires_after="2026-04-26">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1077,7 +1089,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.Storage.Sql.StoreRequestHasCapacity"
-    enum="Boolean" expires_after="2025-10-26">
+    enum="Boolean" expires_after="2026-04-26">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1089,8 +1101,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.UnscheduledRequests.AssemblyTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1105,8 +1116,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.UnscheduledRequests.DelayFromOriginalReportTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1122,8 +1132,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.AggregationService.UnscheduledRequests.SendAttemptTime"
-    units="ms" expires_after="2025-11-01">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1139,7 +1148,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.AggregationService.UnscheduledRequests.Status"
-    enum="AggregationServiceObserverReportStatus" expires_after="2026-01-04">
+    enum="AggregationServiceObserverReportStatus" expires_after="2026-03-08">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1188,7 +1197,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.Attestations.EstimateMemoryUsage.AttestationsMap"
-    units="KB" expires_after="2026-01-18">
+    units="KB" expires_after="2026-03-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1198,7 +1207,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.Attestations.InitializationDuration.ComponentReadyFromApplicationStart"
-    units="ms" expires_after="2025-12-28">
+    units="ms" expires_after="2026-03-01">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1215,7 +1224,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.Attestations.InitializationDuration.ComponentReadyFromApplicationStartWithInterruption"
-    units="ms" expires_after="2025-12-28">
+    units="ms" expires_after="2026-03-01">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1235,7 +1244,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.Attestations.InitializationDuration.ComponentReadyFromBrowserWindowFirstPaint"
-    units="ms" expires_after="2025-12-28">
+    units="ms" expires_after="2026-03-01">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1246,7 +1255,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.Attestations.InitializationDuration.Parsing"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1271,7 +1280,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.Attestations.IsSiteAttested.FileSource"
-    enum="PrivacySandboxAttestationsFileSource" expires_after="2026-01-18">
+    enum="PrivacySandboxAttestationsFileSource" expires_after="2026-03-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1283,7 +1292,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.Attestations.IsSiteAttested.FirstCheckTime"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1295,7 +1304,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.Attestations.IsSiteAttestedStatus"
-    enum="PrivacySandboxApiAllowed" expires_after="2025-12-21">
+    enum="PrivacySandboxApiAllowed" expires_after="2026-02-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1316,7 +1325,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.Attestations.LoadAPKAssetStatus"
     enum="PrivacySandboxAttestationLoadAPKAssetStatus"
-    expires_after="2026-02-01">
+    expires_after="2026-04-05">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1330,7 +1339,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.Attestations.Parsing.Status"
-    enum="PrivacySandboxAttestationParsingStatus" expires_after="2026-01-18">
+    enum="PrivacySandboxAttestationParsingStatus" expires_after="2026-03-22">
   <owner>shivanisha@chromium.org</owner>
   <owner>xiaochenzh@chromium.org</owner>
   <summary>
@@ -1343,7 +1352,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 <histogram
     name="PrivacySandbox.CookieDeprecationFacilitatedTesting.ReasonForEligibilityStoredInPrefs"
     enum="CookieDeprecationFacilitatedTestingProfileEligibility"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>linnan@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -1397,6 +1406,17 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
   </summary>
   <token key="PSNotice" variants="PSNotice"/>
   <token key="PSNoticeAction" variants="PSNoticeAction"/>
+</histogram>
+
+<histogram name="PrivacySandbox.Notice.Migration.PromptTypeCombination"
+    enum="PrivacySandboxPromptTypeCombination" expires_after="2026-05-07">
+  <owner>boujane@google.com</owner>
+  <owner>koilos@google.com</owner>
+  <summary>
+    Records the combination of prompt types calculated by the Privacy Sandbox
+    Service and the Notice Service. This is recorded each time
+    GetRequiredPromptType() is called.
+  </summary>
 </histogram>
 
 <histogram name="PrivacySandbox.Notice.NotHoldingHandle.InQueue" units="counts"
@@ -1578,7 +1598,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.Budgeter.NumReportingOriginsStoredPerSite"
-    units="counts" expires_after="2026-01-04">
+    units="counts" expires_after="2026-03-08">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
@@ -1593,7 +1613,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.PrivateAggregation.Budgeter.RequestResult3"
     enum="PrivacySandboxPrivateAggregationBudgeterRequestResult3"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1605,7 +1625,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.BudgetStorage.BeginInitializationCount"
-    units="units" expires_after="2025-11-01">
+    units="units" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
@@ -1624,7 +1644,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.PrivateAggregation.BudgetStorage.DbSize"
     units="KiB" expires_after="2026-02-01">
-  <owner>dmcardle@chromium.org</owner>
+  <owner>alexmt@chromium.org</owner>
   <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the size of the PrivateAggregationBudgetStorage database on disk.
@@ -1646,10 +1666,10 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 </histogram>
 
 <histogram name="PrivacySandbox.PrivateAggregation.BudgetStorage.InitTime"
-    units="ms" expires_after="2025-12-28">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the time spent initializing the PrivateAggregationBudgetStorage,
     i.e. between running CreateAsync() and FinishInitializationOnMainSequence().
@@ -1685,9 +1705,9 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.Host.NumContributionMergeKeysInPipe{ApiAndDelay}"
-    units="contributions if merged" expires_after="2025-12-28">
+    units="contributions if merged" expires_after="2026-03-01">
   <owner>alexmt@chromium.org</owner>
-  <owner>dmcardle@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the number of contributions sent through a host's mojo pipe,
     including contributions dropped due to the contribution limit. (To avoid
@@ -1727,7 +1747,7 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.PrivateAggregation.Host.PipeResult"
     enum="PrivacySandboxPrivateAggregationHostPipeResult"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -1762,9 +1782,9 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.Host.TimeToGenerateReportRequestWithContextId"
-    units="ms" expires_after="2025-12-28">
-  <owner>dmcardle@chromium.org</owner>
+    units="ms" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the duration of time that elapses from the moment that
     PrivateAggregationHost is notified of a timeout or mojo pipe disconnection
@@ -1801,9 +1821,9 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.NumContributionMergeKeys{ApiAndDelay}"
-    units="contributions if merged" expires_after="2025-11-01">
+    units="contributions if merged" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
-  <owner>dmcardle@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the number of contributions processed by one pending contributions
     object (i.e. corresponding to a single mojo pipe of the host), including
@@ -1834,9 +1854,9 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram
     name="PrivacySandbox.PrivateAggregation.NumFinalUnmergedContributions{ApiAndDelay}"
-    units="unmerged contributions" expires_after="2025-11-01">
+    units="unmerged contributions" expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
-  <owner>dmcardle@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Records the number of contributions processed by one pending contributions
     object (i.e. corresponding to a single mojo pipe of the host). This does not
@@ -1867,9 +1887,9 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
 
 <histogram name="PrivacySandbox.PrivateAggregation.TruncationResult"
     enum="PrivacySandboxPrivateAggregationTruncationResult"
-    expires_after="2025-11-01">
+    expires_after="2026-05-01">
   <owner>alexmt@chromium.org</owner>
-  <owner>dmcardle@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
   <summary>
     Record whether truncation was applied to the contributions processed by one
     pending contributions object (i.e. corresponding to a single mojo pipe of
@@ -1912,6 +1932,16 @@ Regular profiles start at bucket 1, we don't consider non-regular profiles. -->
     Records the amount of times each survey was attempted to be shown on Clank.
     Values do not indicate the amount of surveys shown as each attempt can fail
     due to various factors.
+  </summary>
+</histogram>
+
+<histogram name="PrivacySandbox.WhatsNewSurvey.Status"
+    enum="PrivacySandboxWhatsNewSurveyStatus" expires_after="2026-02-26">
+  <owner>michalhoffmann@google.com</owner>
+  <owner>polonium@google.com</owner>
+  <summary>
+    Records the status when attempting to surface the ACT What's New survey. The
+    ACT What's New survey is triggered on the What's New page with a delay.
   </summary>
 </histogram>
 

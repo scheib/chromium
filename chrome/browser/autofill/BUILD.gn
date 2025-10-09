@@ -11,6 +11,8 @@ assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
 
 static_library("autofill") {
   sources = [
+    "account_setting_service_factory.cc",
+    "account_setting_service_factory.h",
     "address_normalizer_factory.cc",
     "address_normalizer_factory.h",
     "autocomplete_history_manager_factory.cc",
@@ -25,8 +27,8 @@ static_library("autofill") {
     "autofill_image_fetcher_factory.h",
     "autofill_offer_manager_factory.cc",
     "autofill_offer_manager_factory.h",
-    "autofill_optimization_guide_factory.cc",
-    "autofill_optimization_guide_factory.h",
+    "autofill_optimization_guide_decider_factory.cc",
+    "autofill_optimization_guide_decider_factory.h",
     "iban_manager_factory.cc",
     "iban_manager_factory.h",
     "merchant_promo_code_manager_factory.cc",
@@ -62,10 +64,12 @@ static_library("autofill") {
   ]
   deps = [
     "//chrome/browser:browser_process",
+    "//chrome/browser/history",
     "//chrome/browser/optimization_guide",
     "//chrome/browser/profiles",
     "//chrome/browser/signin",
     "//chrome/browser/sync:factories",
+    "//chrome/browser/webdata_services",
     "//chrome/common:constants",
     "//components/autofill/content/browser",
     "//components/image_fetcher/core",
@@ -79,6 +83,8 @@ static_library("autofill") {
   if (is_android) {
     sources += [
       "android/android_autofill_availability_status.h",
+      "android/android_sms_otp_backend_factory.cc",
+      "android/android_sms_otp_backend_factory.h",
       "android/autofill_image_fetcher_impl.cc",
       "android/autofill_image_fetcher_impl.h",
       "android/autofill_profile_bridge.cc",
@@ -90,6 +96,7 @@ static_library("autofill") {
       "android/save_update_address_profile_message_controller.h",
       "android/save_update_address_profile_prompt_controller.cc",
       "android/save_update_address_profile_prompt_controller.h",
+      "android/save_update_address_profile_prompt_mode.h",
       "android/save_update_address_profile_prompt_view.h",
       "manual_filling_view_interface.h",
     ]
@@ -104,6 +111,7 @@ static_library("autofill") {
       "//components/autofill/core/common:credit_card_number_validation",
       "//components/autofill/core/common/mojom:mojo_types",
       "//components/messages/android:feature_flags",
+      "//components/one_time_tokens/android/backend/sms:backend",
       "//components/password_manager/core/browser",
       "//third_party/libaddressinput",
 
@@ -175,11 +183,14 @@ static_library("test_support") {
   }
 }
 
-if (!is_android) {
-  source_set("browser_tests") {
-    testonly = true
+source_set("browser_tests") {
+  testonly = true
 
-    sources = [
+  sources = [ "otp_manager_browsertest.cc" ]
+
+  # TODO(crbug.com/449649023) Migrate these tests to PlatformBrowserTests.
+  if (!is_android) {
+    sources += [
       "autocomplete_browsertest.cc",
       "autofill_across_iframes_browsertest.cc",
       "autofill_browsertest.cc",
@@ -187,26 +198,32 @@ if (!is_android) {
       "autofill_server_browsertest.cc",
       "form_structure_browsertest.cc",
     ]
-
-    defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-
-    deps = [
-      "//base/version_info",
-      "//chrome/browser/autofill",
-      "//chrome/browser/ui:browser_navigator_params_headers",
-      "//chrome/browser/ui/tabs:tab_strip",
-      "//chrome/test:test_support",
-      "//components/autofill/content/browser:test_support",
-      "//components/autofill/core/common:test_support",
-      "//components/password_manager/content/browser:test_support",
-      "//components/ukm:test_support",
-      "//testing/data_driven_testing",
-    ]
-
-    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
-    # enable the diagnostic by removing this line.
-    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
   }
+
+  defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
+
+  deps = [
+    "//base/version_info",
+    "//chrome/browser/autofill",
+    "//chrome/browser/ui:browser_navigator_params_headers",
+    "//chrome/browser/webdata_services",
+    "//chrome/test:test_support",
+    "//components/autofill/content/browser:test_support",
+    "//components/autofill/core/common:test_support",
+    "//components/password_manager/content/browser:test_support",
+    "//components/ukm:test_support",
+    "//testing/data_driven_testing",
+  ]
+
+  if (is_android) {
+    deps += [ "//content/test:browsertest_support" ]
+  } else {
+    deps += [ "//chrome/browser/ui/tabs:tab_strip" ]
+  }
+
+  # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
+  # enable the diagnostic by removing this line.
+  configs += [ "//build/config/compiler:no_exit_time_destructors" ]
 }
 
 if (!is_android) {
@@ -229,7 +246,6 @@ if (!is_android) {
       "//chrome/browser/ui/tabs:tab_strip",
       "//chrome/browser/ui/translate",
       "//chrome/browser/ui/translate:test_support",
-      "//chrome/test:test_support",
       "//chrome/test:test_support",
       "//chrome/test:test_support_ui",
       "//components/javascript_dialogs",

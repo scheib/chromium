@@ -12,6 +12,8 @@ import android.text.TextUtils;
 import android.view.ActionMode;
 
 import androidx.annotation.ColorInt;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.constraintlayout.widget.ConstraintLayout.LayoutParams;
 
 import com.google.android.material.color.MaterialColors;
 
@@ -22,8 +24,6 @@ import org.chromium.chrome.browser.omnibox.UrlBarProperties.AutocompleteText;
 import org.chromium.chrome.browser.omnibox.UrlBarProperties.UrlBarTextState;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
-
-import java.util.Optional;
 
 /** Handles translating the UrlBar model data to the view state. */
 @NullMarked
@@ -47,18 +47,20 @@ class UrlBarViewBinder {
                         autocomplete.userText,
                         autocomplete.autocompleteText,
                         TextUtils.isEmpty(autocomplete.additionalText)
-                                ? Optional.empty()
-                                : Optional.of(autocomplete.additionalText));
+                                ? null
+                                : autocomplete.additionalText);
             }
         } else if (UrlBarProperties.DELEGATE.equals(propertyKey)) {
             view.setDelegate(model.get(UrlBarProperties.DELEGATE));
         } else if (UrlBarProperties.FOCUS_CHANGE_CALLBACK.equals(propertyKey)) {
-            final Optional<Callback<Boolean>> focusChangeCallback =
-                    Optional.ofNullable(model.get(UrlBarProperties.FOCUS_CHANGE_CALLBACK));
+            final Callback<Boolean> focusChangeCallback =
+                    model.get(UrlBarProperties.FOCUS_CHANGE_CALLBACK);
             view.setOnFocusChangeListener(
                     (v, focused) -> {
                         if (focused) view.setIgnoreTextChangesForAutocomplete(false);
-                        focusChangeCallback.ifPresent(cb -> cb.onResult(focused));
+                        if (focusChangeCallback != null) {
+                            focusChangeCallback.onResult(focused);
+                        }
                     });
         } else if (UrlBarProperties.SHOW_CURSOR.equals(propertyKey)) {
             view.setCursorVisible(model.get(UrlBarProperties.SHOW_CURSOR));
@@ -98,6 +100,10 @@ class UrlBarViewBinder {
                     view.getPaddingStart(), verticalPadding, view.getPaddingEnd(), verticalPadding);
             view.setUseSmallTextHeight(useSmallText);
             view.setHint(getHintForTextSize(model));
+            ConstraintLayout.LayoutParams layoutParams =
+                    (ConstraintLayout.LayoutParams) view.getLayoutParams();
+            layoutParams.width =
+                    useSmallText ? LayoutParams.WRAP_CONTENT : LayoutParams.MATCH_CONSTRAINT;
         } else if (UrlBarProperties.HINT_TEXT_COLOR.equals(propertyKey)) {
             view.setHintTextColor(model.get(UrlBarProperties.HINT_TEXT_COLOR));
         } else if (UrlBarProperties.INCOGNITO_COLORS_ENABLED.equals(propertyKey)) {

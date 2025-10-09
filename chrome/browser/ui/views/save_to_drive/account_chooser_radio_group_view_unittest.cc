@@ -4,10 +4,10 @@
 
 #include "chrome/browser/ui/views/save_to_drive/account_chooser_radio_group_view.h"
 
-#include "chrome/browser/ui/save_to_drive/mock_account_chooser_view_delegate.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/save_to_drive/account_chooser_test_util.h"
 #include "chrome/browser/ui/views/save_to_drive/mock_account_chooser_radio_button_delegate.h"
+#include "chrome/browser/ui/views/save_to_drive/mock_account_chooser_view_delegate.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image_unittest_util.h"
@@ -140,6 +140,34 @@ TEST_F(AccountChooserRadioGroupViewTest,
                        /*time_stamp=*/{}, ui::EF_LEFT_MOUSE_BUTTON,
                        ui::EF_LEFT_MOUSE_BUTTON);
   row_view->OnMousePressed(event);
+}
+
+TEST_F(AccountChooserRadioGroupViewTest, MultiAccountWithSameName) {
+  AccountInfo account_pothos =
+      GetTestAccount("pothos", kTestDomain, /*gaia_id=*/1);
+  AccountInfo account_pothos2 =
+      GetTestAccount("pothos", /*domain=*/"test2.com", /*gaia_id=*/2);
+  std::vector<AccountInfo> accounts = {account_pothos2, account_pothos};
+
+  // We expect the lexicographically first account to be selected.
+  EXPECT_CALL(mock_account_chooser_view_delegate_,
+              OnAccountSelected(
+                  Field(&AccountInfo::account_id, account_pothos.account_id)));
+  AccountChooserRadioGroupView* account_chooser_view =
+      anchor_view_->AddChildView(std::make_unique<AccountChooserRadioGroupView>(
+          mock_account_chooser_view_delegate_, accounts, std::nullopt));
+  std::vector<raw_ptr<views::View, VectorExperimental>> children =
+      account_chooser_view->children();
+  ASSERT_EQ(children.size(), 5u);  // 3 separators + 2 accounts
+  // Accounts are lexicographically ordered by full name, then email.
+  ASSERT_EQ(children[1]->GetClassName(), "AccountChooserRadioButtonRow");
+  // In the absence of a primary account, the first account is selected by
+  // default.
+  VerifyAccountChooserRadioButtonRow(children[1], account_pothos,
+                                     /*is_selected=*/true);
+  EXPECT_EQ(children[3]->GetClassName(), "AccountChooserRadioButtonRow");
+  VerifyAccountChooserRadioButtonRow(children[3], account_pothos2,
+                                     /*is_selected=*/false);
 }
 
 TEST_F(AccountChooserRadioGroupViewTest,

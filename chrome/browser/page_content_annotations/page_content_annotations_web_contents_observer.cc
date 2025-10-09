@@ -25,6 +25,7 @@
 #include "components/page_content_annotations/core/page_content_annotations_service.h"
 #include "components/pdf/common/constants.h"
 #include "components/search_engines/template_url_service.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "third_party/blink/public/mojom/opengraph/metadata.mojom.h"
@@ -123,6 +124,13 @@ void PageContentAnnotationsWebContentsObserver::
     OnFirstContentfulPaintInPrimaryMainFrame() {
   if (auto* annotated_page_content_request = GetAnnotatedPageContentRequest()) {
     annotated_page_content_request->OnFirstContentfulPaintInPrimaryMainFrame();
+  }
+}
+
+void PageContentAnnotationsWebContentsObserver::OnVisibilityChanged(
+    content::Visibility visibility) {
+  if (auto* annotated_page_content_request = GetAnnotatedPageContentRequest()) {
+    annotated_page_content_request->OnVisibilityChanged(visibility);
   }
 }
 

@@ -18,7 +18,6 @@
 #include "ash/app_list/views/search_box_view.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
-#include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
@@ -51,8 +50,6 @@
 
 namespace ash {
 namespace {
-
-using assistant::AssistantExitPoint;
 
 // The target scale to which (or from which) the fullscreen launcher will
 // animate between tablet <-> clamshell mode transition.
@@ -233,15 +230,6 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
 
   std::unique_ptr<AppListView::ScopedAccessibilityAnnouncementLock>
       scoped_accessibility_lock;
-
-  // App list view state accessibility alerts should be suppressed when the app
-  // list view is shown by the assistant. The assistant UI should handle its
-  // own accessibility notifications.
-  if (show_source && *show_source == AppListShowSource::kAssistantEntryPoint) {
-    scoped_accessibility_lock =
-        std::make_unique<AppListView::ScopedAccessibilityAnnouncementLock>(
-            view_);
-  }
 
   auto* layer = view_->GetWidget()->GetNativeWindow()->layer();
 
@@ -510,7 +498,7 @@ int64_t AppListPresenterImpl::GetDisplayId() const {
   views::Widget* widget = view_ ? view_->GetWidget() : nullptr;
   if (!widget)
     return display::kInvalidDisplayId;
-  return display::Screen::GetScreen()
+  return display::Screen::Get()
       ->GetDisplayNearestView(widget->GetNativeView())
       .id();
 }

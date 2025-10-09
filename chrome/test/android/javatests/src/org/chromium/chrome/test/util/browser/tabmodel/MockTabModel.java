@@ -38,11 +38,12 @@ public class MockTabModel extends EmptyTabModel {
     public interface MockTabModelDelegate {
         /**
          * Creates a Tab.
+         *
          * @param id ID of the Tab.
          * @param incognito Whether the Tab is incognito.
          * @return Tab that is created.
          */
-        public MockTab createTab(int id, boolean incognito);
+        MockTab createTab(int id, boolean incognito);
     }
 
     /**
@@ -66,6 +67,11 @@ public class MockTabModel extends EmptyTabModel {
         @Override
         public Tab getTabAt(int index) {
             return mAllTabs.get(index);
+        }
+
+        @Override
+        public Iterator<Tab> iterator() {
+            return mAllTabs.iterator();
         }
     }
 
@@ -182,7 +188,7 @@ public class MockTabModel extends EmptyTabModel {
     @Override
     public Tab getTabAt(int position) {
         // Mimic the index safety of TabModelImpl.
-        if (position < 0 || position > mTabs.size()) return null;
+        if (position < 0 || position >= mTabs.size()) return null;
 
         return mTabs.get(position);
     }

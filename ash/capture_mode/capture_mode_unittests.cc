@@ -127,7 +127,7 @@
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/image/image_unittest_util.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/test/test_widget_builder.h"
@@ -1766,8 +1766,7 @@ TEST_P(CaptureModeTest, WindowDestruction) {
 
 TEST_P(CaptureModeTest, CursorUpdatedOnDisplayRotation) {
   UpdateDisplay("600x400");
-  const int64_t display_id =
-      display::Screen::GetScreen()->GetPrimaryDisplay().id();
+  const int64_t display_id = display::Screen::Get()->GetPrimaryDisplay().id();
   display::SetInternalDisplayIds({display_id});
   ScreenOrientationControllerTestApi orientation_test_api(
       Shell::Get()->screen_orientation_controller());
@@ -3162,7 +3161,7 @@ class CaptureModeHdcpTest : public CaptureModeTestBase,
     // Create a child window with protected content. This simulates the real
     // behavior of a browser window hosting a page with protected content, where
     // the window that has a protection mask is the RenderWidgetHostViewAura,
-    // which is a descendant of the BrowserFrame window which can get recorded.
+    // which is a descendant of the BrowserWidget window which can get recorded.
     protected_content_window_ = CreateTestWindow(gfx::Rect(150, 150));
     window_->AddChild(protected_content_window_.get());
     protection_delegate_ = std::make_unique<OutputProtectionDelegate>(
@@ -3576,7 +3575,7 @@ TEST_P(CaptureModeTest, CaptureModeBarButtonTypeHistograms) {
 
   // Enter tablet mode and test the bar buttons.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
 
   ClickOnView(GetImageToggleButton(), event_generator);
   histogram_tester.ExpectBucketCount(
@@ -3734,7 +3733,7 @@ TEST_P(CaptureModeTest, NumberOfCaptureRegionAdjustmentsHistogram) {
   // Enter tablet mode and restart the capture session. The capture region
   // should be remembered.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   StartImageRegionCapture();
   ASSERT_EQ(target_region, controller->user_capture_region());
 
@@ -5329,7 +5328,7 @@ class CaptureModeCursorOverlayTest : public CaptureModeTest {
     EXPECT_EQ(controller->type(), CaptureModeType::kImage);
 
     auto* cursor_manager = Shell::Get()->cursor_manager();
-    bool in_tablet_mode = display::Screen::GetScreen()->InTabletMode();
+    bool in_tablet_mode = display::Screen::Get()->InTabletMode();
 
     // The capture mode session locks the cursor for the whole active session
     // except in the tablet mode unless the cursor is visible.
@@ -6240,10 +6239,9 @@ TEST_P(ProjectorCaptureModeIntegrationTestsWithSource,
   const gfx::Point point_in_second_display = gfx::Point(1000, 500);
   auto* event_generator = GetEventGenerator();
   event_generator->MoveMouseTo(point_in_second_display);
-  window()->SetBoundsInScreen(
-      gfx::Rect(900, 0, 600, 500),
-      display::Screen::GetScreen()->GetDisplayNearestWindow(
-          Shell::GetAllRootWindows()[1]));
+  window()->SetBoundsInScreen(gfx::Rect(900, 0, 600, 500),
+                              display::Screen::Get()->GetDisplayNearestWindow(
+                                  Shell::GetAllRootWindows()[1]));
 
   const auto capture_source = std::get<CaptureModeSource>(GetParam());
   StartRecordingForProjectorFromSource(capture_source);
@@ -6819,10 +6817,9 @@ TEST_P(AnnotatorCaptureModeIntegrationTestsWithSource,
   const gfx::Point point_in_second_display = gfx::Point(1000, 500);
   auto* event_generator = GetEventGenerator();
   event_generator->MoveMouseTo(point_in_second_display);
-  window()->SetBoundsInScreen(
-      gfx::Rect(900, 0, 600, 500),
-      display::Screen::GetScreen()->GetDisplayNearestWindow(
-          Shell::GetAllRootWindows()[1]));
+  window()->SetBoundsInScreen(gfx::Rect(900, 0, 600, 500),
+                              display::Screen::Get()->GetDisplayNearestWindow(
+                                  Shell::GetAllRootWindows()[1]));
 
   const auto capture_source = std::get<CaptureModeSource>(GetParam());
   StartRecordingFromSource(capture_source);
@@ -6913,95 +6910,6 @@ INSTANTIATE_TEST_SUITE_P(
       bool scanner_enabled = std::get<1>(info.param);
       return SunfishScannerTestName(sunfish_enabled, scanner_enabled);
     });
-
-TEST_P(CaptureModeSettingsTest, NudgeChangesRootWithBar) {
-  UpdateDisplay("800x700,801+0-800x700");
-
-  auto* event_generator = GetEventGenerator();
-  event_generator->MoveMouseTo(gfx::Point(100, 500));
-
-  auto* controller = StartCaptureSession(CaptureModeSource::kFullscreen,
-                                         CaptureModeType::kImage);
-  auto* session =
-      static_cast<CaptureModeSession*>(controller->capture_mode_session());
-  ASSERT_EQ(session->session_type(), SessionType::kReal);
-  auto* capture_toast_controller = session->capture_toast_controller();
-
-  EXPECT_EQ(Shell::GetAllRootWindows()[0], session->current_root());
-  EXPECT_EQ(capture_toast_controller->capture_toast_widget()
-                ->GetNativeWindow()
-                ->GetRootWindow(),
-            session->current_root());
-
-  event_generator->MoveMouseTo(gfx::Point(1000, 500));
-  EXPECT_EQ(Shell::GetAllRootWindows()[1], session->current_root());
-  EXPECT_EQ(capture_toast_controller->capture_toast_widget()
-                ->GetNativeWindow()
-                ->GetRootWindow(),
-            session->current_root());
-}
-
-TEST_P(CaptureModeSettingsTest, NudgeBehaviorWhenSelectingRegion) {
-  UpdateDisplay("800x700,801+0-800x700");
-
-  auto* event_generator = GetEventGenerator();
-  event_generator->MoveMouseTo(gfx::Point(100, 500));
-
-  auto* controller = StartImageRegionCapture();
-  auto* session =
-      static_cast<CaptureModeSession*>(controller->capture_mode_session());
-  ASSERT_EQ(session->session_type(), SessionType::kReal);
-  EXPECT_EQ(Shell::GetAllRootWindows()[0], session->current_root());
-
-  // Nudge hides while selecting a region, but doesn't change roots until the
-  // region change is committed.
-  auto* nudge_controller = GetUserNudgeController();
-  event_generator->MoveMouseTo(gfx::Point(1000, 500));
-  event_generator->PressLeftButton();
-  EXPECT_FALSE(nudge_controller->is_visible());
-
-  // If we release without selecting a valid region (i.e., an empty region), the
-  // nudge should be visible again.
-  event_generator->ReleaseLeftButton();
-  EXPECT_EQ(Shell::GetAllRootWindows()[1], session->current_root());
-
-  // The nudge shows again, and is on the second display.
-  EXPECT_TRUE(nudge_controller->is_visible());
-  EXPECT_EQ(session->capture_toast_controller()
-                ->capture_toast_widget()
-                ->GetNativeWindow()
-                ->GetRootWindow(),
-            session->current_root());
-}
-
-TEST_P(CaptureModeSettingsTest, NudgeDoesNotShowForAllUserTypes) {
-  struct {
-    std::string trace;
-    user_manager::UserType user_type;
-    bool can_see_nudge;
-  } kUserTypeTestCases[] = {
-      {"regular user", user_manager::UserType::kRegular, true},
-      {"child", user_manager::UserType::kChild, true},
-      {"guest", user_manager::UserType::kGuest, false},
-      {"public account", user_manager::UserType::kPublicAccount, false},
-      {"kiosk app", user_manager::UserType::kKioskChromeApp, false},
-      {"web kiosk app", user_manager::UserType::kKioskWebApp, false},
-  };
-
-  for (const auto& test_case : kUserTypeTestCases) {
-    SCOPED_TRACE(test_case.trace);
-    ClearLogin();
-    SimulateUserLogin({"example@gmail.com", test_case.user_type});
-
-    auto* controller = StartImageRegionCapture();
-    EXPECT_EQ(test_case.can_see_nudge, controller->CanShowSunfishRegionNudge());
-
-    auto* nudge_controller = GetUserNudgeController();
-    EXPECT_EQ(test_case.can_see_nudge, !!nudge_controller);
-
-    controller->Stop();
-  }
-}
 
 // Tests that the capture mode settings menu is centered with respect to the
 // capture bar.

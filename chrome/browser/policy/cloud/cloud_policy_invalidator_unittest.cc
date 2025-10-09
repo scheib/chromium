@@ -180,7 +180,7 @@ void CloudPolicyInvalidatorTestBase::ConnectCore() {
       std::make_unique<testing::NiceMock<MockCloudPolicyClient>>();
 
   ON_CALL(*client, FetchPolicy(PolicyFetchReason::kInvalidation))
-      .WillByDefault(testing::Invoke([this]() { ++policy_refresh_count_; }));
+      .WillByDefault([this]() { ++policy_refresh_count_; });
 
   client->SetDMToken("dm");
   core_.Connect(std::move(client));
@@ -404,7 +404,7 @@ TEST_F(CloudPolicyInvalidatorTest, HandlesInvalidation) {
 
   // Verify that invalidation is not yet handled as we did not pass random
   // delay.
-  EXPECT_TRUE(ClientInvalidationInfoMatches(inv));
+  EXPECT_TRUE(ClientInvalidationInfoIsUnset());
   EXPECT_EQ(GetPolicyRefreshCountAndReset(), 0);
 
   FastForwardByInvalidationDelay();
@@ -427,9 +427,8 @@ TEST_F(CloudPolicyInvalidatorTest, HandlesInvalidationWithoutPayload) {
   EnableInvalidationListener();
 
   // Fire an invalidation and check that it triggered a policy refresh only
-  // after kMissingPayloadDelay + random delay.
+  // after a random delay.
   const invalidation::DirectInvalidation inv = FireInvalidation(V(12), "");
-  FastForwardBy(CloudPolicyInvalidator::kMissingPayloadDelay);
 
   // Verify that invalidation is not yet handled as we did not pass random
   // delay.
@@ -477,18 +476,12 @@ TEST_F(CloudPolicyInvalidatorTest, HandlesMultipleInvalidations) {
 
   // Fire invalidations out of order.
   const invalidation::DirectInvalidation inv2 = FireInvalidation(V(2), "test1");
-  FastForwardBy(base::TimeDelta());
-  EXPECT_TRUE(ClientInvalidationInfoMatches(inv2));
   const invalidation::DirectInvalidation inv1 = FireInvalidation(V(1), "test2");
-  FastForwardBy(base::TimeDelta());
-  EXPECT_TRUE(ClientInvalidationInfoMatches(inv2));
   const invalidation::DirectInvalidation inv3 = FireInvalidation(V(3), "test3");
-  FastForwardBy(base::TimeDelta());
-  EXPECT_TRUE(ClientInvalidationInfoMatches(inv3));
-
   FastForwardByInvalidationDelay();
 
   // Make sure the policy is refreshed once.
+  EXPECT_TRUE(ClientInvalidationInfoMatches(inv3));
   EXPECT_EQ(GetPolicyRefreshCountAndReset(), 1);
   EXPECT_EQ(0, invalidator()->highest_handled_invalidation_version());
 
@@ -794,7 +787,6 @@ TEST_P(CloudPolicyInvalidatorUserTypedTest, ExpiredInvalidations) {
   // Fire expired invalidation without a payload.
   inv = FireInvalidation(GetVersion(expired_invalidation_timestamp), "");
   FastForwardByInvalidationDelay();
-  FastForwardBy(CloudPolicyInvalidator::kMissingPayloadDelay);
   EXPECT_EQ(GetPolicyRefreshCountAndReset(), 0);
 
   // Invalidations fired after the last fetch should not be ignored.
@@ -804,7 +796,6 @@ TEST_P(CloudPolicyInvalidatorUserTypedTest, ExpiredInvalidations) {
   // Fire a fine invalidation without a payload.
   inv = FireInvalidation(GetVersion(non_expired_invalidaiton_timestamp), "");
   FastForwardByInvalidationDelay();
-  FastForwardBy(CloudPolicyInvalidator::kMissingPayloadDelay);
   EXPECT_TRUE(ClientInvalidationInfoMatches(inv));
   EXPECT_EQ(GetPolicyRefreshCountAndReset(), 1);
 

@@ -16,10 +16,10 @@ bool IsDownloadEvent(const component_updater::CrxUpdateItem& item) {
   // See class comment: components/update_client/component.h
   switch (item.state) {
     case update_client::ComponentState::kDownloading:
+    case update_client::ComponentState::kDecompressing:
+    case update_client::ComponentState::kPatching:
     case update_client::ComponentState::kUpdating:
     case update_client::ComponentState::kUpToDate:
-    case update_client::ComponentState::kDownloadingDiff:
-    case update_client::ComponentState::kUpdatingDiff:
       return item.downloaded_bytes >= 0 && item.total_bytes >= 0;
     case update_client::ComponentState::kNew:
     case update_client::ComponentState::kChecking:
@@ -27,7 +27,6 @@ bool IsDownloadEvent(const component_updater::CrxUpdateItem& item) {
     case update_client::ComponentState::kUpdated:
     case update_client::ComponentState::kUpdateError:
     case update_client::ComponentState::kRun:
-    case update_client::ComponentState::kLastStatus:
       return false;
   }
 }
@@ -42,12 +41,11 @@ bool IsAlreadyInstalled(const component_updater::CrxUpdateItem& item) {
     case update_client::ComponentState::kChecking:
     case update_client::ComponentState::kCanUpdate:
     case update_client::ComponentState::kDownloading:
+    case update_client::ComponentState::kDecompressing:
+    case update_client::ComponentState::kPatching:
     case update_client::ComponentState::kUpdating:
     case update_client::ComponentState::kUpdateError:
     case update_client::ComponentState::kRun:
-    case update_client::ComponentState::kDownloadingDiff:
-    case update_client::ComponentState::kUpdatingDiff:
-    case update_client::ComponentState::kLastStatus:
       return false;
   }
 }
@@ -106,7 +104,8 @@ void AICrxComponent::OnEvent(const component_updater::CrxUpdateItem& item) {
     return;
   }
 
-  SetDownloadedBytes(item.downloaded_bytes);
+  // Crx components may send downloaded_bytes that exceed the total_bytes.
+  SetDownloadedBytes(std::min(item.downloaded_bytes, item.total_bytes));
   SetTotalBytes(item.total_bytes);
 }
 

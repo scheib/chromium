@@ -26,6 +26,7 @@
 #include "crypto/hash.h"
 #include "crypto/random.h"
 #include "crypto/signature_verifier.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "rlz/buildflags/buildflags.h"
@@ -37,6 +38,8 @@
 #if BUILDFLAG(ENABLE_RLZ)
 #include "rlz/lib/machine_id.h"  // nogncheck crbug.com/1125897
 #endif
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace {
 
@@ -316,8 +319,7 @@ void InstallSigner::GetSignature(SignatureCallback callback) {
     id_list.Append(extension_id);
   }
   dictionary.Set(kIdsKey, std::move(id_list));
-  std::string json;
-  base::JSONWriter::Write(dictionary, &json);
+  std::string json = base::WriteJson(dictionary).value_or("");
   if (json.empty()) {
     ReportErrorViaCallback();
     return;
@@ -365,7 +367,8 @@ void InstallSigner::ParseFetchResponse(
   // where |invalid_ids| is a list of ids from the original request that
   // could not be verified to be in the webstore.
 
-  std::optional<base::Value> parsed = base::JSONReader::Read(*response_body);
+  std::optional<base::Value> parsed = base::JSONReader::Read(
+      *response_body, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   bool json_success = parsed && parsed->is_dict();
   if (!json_success) {
     ReportErrorViaCallback();

@@ -25,9 +25,6 @@ class IpProtectionTelemetryUma final : public IpProtectionTelemetry {
   void OAuthTokenFetchComplete(base::TimeDelta) override;
   void TokenBatchFetchComplete(TryGetAuthTokensResult,
                                std::optional<base::TimeDelta>) override;
-  void AndroidTokenBatchFetchComplete(
-      TryGetAuthTokensAndroidResult result,
-      std::optional<base::TimeDelta> duration) override;
 
   void ProxyChainFallback(int) override;
   void EmptyTokenCache(ProxyLayer) override;
@@ -36,19 +33,19 @@ class IpProtectionTelemetryUma final : public IpProtectionTelemetry {
                                 bool is_cache_empty,
                                 bool does_requested_geo_match_current) override;
   void TokenBatchGenerationComplete(base::TimeDelta duration) override;
+  void TokenBatchGenerationPhaseTime(BlindSignAuthPhase phase,
+                                     base::TimeDelta duration) override;
   void TryGetAuthTokensError(uint32_t hash) override;
   void GeoChangeTokenPresence(bool) override;
   void ProxyListRefreshComplete(
       GetProxyListResult result,
       std::optional<base::TimeDelta> duration) override;
-  void TokenSpendRate(ProxyLayer, int) override;
   void TokenExpirationRate(ProxyLayer, int) override;
   void MdlEstimatedMemoryUsage(size_t) override;
   void MdlEstimatedDiskUsage(int64_t) override;
   void MdlSize(int64_t) override;
-  void AndroidAuthClientCreationTime(base::TimeDelta duration) override;
-  void AndroidAuthClientGetInitialDataTime(base::TimeDelta duration) override;
-  void AndroidAuthClientAuthAndSignTime(base::TimeDelta duration) override;
+  void MdlFlatbufferBuildTime(base::TimeDelta duration) override;
+  void MdlUpdateSuccess(bool success) override;
   void MdlFirstUpdateTime(base::TimeDelta duration) override;
   void MdlMatchesTime(base::TimeDelta duration) override;
   void GetProbabilisticRevealTokensComplete(
@@ -62,6 +59,7 @@ class IpProtectionTelemetryUma final : public IpProtectionTelemetry {
   void RecordTokenCountEvent(ProxyLayer layer,
                              IpProtectionTokenCountEvent event,
                              int count) override;
+  void TokenDemandDuringBatchGeneration(int count) override;
 };
 
 }  // namespace ip_protection

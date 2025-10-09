@@ -13,6 +13,7 @@
 
 #include "base/base64.h"
 #include "base/containers/contains.h"
+#include "base/containers/span.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -23,7 +24,9 @@
 #include "base/uuid.h"
 #include "base/values.h"
 #include "components/bookmarks/browser/bookmark_uuids.h"
+#include "components/bookmarks/common/bookmark_features.h"
 #include "components/strings/grit/components_strings.h"
+#include "crypto/hash.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
@@ -38,6 +41,7 @@ const char BookmarkCodec::kOtherBookmarkFolderNameKey[] = "other";
 const char BookmarkCodec::kMobileBookmarkFolderNameKey[] = "synced";
 const char BookmarkCodec::kVersionKey[] = "version";
 const char BookmarkCodec::kChecksumKey[] = "checksum";
+const char BookmarkCodec::kChecksumSHA256Key[] = "checksum_sha256";
 const char BookmarkCodec::kIdKey[] = "id";
 const char BookmarkCodec::kTypeKey[] = "type";
 const char BookmarkCodec::kNameKey[] = "name";
@@ -61,6 +65,28 @@ namespace {
 // usage during encoding.
 base::Value EncodeSyncMetadata(std::string sync_metadata_str) {
   return base::Value(base::Base64Encode(sync_metadata_str));
+}
+
+// Helper function to convert Time to microseconds since Windows epoch.
+int64_t ToMicrosecondsSinceWindowsEpoch(Time time) {
+  return time.ToDeltaSinceWindowsEpoch().InMicroseconds();
+}
+
+// Helper function to parse date from dictionary, returns nullopt if not found.
+std::optional<Time> FindMicrosecondsSinceWindowsEpoch(
+    const base::Value::Dict& dict,
+    std::string_view key) {
+  const std::string* string_value = dict.FindString(key);
+  if (!string_value) {
+    return std::nullopt;
+  }
+
+  int64_t microseconds = 0;
+  if (!base::StringToInt64(*string_value, &microseconds)) {
+    return std::nullopt;
+  }
+
+  return Time::FromDeltaSinceWindowsEpoch(base::Microseconds(microseconds));
 }
 
 }  // namespace
@@ -109,7 +135,10 @@ base::Value::Dict BookmarkCodec::Encode(
   // the same as computed checksum.
   stored_checksum_ = computed_checksum_;
   main.Set(kChecksumKey, computed_checksum_);
-
+  if (base::FeatureList::IsEnabled(kEnableBookmarkCodecSHA256)) {
+    stored_sha256_checksum_ = computed_sha256_checksum_;
+    main.Set(kChecksumSHA256Key, computed_sha256_checksum_);
+  }
   main.Set(kRootsKey, std::move(roots));
   return main;
 }
@@ -139,13 +168,17 @@ bool BookmarkCodec::Decode(const base::Value::Dict& value,
   ids_valid_ = true;
   maximum_id_ = 0;
   stored_checksum_.clear();
+  stored_sha256_checksum_.clear();
   InitializeChecksum();
   bool success = DecodeHelper(bb_node, other_folder_node, mobile_folder_node,
                               value, sync_metadata_str);
   FinalizeChecksum();
+
   // If either the checksums differ or some IDs were missing/not unique,
   // reassign IDs.
-  if (!ids_valid_ || computed_checksum_ != stored_checksum_) {
+  bool use_sha256 = base::FeatureList::IsEnabled(kEnableBookmarkCodecSHA256);
+  if (!ids_valid_ || (computed_checksum_ != stored_checksum_) ||
+      (use_sha256 && computed_sha256_checksum_ != stored_sha256_checksum_)) {
     maximum_id_ = max_already_assigned_id;
     ReassignIDs(bb_node, other_folder_node, mobile_folder_node);
   }
@@ -154,8 +187,10 @@ bool BookmarkCodec::Decode(const base::Value::Dict& value,
 }
 
 bool BookmarkCodec::required_recovery() const {
+  bool use_sha256 = base::FeatureList::IsEnabled(kEnableBookmarkCodecSHA256);
   return ids_reassigned_ || uuids_reassigned_ ||
-         computed_checksum_ != stored_checksum_;
+         (computed_checksum_ != stored_checksum_) ||
+         (use_sha256 && computed_sha256_checksum_ != stored_sha256_checksum_);
 }
 
 base::Value::Dict BookmarkCodec::EncodeNode(const BookmarkNode* node) {
@@ -166,11 +201,10 @@ base::Value::Dict BookmarkCodec::EncodeNode(const BookmarkNode* node) {
   value.Set(kNameKey, title);
   const std::string& uuid = node->uuid().AsLowercaseString();
   value.Set(kGuidKey, uuid);
-  // TODO(crbug.com/40479288): Avoid ToInternalValue().
-  value.Set(kDateAddedKey,
-            base::NumberToString(node->date_added().ToInternalValue()));
-  value.Set(kDateLastUsed,
-            base::NumberToString(node->date_last_used().ToInternalValue()));
+  value.Set(kDateAddedKey, base::NumberToString(ToMicrosecondsSinceWindowsEpoch(
+                               node->date_added())));
+  value.Set(kDateLastUsed, base::NumberToString(ToMicrosecondsSinceWindowsEpoch(
+                               node->date_last_used())));
   if (node->is_url()) {
     value.Set(kTypeKey, kTypeURL);
     std::string url = node->url().possibly_invalid_spec();
@@ -178,9 +212,9 @@ base::Value::Dict BookmarkCodec::EncodeNode(const BookmarkNode* node) {
     UpdateChecksumWithUrlNode(id, title, url);
   } else {
     value.Set(kTypeKey, kTypeFolder);
-    value.Set(
-        kDateModifiedKey,
-        base::NumberToString(node->date_folder_modified().ToInternalValue()));
+    value.Set(kDateModifiedKey,
+              base::NumberToString(ToMicrosecondsSinceWindowsEpoch(
+                  node->date_folder_modified())));
     UpdateChecksumWithFolderNode(id, title);
 
     base::Value::List child_values;
@@ -218,6 +252,19 @@ bool BookmarkCodec::DecodeHelper(BookmarkNode* bb_node,
       stored_checksum_ = *checksum;
     else
       return false;
+  }
+
+  if (base::FeatureList::IsEnabled(kEnableBookmarkCodecSHA256)) {
+    const std::string* checksum_sha256 = value.FindString(kChecksumSHA256Key);
+    if (checksum_sha256) {
+      stored_sha256_checksum_ = *checksum_sha256;
+    }
+    // If checksum is missing, stored data must predate md5->sha256 migration.
+    // Expect a md5 checksum to have been set by the previous block.
+    else if (!checksum_value->GetIfString()) {
+      // If no checksum was set, then the decode should fail.
+      return false;
+    }
   }
 
   if (sync_metadata_str) {
@@ -334,24 +381,6 @@ bool BookmarkCodec::DecodeNode(const base::Value::Dict& value,
     uuids_.insert(uuid);
   }
 
-  std::string date_added_string;
-  string_value = value.FindString(kDateAddedKey);
-  if (string_value)
-    date_added_string = *string_value;
-  else
-    date_added_string = base::NumberToString(Time::Now().ToInternalValue());
-  int64_t date_added_time;
-  base::StringToInt64(date_added_string, &date_added_time);
-
-  std::string date_last_used_string;
-  string_value = value.FindString(kDateLastUsed);
-  if (string_value)
-    date_last_used_string = *string_value;
-  else
-    date_last_used_string = base::NumberToString(0);
-  int64_t date_last_used;
-  base::StringToInt64(date_last_used_string, &date_last_used);
-
   const std::string* type_string = value.FindString(kTypeKey);
   if (!type_string)
     return false;
@@ -376,13 +405,6 @@ bool BookmarkCodec::DecodeNode(const base::Value::Dict& value,
       parent->Add(base::WrapUnique(node));
     UpdateChecksumWithUrlNode(id_string, title, *url_string);
   } else {
-    std::string last_modified_date;
-    string_value = value.FindString(kDateModifiedKey);
-    if (string_value)
-      last_modified_date = *string_value;
-    else
-      last_modified_date = base::NumberToString(Time::Now().ToInternalValue());
-
     const base::Value::List* child_values = value.FindList(kChildrenKey);
     if (!child_values)
       return false;
@@ -395,9 +417,9 @@ bool BookmarkCodec::DecodeNode(const base::Value::Dict& value,
       node->set_id(id);
     }
 
-    int64_t internal_time;
-    base::StringToInt64(last_modified_date, &internal_time);
-    node->set_date_folder_modified(Time::FromInternalValue(internal_time));
+    node->set_date_folder_modified(
+        FindMicrosecondsSinceWindowsEpoch(value, kDateModifiedKey)
+            .value_or(Time::Now()));
 
     if (parent)
       parent->Add(base::WrapUnique(node));
@@ -409,8 +431,10 @@ bool BookmarkCodec::DecodeNode(const base::Value::Dict& value,
   }
 
   node->SetTitle(title);
-  node->set_date_added(Time::FromInternalValue(date_added_time));
-  node->set_date_last_used(Time::FromInternalValue(date_last_used));
+  node->set_date_added(FindMicrosecondsSinceWindowsEpoch(value, kDateAddedKey)
+                           .value_or(Time::Now()));
+  node->set_date_last_used(
+      FindMicrosecondsSinceWindowsEpoch(value, kDateLastUsed).value_or(Time()));
 
   BookmarkNode::MetaInfoMap meta_info_map;
   if (!DecodeMetaInfo(value, &meta_info_map))
@@ -496,11 +520,13 @@ void BookmarkCodec::ReassignIDsHelper(BookmarkNode* node) {
 
 void BookmarkCodec::UpdateChecksum(const std::string& str) {
   md5_hasher_.Update(str);
+  sha256_hasher_.Update(str);
 }
 
 void BookmarkCodec::UpdateChecksum(const std::u16string& str) {
-  md5_hasher_.Update(std::string_view(reinterpret_cast<const char*>(str.data()),
-                                      str.length() * sizeof(str[0])));
+  auto bytes = base::as_byte_span(str);
+  md5_hasher_.Update(bytes);
+  sha256_hasher_.Update(bytes);
 }
 
 void BookmarkCodec::UpdateChecksumWithUrlNode(const std::string& id,
@@ -522,11 +548,15 @@ void BookmarkCodec::UpdateChecksumWithFolderNode(const std::string& id,
 
 void BookmarkCodec::InitializeChecksum() {
   md5_hasher_ = crypto::obsolete::Md5();
+  sha256_hasher_ = crypto::hash::Hasher(crypto::hash::kSha256);
 }
 
 void BookmarkCodec::FinalizeChecksum() {
   computed_checksum_ =
       base::ToLowerASCII(base::HexEncode(md5_hasher_.Finish()));
+  std::string result(crypto::hash::kSha256Size, 0);
+  sha256_hasher_.Finish(base::as_writable_byte_span(result));
+  computed_sha256_checksum_ = base::ToLowerASCII(base::HexEncode(result));
 }
 
 }  // namespace bookmarks

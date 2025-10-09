@@ -138,20 +138,6 @@ class HelpAppIntegrationTestWithAutoTriggerDisabled
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-class HelpAppIntegrationTestWithAppMallEnabled : public HelpAppIntegrationTest {
- public:
-  HelpAppIntegrationTestWithAppMallEnabled() {
-    scoped_feature_list_.InitWithFeatures(
-        {
-            chromeos::features::kCrosMall,
-        },
-        {});
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
 class HelpAppIntegrationTestWithFirstRunEnabled
     : public HelpAppIntegrationTest {
  public:
@@ -204,7 +190,7 @@ IN_PROC_BROWSER_TEST_P(HelpAppIntegrationTest, HelpAppV2DefaultWindowBounds) {
   Browser* browser;
   LaunchApp(SystemWebAppType::HELP, &browser);
   gfx::Rect work_area =
-      display::Screen::GetScreen()->GetDisplayForNewWindows().work_area();
+      display::Screen::Get()->GetDisplayForNewWindows().work_area();
   int x = (work_area.width() - 960) / 2;
   int y = (work_area.height() - 600) / 2;
   EXPECT_EQ(browser->window()->GetBounds(), gfx::Rect(x, y, 960, 600));
@@ -273,7 +259,7 @@ IN_PROC_BROWSER_TEST_P(HelpAppAllProfilesIntegrationTest, HelpAppV2ShowHelp) {
   content::TestNavigationObserver navigation_observer(expected_url);
   navigation_observer.StartWatchingNewWebContents();
 
-  chrome::ShowHelp(browser(), chrome::HELP_SOURCE_KEYBOARD);
+  chrome::ShowHelp(browser(), chrome::HelpSource::kKeyboard);
 
 #if BUILDFLAG(ENABLE_CROS_HELP_APP)
   EXPECT_NO_FATAL_FAILURE(navigation_observer.Wait());
@@ -723,8 +709,7 @@ IN_PROC_BROWSER_TEST_P(HelpAppIntegrationTest, HelpAppV2ShowParentalControls) {
 }
 
 // Test that the Help App's `openAppMallPath` opens the App Mall SWA.
-IN_PROC_BROWSER_TEST_P(HelpAppIntegrationTestWithAppMallEnabled,
-                       HelpAppV2ShowAppMallSWA) {
+IN_PROC_BROWSER_TEST_P(HelpAppIntegrationTest, HelpAppV2ShowAppMallSWA) {
   WaitForTestSystemAppInstall();
   content::WebContents* web_contents = LaunchApp(SystemWebAppType::HELP);
 
@@ -1252,7 +1237,4 @@ INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_ALL_PROFILE_TYPES_P(
 
 INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(
     HelpAppIntegrationTestWithHelpAppOpensInsteadOfReleaseNotesNotification);
-
-INSTANTIATE_SYSTEM_WEB_APP_MANAGER_TEST_SUITE_REGULAR_PROFILE_P(
-    HelpAppIntegrationTestWithAppMallEnabled);
 }  // namespace ash

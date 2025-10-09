@@ -60,7 +60,7 @@ constexpr base::TimeDelta kConnectionTimeout = base::Minutes(3);
   state.app_id = state_mojom->app_id;
   state.state =
       static_cast<UpdateService::UpdateState::State>(state_mojom->state);
-  state.next_version = base::Version(state_mojom->next_version);
+  state.next_version = state_mojom->next_version;
   state.downloaded_bytes = state_mojom->downloaded_bytes;
   state.total_bytes = state_mojom->total_bytes;
   state.install_progress = state_mojom->install_progress;
@@ -78,7 +78,7 @@ constexpr base::TimeDelta kConnectionTimeout = base::Minutes(3);
     const mojom::AppStatePtr& app_state_mojo) {
   UpdateService::AppState app_state;
   app_state.app_id = app_state_mojo->app_id;
-  app_state.version = base::Version(app_state_mojo->version);
+  app_state.version = app_state_mojo->version;
   if (app_state_mojo->version_path) {
     app_state.version_path = *app_state_mojo->version_path;
   }
@@ -104,11 +104,7 @@ constexpr base::TimeDelta kConnectionTimeout = base::Minutes(3);
 
 [[nodiscard]] mojom::RegistrationRequestPtr MakeRegistrationRequest(
     const RegistrationRequest& request) {
-  return mojom::RegistrationRequest::New(
-      request.app_id, request.brand_code, request.brand_path, request.ap,
-      request.version.GetString(), request.existence_checker_path,
-      request.ap_path, request.ap_key, request.version_path,
-      request.version_key, request.install_id);
+  return mojom::RegistrationRequest::New(request);
 }
 
 class StateChangeObserverImpl : public mojom::StateChangeObserver {

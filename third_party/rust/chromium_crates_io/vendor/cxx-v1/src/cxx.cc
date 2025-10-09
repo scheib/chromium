@@ -17,9 +17,17 @@
 //
 // On MSVC, it is possible for exception throwing and catching to be enabled
 // without __cpp_exceptions being defined, so do not try to detect anything.
-#if defined(__cpp_attributes) && !defined(__cpp_exceptions) &&                 \
-    (!defined(_MSC_VER) || defined(__llvm__))
+#if !defined(RUST_CXX_NO_EXCEPTIONS) && defined(__cpp_attributes) &&           \
+    !defined(__cpp_exceptions) && (!defined(_MSC_VER) || defined(__llvm__))
 #define RUST_CXX_NO_EXCEPTIONS
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wmissing-declarations"
+#pragma GCC diagnostic ignored "-Wshadow"
+#endif
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdollar-in-identifier-extension"
 #endif
 
 #ifndef CXX_RS_EXPORT
@@ -404,7 +412,8 @@ bool Str::operator<=(const Str &rhs) const noexcept {
   const_iterator liter = this->begin(), lend = this->end(), riter = rhs.begin(),
                  rend = rhs.end();
   while (liter != lend && riter != rend && *liter == *riter) {
-    ++liter, ++riter;
+    ++liter;
+    ++riter;
   }
   if (liter == lend) {
     return true; // equal or *this is a prefix of rhs

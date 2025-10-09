@@ -407,17 +407,10 @@ HTMLFormControlElement::popoverTargetElement() {
   return HTMLFormControlElement::popoverTargetElement(*this);
 }
 
-Element* HTMLFormControlElement::InterestForElement() const {
-  if (!RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled(
-          GetDocument().GetExecutionContext())) {
-    return nullptr;
-  }
-  if (!IsInTreeScope() || IsDisabledFormControl()) {
-    return nullptr;
-  }
-
-  return GetElementAttributeResolvingReferenceTarget(
-      html_names::kInterestforAttr);
+bool HTMLFormControlElement::IsValidInterestInvoker(Element& target) const {
+  DCHECK(RuntimeEnabledFeatures::HTMLInterestForAttributeEnabled());
+  // Buttons need to be enabled in order to support interest invokers.
+  return !IsDisabledFormControl();
 }
 
 // static

@@ -79,7 +79,6 @@
 #include "gpu/command_buffer/service/program_manager.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
 #include "gpu/command_buffer/service/sampler_manager.h"
-#include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/shader_manager.h"
 #include "gpu/command_buffer/service/shader_translator.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
@@ -90,6 +89,7 @@
 #include "gpu/command_buffer/service/vertex_attrib_manager.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_preferences.h"
+#include "third_party/perfetto/include/perfetto/tracing/track.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/point.h"
@@ -563,12 +563,11 @@ class GLES2DecoderImpl : public GLES2Decoder,
 
   // Overridden from GLES2Decoder.
   base::WeakPtr<DecoderContext> AsWeakPtr() override;
-  gpu::ContextResult Initialize(
-      const scoped_refptr<gl::GLSurface>& surface,
-      const scoped_refptr<gl::GLContext>& context,
-      bool offscreen,
-      const DisallowedFeatures& disallowed_features,
-      const ContextCreationAttribs& attrib_helper) override;
+  gpu::ContextResult Initialize(const scoped_refptr<gl::GLSurface>& surface,
+                                const scoped_refptr<gl::GLContext>& context,
+                                bool offscreen,
+                                ContextType context_type,
+                                bool lose_context_when_out_of_memory) override;
   void Destroy(bool have_context) override;
   void SetSurface(const scoped_refptr<gl::GLSurface>& surface) override;
   void ReleaseSurface() override;
@@ -678,7 +677,7 @@ class GLES2DecoderImpl : public GLES2Decoder,
                     const gfx::Rect& cleared_rect) override;
 
   // Implements GpuSwitchingObserver.
-  void OnGpuSwitched(gl::GpuPreference active_gpu_heuristic) override;
+  void OnGpuSwitched() override;
 
   // Restores the current state to the user's settings.
   void RestoreCurrentFramebufferBindings();
@@ -2840,19 +2839,20 @@ GLenum BackFramebuffer::CheckStatus() {
   return api()->glCheckFramebufferStatusEXTFn(GL_FRAMEBUFFER);
 }
 
-GLES2Decoder* GLES2Decoder::Create(
+std::unique_ptr<GLES2Decoder> GLES2Decoder::Create(
     DecoderClient* client,
     CommandBufferServiceBase* command_buffer_service,
     Outputter* outputter,
     ContextGroup* group) {
   if (group->use_passthrough_cmd_decoder()) {
-    return new GLES2DecoderPassthroughImpl(client, command_buffer_service,
-                                           outputter, group);
+    return std::make_unique<GLES2DecoderPassthroughImpl>(
+        client, command_buffer_service, outputter, group);
   }
 
 // Allow linux to run fuzzers.
 #if BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER) || BUILDFLAG(IS_LINUX)
-  return new GLES2DecoderImpl(client, command_buffer_service, outputter, group);
+  return std::make_unique<GLES2DecoderImpl>(client, command_buffer_service,
+                                            outputter, group);
 #else
   LOG(FATAL) << "Validating command decoder is not supported.";
 #endif
@@ -2934,8 +2934,8 @@ gpu::ContextResult GLES2DecoderImpl::Initialize(
     const scoped_refptr<gl::GLSurface>& surface,
     const scoped_refptr<gl::GLContext>& context,
     bool offscreen,
-    const DisallowedFeatures& disallowed_features,
-    const ContextCreationAttribs& attrib_helper) {
+    ContextType context_type,
+    bool lose_context_when_out_of_memory) {
   TRACE_EVENT0("gpu", "GLES2DecoderImpl::Initialize");
   DCHECK(context->IsCurrent(surface.get()));
   DCHECK(!context_.get());
@@ -2973,23 +2973,10 @@ gpu::ContextResult GLES2DecoderImpl::Initialize(
     GetGLContext()->CreateGPUTimingClient()->ForceTimeElapsedQuery();
   }
 
-  // Save the loseContextWhenOutOfMemory context creation attribute.
-  lose_context_when_out_of_memory_ =
-      attrib_helper.lose_context_when_out_of_memory;
-
-  // If the failIfMajorPerformanceCaveat context creation attribute was true
-  // and we are using a software renderer, fail.
-  if (attrib_helper.fail_if_major_perf_caveat &&
-      feature_info_->feature_flags().is_software_webgl) {
-    // Must not destroy ContextGroup if it is not initialized.
-    group_ = nullptr;
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "fail_if_major_perf_caveat + software gl";
-    return gpu::ContextResult::kFatalFailure;
-  }
+  lose_context_when_out_of_memory_ = lose_context_when_out_of_memory;
 
   // Only create ES 3.1 contexts with the passthrough cmd decoder.
-  if (attrib_helper.context_type == CONTEXT_TYPE_OPENGLES31_FOR_TESTING) {
+  if (context_type == CONTEXT_TYPE_OPENGLES31_FOR_TESTING) {
     // Must not destroy ContextGroup if it is not initialized.
     group_ = nullptr;
     LOG(ERROR) << "ContextResult::kFatalFailure: "
@@ -2997,8 +2984,7 @@ gpu::ContextResult GLES2DecoderImpl::Initialize(
     return gpu::ContextResult::kFatalFailure;
   }
 
-  auto result =
-      group_->Initialize(this, attrib_helper.context_type, disallowed_features);
+  auto result = group_->Initialize(this, context_type, DisallowedFeatures());
   if (result != gpu::ContextResult::kSuccess) {
     // Must not destroy ContextGroup if it is not initialized.
     group_ = nullptr;
@@ -3331,15 +3317,9 @@ Capabilities GLES2DecoderImpl::GetCapabilities() {
   caps.image_ab30 = feature_info_->feature_flags().chromium_image_ab30;
   caps.image_ycbcr_p010 =
       feature_info_->feature_flags().chromium_image_ycbcr_p010;
-  caps.max_copy_texture_chromium_size =
-      workarounds().max_copy_texture_chromium_size;
   caps.render_buffer_format_bgra8888 =
       feature_info_->feature_flags().ext_render_buffer_format_bgra8888;
   caps.gpu_rasterization = false;
-  if (workarounds().broken_egl_image_ref_counting &&
-      group_->gpu_preferences().enable_threaded_texture_mailboxes) {
-    caps.disable_2d_canvas_copy_on_write = true;
-  }
   caps.chromium_gpu_fence = feature_info_->feature_flags().chromium_gpu_fence;
   caps.mesa_framebuffer_flip_y =
       feature_info_->feature_flags().mesa_framebuffer_flip_y;
@@ -3408,8 +3388,6 @@ GLCapabilities GLES2DecoderImpl::GetGLCapabilities() {
                 &caps.num_compressed_texture_formats, 1);
   DoGetIntegerv(GL_NUM_SHADER_BINARY_FORMATS, &caps.num_shader_binary_formats,
                 1);
-  DoGetIntegerv(GL_BIND_GENERATES_RESOURCE_CHROMIUM,
-                &caps.bind_generates_resource_chromium, 1);
   if (feature_info_->IsWebGL2OrES3Context()) {
     // TODO(zmo): Note that some parameter values could be more than 32-bit,
     // but for now we clamp them to 32-bit max.
@@ -4403,9 +4381,9 @@ void GLES2DecoderImpl::SetLevelInfo(uint32_t client_id,
                                   0 /* border */, format, type, cleared_rect);
 }
 
-void GLES2DecoderImpl::OnGpuSwitched(gl::GpuPreference active_gpu_heuristic) {
+void GLES2DecoderImpl::OnGpuSwitched() {
   // Send OnGpuSwitched notification to renderer process via decoder client.
-  client()->OnGpuSwitched(active_gpu_heuristic);
+  client()->OnGpuSwitched();
 }
 
 void GLES2DecoderImpl::Destroy(bool have_context) {
@@ -4854,17 +4832,9 @@ void GLES2DecoderImpl::DoBindBuffer(GLenum target, GLuint client_id) {
   if (client_id != 0) {
     buffer = GetBuffer(client_id);
     if (!buffer) {
-      if (!group_->bind_generates_resource()) {
-        LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION,
-                           "glBindBuffer",
-                           "id not generated by glGenBuffers");
-        return;
-      }
-
-      // It's a new id so make a buffer buffer for it.
-      api()->glGenBuffersARBFn(1, &service_id);
-      CreateBuffer(client_id, service_id);
-      buffer = GetBuffer(client_id);
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, "glBindBuffer",
+                         "id not generated by glGenBuffers");
+      return;
     }
   }
   LogClientServiceForInfo(buffer, client_id, "glBindBuffer");
@@ -4946,28 +4916,18 @@ void GLES2DecoderImpl::BindIndexedBufferImpl(
   }
 
   Buffer* buffer = nullptr;
-  GLuint service_id = 0;
   if (client_id != 0) {
     buffer = GetBuffer(client_id);
     if (!buffer) {
-      if (!group_->bind_generates_resource()) {
-        LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
-                           "id not generated by glGenBuffers");
-        return;
-      }
-
-      // It's a new id so make a buffer for it.
-      api()->glGenBuffersARBFn(1, &service_id);
-      CreateBuffer(client_id, service_id);
-      buffer = GetBuffer(client_id);
-      DCHECK(buffer);
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
+                         "id not generated by glGenBuffers");
+      return;
     }
     if (!buffer_manager()->SetTarget(buffer, target)) {
       LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
                          "buffer bound to more than 1 target");
       return;
     }
-    service_id = buffer->service_id();
   }
   LogClientServiceForInfo(buffer, client_id, function_name);
 
@@ -5223,17 +5183,9 @@ void GLES2DecoderImpl::DoBindFramebuffer(GLenum target, GLuint client_id) {
   if (client_id != 0) {
     framebuffer = GetFramebuffer(client_id);
     if (!framebuffer) {
-      if (!group_->bind_generates_resource()) {
-        LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION,
-                           "glBindFramebuffer",
-                           "id not generated by glGenFramebuffers");
-        return;
-      }
-
-      // It's a new id so make a framebuffer framebuffer for it.
-      api()->glGenFramebuffersEXTFn(1, &service_id);
-      CreateFramebuffer(client_id, service_id);
-      framebuffer = GetFramebuffer(client_id);
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, "glBindFramebuffer",
+                         "id not generated by glGenFramebuffers");
+      return;
     } else {
       service_id = framebuffer->service_id();
     }
@@ -5270,17 +5222,9 @@ void GLES2DecoderImpl::DoBindRenderbuffer(GLenum target, GLuint client_id) {
   if (client_id != 0) {
     renderbuffer = GetRenderbuffer(client_id);
     if (!renderbuffer) {
-      if (!group_->bind_generates_resource()) {
-        LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION,
-                           "glBindRenderbuffer",
-                           "id not generated by glGenRenderbuffers");
-        return;
-      }
-
-      // It's a new id so make a renderbuffer for it.
-      api()->glGenRenderbuffersEXTFn(1, &service_id);
-      CreateRenderbuffer(client_id, service_id);
-      renderbuffer = GetRenderbuffer(client_id);
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, "glBindRenderbuffer",
+                         "id not generated by glGenRenderbuffers");
+      return;
     } else {
       service_id = renderbuffer->service_id();
     }
@@ -5335,22 +5279,12 @@ void GLES2DecoderImpl::UpdateTextureBinding(GLenum target,
 
 void GLES2DecoderImpl::DoBindTexture(GLenum target, GLuint client_id) {
   TextureRef* texture_ref = nullptr;
-  GLuint service_id = 0;
   if (client_id != 0) {
     texture_ref = GetTexture(client_id);
     if (!texture_ref) {
-      if (!group_->bind_generates_resource()) {
-        LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION,
-                           "glBindTexture",
-                           "id not generated by glGenTextures");
-        return;
-      }
-
-      // It's a new id so make a texture texture for it.
-      api()->glGenTexturesFn(1, &service_id);
-      DCHECK_NE(0u, service_id);
-      CreateTexture(client_id, service_id);
-      texture_ref = GetTexture(client_id);
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, "glBindTexture",
+                         "id not generated by glGenTextures");
+      return;
     }
   } else {
     texture_ref = texture_manager()->GetDefaultTextureInfo(target);
@@ -5389,8 +5323,7 @@ void GLES2DecoderImpl::DoBindSampler(GLuint unit, GLuint client_id) {
   if (client_id != 0) {
     sampler = GetSampler(client_id);
     if (!sampler) {
-      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION,
-                         "glBindSampler",
+      LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, "glBindSampler",
                          "id not generated by glGenSamplers");
       return;
     }
@@ -6140,12 +6073,6 @@ bool GLES2DecoderImpl::GetHelper(
         } else {
           *params = 0;
         }
-      }
-      return true;
-    case GL_BIND_GENERATES_RESOURCE_CHROMIUM:
-      *num_written = 1;
-      if (params) {
-        params[0] = group_->bind_generates_resource() ? 1 : 0;
       }
       return true;
     case GL_MAX_DUAL_SOURCE_DRAW_BUFFERS_EXT:
@@ -14989,8 +14916,8 @@ error::Error GLES2DecoderImpl::HandleDescheduleUntilFinishedCHROMIUM(
     return error::kNoError;
   }
 
-  TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(
-      "cc", "GLES2DecoderImpl::DescheduleUntilFinished", TRACE_ID_LOCAL(this));
+  TRACE_EVENT_BEGIN("cc", "GLES2DecoderImpl::DescheduleUntilFinished",
+                    perfetto::Track::FromPointer(this));
   client()->OnDescheduleUntilFinished();
   return error::kDeferLaterCommands;
 }
@@ -15075,8 +15002,8 @@ void GLES2DecoderImpl::ProcessDescheduleUntilFinished() {
   if (!deschedule_until_finished_fences_[0]->HasCompleted())
     return;
 
-  TRACE_EVENT_NESTABLE_ASYNC_END0(
-      "cc", "GLES2DecoderImpl::DescheduleUntilFinished", TRACE_ID_LOCAL(this));
+  TRACE_EVENT_END("cc", /*"GLES2DecoderImpl::DescheduleUntilFinished"*/
+                  perfetto::Track::FromPointer(this));
   deschedule_until_finished_fences_.erase(
       deschedule_until_finished_fences_.begin());
   client()->OnRescheduleAfterFinished();
@@ -16979,75 +16906,6 @@ void GLES2DecoderImpl::DoContextVisibilityHintCHROMIUM(GLboolean visibility) {
   if (feature_info_->IsWebGLContext())
     context_->SetVisibility(visibility == GL_TRUE);
 }
-
-error::Error GLES2DecoderImpl::HandleInitializeDiscardableTextureCHROMIUM(
-    uint32_t immediate_data_size,
-    const volatile void* cmd_data) {
-  const volatile gles2::cmds::InitializeDiscardableTextureCHROMIUM& c =
-      *static_cast<
-          const volatile gles2::cmds::InitializeDiscardableTextureCHROMIUM*>(
-          cmd_data);
-  GLuint texture_id = c.texture_id;
-  uint32_t shm_id = c.shm_id;
-  uint32_t shm_offset = c.shm_offset;
-
-  TextureRef* texture = texture_manager()->GetTexture(texture_id);
-  if (!texture) {
-    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE,
-                       "glInitializeDiscardableTextureCHROMIUM",
-                       "Invalid texture ID");
-    return error::kNoError;
-  }
-  scoped_refptr<gpu::Buffer> buffer = GetSharedMemoryBuffer(shm_id);
-  if (!DiscardableHandleBase::ValidateParameters(buffer.get(), shm_offset))
-    return error::kInvalidArguments;
-
-  size_t size = texture->texture()->estimated_size();
-  ServiceDiscardableHandle handle(std::move(buffer), shm_offset, shm_id);
-  GetContextGroup()->discardable_manager()->InsertLockedTexture(
-      texture_id, size, group_->texture_manager(), std::move(handle));
-  return error::kNoError;
-}
-
-error::Error GLES2DecoderImpl::HandleUnlockDiscardableTextureCHROMIUM(
-    uint32_t immediate_data_size,
-    const volatile void* cmd_data) {
-  const volatile gles2::cmds::UnlockDiscardableTextureCHROMIUM& c =
-      *static_cast<
-          const volatile gles2::cmds::UnlockDiscardableTextureCHROMIUM*>(
-          cmd_data);
-  GLuint texture_id = c.texture_id;
-  ServiceDiscardableManager* discardable_manager =
-      GetContextGroup()->discardable_manager();
-  TextureRef* texture_to_unbind;
-  if (!discardable_manager->UnlockTexture(texture_id, group_->texture_manager(),
-                                          &texture_to_unbind)) {
-    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE, "glUnlockDiscardableTextureCHROMIUM",
-                       "Texture ID not initialized");
-  }
-  if (texture_to_unbind)
-    UnbindTexture(texture_to_unbind, SupportsSeparateFramebufferBinds());
-
-  return error::kNoError;
-}
-
-error::Error GLES2DecoderImpl::HandleLockDiscardableTextureCHROMIUM(
-    uint32_t immediate_data_size,
-    const volatile void* cmd_data) {
-  const volatile gles2::cmds::LockDiscardableTextureCHROMIUM& c =
-      *static_cast<const volatile gles2::cmds::LockDiscardableTextureCHROMIUM*>(
-          cmd_data);
-  GLuint texture_id = c.texture_id;
-  if (!GetContextGroup()->discardable_manager()->LockTexture(
-          texture_id, group_->texture_manager())) {
-    // Temporarily log a crash dump for debugging crbug.com/870317.
-    base::debug::DumpWithoutCrashing();
-    LOCAL_SET_GL_ERROR(GL_INVALID_VALUE, "glLockDiscardableTextureCHROMIUM",
-                       "Texture ID not initialized");
-  }
-  return error::kNoError;
-}
-
 
 scoped_refptr<gpu::Buffer> GLES2DecoderImpl::GetShmBuffer(uint32_t shm_id) {
   return GetSharedMemoryBuffer(shm_id);

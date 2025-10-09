@@ -4,8 +4,6 @@
 
 #include "chrome/browser/glic/host/page_metadata_manager.h"
 
-#include <utility>
-
 #include "base/functional/bind.h"
 #include "chrome/browser/ui/tabs/tab_model.h"
 #include "components/optimization_guide/content/browser/page_content_metadata_observer.h"
@@ -50,8 +48,7 @@ PageMetadataManager::PageMetadataSubscription&
 PageMetadataManager::PageMetadataSubscription::operator=(
     PageMetadataSubscription&&) = default;
 
-PageMetadataManager::PageMetadataManager(
-    mojo::Remote<glic::mojom::WebClient>* web_client)
+PageMetadataManager::PageMetadataManager(glic::mojom::WebClient* web_client)
     : web_client_(web_client) {}
 
 PageMetadataManager::~PageMetadataManager() = default;
@@ -62,7 +59,6 @@ void PageMetadataManager::SubscribeToPageMetadata(
     glic::mojom::WebClientHandler::SubscribeToPageMetadataCallback callback) {
   // Erase any existing subscription for this tab.
   tab_id_to_page_metadata_subscriptions_.erase(tab_id);
-  tab_id_to_cached_page_metadata_.erase(tab_id);
 
   if (names.empty()) {
     // An empty name list is an unsubscription. We've already erased the
@@ -83,12 +79,9 @@ void PageMetadataManager::SubscribeToPageMetadata(
     return;
   }
 
-  auto on_page_metadata_changed = base::BindRepeating(
-      [](PageMetadataManager* manager, int32_t tab_id,
-         const blink::mojom::PageMetadata& metadata) {
-        manager->NotifyPageMetadataChanged(tab_id, metadata.Clone());
-      },
-      base::Unretained(this), tab_id);
+  auto on_page_metadata_changed =
+      base::BindRepeating(&PageMetadataManager::NotifyPageMetadataChanged,
+                          base::Unretained(this), tab_id);
 
   auto observer =
       std::make_unique<optimization_guide::PageContentMetadataObserver>(
@@ -109,24 +102,11 @@ void PageMetadataManager::SubscribeToPageMetadata(
   std::move(callback).Run(true);
 }
 
-void PageMetadataManager::SetPaused(bool paused) {
-  paused_ = paused;
-  if (paused_) {
-    return;
-  }
-
-  for (auto& [tab_id, metadata] :
-       std::exchange(tab_id_to_cached_page_metadata_, {})) {
-    web_client_->get()->NotifyPageMetadataChanged(tab_id, std::move(metadata));
-  }
-}
-
 void PageMetadataManager::OnTabWillDiscardContents(
     tabs::TabInterface* tab,
     content::WebContents* old_contents,
     content::WebContents* new_contents) {
   const int32_t tab_id = tab->GetHandle().raw_value();
-  tab_id_to_cached_page_metadata_.erase(tab_id);
   auto it = tab_id_to_page_metadata_subscriptions_.find(tab_id);
   if (it == tab_id_to_page_metadata_subscriptions_.end()) {
     return;
@@ -134,20 +114,16 @@ void PageMetadataManager::OnTabWillDiscardContents(
 
   auto& subscription = it->second;
   if (!new_contents || new_contents->IsBeingDestroyed()) {
-    // The observer is tied to the old web contents, which is being destroyed.
-    // Explicitly reset the observer, rather than waiting for the
-    // subscription to be removed when the tab is
-    // detached (OnTabWillDetach).
+    // The observer is tied to the old web contents and will be destroyed.
+    // Since there's no new web contents, we can't create a new observer.
+    // The subscription will be removed by OnTabWillDetach.
     subscription.observer.reset();
     return;
   }
 
-  auto on_page_metadata_changed = base::BindRepeating(
-      [](PageMetadataManager* manager, int32_t tab_id,
-         const blink::mojom::PageMetadata& metadata) {
-        manager->NotifyPageMetadataChanged(tab_id, metadata.Clone());
-      },
-      base::Unretained(this), tab_id);
+  auto on_page_metadata_changed =
+      base::BindRepeating(&PageMetadataManager::NotifyPageMetadataChanged,
+                          base::Unretained(this), tab_id);
 
   auto observer =
       std::make_unique<optimization_guide::PageContentMetadataObserver>(
@@ -165,20 +141,12 @@ void PageMetadataManager::OnTabWillDetach(
   const int32_t tab_id = tab->GetHandle().raw_value();
   NotifyPageMetadataChanged(tab_id, nullptr);
   tab_id_to_page_metadata_subscriptions_.erase(tab_id);
-  tab_id_to_cached_page_metadata_.erase(tab_id);
 }
 
 void PageMetadataManager::NotifyPageMetadataChanged(
     int32_t tab_id,
     blink::mojom::PageMetadataPtr page_metadata) {
-  if (paused_ && page_metadata) {
-    // If paused, cache the metadata to be sent later. A null metadata
-    // indicates completion and should be sent immediately.
-    tab_id_to_cached_page_metadata_[tab_id] = std::move(page_metadata);
-  } else {
-    web_client_->get()->NotifyPageMetadataChanged(tab_id,
-                                                  std::move(page_metadata));
-  }
+  web_client_->NotifyPageMetadataChanged(tab_id, std::move(page_metadata));
 }
 
 }  // namespace glic

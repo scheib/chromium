@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.compositor.overlays.strip.reorder;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,11 +34,14 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.Token;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutGroupTitle;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutTab;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutUtils;
 import org.chromium.chrome.browser.compositor.overlays.strip.StripLayoutView;
 import org.chromium.chrome.browser.compositor.overlays.strip.reorder.ReorderDelegate.ReorderType;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
 
 import java.util.List;
@@ -55,6 +60,10 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
     // tab reorder threshold = (width(50) - overlap(28)) * constant(0.53) = 11.66
     private static final float DRAG_PAST_TAB_FAIL = 10.f;
     private static final float DRAG_PAST_TAB_SUCCESS = 15.f;
+
+    // pinned tab reorder threshold = (width(108) - overlap(28)) * constant(0.53) = 42.4
+    private static final float DRAG_PAST_PINNED_TAB_SUCCESS = 43.f;
+
     // collapsed group reorder threshold = width(50) * constant(0.53) = 26.5
     private static final float DRAG_PAST_COLLAPSED_GROUP_FAIL = 20.f;
     private static final float DRAG_PAST_COLLAPSED_GROUP_SUCCESS = 30.f;
@@ -114,11 +123,11 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
     @Override
     protected void setupStripViews() {
         // Data = [CollapsedGroup]([Tab])  [Tab]  [Tab]  [ExpandedGroup]([Tab] [Tab])  [Tab]
-        StripLayoutGroupTitle groupTitle1 = buildGroupTitle(TAB_ID1, GROUP_ID1, /* x= */ 0);
+        StripLayoutGroupTitle groupTitle1 = buildGroupTitle(GROUP_ID1, /* x= */ 0);
         mCollapsedTab = buildStripTab(TAB_ID1, TAB_WIDTH);
         mUngroupedTab1 = buildStripTab(TAB_ID2, 2 * TAB_WIDTH);
         mUngroupedTab2 = buildStripTab(TAB_ID3, 3 * TAB_WIDTH);
-        mExpandedTitle = buildGroupTitle(TAB_ID4, GROUP_ID2, 4 * TAB_WIDTH);
+        mExpandedTitle = buildGroupTitle(GROUP_ID2, 4 * TAB_WIDTH);
         mExpandedTab1 = buildStripTab(TAB_ID4, 5 * TAB_WIDTH);
         mExpandedTab2 = buildStripTab(TAB_ID5, 6 * TAB_WIDTH);
         mLastTab = buildStripTab(TAB_ID6, 7 * TAB_WIDTH);
@@ -171,7 +180,7 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
 
         String message = "Unexpected group margin.";
         float expectedMargin =
-                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier)
+                StripLayoutUtils.getHalfTabWidth(mTabWidthSupplier, /* isPinned= */ false)
                         * StripLayoutUtils.REORDER_OVERLAP_SWITCH_PERCENTAGE;
         verify(mScrollDelegate).setReorderStartMargin(expectedMargin);
         assertEquals(message, 0, mCollapsedTab.getTrailingMargin(), DELTA);
@@ -216,6 +225,40 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
         testUpdateReorder_success(draggedTab, dragDeltaX, expectedOffset);
 
         verify(mModel).moveTab(mInteractingTab.getTabId(), expectedIndex);
+    }
+
+    @Test
+    @Feature("Pinned Tabs")
+    public void testUpdateReorder_success_pinnedTabs() {
+        // Pinned tabs should live at strip start, however, this test and below only checks the
+        // success/failure of the reorder, the initial position doesn't matter, so reuse the current
+        // StripViews here for now. Should consider to refactor this setup for clarity.
+
+        //                     -------->
+        // [CollapsedGroup]  [PinnedTab]  [PinnedTab]  [ExpandedGroup]  [Tab]
+        mUngroupedTab1.setIsPinned(true);
+        mUngroupedTab2.setIsPinned(true);
+        Tab tab1 = mModel.getTabAt(1);
+        Tab tab2 = mModel.getTabAt(2);
+        tab1.setIsPinned(true);
+        tab2.setIsPinned(true);
+        testUpdateReorder_success(
+                mUngroupedTab1, TAB_WIDTH, DRAG_PAST_PINNED_TAB_SUCCESS, /* expectedIndex= */ 2);
+        verifyMoved();
+    }
+
+    @Test
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS_TABLET_TAB_STRIP)
+    public void testUpdateReorder_fail_pinnedTabs() {
+        //                    -------->
+        // [CollapsedGroup]  [PinnedTab]  [Tab]  [ExpandedGroup]  [Tab]
+        mUngroupedTab1.setIsPinned(true);
+        Tab tab1 = mModel.getTabAt(1);
+        tab1.setIsPinned(true);
+
+        // Though the drag threshold is reached, but pinned tab cannot trigger reorder for an
+        // unpinned tab.
+        testUpdateReorder_fail(mUngroupedTab1, DRAG_PAST_PINNED_TAB_SUCCESS);
     }
 
     @Test
@@ -342,7 +385,7 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
     }
 
     @Test
-    public void testUpdateReorder_bottomIndicatorWidth_unGroup() {
+    public void testUpdateReorder_bottomIndicatorWidth_ungroup() {
         //                                                         ------>
         // [CollapsedGroup]  [Tab]  [Tab]  [ExpandedGroup]([Tab] [Tab])  [Tab]
         mockUnGroup();
@@ -451,12 +494,13 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
                 .moveTab(anyInt(), anyInt());
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     private void mockMergeToGroup() {
         ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
         doAnswer(
                         invocation -> {
                             Tab tab = mModel.getTabById(captor.getValue());
-                            assert tab != null;
+                            assertThat(tab).isNotNull();
                             Token tabGroupId = tab.getTabGroupId();
                             int count = mTabGroupModelFilter.getTabCountForGroup(tabGroupId);
                             when(mTabGroupModelFilter.getTabCountForGroup(tabGroupId))
@@ -467,6 +511,7 @@ public class TabReorderStrategyTest extends ReorderStrategyTestBase {
                 .mergeTabsToGroup(anyInt(), captor.capture(), anyBoolean());
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     private void mockUnGroup() {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Tab>> captor = ArgumentCaptor.forClass(List.class);

@@ -20,8 +20,11 @@ import static org.chromium.chrome.test.util.ChromeTabUtils.getIndexOnUiThread;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Build;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Before;
@@ -30,9 +33,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
@@ -66,6 +69,7 @@ import org.chromium.chrome.test.transit.hub.UndoSnackbarFacility;
 import org.chromium.chrome.test.transit.ntp.IncognitoNewTabPageStation;
 import org.chromium.chrome.test.transit.ntp.RegularNewTabPageAppMenuFacility;
 import org.chromium.chrome.test.transit.ntp.RegularNewTabPageStation;
+import org.chromium.chrome.test.transit.page.BasePageStation;
 import org.chromium.chrome.test.transit.page.CtaPageStation;
 import org.chromium.chrome.test.transit.page.WebPageStation;
 import org.chromium.chrome.test.transit.tabmodel.TabThumbnailsCapturedCarryOn;
@@ -81,6 +85,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
 /** Tests for the {@link TabSwitcherLayout}. */
 @SuppressWarnings("ConstantConditions")
@@ -316,6 +321,64 @@ public class TabSwitcherLayoutPTTest {
 
     @Test
     @MediumTest
+    @Feature({"RenderTest"})
+    @EnableFeatures(ChromeFeatureList.ANDROID_PINNED_TABS)
+    @DisabledTest(message = "crbug.com/444244174")
+    public void testRenderGrid_PinnedTabs_Scrolled() throws IOException {
+        ChromeTabbedActivity cta = mCtaTestRule.getActivity();
+        RegularNewTabPageStation pageStation =
+                Journeys.prepareTabsWithThumbnails(
+                        mStartPage,
+                        18,
+                        0,
+                        UrlConstants.NTP_URL,
+                        RegularNewTabPageStation::newBuilder);
+        // Make sure all thumbnails are there before switching tabs.
+        RegularTabSwitcherStation tabSwitcherStation =
+                enterRegularHtsWithThumbnailChecking(pageStation);
+
+        // Pin two tabs.
+        pageStation = tabSwitcherStation.selectTabAtIndex(0, RegularNewTabPageStation.newBuilder());
+        RegularNewTabPageAppMenuFacility menu = pageStation.openAppMenu();
+        menu.pinTab();
+
+        tabSwitcherStation = pageStation.openRegularTabSwitcher();
+        pageStation = tabSwitcherStation.selectTabAtIndex(1, RegularNewTabPageStation.newBuilder());
+        menu = pageStation.openAppMenu();
+        menu.pinTab();
+
+        tabSwitcherStation = pageStation.openRegularTabSwitcher();
+
+        // Scroll to the bottom to make the pinned tab strip visible.
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    RecyclerView recyclerView = cta.findViewById(R.id.tab_list_recycler_view);
+                    recyclerView.scrollToPosition(recyclerView.getAdapter().getItemCount() - 1);
+                });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    RecyclerView recyclerView = cta.findViewById(R.id.tab_list_recycler_view);
+                    if (recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+                        return false;
+                    }
+                    LinearLayout parent = (LinearLayout) recyclerView.getParent();
+                    View pinnedTabView = parent.getChildAt(0);
+                    return pinnedTabView != null
+                            && pinnedTabView.getVisibility() == View.VISIBLE
+                            && pinnedTabView.getAlpha() == 1.0f
+                            && pinnedTabView.getTranslationY() == 0f;
+                });
+
+        mRenderTestRule.render(cta.findViewById(R.id.pane_frame), "pinned_tabs_scrolled");
+
+        RegularNewTabPageStation previousPage =
+                tabSwitcherStation.leaveHubToPreviousTabViaBack(
+                        RegularNewTabPageStation.newBuilder());
+        assertFinalDestination(previousPage);
+    }
+
+    @Test
+    @MediumTest
     @EnableAnimations
     public void testTabToGridAndBack_NoReset() {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
@@ -449,9 +512,9 @@ public class TabSwitcherLayoutPTTest {
                         "Android.TabGroupParity.TabGroupCreationDialogResultAction", 1);
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -488,9 +551,9 @@ public class TabSwitcherLayoutPTTest {
                         .build();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs and edit group fields
@@ -521,9 +584,9 @@ public class TabSwitcherLayoutPTTest {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -553,9 +616,9 @@ public class TabSwitcherLayoutPTTest {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -587,9 +650,9 @@ public class TabSwitcherLayoutPTTest {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -624,9 +687,9 @@ public class TabSwitcherLayoutPTTest {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -656,9 +719,9 @@ public class TabSwitcherLayoutPTTest {
         WebPageStation firstPage = mCtaTestRule.startOnBlankPage();
 
         // Open 2 tabs
-        int firstTabId = firstPage.loadedTabElement.get().getId();
+        int firstTabId = firstPage.loadedTabElement.value().getId();
         RegularNewTabPageStation secondPage = firstPage.openNewTabFast();
-        int secondTabId = secondPage.loadedTabElement.get().getId();
+        int secondTabId = secondPage.loadedTabElement.value().getId();
         RegularTabSwitcherStation tabSwitcher = secondPage.openRegularTabSwitcher();
 
         // Group both tabs
@@ -693,7 +756,7 @@ public class TabSwitcherLayoutPTTest {
 
     private <T extends CtaPageStation> T roundtripToHTSWithThumbnailChecks(
             T page,
-            Supplier<CtaPageStation.Builder<T>> destinationBuiderFactory,
+            Supplier<BasePageStation.Builder<T>> destinationBuiderFactory,
             Runnable resetHTSStateOnUiThread,
             boolean canGarbageCollectBitmaps) {
         RegularTabSwitcherStation tabSwitcher = enterRegularHtsWithThumbnailChecking(page);
@@ -730,10 +793,11 @@ public class TabSwitcherLayoutPTTest {
     @MediumTest
     public void testUrlUpdatedNotCrashing_ForTabNotInCurrentModel() throws Exception {
         WebPageStation regularPage = mCtaTestRule.startOnBlankPage();
-        Tab regularTab = regularPage.loadedTabElement.get();
+        Tab regularTab = regularPage.loadedTabElement.value();
         IncognitoNewTabPageStation incognitoPage = regularPage.openNewIncognitoTabFast();
-        Tab incognitoTab = incognitoPage.loadedTabElement.get();
-        IncognitoTabSwitcherStation incognitoTabSwitcherStation = incognitoPage.openIncognitoTabSwitcher();
+        Tab incognitoTab = incognitoPage.loadedTabElement.value();
+        IncognitoTabSwitcherStation incognitoTabSwitcherStation =
+                incognitoPage.openIncognitoTabSwitcher();
         // Load URL in Regular Model
         mCtaTestRule.loadUrlInTab(
                 mCtaTestRule.getTestServer().getURL(TEST_URL),

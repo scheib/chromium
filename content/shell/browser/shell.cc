@@ -31,6 +31,7 @@
 #include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
 #include "content/public/browser/presentation_receiver_flags.h"
 #include "content/public/browser/render_process_host.h"
@@ -48,6 +49,7 @@
 #include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
+#include "third_party/blink/public/mojom/input/pointer_lock_result.mojom.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 
 namespace content {

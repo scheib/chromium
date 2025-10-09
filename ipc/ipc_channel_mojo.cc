@@ -24,8 +24,6 @@
 #include "ipc/ipc_message_macros.h"
 #include "ipc/ipc_mojo_bootstrap.h"
 #include "ipc/ipc_mojo_handle_attachment.h"
-#include "ipc/native_handle_type_converters.h"
-#include "ipc/trace_ipc_message.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
@@ -36,37 +34,6 @@
 namespace IPC {
 
 namespace {
-
-class MojoChannelFactory : public ChannelFactory {
- public:
-  MojoChannelFactory(
-      mojo::ScopedMessagePipeHandle handle,
-      Channel::Mode mode,
-      const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-      const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner)
-      : handle_(std::move(handle)),
-        mode_(mode),
-        ipc_task_runner_(ipc_task_runner),
-        proxy_task_runner_(proxy_task_runner) {}
-
-  MojoChannelFactory(const MojoChannelFactory&) = delete;
-  MojoChannelFactory& operator=(const MojoChannelFactory&) = delete;
-
-  std::unique_ptr<Channel> BuildChannel(Listener* listener) override {
-    return ChannelMojo::Create(std::move(handle_), mode_, listener,
-                               ipc_task_runner_, proxy_task_runner_);
-  }
-
-  scoped_refptr<base::SingleThreadTaskRunner> GetIPCTaskRunner() override {
-    return ipc_task_runner_;
-  }
-
- private:
-  mojo::ScopedMessagePipeHandle handle_;
-  const Channel::Mode mode_;
-  scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner_;
-  scoped_refptr<base::SingleThreadTaskRunner> proxy_task_runner_;
-};
 
 class ThreadSafeChannelProxy : public mojo::ThreadSafeProxy {
  public:
@@ -114,37 +81,6 @@ base::ProcessId GetSelfPID() {
 }  // namespace
 
 //------------------------------------------------------------------------------
-
-// static
-std::unique_ptr<ChannelMojo> ChannelMojo::Create(
-    mojo::ScopedMessagePipeHandle handle,
-    Mode mode,
-    Listener* listener,
-    const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner) {
-  return base::WrapUnique(new ChannelMojo(std::move(handle), mode, listener,
-                                          ipc_task_runner, proxy_task_runner));
-}
-
-// static
-std::unique_ptr<ChannelFactory> ChannelMojo::CreateServerFactory(
-    mojo::ScopedMessagePipeHandle handle,
-    const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner) {
-  return std::make_unique<MojoChannelFactory>(
-      std::move(handle), Channel::MODE_SERVER, ipc_task_runner,
-      proxy_task_runner);
-}
-
-// static
-std::unique_ptr<ChannelFactory> ChannelMojo::CreateClientFactory(
-    mojo::ScopedMessagePipeHandle handle,
-    const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner) {
-  return std::make_unique<MojoChannelFactory>(
-      std::move(handle), Channel::MODE_CLIENT, ipc_task_runner,
-      proxy_task_runner);
-}
 
 ChannelMojo::ChannelMojo(
     mojo::ScopedMessagePipeHandle handle,
@@ -252,26 +188,6 @@ void ChannelMojo::OnAssociatedInterfaceRequest(
   }
 }
 
-bool ChannelMojo::Send(Message* message) {
-  DVLOG(2) << "sending message @" << message << " on channel @" << this
-           << " with type " << message->type();
-
-  std::unique_ptr<Message> scoped_message = base::WrapUnique(message);
-  if (!message_reader_)
-    return false;
-
-  // Comment copied from ipc_channel_posix.cc:
-  // We can't close the pipe here, because calling OnChannelError may destroy
-  // this object, and that would be bad if we are called from Send(). Instead,
-  // we return false and hope the caller will close the pipe. If they do not,
-  // the pipe will still be closed next time OnFileCanReadWithoutBlocking is
-  // called.
-  //
-  // With Mojo, there's no OnFileCanReadWithoutBlocking, but we expect the
-  // pipe's connection error handler will be invoked in its place.
-  return message_reader_->Send(std::move(scoped_message));
-}
-
 Channel::AssociatedInterfaceSupport*
 ChannelMojo::GetAssociatedInterfaceSupport() { return this; }
 
@@ -288,75 +204,8 @@ void ChannelMojo::OnPeerPidReceived(int32_t peer_pid) {
   listener_->OnChannelConnected(peer_pid);
 }
 
-void ChannelMojo::OnMessageReceived(const Message& message) {
-  const Message* message_ptr = &message;
-  TRACE_IPC_MESSAGE_SEND("ipc,toplevel", "ChannelMojo::OnMessageReceived",
-                         message_ptr);
-  listener_->OnMessageReceived(message);
-  if (message.dispatch_error())
-    listener_->OnBadMessageReceived(message);
-}
-
 void ChannelMojo::OnBrokenDataReceived() {
-  listener_->OnBadMessageReceived(Message());
-}
-
-// static
-MojoResult ChannelMojo::ReadFromMessageAttachmentSet(
-    Message* message,
-    std::optional<std::vector<mojo::native::SerializedHandlePtr>>* handles) {
-  DCHECK(!*handles);
-
-  MojoResult result = MOJO_RESULT_OK;
-  if (!message->HasAttachments())
-    return result;
-
-  std::vector<mojo::native::SerializedHandlePtr> output_handles;
-  MessageAttachmentSet* set = message->attachment_set();
-
-  for (unsigned i = 0; result == MOJO_RESULT_OK && i < set->size(); ++i) {
-    auto attachment = set->GetAttachmentAt(i);
-    auto serialized_handle = mojo::native::SerializedHandle::New();
-    serialized_handle->the_handle = attachment->TakeMojoHandle();
-    serialized_handle->type =
-        mojo::ConvertTo<mojo::native::SerializedHandleType>(
-            attachment->GetType());
-    output_handles.emplace_back(std::move(serialized_handle));
-  }
-  set->CommitAllDescriptors();
-
-  if (!output_handles.empty())
-    *handles = std::move(output_handles);
-
-  return result;
-}
-
-// static
-MojoResult ChannelMojo::WriteToMessageAttachmentSet(
-    std::optional<std::vector<mojo::native::SerializedHandlePtr>> handles,
-    Message* message) {
-  if (!handles)
-    return MOJO_RESULT_OK;
-  for (size_t i = 0; i < handles->size(); ++i) {
-    auto& handle = handles->at(i);
-    scoped_refptr<MessageAttachment> unwrapped_attachment =
-        MessageAttachment::CreateFromMojoHandle(
-            std::move(handle->the_handle),
-            mojo::ConvertTo<MessageAttachment::Type>(handle->type));
-    if (!unwrapped_attachment) {
-      DLOG(WARNING) << "Pipe failed to unwrap handles.";
-      return MOJO_RESULT_UNKNOWN;
-    }
-
-    bool ok = message->attachment_set()->AddAttachment(
-        std::move(unwrapped_attachment));
-    DCHECK(ok);
-    if (!ok) {
-      LOG(ERROR) << "Failed to add new Mojo handle.";
-      return MOJO_RESULT_UNKNOWN;
-    }
-  }
-  return MOJO_RESULT_OK;
+  listener_->OnBadMessageReceived();
 }
 
 void ChannelMojo::AddGenericAssociatedInterface(

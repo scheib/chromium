@@ -46,6 +46,7 @@
 #include "components/autofill/core/browser/data_model/payments/credit_card.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_import/form_data_importer_test_api.h"
+#include "components/autofill/core/browser/form_parsing/determine_regex_types.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/form_structure_test_api.h"
 #include "components/autofill/core/browser/foundations/test_autofill_client.h"
@@ -88,6 +89,7 @@ using ::testing::_;
 using ::testing::Contains;
 using ::testing::ElementsAre;
 using ::testing::Eq;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Pair;
 using ::testing::Pointee;
@@ -108,11 +110,7 @@ constexpr char kDefaultZip[] = "94102";
 constexpr char kDefaultCity[] = "Los Angeles";
 constexpr char kDefaultState[] = "California";
 constexpr char kDefaultCountry[] = "US";
-// Unlike phone numbers from other countries, US phone numbers are stored
-// without a leading "+". Formatting a US or CA phone number drops the leading
-// "+". As these tests check equality, we drop the "+" in the input as it would
-// be gone in the output.
-constexpr char kDefaultPhone[] = "1 650-555-0000";
+constexpr char kDefaultPhone[] = "+1 650-555-0000";
 constexpr char kDefaultPhoneAreaCode[] = "650";
 constexpr char kDefaultPhonePrefix[] = "555";
 constexpr char kDefaultPhoneSuffix[] = "0000";
@@ -125,7 +123,7 @@ constexpr char kSecondAddressLine1[] = "23 Main St";
 constexpr char kSecondZip[] = "94106";
 constexpr char kSecondCity[] = "Los Angeles";
 constexpr char kSecondState[] = "California";
-constexpr char kSecondPhone[] = "1 651-666-1111";
+constexpr char kSecondPhone[] = "+1 651-666-1111";
 constexpr char kSecondPhoneAreaCode[] = "651";
 constexpr char kSecondPhonePrefix[] = "666";
 constexpr char kSecondPhoneSuffix[] = "1111";
@@ -138,7 +136,7 @@ constexpr char kThirdAddressLine1[] = "742 Evergreen Terrace";
 constexpr char kThirdZip[] = "65619";
 constexpr char kThirdCity[] = "Springfield";
 constexpr char kThirdState[] = "Oregon";
-constexpr char kThirdPhone[] = "1 850-777-2222";
+constexpr char kThirdPhone[] = "+1 850-777-2222";
 
 constexpr char kDefaultCreditCardName[] = "Biggie Smalls";
 constexpr char kDefaultCreditCardNumber[] = "4111 1111 1111 1111";
@@ -148,6 +146,9 @@ constexpr char kDefaultCreditCardExpYear[] = "2999";
 constexpr char kDefaultPhoneGermany[] = "+49 89 123456";
 constexpr char kDefaultPhoneMexico[] = "+52 55 1234 5678";
 constexpr char kDefaultPhoneArmenia[] = "+374 10 123456";
+
+constexpr char kDefaultGuid[] = "a21f010a-eac1-41fc-aee9-c06bbedfb292";
+constexpr char kSecondGuid[] = "a21f010a-eac1-41fc-aee9-c06bbedfb293";
 
 // For a given FieldType |type| returns a pair of field name and label
 // that should be parsed into this type by our field type parsers.
@@ -211,7 +212,12 @@ std::unique_ptr<FormStructure> ConstructFormStructureFromFormData(
     GeoIpCountryCode geo_country = GeoIpCountryCode("")) {
   auto cached_form_structure =
       std::make_unique<FormStructure>(test::WithoutValues(form));
-  cached_form_structure->DetermineHeuristicTypes(geo_country, nullptr);
+  const RegexPredictions regex_predictions =
+      DetermineRegexTypes(geo_country, LanguageCode(""),
+                          cached_form_structure->ToFormData(), nullptr);
+  regex_predictions.ApplyTo(cached_form_structure->fields());
+  cached_form_structure->RationalizeAndAssignSections(
+      geo_country, LanguageCode(""), nullptr);
 
   auto form_structure = std::make_unique<FormStructure>(form);
   form_structure->RetrieveFromCache(
@@ -2455,6 +2461,29 @@ TEST_F(FormDataImporterTest,
   EXPECT_THAT(*results[0], ComparesEqual(credit_card));
 }
 
+// Tests that if Save and Fill suggestion was clicked on before the form
+// extraction, no payments post-checkout flows are offered. But we should still
+// log the "submitted card state" metrics correctly.
+TEST_F(FormDataImporterTest, ExtractCreditCard_SaveAndFillOccurred) {
+  FormData form = CreateFullCreditCardForm("Jim Johansen", "4111111111111111",
+                                           "02", "2999");
+  form_data_importer()
+      .fetched_payments_data_context()
+      .card_submitted_through_save_and_fill = true;
+  std::unique_ptr<FormStructure> form_structure =
+      ConstructFormStructureFromFormData(form);
+  base::HistogramTester histogram_tester;
+
+  std::optional<CreditCard> extracted_credit_card =
+      ExtractCreditCard(*form_structure);
+
+  EXPECT_FALSE(extracted_credit_card);
+  histogram_tester.ExpectUniqueSample(
+      "Autofill.SubmittedCardState",
+      AutofillMetrics::HAS_CARD_NUMBER_AND_EXPIRATION_DATE, 1);
+  ASSERT_EQ(0U, payments_data_manager().GetCreditCards().size());
+}
+
 // Ensures that
 // `FormDataImporterTest::credit_card_import_type_` is set and
 // reset correctly.
@@ -3652,7 +3681,9 @@ TEST_F(FormDataImporterTest, ProcessExtractedCreditCard_VirtualCardEligible) {
   test_api(form_data_importer())
       .set_credit_card_import_type(
           FormDataImporter::CreditCardImportType::kServerCard);
-  form_data_importer().SetFetchedCardInstrumentId(2222);
+  form_data_importer()
+      .fetched_payments_data_context()
+      .fetched_card_instrument_id = 2222;
 
   EXPECT_CALL(virtual_card_enrollment_manager(),
               InitVirtualCardEnroll(_, VirtualCardEnrollmentSource::kDownstream,
@@ -3665,7 +3696,9 @@ TEST_F(FormDataImporterTest, ProcessExtractedCreditCard_VirtualCardEligible) {
                                       /*is_credit_card_upstream_enabled=*/true,
                                       ukm_source_id()));
 
-  form_data_importer().SetFetchedCardInstrumentId(1111);
+  form_data_importer()
+      .fetched_payments_data_context()
+      .fetched_card_instrument_id = 1111;
   EXPECT_CALL(virtual_card_enrollment_manager(),
               InitVirtualCardEnroll(_, VirtualCardEnrollmentSource::kDownstream,
                                     _, _, _, _));
@@ -3727,11 +3760,15 @@ TEST_F(FormDataImporterTest,
                                   ukm_source_id());
 }
 
-// Test that in the case where the MandatoryReauthManager denotes we should
-// offer re-auth opt-in, we start the opt-in in credit card processing flow if
-// the card is not a new card.
+// Verifies the legacy behavior when
+// `kAutofillPrioritizeSaveCardOverMandatoryReauth` is disabled. Verifies that
+// when the conditions for offering mandatory re-auth are met, the re-auth
+// bubble is offered immediately and the save card flow is not attempted.
 TEST_F(FormDataImporterTest,
-       ProcessExtractedCreditCard_MandatoryReauthOffered) {
+       ProcessExtractedCreditCard_PrioritizeSaveCard_FlagOff) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(
+      features::kAutofillPrioritizeSaveCardOverMandatoryReauth);
   CreditCard extracted_credit_card = test::GetCreditCard2();
   std::unique_ptr<FormStructure> form_structure =
       ConstructDefaultCreditCardFormStructure();
@@ -3742,6 +3779,8 @@ TEST_F(FormDataImporterTest,
       .set_credit_card_import_type(
           FormDataImporter::CreditCardImportType::kLocalCard);
 
+  EXPECT_CALL(credit_card_save_manager(), ProceedWithSavingIfApplicable)
+      .Times(0);
   EXPECT_CALL(reauth_manager(), ShouldOfferOptin).WillOnce(Return(true));
   EXPECT_CALL(reauth_manager(), StartOptInFlow);
 
@@ -3756,6 +3795,68 @@ TEST_F(FormDataImporterTest,
       test_api(form_data_importer())
           .payment_method_type_if_non_interactive_authentication_flow_completed()
           .has_value());
+}
+
+// Test that when `kAutofillPrioritizeSaveCardOverMandatoryReauth` is enabled,
+// the save card bubble is prioritized. If that bubble is shown, the mandatory
+// re-auth bubble is not offered.
+TEST_F(
+    FormDataImporterTest,
+    ProcessExtractedCreditCard_PrioritizeSaveCard_SaveSucceedsMandatoryReauthNotOffered) {
+  base::test::ScopedFeatureList feature_list(
+      features::kAutofillPrioritizeSaveCardOverMandatoryReauth);
+
+  CreditCard card = test::GetCreditCard();
+  std::unique_ptr<FormStructure> form_structure =
+      ConstructDefaultCreditCardFormStructure();
+  test_api(form_data_importer())
+      .set_credit_card_import_type(
+          FormDataImporter::CreditCardImportType::kLocalCard);
+  form_data_importer()
+      .SetPaymentMethodTypeIfNonInteractiveAuthenticationFlowCompleted(
+          NonInteractivePaymentMethodType::kLocalCard);
+
+  EXPECT_CALL(credit_card_save_manager(), ProceedWithSavingIfApplicable)
+      .WillOnce(Return(true));
+  // Verify that the mandatory re-auth flow is never started.
+  EXPECT_CALL(reauth_manager(), ShouldOfferOptin).Times(0);
+  EXPECT_CALL(reauth_manager(), StartOptInFlow).Times(0);
+
+  test_api(form_data_importer())
+      .ProcessExtractedCreditCard(*form_structure, card,
+                                  /*is_credit_card_upstream_enabled=*/false,
+                                  ukm_source_id());
+}
+
+// Test that when `kAutofillPrioritizeSaveCardOverMandatoryReauth` is enabled,
+// offering the save card bubble is prioritized. If it fails, we offer the
+// mandatory re-auth bubble as a fallback.
+TEST_F(
+    FormDataImporterTest,
+    ProcessExtractedCreditCard_PrioritizeSaveCard_SaveCardFailsMandatoryReauthOffered) {
+  base::test::ScopedFeatureList feature_list(
+      features::kAutofillPrioritizeSaveCardOverMandatoryReauth);
+
+  CreditCard card = test::GetCreditCard();
+  std::unique_ptr<FormStructure> form_structure =
+      ConstructDefaultCreditCardFormStructure();
+  test_api(form_data_importer())
+      .set_credit_card_import_type(
+          FormDataImporter::CreditCardImportType::kLocalCard);
+  form_data_importer()
+      .SetPaymentMethodTypeIfNonInteractiveAuthenticationFlowCompleted(
+          NonInteractivePaymentMethodType::kLocalCard);
+
+  EXPECT_CALL(credit_card_save_manager(), ProceedWithSavingIfApplicable)
+      .WillOnce(Return(false));
+  // As a fallback, the mandatory re-auth flow should be offered.
+  EXPECT_CALL(reauth_manager(), ShouldOfferOptin).WillOnce(Return(true));
+  EXPECT_CALL(reauth_manager(), StartOptInFlow).Times(1);
+
+  test_api(form_data_importer())
+      .ProcessExtractedCreditCard(*form_structure, card,
+                                  /*is_credit_card_upstream_enabled=*/false,
+                                  ukm_source_id());
 }
 
 // Test that in the case where the MandatoryReauthManager denotes we should
@@ -3928,6 +4029,40 @@ TEST_F(FormDataImporterTest, AutofillPromptStatusMetric_AddressAndCreditCard) {
       AutofillMetrics::AutofillPromptStatus::kAddressAndCreditCardShown, 1);
 }
 
+TEST_F(FormDataImporterTest, ExtractGUIDsOfProfilesWithoutManualEdits) {
+  std::unique_ptr<FormStructure> form_structure =
+      ConstructDefaultProfileFormStructure();
+  int counter = 0;
+  for (auto& field : *form_structure) {
+    field->set_autofill_source_profile_guid(counter % 2 ? kDefaultGuid
+                                                        : kSecondGuid);
+    field->set_is_user_edited(false);
+    ++counter;
+  }
+  base::flat_set<std::string> guids =
+      test_api(form_data_importer())
+          .ExtractGUIDsOfProfilesWithoutManualEdits(*form_structure);
+  EXPECT_THAT(guids, UnorderedElementsAre(kDefaultGuid, kSecondGuid));
+}
+
+TEST_F(FormDataImporterTest,
+       ExtractGUIDsOfProfilesWithoutManualEdits_FieldWasEdited) {
+  std::unique_ptr<FormStructure> form_structure =
+      ConstructDefaultProfileFormStructure();
+  int counter = 0;
+  for (auto& field : *form_structure) {
+    field->set_autofill_source_profile_guid(counter % 2 ? kDefaultGuid
+                                                        : kSecondGuid);
+    field->set_is_user_edited(false);
+    ++counter;
+  }
+  form_structure->field(0)->set_is_user_edited(true);
+  base::flat_set<std::string> guids =
+      test_api(form_data_importer())
+          .ExtractGUIDsOfProfilesWithoutManualEdits(*form_structure);
+  EXPECT_THAT(guids, IsEmpty());
+}
+
 class SkipSaveCardInFormDataImporterTest
     : public FormDataImporterTest,
       public testing::WithParamInterface<bool> {
@@ -4006,9 +4141,6 @@ class FormDataImporterTest_ExtractCreditCardFromForm
 
   FormStructure form_{/*form=*/{}};
 
- private:
-  base::test::ScopedFeatureList scoped_feature_list_{
-      features::kAutofillFixSplitCreditCardImport};
 };
 
 // Tests that inconsistent values from different priority classes do not prevent

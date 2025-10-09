@@ -38,25 +38,13 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/base_window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
 namespace installer_downloader {
 
 namespace {
-
-content::WebContents* GetActiveWebContents() {
-  for (BrowserWindowInterface* browser : GetAllBrowserWindowInterfaces()) {
-    if (!browser->IsActive() ||
-        browser->GetType() != BrowserWindowInterface::Type::TYPE_NORMAL) {
-      continue;
-    }
-
-    return CHECK_DEREF(browser->GetActiveTabInterface()).GetContents();
-  }
-
-  return nullptr;
-}
 
 std::optional<GURL> BuildInstallerDownloadUrl(bool is_metrics_enabled) {
   std::string installer_url_template = kInstallerUrlTemplateParam.Get();
@@ -92,8 +80,12 @@ InstallerDownloaderController::InstallerDownloaderController(
       show_infobar_callback_(std::move(show_infobar_callback)),
       model_(std::make_unique<InstallerDownloaderModelImpl>(
           std::make_unique<SystemInfoProviderImpl>())),
-      get_active_web_contents_callback_(
-          base::BindRepeating(&GetActiveWebContents)) {
+      get_active_web_contents_callback_(base::BindRepeating(
+          &InstallerDownloaderController::GetActiveWebContents,
+          base::Unretained(this))),
+      should_show_infobar_for_profile_callback_(base::BindRepeating(
+          &InstallerDownloaderController::ShouldShowInfobarForCurrentProfile,
+          base::Unretained(this))) {
   RegisterBrowserWindowEvents();
 }
 
@@ -104,8 +96,12 @@ InstallerDownloaderController::InstallerDownloaderController(
     : is_metrics_enabled_callback_(std::move(is_metrics_enabled_callback)),
       show_infobar_callback_(std::move(show_infobar_callback)),
       model_(std::move(model)),
-      get_active_web_contents_callback_(
-          base::BindRepeating(&GetActiveWebContents)) {
+      get_active_web_contents_callback_(base::BindRepeating(
+          &InstallerDownloaderController::GetActiveWebContents,
+          base::Unretained(this))),
+      should_show_infobar_for_profile_callback_(base::BindRepeating(
+          &InstallerDownloaderController::ShouldShowInfobarForCurrentProfile,
+          base::Unretained(this))) {
   RegisterBrowserWindowEvents();
 }
 
@@ -119,6 +115,25 @@ void InstallerDownloaderController::RegisterBrowserWindowEvents() {
       window_tracker_.RegisterRemovedWindowCallback(base::BindRepeating(
           &InstallerDownloaderController::OnRemovedBrowserWindow,
           base::Unretained(this)));
+}
+
+content::WebContents* InstallerDownloaderController::GetActiveWebContents() {
+  BrowserWindowInterface* last_active_window =
+      window_tracker_.get_last_active_window();
+  if (!last_active_window) {
+    return nullptr;
+  }
+
+  tabs::TabInterface* active_tab = last_active_window->GetActiveTabInterface();
+  if (!active_tab) {
+    return nullptr;
+  }
+
+  content::WebContents* web_contents = active_tab->GetContents();
+  if (!web_contents || web_contents->IsBeingDestroyed()) {
+    return nullptr;
+  }
+  return web_contents;
 }
 
 InstallerDownloaderController::~InstallerDownloaderController() = default;
@@ -169,7 +184,7 @@ void InstallerDownloaderController::MaybeShowInfoBar() {
     return;
   }
 
-  if (!ShouldShowInfobarForCurrentProfile()) {
+  if (!should_show_infobar_for_profile_callback_.Run()) {
     return;
   }
 
@@ -184,6 +199,11 @@ void InstallerDownloaderController::OnEligibilityReady(
     return;
   }
 
+  // Early return when we have no destination and bypass is not allowed.
+  if (!destination.has_value() && !model_->ShouldByPassEligibilityCheck()) {
+    return;
+  }
+
   auto* contents = get_active_web_contents_callback_.Run();
 
   if (!contents) {
@@ -191,11 +211,6 @@ void InstallerDownloaderController::OnEligibilityReady(
   }
 
   if (visible_infobars_web_contents_.contains(contents)) {
-    return;
-  }
-
-  // Early return when we have no destination and bypass is not allowed.
-  if (!destination.has_value() && !model_->ShouldByPassEligibilityCheck()) {
     return;
   }
 
@@ -238,7 +253,7 @@ void InstallerDownloaderController::OnEligibilityReady(
   if (visible_infobars_web_contents_.size() == 1u) {
     model_->IncrementShowCount();
     base::UmaHistogramBoolean("Windows.InstallerDownloader.InfobarShown",
-                              /*shown=*/true);
+                              /*sample=*/true);
   }
 }
 
@@ -314,6 +329,12 @@ void InstallerDownloaderController::OnDownloadCompleted(
 void InstallerDownloaderController::SetActiveWebContentsCallbackForTesting(
     GetActiveWebContentsCallback callback) {
   get_active_web_contents_callback_ = std::move(callback);
+}
+
+void InstallerDownloaderController::
+    SetShouldShowInfobarForProfileCallbackForTesting(
+        ShouldShowInfobarForProfileCallback callback) {
+  should_show_infobar_for_profile_callback_ = std::move(callback);
 }
 
 void InstallerDownloaderController::OnInfoBarDismissed() {

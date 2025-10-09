@@ -57,8 +57,7 @@ class NetworkServiceClient
   void OnTrustStoreChanged() override;
   void OnClientCertStoreChanged() override;
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel memory_presure_level);
+  void OnMemoryPressure(base::MemoryPressureLevel memory_presure_level);
 
   // Called when there is a change in the count of media connections that
   // require low network latency.
@@ -80,8 +79,7 @@ class NetworkServiceClient
 
   // net::NetworkChangeNotifier::IPAddressObserver implementation:
   void OnIPAddressChanged(
-      net::NetworkChangeNotifier::IPAddressChangeType change_type =
-          net::NetworkChangeNotifier::IP_ADDRESS_CHANGE_NORMAL) override;
+      net::NetworkChangeNotifier::IPAddressChangeType change_type) override;
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX)
 
 #if BUILDFLAG(IS_WIN)
@@ -137,6 +135,7 @@ class NetworkServiceClient
       mojo::PendingReceiver<network::mojom::URLLoaderNetworkServiceObserver>
           listener) override;
   void OnWebSocketConnectedToPrivateNetwork(
+      const GURL& request_url,
       network::mojom::IPAddressSpace ip_address_space) override;
   void OnUrlLoaderConnectedToPrivateNetwork(
       const GURL& request_url,
@@ -144,7 +143,8 @@ class NetworkServiceClient
       network::mojom::IPAddressSpace client_address_space,
       network::mojom::IPAddressSpace target_address_space) override;
 
-  std::unique_ptr<base::MemoryPressureListener> memory_pressure_listener_;
+  std::unique_ptr<base::MemoryPressureListenerRegistration>
+      memory_pressure_listener_registration_;
 
   std::unique_ptr<WebRtcConnectionsObserver> webrtc_connections_observer_;
 

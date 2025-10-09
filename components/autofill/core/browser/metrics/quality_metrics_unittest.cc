@@ -10,6 +10,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/form_parsing/determine_regex_types.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/foundations/browser_autofill_manager_test_api.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics_test_base.h"
@@ -34,10 +35,9 @@ using ::autofill::test::CreateTestFormField;
 using ::base::Bucket;
 using ::base::BucketsAre;
 using ::base::BucketsInclude;
+using ::testing::Each;
 using ::testing::ElementsAre;
 
-using ExpectedUkmMetricsRecord = std::vector<ExpectedUkmMetricsPair>;
-using ExpectedUkmMetrics = std::vector<ExpectedUkmMetricsRecord>;
 using UkmFieldTypeValidationType = ukm::builders::Autofill_FieldTypeValidation;
 
 std::string SerializeAndEncode(const AutofillQueryResponse& response) {
@@ -47,6 +47,43 @@ std::string SerializeAndEncode(const AutofillQueryResponse& response) {
     return "";
   }
   return base::Base64Encode(unencoded_response_string);
+}
+
+void AppendFieldTypeUkm(
+    const FormData& form,
+    const std::vector<FieldType>& heuristic_types,
+    const std::vector<FieldType>& server_types,
+    const std::vector<FieldType>& actual_types,
+    std::vector<std::vector<UkmMetricNameAndValue>>* expected_metrics) {
+  ASSERT_EQ(heuristic_types.size(), form.fields().size());
+  ASSERT_EQ(server_types.size(), form.fields().size());
+  ASSERT_EQ(actual_types.size(), form.fields().size());
+  FormSignature form_signature = Collapse(CalculateFormSignature(form));
+  int64_t metric_type = static_cast<int64_t>(TYPE_SUBMISSION);
+  std::vector<int64_t> prediction_sources{PREDICTION_SOURCE_HEURISTIC,
+                                          PREDICTION_SOURCE_SERVER,
+                                          PREDICTION_SOURCE_OVERALL};
+  for (size_t i = 0; i < form.fields().size(); ++i) {
+    const FormFieldData& field = form.fields()[i];
+    FieldSignature field_signature =
+        Collapse(CalculateFieldSignatureForField(field));
+    for (int64_t source : prediction_sources) {
+      int64_t predicted_type = static_cast<int64_t>(
+          (source == PREDICTION_SOURCE_SERVER ? server_types
+                                              : heuristic_types)[i]);
+      int64_t actual_type = static_cast<int64_t>(actual_types[i]);
+      expected_metrics->push_back(
+          {{UkmFieldTypeValidationType::kMillisecondsSinceFormParsedName, 0},
+           {UkmFieldTypeValidationType::kFormSignatureName,
+            form_signature.value()},
+           {UkmFieldTypeValidationType::kFieldSignatureName,
+            field_signature.value()},
+           {UkmFieldTypeValidationType::kValidationEventName, metric_type},
+           {UkmFieldTypeValidationType::kPredictionSourceName, source},
+           {UkmFieldTypeValidationType::kPredictedTypeName, predicted_type},
+           {UkmFieldTypeValidationType::kActualTypeName, actual_type}});
+    }
+  }
 }
 
 }  // namespace
@@ -92,7 +129,7 @@ TEST_F(QualityMetricsTest, QualityMetrics) {
                   .form_control_type = FormControlType::kInputTelephone,
                   .is_autofilled = true}},
       .renderer_id = test::MakeFormRendererId(),
-      .main_frame_origin = url::Origin::Create(autofill_driver_->url())};
+      .main_frame_origin = url::Origin::Create(autofill_driver().url())};
 
   std::vector<FieldType> heuristic_types = {
       NAME_FULL,         PHONE_HOME_NUMBER, NAME_FULL,
@@ -184,7 +221,7 @@ TEST_P(AlternativeNameFieldValueCharacterSetTest, LoggedCorrectly) {
                   .value = GetParam().name,
                   .is_autofilled = true}},
       .renderer_id = test::MakeFormRendererId(),
-      .main_frame_origin = url::Origin::Create(autofill_driver_->url())};
+      .main_frame_origin = url::Origin::Create(autofill_driver().url())};
 
   FormData form = GetAndAddSeenForm(form_description);
 
@@ -258,7 +295,8 @@ TEST_F(QualityMetricsTest, LoggedCorrectlyForRationalizationOk) {
   FormStructure* form_structure =
       autofill_manager().FindCachedFormById(form.global_id());
   ASSERT_TRUE(form_structure);
-  form_structure->RationalizePhoneNumberFieldsForFilling();
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
 
   base::HistogramTester histogram_tester;
   SubmitForm(form);
@@ -296,7 +334,8 @@ TEST_F(QualityMetricsTest, LoggedCorrectlyForRationalizationGood) {
   FormStructure* form_structure =
       autofill_manager().FindCachedFormById(form.global_id());
   ASSERT_TRUE(form_structure);
-  form_structure->RationalizePhoneNumberFieldsForFilling();
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
 
   base::HistogramTester histogram_tester;
   SubmitForm(form);
@@ -339,7 +378,8 @@ TEST_F(QualityMetricsTest, LoggedCorrectlyForRationalizationBad) {
   FormStructure* form_structure =
       autofill_manager().FindCachedFormById(form.global_id());
   ASSERT_TRUE(form_structure);
-  form_structure->RationalizePhoneNumberFieldsForFilling();
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
 
   base::HistogramTester histogram_tester;
   SubmitForm(form);
@@ -390,7 +430,8 @@ TEST_F(QualityMetricsTest, LoggedCorrectlyForOnlyFillWhenFocusedField) {
   FormStructure* form_structure =
       autofill_manager().FindCachedFormById(form.global_id());
   ASSERT_TRUE(form_structure);
-  form_structure->RationalizePhoneNumberFieldsForFilling();
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
 
   base::HistogramTester histogram_tester;
   SubmitForm(form);
@@ -616,11 +657,15 @@ TEST_P(PredictionQualityMetricsTest, Classification) {
   base::HistogramTester histogram_tester;
   SubmitForm(form);
 
-  ExpectedUkmMetrics expected_ukm_metrics;
+  std::vector<std::vector<UkmMetricNameAndValue>> expected_ukm_metrics;
   AppendFieldTypeUkm(form, heuristic_types, server_types, actual_types,
                      &expected_ukm_metrics);
-  VerifyUkm(&test_ukm_recorder(), form, UkmFieldTypeValidationType::kEntryName,
-            expected_ukm_metrics);
+  EXPECT_THAT(
+      GetUkmEvents(test_ukm_recorder(), UkmFieldTypeValidationType::kEntryName),
+      UkmEventsAre(expected_ukm_metrics));
+  EXPECT_THAT(
+      GetEventUrls(test_ukm_recorder(), UkmFieldTypeValidationType::kEntryName),
+      Each(form.main_frame_origin().GetURL()));
 
   // Validate the total samples and the crossed (predicted-to-actual) samples.
   for (const auto& source : prediction_sources) {
@@ -769,8 +814,7 @@ TEST_F(QualityMetricsTest, NoSubmission) {
   base::HistogramTester histogram_tester;
 
   // Triggers the metrics.
-  test_api(autofill_client().GetAutofillDriverFactory())
-      .Reset(autofill_driver());
+  autofill_client().GetAutofillDriverFactory().Reset(autofill_driver());
 
   auto Buck = [](FieldType field_type, FieldTypeQualityMetric metric,
                  size_t n) {
@@ -840,12 +884,13 @@ TEST_F(QualityMetricsTest, BasedOnAutocomplete) {
   std::unique_ptr<FormStructure> form_structure =
       std::make_unique<FormStructure>(form);
   FormStructure* form_structure_ptr = form_structure.get();
-  form_structure->DetermineHeuristicTypes(GeoIpCountryCode(""), nullptr);
-  ASSERT_TRUE(
-      test_api(autofill_manager())
-          .mutable_form_structures()
-          ->emplace(form_structure_ptr->global_id(), std::move(form_structure))
-          .second);
+  const RegexPredictions regex_predictions =
+      DetermineRegexTypes(GeoIpCountryCode(""), LanguageCode(""),
+                          form_structure->ToFormData(), nullptr);
+  regex_predictions.ApplyTo(form_structure->fields());
+  form_structure->RationalizeAndAssignSections(GeoIpCountryCode(""),
+                                               LanguageCode(""), nullptr);
+  test_api(autofill_manager()).AddSeenFormStructure(std::move(form_structure));
 
   AutofillQueryResponse response;
   auto* form_suggestion = response.add_form_suggestions();
@@ -1039,7 +1084,7 @@ TEST_F(QualityMetricsTest, EmailPredictionCorrectnessRecallMetric) {
   // email).
   {
     base::HistogramTester histogram_tester;
-    autofill_manager().ClearFormStructures();
+    test_api(autofill_manager()).ClearFormStructures();
     // Wrong field type predicted (i.e. not email).
     field_types[2] = COMPANY_NAME;
     autofill_manager().AddSeenForm(form, field_types);

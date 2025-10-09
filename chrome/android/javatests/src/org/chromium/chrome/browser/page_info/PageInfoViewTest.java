@@ -30,6 +30,7 @@ import static org.junit.Assert.assertTrue;
 
 import static org.chromium.components.content_settings.PrefNames.COOKIE_CONTROLS_MODE;
 import static org.chromium.components.content_settings.PrefNames.IN_CONTEXT_COOKIE_CONTROLS_OPENED;
+import static org.chromium.components.permissions.PermissionUtil.getGeolocationType;
 import static org.chromium.ui.test.util.ViewUtils.clickOnClickableSpan;
 import static org.chromium.ui.test.util.ViewUtils.hasBackgroundColor;
 import static org.chromium.ui.test.util.ViewUtils.onViewWaiting;
@@ -54,7 +55,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
@@ -97,8 +97,8 @@ import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.transit.AutoResetCtaTransitTestRule;
 import org.chromium.chrome.test.transit.ChromeTransitTestRules;
-import org.chromium.components.browser_ui.settings.SettingsNavigation;
 import org.chromium.components.browser_ui.site_settings.ContentSettingException;
+import org.chromium.components.browser_ui.site_settings.GeolocationSetting;
 import org.chromium.components.browser_ui.site_settings.RwsCookieInfo;
 import org.chromium.components.browser_ui.site_settings.Website;
 import org.chromium.components.browser_ui.site_settings.WebsiteAddress;
@@ -107,7 +107,7 @@ import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridgeJ
 import org.chromium.components.browser_ui.util.date.CalendarUtils;
 import org.chromium.components.browser_ui.util.date.StringUtils;
 import org.chromium.components.browser_ui.widget.FadingEdgeScrollView;
-import org.chromium.components.content_settings.ContentSettingValues;
+import org.chromium.components.content_settings.ContentSetting;
 import org.chromium.components.content_settings.ContentSettingsType;
 import org.chromium.components.content_settings.CookieControlsEnforcement;
 import org.chromium.components.content_settings.CookieControlsMode;
@@ -280,8 +280,6 @@ public class PageInfoViewTest {
         }
     }
 
-    @Mock private SettingsNavigation mSettingsNavigation;
-
     private FakePrivacySandboxBridge mFakePrivacySandboxBridge;
 
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
@@ -346,12 +344,10 @@ public class PageInfoViewTest {
         return view;
     }
 
-    private void enableTrackingProtectionFixedExpiration(
-            boolean isModeBUiInCookiesController, int days) {
+    private void enableTrackingProtectionFixedExpiration(int days) {
         PageInfoController controller = PageInfoController.getLastPageInfoController();
         assertNotNull(controller);
         var tpController = controller.getCookiesController();
-        tpController.setFixedExceptionExpirationForTesting(true);
         tpController.setDaysUntilExpirationForTesting(days);
     }
 
@@ -461,31 +457,31 @@ public class PageInfoViewTest {
                                         ContentSettingsType.GEOLOCATION_WITH_OPTIONS,
                                         urlString,
                                         urlString,
-                                        ContentSettingValues.ALLOW,
-                                        ContentSettingValues.ALLOW);
+                                        ContentSetting.ALLOW,
+                                        ContentSetting.ALLOW);
                     } else {
                         WebsitePreferenceBridge.setContentSettingDefaultScope(
                                 ProfileManager.getLastUsedRegularProfile(),
                                 ContentSettingsType.GEOLOCATION,
                                 url,
                                 url,
-                                ContentSettingValues.ALLOW);
+                                ContentSetting.ALLOW);
                     }
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
                             ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.NOTIFICATIONS,
                             url,
                             url,
-                            ContentSettingValues.BLOCK);
+                            ContentSetting.BLOCK);
                 });
     }
 
     private void expectHasPermissions(String url, boolean hasPermissions) {
         // The default value for these types is ask.
-        @ContentSettingValues
-        int expectAllow = hasPermissions ? ContentSettingValues.ALLOW : ContentSettingValues.ASK;
-        @ContentSettingValues
-        int expectBlock = hasPermissions ? ContentSettingValues.BLOCK : ContentSettingValues.ASK;
+        @ContentSetting
+        int expectAllow = hasPermissions ? ContentSetting.ALLOW : ContentSetting.ASK;
+        @ContentSetting
+        int expectBlock = hasPermissions ? ContentSetting.BLOCK : ContentSetting.ASK;
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     assertEquals(
@@ -496,14 +492,26 @@ public class PageInfoViewTest {
                                             ContentSettingsType.NOTIFICATIONS,
                                             url,
                                             url));
-                    assertEquals(
-                            expectAllow,
-                            WebsitePreferenceBridgeJni.get()
-                                    .getPermissionSettingForOrigin(
-                                            ProfileManager.getLastUsedRegularProfile(),
-                                            ContentSettingsType.GEOLOCATION,
-                                            url,
-                                            "*"));
+                    if (PermissionsAndroidFeatureMap.isEnabled(
+                            PermissionsAndroidFeatureList.APPROXIMATE_GEOLOCATION_PERMISSION)) {
+                        assertEquals(
+                                new GeolocationSetting(expectAllow, expectAllow),
+                                WebsitePreferenceBridgeJni.get()
+                                        .getGeolocationSettingForOrigin(
+                                                ProfileManager.getLastUsedRegularProfile(),
+                                                ContentSettingsType.GEOLOCATION_WITH_OPTIONS,
+                                                url,
+                                                "*"));
+                    } else {
+                        assertEquals(
+                                expectAllow,
+                                WebsitePreferenceBridgeJni.get()
+                                        .getPermissionSettingForOrigin(
+                                                ProfileManager.getLastUsedRegularProfile(),
+                                                ContentSettingsType.GEOLOCATION,
+                                                url,
+                                                "*"));
+                    }
                 });
     }
 
@@ -516,13 +524,13 @@ public class PageInfoViewTest {
                             ContentSettingsType.MEDIASTREAM_MIC,
                             url,
                             url,
-                            ContentSettingValues.DEFAULT);
+                            ContentSetting.DEFAULT);
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
                             ProfileManager.getLastUsedRegularProfile(),
                             ContentSettingsType.MEDIASTREAM_CAMERA,
                             url,
                             url,
-                            ContentSettingValues.ASK);
+                            ContentSetting.ASK);
                 });
     }
 
@@ -611,14 +619,12 @@ public class PageInfoViewTest {
         String testUrl =
                 mTestServerRule.getServer().getURLWithHostName("xn--allestrungen-9ib.ch", "/");
         loadUrlAndOpenPageInfo(testUrl);
-        onView(
-                withText(
-                        allOf(
-                                containsString("allestörungen.ch"),
-                                not(containsString("https://")))));
+        onView(withText(allOf(containsString("allestörungen.ch"), not(containsString("https://")))))
+                .check(matches(isDisplayed()));
         // Expand to full URL.
         onView(withId(R.id.page_info_url_wrapper)).perform(click());
-        onView(withText(allOf(containsString("allestörungen.ch"), containsString("https://"))));
+        onView(withText(allOf(containsString("allestörungen.ch"), containsString("https://"))))
+                .check(matches(isDisplayed()));
     }
 
     /** Tests PageInfo on an insecure website. */
@@ -808,12 +814,12 @@ public class PageInfoViewTest {
                             ContentSettingsType.SOUND,
                             url,
                             url,
-                            ContentSettingValues.BLOCK);
+                            ContentSetting.BLOCK);
                 });
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         onView(withId(R.id.page_info_permissions_row)).perform(click());
         onViewWaiting(allOf(withText("Control this site's access to your device"), isDisplayed()));
-        onView(allOf(withText(containsString("Sound")), isDisplayed()));
+        onView(withText(containsString("Sound"))).check(matches(isDisplayed()));
     }
 
     @Test
@@ -827,7 +833,7 @@ public class PageInfoViewTest {
                     WebsitePreferenceBridgeJni.get()
                             .setEphemeralGrantForTesting(
                                     ProfileManager.getLastUsedRegularProfile(),
-                                    ContentSettingsType.GEOLOCATION,
+                                    getGeolocationType(),
                                     url,
                                     url);
                     WebsitePreferenceBridge.setContentSettingDefaultScope(
@@ -835,7 +841,7 @@ public class PageInfoViewTest {
                             ContentSettingsType.MEDIASTREAM_CAMERA,
                             url,
                             url,
-                            ContentSettingValues.ALLOW);
+                            ContentSetting.ALLOW);
                 });
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         onView(withId(R.id.page_info_permissions_row)).perform(click());
@@ -878,7 +884,9 @@ public class PageInfoViewTest {
     public void testShowCookiesSubpageUserBypassOn() throws IOException {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
+        enableTrackingProtectionFixedExpiration(42);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
+
         onViewWaiting(
                 allOf(
                         withText(containsString("Cookies and other site data are used")),
@@ -906,7 +914,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(false);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(false, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(
@@ -939,7 +947,7 @@ public class PageInfoViewTest {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(
@@ -963,7 +971,7 @@ public class PageInfoViewTest {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(
@@ -990,7 +998,7 @@ public class PageInfoViewTest {
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
         enableIsIncognitoInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(
@@ -1012,7 +1020,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(true);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(
@@ -1036,7 +1044,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(false);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(false, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onViewWaiting(allOf(withId(R.id.page_info_cookies_row), isDisplayed()));
         onView(withText(containsString("Third-party cookies limited")))
                 .check(matches(isDisplayed()));
@@ -1055,7 +1063,7 @@ public class PageInfoViewTest {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         // Check that the cookie toggle is displayed and try clicking it.
         onViewWaiting(allOf(withId(R.id.page_info_cookies_row), isDisplayed()));
         onView(withText(containsString("Third-party cookies blocked")))
@@ -1074,7 +1082,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(false);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         enableModeBUiInCookiesController();
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onView(withText(containsString("Limited"))).check(matches(isDisplayed()));
@@ -1106,7 +1114,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(false);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(true, 1);
+        enableTrackingProtectionFixedExpiration(1);
         enableModeBUiInCookiesController();
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         // Check that the cookie toggle is displayed and try clicking it.
@@ -1133,7 +1141,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(true);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         // Check that the cookie toggle is displayed and try clicking it.
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(allOf(withText(containsString("Third-party cookies")), isDisplayed()));
@@ -1163,7 +1171,7 @@ public class PageInfoViewTest {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
 
         // Check that the cookie toggle is displayed and try clicking it.
@@ -1195,7 +1203,7 @@ public class PageInfoViewTest {
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
         enableModeBUiInCookiesController();
-        enableTrackingProtectionFixedExpiration(true, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onView(withText(containsString("Blocked"))).check(matches(isDisplayed()));
         mRenderTestRule.render(
@@ -1225,7 +1233,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(true);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(true, 1);
+        enableTrackingProtectionFixedExpiration(1);
         enableModeBUiInCookiesController();
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         // Check that the cookie toggle is displayed and try clicking it.
@@ -1252,7 +1260,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(true);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(false, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         mRenderTestRule.render(
                 getPageInfoView(),
@@ -1300,7 +1308,7 @@ public class PageInfoViewTest {
         setBlockAll3pc(true);
         setThirdPartyCookieBlocking(CookieControlsMode.BLOCK_THIRD_PARTY);
         loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
-        enableTrackingProtectionFixedExpiration(false, 33);
+        enableTrackingProtectionFixedExpiration(33);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         onViewWaiting(
                 allOf(withText(containsString("You blocked sites from using")), isDisplayed()));
@@ -1546,8 +1554,7 @@ public class PageInfoViewTest {
         expectHasCookies(true);
         // Go to cookies subpage.
         openPageInfo(PageInfoController.NO_HIGHLIGHTED_PERMISSION);
-        enableTrackingProtectionFixedExpiration(
-                /* isModeBUiInCookiesController= */ false, /* days= */ DAYS_UNTIL_EXPIRATION);
+        enableTrackingProtectionFixedExpiration(/* days= */ DAYS_UNTIL_EXPIRATION);
         onView(withId(R.id.page_info_cookies_row)).perform(click());
         // Check that cookies usage is displayed.
         onViewWaiting(allOf(withText(containsString("stored data")), isDisplayed()));
@@ -1620,7 +1627,7 @@ public class PageInfoViewTest {
                             ContentSettingsType.FEDERATED_IDENTITY_API);
             assertEquals(1, exceptions.size());
             assertEquals(GURLUtils.getOrigin(rpUrl), exceptions.get(0).getPrimaryPattern() + "/");
-            assertEquals(ContentSettingValues.BLOCK, exceptions.get(0).getContentSetting());
+            assertEquals(ContentSetting.BLOCK, exceptions.get(0).getContentSetting());
         }
 
         // Toggle the federated identity permission.
@@ -1634,7 +1641,7 @@ public class PageInfoViewTest {
                             ContentSettingsType.FEDERATED_IDENTITY_API);
             assertEquals(1, exceptions.size());
             assertEquals(GURLUtils.getOrigin(rpUrl), exceptions.get(0).getPrimaryPattern() + "/");
-            assertEquals(ContentSettingValues.ALLOW, exceptions.get(0).getContentSetting());
+            assertEquals(ContentSetting.ALLOW, exceptions.get(0).getContentSetting());
         }
     }
 
@@ -1655,6 +1662,7 @@ public class PageInfoViewTest {
                                     null,
                                     null,
                                     ChromePageInfoHighlight.noHighlight(),
+                                    null,
                                     null) {
                                 @Override
                                 public boolean isShowingPaintPreviewPage() {
@@ -1691,6 +1699,7 @@ public class PageInfoViewTest {
                                     null,
                                     null,
                                     ChromePageInfoHighlight.noHighlight(),
+                                    null,
                                     null) {
                                 @Override
                                 public @PdfPageType int getPdfPageType() {
@@ -1727,6 +1736,7 @@ public class PageInfoViewTest {
                                     null,
                                     null,
                                     ChromePageInfoHighlight.noHighlight(),
+                                    null,
                                     null) {
                                 @Override
                                 public @PdfPageType int getPdfPageType() {
@@ -1766,6 +1776,7 @@ public class PageInfoViewTest {
                                     null,
                                     null,
                                     ChromePageInfoHighlight.noHighlight(),
+                                    null,
                                     null) {
                                 @Override
                                 public @PdfPageType int getPdfPageType() {
@@ -1807,9 +1818,29 @@ public class PageInfoViewTest {
     public void testShowWithPermissionsAndHighlight() throws IOException {
         addSomePermissions(mTestServerRule.getServer().getURL("/"));
         loadUrlAndOpenPageInfoWithPermission(
-                mTestServerRule.getServer().getURL(sSimpleHtml), ContentSettingsType.GEOLOCATION);
+                mTestServerRule.getServer().getURL(sSimpleHtml), getGeolocationType());
         onView(withId(R.id.page_info_permissions_row))
                 .check(matches(hasBackgroundColor(R.color.iph_highlight_blue)));
+    }
+
+    /** Tests the location permission subpage of the PageInfo UI. */
+    @Test
+    @MediumTest
+    @Features.EnableFeatures(PermissionsAndroidFeatureList.APPROXIMATE_GEOLOCATION_PERMISSION)
+    public void testShowLocationPermissionSubpage() throws IOException {
+        addSomePermissions(mTestServerRule.getServer().getURL("/"));
+        loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
+        onView(withId(R.id.page_info_permissions_row)).perform(click());
+        onViewWaiting(allOf(withText("Control this site's access to your device"), isDisplayed()));
+
+        onView(withText("Location")).perform(click());
+        onViewWaiting(allOf(withText(R.string.website_settings_device_location), isDisplayed()));
+        onViewWaiting(
+                allOf(
+                        withText(
+                                "Sites usually use your location for relevant features or info,"
+                                        + " like local news or nearby shops"),
+                        isDisplayed()));
     }
 
     /**
@@ -1821,7 +1852,7 @@ public class PageInfoViewTest {
     public void testShowPermissionsSubpageWithHighlight() throws IOException {
         addSomePermissions(mTestServerRule.getServer().getURL("/"));
         loadUrlAndOpenPageInfoWithPermission(
-                mTestServerRule.getServer().getURL(sSimpleHtml), ContentSettingsType.GEOLOCATION);
+                mTestServerRule.getServer().getURL(sSimpleHtml), getGeolocationType());
         onView(withId(R.id.page_info_permissions_row)).perform(click());
         onViewWaiting(allOf(withText("Control this site's access to your device"), isDisplayed()));
         Context context = ApplicationProvider.getApplicationContext();
@@ -1856,6 +1887,32 @@ public class PageInfoViewTest {
                 () -> {
                     ChromeAccessibilityUtil.get().setAccessibilityEnabledForTesting(null);
                 });
+    }
+
+    /** Tests that navigation between nested subpages works as expected. */
+    @Test
+    @MediumTest
+    @Features.EnableFeatures(PermissionsAndroidFeatureList.APPROXIMATE_GEOLOCATION_PERMISSION)
+    public void testNestedSubpageNavigation() throws IOException {
+        addSomePermissions(mTestServerRule.getServer().getURL("/"));
+        loadUrlAndOpenPageInfo(mTestServerRule.getServer().getURL(sSimpleHtml));
+        PageInfoController controller = PageInfoController.getLastPageInfoController();
+
+        // Open first subpage.
+        onView(withId(R.id.page_info_permissions_row)).perform(click());
+        onViewWaiting(allOf(withText("Control this site's access to your device"), isDisplayed()));
+
+        // Open second subpage
+        onView(withText("Location")).perform(click());
+        onViewWaiting(allOf(withText(R.string.website_settings_device_location), isDisplayed()));
+
+        // Verify back button press takes you back to the first subpage.
+        controller.exitSubpage();
+        onViewWaiting(allOf(withText("Control this site's access to your device"), isDisplayed()));
+
+        // Verify another back button press takes you back to the main page info view.
+        controller.exitSubpage();
+        onViewWaiting(allOf(withId(R.id.page_info_permissions_row), isDisplayed()));
     }
 
     /** Tests the summary string of the history page of the PageInfo UI. */

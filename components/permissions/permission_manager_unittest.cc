@@ -10,8 +10,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
+#include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_types.h"
+#include "components/content_settings/core/common/features.h"
 #include "components/permissions/content_setting_permission_context_base.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_request_manager.h"
@@ -37,10 +41,7 @@
 #include "url/origin.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#include "base/feature_list.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "ui/android/ui_android_features.h"
 #endif  // IS_ANDROID
 
 using blink::PermissionType;
@@ -198,10 +199,12 @@ class PermissionManagerTest : public content::RenderViewHostTestHarness {
   PermissionStatus GetPermissionStatusForCurrentDocument(
       PermissionType permission,
       content::RenderFrameHost* render_frame_host) {
-    return GetPermissionManager()->GetPermissionStatusForCurrentDocument(
-        content::PermissionDescriptorUtil::
-            CreatePermissionDescriptorForPermissionType(permission),
-        render_frame_host, /*should_include_device_status*/ false);
+    return GetPermissionManager()
+        ->GetPermissionResultForCurrentDocument(
+            content::PermissionDescriptorUtil::
+                CreatePermissionDescriptorForPermissionType(permission),
+            render_frame_host, /*should_include_device_status*/ false)
+        .status;
   }
 
   content::PermissionResult GetPermissionResultForCurrentDocument(
@@ -217,10 +220,12 @@ class PermissionManagerTest : public content::RenderViewHostTestHarness {
       PermissionType permission,
       content::RenderProcessHost* render_process_host,
       const GURL& worker_origin) {
-    return GetPermissionManager()->GetPermissionStatusForWorker(
-        content::PermissionDescriptorUtil::
-            CreatePermissionDescriptorForPermissionType(permission),
-        render_process_host, worker_origin);
+    return GetPermissionManager()
+        ->GetPermissionResultForWorker(
+            content::PermissionDescriptorUtil::
+                CreatePermissionDescriptorForPermissionType(permission),
+            render_process_host, worker_origin)
+        .status;
   }
 
   bool IsPermissionOverridable(PermissionType permission,
@@ -384,8 +389,8 @@ TEST_F(PermissionManagerTest, GetPermissionStatusAfterSet) {
 TEST_F(PermissionManagerTest, AndroidWindowManagementPermission) {
   // Enable kAndroidWindowManagementWebApi flag
   base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatureState(ui::kAndroidWindowManagementWebApi,
-                                           true);
+  scoped_feature_list.InitWithFeatureState(
+      permissions::features::kAndroidWindowManagementWebApi, true);
 
   {
     base::HistogramTester histogram_tester;
@@ -770,6 +775,54 @@ TEST_F(PermissionManagerTest,
 
   // Context is null because it is not added to PermissionContextMap.
   EXPECT_TRUE(!context);
+}
+
+class PermissionManagerWithGeolocationTest : public PermissionManagerTest {
+ public:
+  PermissionManagerWithGeolocationTest() {
+    feature_list_.InitAndEnableFeature(
+        content_settings::features::kApproximateGeolocationPermission);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+TEST_F(PermissionManagerWithGeolocationTest, GetGeolocationPermissionStatus) {
+  auto content_settings_type = ContentSettingsType::GEOLOCATION_WITH_OPTIONS;
+  auto permission_type = PermissionType::GEOLOCATION;
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kAllowed,
+                         PermissionOption::kAllowed});
+  CheckPermissionStatus(permission_type, PermissionStatus::GRANTED);
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kAllowed,
+                         PermissionOption::kDenied});
+  CheckPermissionStatus(permission_type, PermissionStatus::UNSATISFIED_OPTIONS);
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kAllowed, PermissionOption::kAsk});
+  CheckPermissionStatus(permission_type, PermissionStatus::UNSATISFIED_OPTIONS);
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kAsk, PermissionOption::kAsk});
+  CheckPermissionStatus(permission_type, PermissionStatus::ASK);
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kAsk, PermissionOption::kDenied});
+  CheckPermissionStatus(permission_type, PermissionStatus::DENIED);
+
+  GetHostContentSettingsMap()->SetPermissionSettingDefaultScope(
+      url(), url(), content_settings_type,
+      GeolocationSetting{PermissionOption::kDenied, PermissionOption::kDenied});
+  CheckPermissionStatus(permission_type, PermissionStatus::DENIED);
 }
 
 }  // namespace permissions

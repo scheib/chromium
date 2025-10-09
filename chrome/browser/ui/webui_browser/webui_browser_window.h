@@ -10,17 +10,28 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_entry_key.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/accelerators/accelerator.h"
 #include "ui/color/color_provider_key.h"
 #include "ui/color/color_provider_source.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_observer.h"
+
+namespace ui {
+class TrackedElement;
+}  // namespace ui
 
 namespace views {
+class NativeWidget;
 class WebView;
 class Widget;
 }  // namespace views
 
 class Browser;
+class WebUIBrowserExtensionsContainer;
+class WebUIBrowserModalDialogHost;
+class WebUIBrowserSidePanelUI;
 class WebUIBrowserUI;
 class WebUIBrowserWebContentsDelegate;
 class WebUILocationBar;
@@ -29,15 +40,25 @@ class WebUILocationBar;
 // uses views::Widget for windowing management.
 class WebUIBrowserWindow : public BrowserWindow,
                            public ExclusiveAccessContext,
-                           public ui::ColorProviderSource {
+                           public ui::ColorProviderSource,
+                           public ui::AcceleratorProvider,
+                           public ui::AcceleratorTarget,
+                           public views::WidgetObserver {
  public:
-  explicit WebUIBrowserWindow(std::unique_ptr<Browser> browser);
+  explicit WebUIBrowserWindow(Browser* browser);
   ~WebUIBrowserWindow() override;
 
   // Returns the containing browser window for a WebContents that hosts
   // WebShell.
   static WebUIBrowserWindow* FromWebShellWebContents(
       content::WebContents* web_contents);
+
+  // Returns the WebUIBrowserWindow for a Browser. If browser does not use
+  // WebUIBrowserWindow, returns nullptr.
+  static WebUIBrowserWindow* FromBrowser(Browser* browser);
+
+  // Returns the WebUIBrowserWindow for the given `window`.
+  static WebUIBrowserWindow* FromNativeWindow(gfx::NativeWindow window);
 
   // BrowserWindow:
   gfx::NativeWindow GetNativeWindow() const override;
@@ -57,6 +78,7 @@ class WebUIBrowserWindow : public BrowserWindow,
       BookmarkBar::AnimateChangeType change_type) override;
   void TemporarilyShowBookmarkBar(base::TimeDelta duration) override;
   void UpdateDevTools(content::WebContents* inspected_web_contents) override;
+  bool CanDockDevTools() const override;
   void UpdateLoadingAnimations(bool is_visible) override;
   void SetStarredState(bool is_starred) override;
   bool IsTabModalPopupDeprecated() const override;
@@ -78,12 +100,11 @@ class WebUIBrowserWindow : public BrowserWindow,
   autofill::AutofillBubbleHandler* GetAutofillBubbleHandler() override;
   void ExecutePageActionIconForTesting(PageActionIconType type) override;
   LocationBar* GetLocationBar() const override;
-  void SetFocusToLocationBar(bool select_all) override;
+  void SetFocusToLocationBar(bool is_user_initiated) override;
   void UpdateReloadStopState(bool is_loading, bool force) override;
   void UpdateToolbar(content::WebContents* contents) override;
   bool UpdateToolbarSecurityState() override;
   void UpdateCustomTabBarVisibility(bool visible, bool animate) override;
-  void SetContentScrimVisibility(bool visible) override;
   void SetDevToolsScrimVisibility(bool visible) override;
   void ResetToolbarTabState(content::WebContents* contents) override;
   void FocusToolbar() override;
@@ -128,7 +149,7 @@ class WebUIBrowserWindow : public BrowserWindow,
       bool show_signin_button) override;
 #if BUILDFLAG(IS_CHROMEOS)
   views::Button* GetSharingHubIconButton() override;
-  void ToggleMultitaskMenu() const override;
+  void ToggleMultitaskMenu() override;
 #else
   sharing_hub::SharingHubBubbleView* ShowSharingHubBubble(
       share::ShareAttempt attempt) override;
@@ -155,7 +176,6 @@ class WebUIBrowserWindow : public BrowserWindow,
       base::OnceCallback<void(bool)> callback) override;
   void UserChangedTheme(BrowserThemeChangeType theme_change_type) override;
   void ShowAppMenu() override;
-  bool PreHandleMouseEvent(const blink::WebMouseEvent& event) override;
   void PreHandleDragUpdate(const content::DropData& drop_data,
                            const gfx::PointF& point) override;
   void PreHandleDragExit() override;
@@ -166,6 +186,8 @@ class WebUIBrowserWindow : public BrowserWindow,
   std::unique_ptr<FindBar> CreateFindBar() override;
   web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
       override;
+  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHostFor(
+      content::WebContents* web_contents) override;
   void ShowAvatarBubbleFromAvatarButton(bool is_source_accelerator) override;
   void MaybeShowProfileSwitchIPH() override;
   void MaybeShowSupervisedUserProfileSignInIPH() override;
@@ -233,7 +255,7 @@ class WebUIBrowserWindow : public BrowserWindow,
   Profile* GetProfile() override;
   void EnterFullscreen(const url::Origin& origin,
                        ExclusiveAccessBubbleType bubble_type,
-                       const int64_t display_id) override;
+                       FullscreenTabParams fullscreen_tab_params) override;
   void ExitFullscreen() override;
   void UpdateExclusiveAccessBubble(
       const ExclusiveAccessBubbleParams& params,
@@ -244,23 +266,72 @@ class WebUIBrowserWindow : public BrowserWindow,
   bool CanUserEnterFullscreen() const override;
   bool CanUserExitFullscreen() const override;
 
+  // ui::AcceleratorProvider:
+  bool GetAcceleratorForCommandId(int command_id,
+                                  ui::Accelerator* accelerator) const override;
+
+  // views::WidgetObserver:
+  void OnWidgetBoundsChanged(views::Widget* widget,
+                             const gfx::Rect& new_bounds) override;
+
+  void ShowSidePanel(SidePanelEntryKey side_panel_entry_key);
+  void CloseSidePanel();
+
+  WebUIBrowserUI* GetWebUIBrowserUI() const;
+  WebUIBrowserSidePanelUI* GetWebUIBrowserSidePanelUI();
+
   Browser* browser() { return browser_.get(); }
+  views::Widget* widget() { return widget_.get(); }
+
+  gfx::Rect GetContentsBoundsInScreen() const;
+  ui::TrackedElement* GetExtensionsMenuButtonAnchor() const;
 
  protected:
-  void DestroyBrowser() override;
+  // BrowserWindow:
+  void DeleteBrowserWindow() final;
 
  private:
   class WidgetDelegate;
 
-  void OnWindowCloseRequested(views::Widget::ClosedReason close_reason);
-  WebUIBrowserUI* GetWebUIBrowserUI() const;
+  // Creates and returns the native widget.
+  // Note that this class uses CLIENT_OWNS_WIDGET ownership model whereby
+  // the NativeWidget owns itself (i.e. NativeWidget*::WindowDestroyed() frees
+  // itself) so this method returns a pointer rather than a unique_ptr.
+  views::NativeWidget* CreateNativeWidget();
 
-  std::unique_ptr<Browser> browser_;
+  // ui::AcceleratorTarget:
+  bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
+  bool CanHandleAccelerators() const override;
+
+  // Retrieves the Chrome command ID associated with |accelerator|. The function
+  // returns false if |accelerator| is unknown. Otherwise |command_id| will be
+  // set to the Chrome command ID defined in //chrome/app/chrome_command_ids.h.
+  bool FindCommandIdForAccelerator(const ui::Accelerator& accelerator,
+                                   int* command_id) const;
+
+  // Load accelerators into |accelerator_table_| and |accelerator_manager_|.
+  void LoadAccelerators();
+
+  // Returns the appropriate ThemeInitializerSupplier based on the window type.
+  ui::ColorProviderKey::ThemeInitializerSupplier* GetThemeInitializerSupplier()
+      const;
+
+  void OnWindowCloseRequested(views::Widget::ClosedReason close_reason);
+
+  const raw_ptr<Browser> browser_;
   std::unique_ptr<WebUIBrowserWebContentsDelegate> web_contents_delegate_;
   std::unique_ptr<WidgetDelegate> widget_delegate_;
   std::unique_ptr<views::Widget> widget_;
   raw_ptr<views::WebView> web_view_ = nullptr;
   std::unique_ptr<WebUILocationBar> location_bar_;
+
+  // A mapping between accelerators and Chrome command IDs as defined in
+  // //chrome/app/chrome_command_ids.h.
+  std::map<ui::Accelerator, int> accelerator_table_;
+  ui::AcceleratorManager accelerator_manager_;
+
+  std::unique_ptr<WebUIBrowserModalDialogHost> modal_dialog_host_;
+  std::unique_ptr<WebUIBrowserExtensionsContainer> extensions_container_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_WEBUI_BROWSER_WINDOW_H_

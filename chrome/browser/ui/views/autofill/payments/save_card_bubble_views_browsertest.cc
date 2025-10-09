@@ -23,8 +23,6 @@
 #include "chrome/browser/sync/test/integration/secondary_account_helper.h"
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
-#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
-#include "chrome/browser/ui/autofill/payments/payments_ui_constants.h"
 #include "chrome/browser/ui/autofill/payments/save_card_bubble_controller_impl.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -104,7 +102,7 @@
 #include "ui/views/test/widget_test.h"
 #include "ui/views/widget/any_widget_observer.h"
 #include "ui/views/widget/widget.h"
-#include "ui/views/window/non_client_view.h"
+#include "ui/views/window/frame_view.h"
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -814,7 +812,7 @@ IN_PROC_BROWSER_TEST_F(SaveCardBubbleViewsFullFormBrowserTest,
   // UMA should have recorded bubble rejection.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Local.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kCancelled, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kCancelled, 1);
 }
 
 // Tests the upload save bubble. Ensures that clicking the [Save] button
@@ -1037,7 +1035,7 @@ IN_PROC_BROWSER_TEST_P(
   // UMA should have recorded bubble acceptance.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Upload.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kAccepted, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kAccepted, 1);
 }
 
 // On Chrome OS, the test profile starts with a primary account already set, so
@@ -1176,7 +1174,7 @@ IN_PROC_BROWSER_TEST_F(SaveCardBubbleViewsSyncTransportFullFormBrowserTest,
   // UMA should have recorded bubble acceptance.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Upload.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kAccepted, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kAccepted, 1);
 }
 
 #endif  // !BUILDFLAG(IS_CHROMEOS)
@@ -1217,7 +1215,7 @@ IN_PROC_BROWSER_TEST_P(
   // UMA should have recorded bubble rejection.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Upload.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kCancelled, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kCancelled, 1);
 }
 
 // Tests the upload save bubble. Ensures that clicking the top-right [X] close
@@ -2223,11 +2221,11 @@ IN_PROC_BROWSER_TEST_P(
   // the ".RequestingCardholderName" subhistogram.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Upload.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kAccepted, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kAccepted, 1);
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Upload.FirstShow."
       "RequestingCardholderName",
-      autofill_metrics::SaveCardPromptResult::kAccepted, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kAccepted, 1);
 }
 
 // Tests the local save bubble. Ensures that clicking the [Save] button
@@ -2244,7 +2242,7 @@ IN_PROC_BROWSER_TEST_F(SaveCardBubbleViewsFullFormBrowserTest,
   // UMA should have recorded bubble acceptance.
   histogram_tester.ExpectUniqueSample(
       "Autofill.SaveCreditCardPromptResult.Local.FirstShow",
-      autofill_metrics::SaveCardPromptResult::kAccepted, 1);
+      autofill_metrics::LegacySaveCardPromptResult::kAccepted, 1);
 
   // The local save bubble should not be visible, but the card icon should
   // remain visible for the clickable [Manage cards] option.

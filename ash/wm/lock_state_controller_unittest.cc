@@ -11,8 +11,8 @@
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
+#include "ash/multi_user/multi_user_window_manager.h"
 #include "ash/public/cpp/ash_prefs.h"
-#include "ash/public/cpp/multi_user_window_manager.h"
 #include "ash/public/cpp/shutdown_controller.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
@@ -371,13 +371,19 @@ class LockStateControllerTest : public PowerButtonTestBase {
   raw_ptr<PrefService> local_state_ = nullptr;
 };
 
+class LockStateControllerLegacyTest : public LockStateControllerTest {
+ public:
+  LockStateControllerLegacyTest() {
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kAuraLegacyPowerButton);
+  }
+};
+
 // Test the show menu and shutdown flow for non-Chrome-OS hardware that doesn't
 // correctly report power button releases.  We should show menu the first
 // time the button is pressed and shut down when it's pressed from the locked
 // state.
-TEST_F(LockStateControllerTest, LegacyShowMenuAndShutDown) {
-  Initialize(ButtonType::LEGACY, LoginStatus::USER);
-
+TEST_F(LockStateControllerLegacyTest, ShowMenuAndShutDown) {
   ExpectUnlockedState("1");
 
   // We should request that the screen be locked immediately after seeing the
@@ -410,9 +416,7 @@ TEST_F(LockStateControllerTest, LegacyShowMenuAndShutDown) {
 
 // Test that we ignore power button presses when the screen is turned off on an
 // unofficial system.
-TEST_F(LockStateControllerTest, LegacyIgnorePowerButtonIfScreenIsOff) {
-  Initialize(ButtonType::LEGACY, LoginStatus::USER);
-
+TEST_F(LockStateControllerLegacyTest, IgnorePowerButtonIfScreenIsOff) {
   // When the screen brightness is at 0%, we shouldn't do anything in response
   // to power button presses.
   SendBrightnessChange(0, kUserCause);
@@ -427,8 +431,7 @@ TEST_F(LockStateControllerTest, LegacyIgnorePowerButtonIfScreenIsOff) {
   ReleasePowerButton();
 }
 
-TEST_F(LockStateControllerTest, LegacyHonorPowerButtonInDockedMode) {
-  Initialize(ButtonType::LEGACY, LoginStatus::USER);
+TEST_F(LockStateControllerLegacyTest, HonorPowerButtonInDockedMode) {
   // Create two outputs, the first internal and the second external.
   display::DisplayConfigurator::DisplayStateList outputs;
 
@@ -471,7 +474,7 @@ TEST_F(LockStateControllerTest, LegacyHonorPowerButtonInDockedMode) {
 // Test the basic operation of the lock button (not logged in).
 TEST_F(LockStateControllerTest, LockButtonBasicNotLoggedIn) {
   // The lock button shouldn't do anything if we aren't logged in.
-  Initialize(ButtonType::NORMAL, LoginStatus::NOT_LOGGED_IN);
+  ClearLogin();
 
   PressLockButton();
   EXPECT_FALSE(lock_state_test_api_->is_animating_lock());
@@ -482,7 +485,8 @@ TEST_F(LockStateControllerTest, LockButtonBasicNotLoggedIn) {
 // Test the basic operation of the lock button (guest).
 TEST_F(LockStateControllerTest, LockButtonBasicGuest) {
   // The lock button shouldn't do anything when we're logged in as a guest.
-  Initialize(ButtonType::NORMAL, LoginStatus::GUEST);
+  ClearLogin();
+  SimulateGuestLogin();
 
   PressLockButton();
   EXPECT_FALSE(lock_state_test_api_->is_animating_lock());
@@ -525,8 +529,6 @@ class LockStateControllerAnimationTest
 TEST_P(LockStateControllerAnimationTest, LockButtonBasic) {
   // If we're logged in as a regular user, we should start the lock timer and
   // the pre-lock animation.
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
-
   PressLockButton();
   ExpectPreLockAnimationStarted("1");
   AdvancePartially(SessionStateAnimator::ANIMATION_SPEED_UNDOABLE, 0.5f);
@@ -623,7 +625,6 @@ TEST_P(LockStateControllerAnimationTest,
 // slow-close path (e.g. via the wrench menu), test that we still show the
 // fast-close animation.
 TEST_F(LockStateControllerTest, LockWithoutButton) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   lock_state_controller_->OnStartingLock();
 
   ExpectPreLockAnimationStarted();
@@ -638,7 +639,6 @@ TEST_F(LockStateControllerTest, LockWithoutButton) {
 // When we hear that the process is exiting but we haven't had a chance to
 // display an animation, we should just blank the screen.
 TEST_F(LockStateControllerTest, ShutdownWithoutButton) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   lock_state_controller_->OnChromeTerminating();
 
   EXPECT_TRUE(test_animator_->AreContainersAnimated(
@@ -653,7 +653,7 @@ TEST_F(LockStateControllerTest, ShutdownWithoutButton) {
 // Test that we display the fast-close animation and shut down when we get an
 // outside request to shut down (e.g. from the login or lock screen).
 TEST_P(LockStateControllerAnimationTest, RequestShutdownFromLoginScreen) {
-  Initialize(ButtonType::NORMAL, LoginStatus::NOT_LOGGED_IN);
+  ClearLogin();
   EXPECT_TRUE(IsDefaultValueLoginShutdownTimestamp());
 
   lock_state_controller_->RequestShutdown(
@@ -674,8 +674,6 @@ TEST_P(LockStateControllerAnimationTest, RequestShutdownFromLoginScreen) {
 }
 
 TEST_P(LockStateControllerAnimationTest, RequestShutdownFromLockScreen) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
-
   LockScreen();
 
   AdvanceOrAbort(SessionStateAnimator::ANIMATION_SPEED_SHUTDOWN);
@@ -702,7 +700,7 @@ TEST_P(LockStateControllerAnimationTest, RequestShutdownFromLockScreen) {
 // Test that histogram of time delta was recorded if a previous shutdown was
 // initiated from login/lock screen.
 TEST_F(LockStateControllerTest, RequestShutdownFromLoginScreenThenRestart) {
-  Initialize(ButtonType::NORMAL, LoginStatus::NOT_LOGGED_IN);
+  ClearLogin();
   EXPECT_TRUE(IsDefaultValueLoginShutdownTimestamp());
 
   lock_state_controller_->RequestShutdown(
@@ -725,8 +723,6 @@ TEST_F(LockStateControllerTest, RequestShutdownFromLoginScreenThenRestart) {
 }
 
 TEST_F(LockStateControllerTest, RequestShutdownFromLockScreenThenRestart) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
-
   LockScreen();
 
   EXPECT_TRUE(IsDefaultValueLoginShutdownTimestamp());
@@ -752,9 +748,7 @@ TEST_F(LockStateControllerTest, RequestShutdownFromLockScreenThenRestart) {
 
 // Test that histogram of time delta was not recorded if a previous shutdown
 // was not initiated from login/lock screen.
-TEST_F(LockStateControllerTest, LegacyShowMenuAndShutDownThenRestart) {
-  Initialize(ButtonType::LEGACY, LoginStatus::USER);
-
+TEST_F(LockStateControllerLegacyTest, ShowMenuAndShutDownThenRestart) {
   ExpectUnlockedState("1");
 
   // We should request that the screen be locked immediately after seeing the
@@ -790,7 +784,6 @@ TEST_F(LockStateControllerTest, LegacyShowMenuAndShutDownThenRestart) {
 }
 // Test that hidden wallpaper appears and reverts correctly on lock/cancel.
 TEST_P(LockStateControllerAnimationTest, TestHiddenWallpaperLockCancel) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   HideWallpaper();
 
   ExpectUnlockedState("1");
@@ -820,7 +813,6 @@ TEST_P(LockStateControllerAnimationTest, TestHiddenWallpaperLockCancel) {
 
 // Test that hidden wallpaper appears and revers correctly on lock/unlock.
 TEST_P(LockStateControllerAnimationTest, TestHiddenWallpaperLockUnlock) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   HideWallpaper();
 
   ExpectUnlockedState("1");
@@ -873,7 +865,6 @@ TEST_P(LockStateControllerAnimationTest, TestHiddenWallpaperLockUnlock) {
 // Tests the default behavior of disabling the touchscreen when the screen is
 // turned off due to user inactivity.
 TEST_F(LockStateControllerTest, DisableTouchscreenForScreenOff) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   // Run the event loop so PowerButtonDisplayController will get the initial
   // backlights-forced-off state from chromeos::PowerManagerClient.
   base::RunLoop().RunUntilIdle();
@@ -896,7 +887,6 @@ TEST_F(LockStateControllerTest, TouchscreenUnableWhileScreenOff) {
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kTouchscreenUsableWhileScreenOff);
   ResetPowerButtonController();
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   // Run the event loop so PowerButtonDisplayController will get the initial
   // backlights-forced-off state from chromeos::PowerManagerClient.
   base::RunLoop().RunUntilIdle();
@@ -910,7 +900,6 @@ TEST_F(LockStateControllerTest, TouchscreenUnableWhileScreenOff) {
 // Tests that continue pressing the power button for a while after power menu is
 // shown should trigger the cancellable pre-shutdown animation.
 TEST_F(LockStateControllerTest, ShutDownAfterShowPowerMenu) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
   PressPowerButton();
   EXPECT_TRUE(power_button_test_api_->IsMenuOpened());
   ASSERT_TRUE(power_button_test_api_->TriggerPreShutdownTimeout());
@@ -947,8 +936,6 @@ TEST_F(LockStateControllerTest, ShutDownAfterShowPowerMenu) {
 }
 
 TEST_P(LockStateControllerAnimationTest, CancelShouldResetWallpaperBlur) {
-  Initialize(ButtonType::NORMAL, LoginStatus::USER);
-
   ExpectUnlockedState("1");
 
   auto* wallpaper_view = Shell::Get()
@@ -984,7 +971,10 @@ class LockStateControllerMockTimeTest : public PowerButtonTestBase {
  public:
   LockStateControllerMockTimeTest()
       : PowerButtonTestBase(
-            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kAuraLegacyPowerButton);
+  }
   LockStateControllerMockTimeTest(const LockStateControllerMockTimeTest&) =
       delete;
   LockStateControllerMockTimeTest& operator=(
@@ -1023,7 +1013,6 @@ class TestLayerCopyAnimator final : public LayerCopyAnimator {
 };
 
 TEST_F(LockStateControllerMockTimeTest, LockWithoutAnimation) {
-  Initialize(ButtonType::LEGACY, LoginStatus::USER);
   EXPECT_FALSE(Shell::Get()->session_controller()->IsScreenLocked());
   auto* shelf_container = Shell::GetContainer(Shell::GetPrimaryRootWindow(),
                                               kShellWindowId_ShelfContainer);
@@ -1060,29 +1049,20 @@ class LockStateControllerInformedRestoreTest : public LockStateControllerTest {
 
   // LockStateControllerTest:
   void SetUp() override {
-    // `Initialize` below will perform login for a user.
-    AshTestBase::set_start_session(false);
-
     LockStateControllerTest::SetUp();
 
     CHECK(temp_dir_.CreateUniqueTempDir());
     file_path_ = temp_dir_.GetPath().AppendASCII("test_informed_restore.png");
     SetInformedRestoreImagePathForTest(file_path_);
-    Initialize(ButtonType::NORMAL, LoginStatus::USER);
 
     // Although `kAskEveryTime` is the default value, this is needed because
     // `IsAskEveryTime` checks the pref is explicitly set using `HasPrefPath`.
     Shell::Get()->session_controller()->GetPrimaryUserPrefService()->SetInteger(
         prefs::kRestoreAppsAndPagesPrefName,
         static_cast<int>(full_restore::RestoreOption::kAskEveryTime));
-
-    multi_user_window_manager_ = MultiUserWindowManager::Create();
-    multi_user_window_manager_->SetPrimaryUser(GetPrimaryUserAccountId());
   }
 
   void TearDown() override {
-    multi_user_window_manager_.reset();
-
     SetInformedRestoreImagePathForTest(base::FilePath());
     LockStateControllerTest::TearDown();
   }
@@ -1107,9 +1087,6 @@ class LockStateControllerInformedRestoreTest : public LockStateControllerTest {
   }
 
   const base::FilePath& file_path() const { return file_path_; }
-
- protected:
-  std::unique_ptr<MultiUserWindowManager> multi_user_window_manager_;
 
  private:
   base::ScopedAllowBlockingForTesting allow_blocking_;
@@ -1205,7 +1182,7 @@ TEST_F(LockStateControllerInformedRestoreTest, ShutdownInLockScreen) {
 
   base::HistogramTester histogram_tester;
   // Create a window and go the lock screen before requesting shutdown.
-  CreateTestWindowInShellWithId(0);
+  CreateTestWindowInShell({.window_id = 0});
   GetSessionControllerClient()->LockScreen();
   EXPECT_TRUE(Shell::Get()->session_controller()->IsScreenLocked());
 
@@ -1309,8 +1286,9 @@ TEST_F(LockStateControllerInformedRestoreTest, ShutdownWithAlwaysOnTopWindow) {
   base::HistogramTester histogram_tester;
   aura::Window* top_container = Shell::GetContainer(
       Shell::GetPrimaryRootWindow(), kShellWindowId_AlwaysOnTopContainer);
-  std::unique_ptr<aura::Window> window_always_on_top(
-      aura::test::CreateTestWindowWithId(1, top_container));
+  std::unique_ptr<aura::Window> window_always_on_top =
+      aura::test::CreateTestWindow(
+          {.parent = top_container, .bounds = {100, 100}, .window_id = 1});
 
   RequestShutdownWithoutFailTimer();
   EXPECT_THAT(histogram_tester.GetAllSamples(kScreenshotOnShutdownStatus),
@@ -1496,13 +1474,14 @@ TEST_F(LockStateControllerInformedRestoreTest,
   // Setup two windows: one is owned by the primary user, and the other
   // is owned by the secondary user. Both are shown for the primary user.
   auto test_window = CreateTestWindow();
-  multi_user_window_manager_->SetWindowOwner(test_window.get(),
-                                             primary_account_id);
+  auto* multi_user_window_manager = Shell::Get()->multi_user_window_manager();
+  multi_user_window_manager->SetWindowOwner(test_window.get(),
+                                            primary_account_id);
   auto test_window2 = CreateTestWindow();
-  multi_user_window_manager_->SetWindowOwner(test_window2.get(),
-                                             secondary_account_id);
-  multi_user_window_manager_->ShowWindowForUser(test_window2.get(),
-                                                primary_account_id);
+  multi_user_window_manager->SetWindowOwner(test_window2.get(),
+                                            secondary_account_id);
+  multi_user_window_manager->ShowWindowForUser(test_window2.get(),
+                                               primary_account_id);
 
   base::RunLoop run_loop;
   lock_state_test_api_->set_informed_restore_image_callback(
@@ -1519,6 +1498,32 @@ TEST_F(LockStateControllerInformedRestoreTest,
       testing::ElementsAre(base::Bucket(
           ScreenshotOnShutdownStatus::kFailedWithVisibleWindowFromOtherUser,
           1)));
+}
+
+TEST_F(LockStateControllerInformedRestoreTest,
+       ScreenshotIsNotTakenWhenSessionIsNotActive) {
+  EXPECT_FALSE(base::PathExists(file_path()));
+
+  // Simulate user adding flow where user has entered their password, but the UI
+  // is still visible (e.g., PIN setup screen).
+  AshTestBase::GetSessionControllerClient()->SetSessionState(
+      session_manager::SessionState::LOGIN_PRIMARY);
+
+  base::HistogramTester histogram_tester;
+
+  base::RunLoop run_loop;
+  lock_state_test_api_->set_informed_restore_image_callback(
+      run_loop.QuitClosure());
+  // Disable the timeout to avoid test flakiness.
+  lock_state_test_api_->disable_screenshot_timeout_for_test(true);
+
+  lock_state_controller_->RequestSignOut();
+  run_loop.Run();
+  EXPECT_FALSE(base::PathExists(file_path()));
+
+  EXPECT_THAT(histogram_tester.GetAllSamples(kScreenshotOnShutdownStatus),
+              testing::ElementsAre(base::Bucket(
+                  ScreenshotOnShutdownStatus::kFailedSessionIsNotActive, 1)));
 }
 
 }  // namespace ash

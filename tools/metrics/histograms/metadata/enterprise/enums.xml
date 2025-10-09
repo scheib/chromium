@@ -60,6 +60,7 @@ chromium-metrics-reviews@google.com.
   <int value="9" label="Load Key Failed"/>
   <int value="10" label="Invalid Final Identity Name"/>
   <int value="11" label="Identity Not Found"/>
+  <int value="12" label="Delete Identity Failed"/>
 </enum>
 
 <enum name="CertificateUploadClientError">
@@ -77,6 +78,11 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="Post navigation lookup"/>
 </enum>
 
+<enum name="DataProtectionVerdictCacheEvent">
+  <int value="0" label="Cache Hit"/>
+  <int value="1" label="URL Scan Request"/>
+</enum>
+
 <enum name="DeviceIdentifierStatus">
   <int value="0" label="all device identifiers are present"/>
   <int value="1" label="serial number is missing"/>
@@ -91,6 +97,24 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="STORE_NO_POLICY"/>
   <int value="4" label="STORE_INVALID_POLICY"/>
   <int value="5" label="STORE_VALIDATION_ERROR"/>
+</enum>
+
+<enum name="DeviceSettingsStatus2">
+  <int value="0" label="STORE_SUCCESS"/>
+  <int value="1" label="STORE_KEY_UNAVAILABLE"/>
+  <int value="2" label="STORE_OPERATION_FAILED"/>
+  <int value="3" label="STORE_NO_POLICY"/>
+  <int value="4" label="STORE_INVALID_POLICY"/>
+  <int value="5" label="STORE_VALIDATION_ERROR"/>
+  <int value="6" label="STORE_KEY_UNAVAILABLE_NOT_INITIALIZED"/>
+  <int value="7" label="STORE_KEY_UNAVAILABLE_NOT_LOCKED"/>
+  <int value="8" label="STORE_KEY_UNAVAILABLE_MANAGED"/>
+</enum>
+
+<enum name="DeviceSignalsHarmfulAppsStatus">
+  <int value="0" label="Success"/>
+  <int value="1" label="Timeout"/>
+  <int value="2" label="Failed"/>
 </enum>
 
 <enum name="DeviceSignalsParsingError">
@@ -606,6 +630,8 @@ chromium-metrics-reviews@google.com.
   <int value="7" label="File download"/>
 </enum>
 
+<!-- LINT.IfChange(EnterpriseEnrollmentType) -->
+
 <enum name="EnterpriseEnrollmentType">
   <summary>
     Result of device enrollment as defined in
@@ -833,7 +859,13 @@ chromium-metrics-reviews@google.com.
     A registration certificate could not be obtained from the PCA due to the
     attestation service not being available on the device.
   </int>
+  <int value="69" label="Organization unit initial enrollment limit exceeded">
+    The admin configured organization unit initial enrollment limit has been
+    exceeded.
+  </int>
 </enum>
+
+<!-- LINT.ThenChange(//components/policy/core/common/cloud/enterprise_metrics.h:MetricEnrollment) -->
 
 <!-- LINT.IfChange(EnterpriseEventBasedLogUploadResult) -->
 
@@ -2258,6 +2290,19 @@ chromium-metrics-reviews@google.com.
   <int value="1388" label="NTPShortcuts"/>
   <int value="1389" label="AutoSignOutEnabled"/>
   <int value="1390" label="ExtensionInstallCloudPolicyChecksEnabled"/>
+  <int value="1391" label="DevToolsGoogleDeveloperProgramProfileAvailability"/>
+  <int value="1392" label="IncognitoModeBlocklist"/>
+  <int value="1393" label="IncognitoModeAllowlist"/>
+  <int value="1394" label="PreferSlowKexAlgorithms"/>
+  <int value="1395"
+      label="ExtensionForceInstallWithNonMalwareViolationsEnabled"/>
+  <int value="1396" label="CacheEncryptionEnabled"/>
+  <int value="1397" label="SilentPrintingEnabled"/>
+  <int value="1398" label="PreferSlowCiphers"/>
+  <int value="1399" label="DeveloperToolsAvailabilityAllowlist"/>
+  <int value="1400" label="DeveloperToolsAvailabilityBlocklist"/>
+  <int value="1401" label="LocalNetworkAccessRestrictionsTemporaryOptOut"/>
+  <int value="1402" label="GeminiActOnWebSettings"/>
 </enum>
 
 <enum name="EnterprisePoliciesSources">
@@ -2277,6 +2322,8 @@ chromium-metrics-reviews@google.com.
   </int>
 </enum>
 
+<!-- LINT.IfChange(EnterprisePolicyDeviceIdValidity) -->
+
 <enum name="EnterprisePolicyDeviceIdValidity">
   <summary>
     Defined as PolicyDeviceIdValidity in
@@ -2288,6 +2335,10 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="Invalid"/>
 </enum>
 
+<!-- LINT.ThenChange(//components/policy/core/common/cloud/enterprise_metrics.h:PolicyDeviceIdValidity) -->
+
+<!-- LINT.IfChange(EnterprisePolicyInvalidations) -->
+
 <enum name="EnterprisePolicyInvalidations">
   <summary>
     Defined as PolicyInvalidationType in
@@ -2298,6 +2349,8 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="No payload; expired"/>
   <int value="4" label="Payload; expired"/>
 </enum>
+
+<!-- LINT.ThenChange(//components/policy/core/common/cloud/enterprise_metrics.h:PolicyInvalidationType) -->
 
 <enum name="EnterprisePolicyLoadStatus">
   <summary>
@@ -2331,6 +2384,8 @@ chromium-metrics-reviews@google.com.
   <int value="8" label="PARSE_ERROR">Parse error.</int>
 </enum>
 
+<!-- LINT.IfChange(EnterprisePolicyRefresh) -->
+
 <enum name="EnterprisePolicyRefresh">
   <summary>
     Defined as MetricPolicyRefresh in
@@ -2342,6 +2397,8 @@ chromium-metrics-reviews@google.com.
   <int value="3" label="Invalidated; Changed"/>
   <int value="4" label="Invalidated; Unchanged"/>
 </enum>
+
+<!-- LINT.ThenChange(//components/policy/core/common/cloud/enterprise_metrics.h:MetricPolicyRefresh) -->
 
 <enum name="EnterprisePolicyUserVerification">
   <summary>
@@ -2542,6 +2599,18 @@ chromium-metrics-reviews@google.com.
   <int value="4" label="Image download cancelled"/>
 </enum>
 
+<enum name="NetworkedProfileCheck">
+  <int value="0" label="Check was suppressed by command line flag."/>
+  <int value="1" label="WTSQuerySessionInformation call failed."/>
+  <int value="2" label="File access in profile dir failed."/>
+  <int value="3" label="Profile on a network share detected."/>
+  <int value="4" label="Profile not on a network share detected."/>
+  <int value="5" label="Check was suppressed because of remote session."/>
+  <int value="6"
+      label="User has clicked learn more on the notification bubble."/>
+  <int value="7" label="User has clicked OK on the notification bubble."/>
+</enum>
+
 <enum name="OidcInterceptionFunnelStep">
   <int value="0" label="Created throttle for valid redirection"/>
   <int value="1" label="Successfuly parsed out required info for registration"/>
@@ -2614,6 +2683,12 @@ chromium-metrics-reviews@google.com.
   <int value="7" label="Connection Error"/>
   <int value="8" label="Server Error"/>
   <int value="9" label="Timeout"/>
+</enum>
+
+<enum name="RegisterCloudPolicyServiceEvent">
+  <int value="0" label="No re-registration"/>
+  <int value="1" label="Re-registeringg with Gaia account"/>
+  <int value="2" label="Re-registeringg without Gaia account"/>
 </enum>
 
 <enum name="RemoteCommandExecutionStatus">

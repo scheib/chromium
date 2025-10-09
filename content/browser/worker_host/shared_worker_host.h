@@ -126,6 +126,8 @@ class CONTENT_EXPORT SharedWorkerHost : public blink::mojom::SharedWorkerHost,
 
   void CreateWebTransportConnector(
       mojo::PendingReceiver<blink::mojom::WebTransportConnector> receiver);
+  void CreateWebSocketConnector(
+      mojo::PendingReceiver<blink::mojom::WebSocketConnector> receiver);
   void BindCacheStorage(
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver);
   void CreateBroadcastChannelProvider(
@@ -243,6 +245,9 @@ class CONTENT_EXPORT SharedWorkerHost : public blink::mojom::SharedWorkerHost,
       blink::mojom::BucketHost::GetDirectoryCallback callback) override;
   storage::BucketClientInfo GetBucketClientInfo() const override;
 
+  // Helper to get or create a new canvas noise token for this worker.
+  std::optional<blink::NoiseToken> GetOrCreateCanvasNoiseToken();
+
  private:
   friend class SharedWorkerHostTest;
 
@@ -275,6 +280,8 @@ class CONTENT_EXPORT SharedWorkerHost : public blink::mojom::SharedWorkerHost,
       mojo::PendingRemote<blink::mojom::DevToolsAgent>,
       mojo::PendingReceiver<blink::mojom::DevToolsAgentHost>) override;
   void OnScriptLoadFailed(const std::string& error_message) override;
+  void OnReportException(
+      blink::mojom::SharedWorkerExceptionDetailsPtr details) override;
   void OnFeatureUsed(blink::mojom::WebFeature feature) override;
 
   // RenderProcessHostObserver methods:

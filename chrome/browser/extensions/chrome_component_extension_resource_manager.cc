@@ -20,6 +20,7 @@
 #include "chrome/grit/component_extension_resources_map.h"
 #include "chrome/grit/theme_resources.h"
 #include "content/public/browser/browser_thread.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension_id.h"
 #include "pdf/buildflags.h"
@@ -38,9 +39,11 @@
 
 #if BUILDFLAG(ENABLE_PDF)
 #include <utility>
+
 #include "chrome/browser/pdf/pdf_extension_util.h"
-#include "chrome/grit/pdf_resources_map.h"
 #endif  // BUILDFLAG(ENABLE_PDF)
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -128,13 +131,13 @@ ChromeComponentExtensionResourceManager::Data::Data() {
 #endif
 
 #if BUILDFLAG(ENABLE_PDF)
-  AddComponentResourceEntries(kPdfResources);
+  AddComponentResourceEntries(pdf_extension_util::GetResources(
+      pdf_extension_util::PdfViewerContext::kPdfViewer));
 
   // ResourceBundle is not always initialized in unit tests.
   if (ui::ResourceBundle::HasSharedInstance()) {
-    base::Value::Dict dict;
-    pdf_extension_util::AddStrings(
-        pdf_extension_util::PdfViewerContext::kPdfViewer, &dict);
+    base::Value::Dict dict = pdf_extension_util::GetStrings(
+        pdf_extension_util::PdfViewerContext::kPdfViewer);
 
     ui::TemplateReplacements pdf_viewer_replacements;
     ui::TemplateReplacementsFromDictionaryValue(dict, &pdf_viewer_replacements);

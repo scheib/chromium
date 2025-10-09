@@ -163,6 +163,25 @@ struct AiMode : Config<AiMode> {
   bool check_ai_eligibility_gws_side = false;
 };
 
+// If enabled, show the AIM entrypoint in the omnibox.
+struct AiModeOmniboxEntryPoint : Config<AiModeOmniboxEntryPoint> {
+  AiModeOmniboxEntryPoint();
+  // Whether the AIM entrypoint is enabled for all users.
+  bool enabled;
+  // Whether the AIM entrypoint is enabled only for users whose locale is set to
+  // English and who are located in the US. Has no effect if `enabled` is true.
+  bool enabledEnUs;
+
+  // Never display AIM hint text.
+  bool hide_aim_hint_text;
+
+  // Whether to hide the AIM hint text on NTP open.
+  bool hide_aim_hint_text_on_ntp_open;
+
+  // Whether to hide the other (non-AIM) page actions on NTP.
+  bool hide_other_page_actions_on_ntp;
+};
+
 // A config struct for features related to contextual search in omnibox.
 struct ContextualSearch : Config<ContextualSearch> {
   ContextualSearch();
@@ -186,6 +205,7 @@ struct ContextualSearch : Config<ContextualSearch> {
   DECLARE_FEATURE(kShowSuggestionsOnNoApc);
   DECLARE_FEATURE(kOpenLensActionUITweaks);
   DECLARE_FEATURE(kSuggestionsFulfilledByLensSupported);
+  DECLARE_FEATURE(kLoadingSuggestionsAnimation);
 
   // Whether to use contextual search features, for example the lens action.
   bool IsContextualSearchEnabled() const;
@@ -268,6 +288,20 @@ struct ContextualSearch : Config<ContextualSearch> {
   // overlay in the selection state. This is in contrast to the default behavior
   // where the suggestion is fulfilled by the contextual searchbox.
   bool suggestions_fulfilled_by_lens_supported;
+
+  // Whether to enable the loading suggestions animation. This adds an
+  // animation when contextual suggestions load into the omnibox popup.
+  bool enable_loading_suggestions_animation;
+
+  // The duration of the position animation when loading suggestions.
+  int loading_suggestions_position_animation_duration;
+
+  // The delay after the position animation begins that the opacity animation
+  // should start after.
+  int loading_suggestions_opacity_animation_delay;
+
+  // The duration of the opacity animation when loading suggestions.
+  int loading_suggestions_opacity_animation_duration;
 };
 
 // If enabled, allows MIA zero-prefix suggestions in NTP omnibox and realbox.
@@ -594,6 +628,23 @@ struct HappinessTrackingSurveyForOmniboxOnFocusZps
   std::string happiness_trigger_id;
   // Trigger ID of Usefulness and Distraction survey.
   std::string utility_trigger_id;
+};
+
+struct ComposeboxSuggestionLimit : Config<ComposeboxSuggestionLimit> {
+  DECLARE_FEATURE(kComposeboxSuggestionLimit);
+  ComposeboxSuggestionLimit();
+  ComposeboxSuggestionLimit(const ComposeboxSuggestionLimit&);
+  ComposeboxSuggestionLimit(ComposeboxSuggestionLimit&&);
+  ComposeboxSuggestionLimit& operator=(const ComposeboxSuggestionLimit&);
+  ComposeboxSuggestionLimit& operator=(ComposeboxSuggestionLimit&&);
+  ~ComposeboxSuggestionLimit();
+  bool enabled;
+  // Max number of zps suggestions to show.
+  size_t max_suggestions;
+  // Max number of aim zps suggestions to show.
+  size_t max_aim_suggestions;
+  // Max number of contextual zps suggestions to show.
+  size_t max_contextual_suggestions;
 };
 
 // Do not add new configs here at the bottom by default. They should be ordered

@@ -23,10 +23,10 @@ import {I18nMixinLit} from '//resources/cr_elements/i18n_mixin_lit.js';
 import {WebUiListenerMixinLit} from '//resources/cr_elements/web_ui_listener_mixin_lit.js';
 import {assert} from '//resources/js/assert.js';
 import {loadTimeData} from '//resources/js/load_time_data.js';
-import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import {CrLitElement, html, type TemplateResult} from '//resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 
-import {getCurrentSpeechRate, minOverflowLengthToScroll, openMenu, spinnerDebounceTimeout, ToolbarEvent} from './common.js';
+import {minOverflowLengthToScroll, openMenu, spinnerDebounceTimeout, ToolbarEvent} from './common.js';
 import type {SettingsPrefs} from './common.js';
 import {getNewIndex, isArrow, isForwardArrow, isHorizontalArrow} from './keyboard_util.js';
 import type {ColorMenuElement} from './menus/color_menu.js';
@@ -35,6 +35,7 @@ import type {LetterSpacingMenuElement} from './menus/letter_spacing_menu.js';
 import type {LineSpacingMenuElement} from './menus/line_spacing_menu.js';
 import type {RateMenuElement} from './menus/rate_menu.js';
 import {ReadAnythingSettingsChange} from './metrics_browser_proxy.js';
+import {getCurrentSpeechRate} from './read_aloud/speech_presentation_rules.js';
 import {ReadAnythingLogger, SpeechControls, TimeFrom} from './read_anything_logger.js';
 import {getCss} from './read_anything_toolbar.css.js';
 import {getHtml} from './read_anything_toolbar.html.js';
@@ -61,6 +62,7 @@ interface MenuButton {
   icon: string;
   ariaLabel: string;
   openMenu: (target: HTMLElement) => void;
+  announceBlock?: TemplateResult;
 }
 
 
@@ -83,6 +85,15 @@ export const LINK_TOGGLE_BUTTON_ID = 'link-toggle-button';
 export const IMAGES_ENABLED_ICON = 'read-anything:images-enabled';
 export const IMAGES_DISABLED_ICON = 'read-anything:images-disabled';
 export const IMAGES_TOGGLE_BUTTON_ID = 'images-toggle-button';
+
+// Max number of paragraph elements inside an aria-live region for
+// announcing setting changes. Not clearing the element may make
+// the announce block too big and waste memory. Trade-off is that every
+// MAX_PARAGRAOHS_IN_ANNOUNCE_BLOCK font sizes, there is a chance the
+// announcement won't happen the sixth time, if the change is too fast.
+// It is unlikely someone will change the font size more than 5 times so
+// this covers most use cases.
+const MAX_PARAGRAPHS_IN_ANNOUNCE_BLOCK = 5;
 
 // Constants for styling the toolbar when page zoom changes.
 const flexWrapTypical = 'nowrap';
@@ -122,6 +133,7 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
       speechRate_: {type: Number},
       fontName_: {type: String},
       moreOptionsButtons_: {type: Array},
+      pageLanguage: {type: String},
     };
   }
 
@@ -150,6 +162,7 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     highlightGranularity: 0,
   };
   accessor selectedVoice: SpeechSynthesisVoice|undefined;
+  accessor pageLanguage: string = '';
   protected accessor fontOptions_: string[] = [];
   protected accessor hideSpinner_: boolean = true;
   protected isReadAloudEnabled_: boolean = true;
@@ -190,6 +203,10 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     if (changedProperties.has('isSpeechActive') ||
         changedProperties.has('isAudioCurrentlyPlaying')) {
       this.onSpeechPlayingStateChanged_();
+    }
+
+    if (changedProperties.has('pageLanguage')) {
+      this.updateFonts_();
     }
   }
 
@@ -324,7 +341,8 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
             ariaLabel: loadTimeData.getString('fontSizeTitle'),
             openMenu: (target: HTMLElement) =>
                 openMenu(this.$.fontSizeMenu.get(), target),
-
+            announceBlock: html`<div id='size-announce' class='announce-block'
+       aria-live='polite'></div>`,
           },
           {
             id: 'font',
@@ -428,7 +446,8 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
         this.fontOptions_.indexOf(chrome.readingMode.fontName);
     if (currentFontIndex < 0) {
       currentFontIndex = 0;
-      this.propagateFontChange_(this.fontOptions_[0]!);
+      this.propagateFontChange_(
+          this.fontOptions_[0]!, /*isTemporaryFallback=*/ true);
     }
     this.fontName_ = this.fontOptions_[currentFontIndex]!;
     if (!this.isReadAloudEnabled_) {
@@ -450,7 +469,7 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     }
   }
 
-  updateFonts() {
+  private updateFonts_() {
     this.initFonts_();
     this.restoreFontMenu_();
   }
@@ -576,8 +595,13 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     this.propagateFontChange_(this.fontName_);
   }
 
-  private propagateFontChange_(fontName: string) {
-    chrome.readingMode.onFontChange(fontName);
+  private propagateFontChange_(
+      fontName: string, isTemporaryFallback: boolean = false) {
+    if (!isTemporaryFallback) {
+      // Persist the change only if it's a direct user selection, not a
+      // temporary fallback.
+      chrome.readingMode.onFontChange(fontName);
+    }
     this.fire(ToolbarEvent.FONT);
     this.style.fontFamily = chrome.readingMode.getValidatedFontName(fontName);
   }
@@ -628,9 +652,11 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     if (button) {
       button.ironIcon = chrome.readingMode.linksEnabled ? LINKS_ENABLED_ICON :
                                                           LINKS_DISABLED_ICON;
-      button.title = chrome.readingMode.linksEnabled ?
+      const linkStatusLabel = chrome.readingMode.linksEnabled ?
           loadTimeData.getString('disableLinksLabel') :
           loadTimeData.getString('enableLinksLabel');
+      button.title = linkStatusLabel;
+      button.ariaLabel = linkStatusLabel;
     }
   }
 
@@ -640,17 +666,56 @@ export class ReadAnythingToolbarElement extends ReadAnythingToolbarElementBase {
     if (button) {
       button.ironIcon = chrome.readingMode.imagesEnabled ? IMAGES_ENABLED_ICON :
                                                            IMAGES_DISABLED_ICON;
-      button.title = chrome.readingMode.imagesEnabled ?
+      const imageStatusLabel = chrome.readingMode.imagesEnabled ?
           loadTimeData.getString('disableImagesLabel') :
           loadTimeData.getString('enableImagesLabel');
+      button.title = imageStatusLabel;
+      button.ariaLabel = imageStatusLabel;
+    }
+  }
+
+  private announceSizeChage(increase: boolean) {
+    const sizeChangeAnnounce: HTMLDivElement =
+        this.shadowRoot?.getElementById('size-announce') as HTMLDivElement;
+    if (sizeChangeAnnounce) {
+      // We must add a new HTML element otherwise aria-live won't catch it.
+      const paragraph: HTMLParagraphElement = document.createElement('p');
+      if (increase) {
+        paragraph.textContent = this.i18n('increaseFontSizeAnnouncement');
+      } else {
+        paragraph.textContent = this.i18n('decreaseFontSizeAnnouncement');
+      }
+      sizeChangeAnnounce.appendChild(paragraph);
+      // To avoid adding indefinite number of HTML elements. If the list of
+      // paragraphs in size_change_announce has become too large reset it.
+      if (sizeChangeAnnounce.getElementsByTagName('p').length >
+          MAX_PARAGRAPHS_IN_ANNOUNCE_BLOCK) {
+        this.restoreAnnounceState('size-announce');
+      }
+    }
+  }
+
+
+  // Helper function to clear html in an aria announce element.
+  private restoreAnnounceState(id: string) {
+    const srNotice: HTMLElement|null = this.shadowRoot?.getElementById(id);
+    if (srNotice) {
+      const paragraphs = srNotice.querySelectorAll('p');
+      paragraphs.forEach(paragraph => {
+        paragraph.remove();
+      });
     }
   }
 
   private updateFontSize_(increase: boolean) {
     this.logger_.logTextSettingsChange(
         ReadAnythingSettingsChange.FONT_SIZE_CHANGE);
+    const startingSize = chrome.readingMode.fontSize;
     chrome.readingMode.onFontSizeChanged(increase);
     this.fire(ToolbarEvent.FONT_SIZE);
+    if (startingSize !== chrome.readingMode.fontSize) {
+      this.announceSizeChage(increase);
+    }
     // Don't close the menu
   }
 

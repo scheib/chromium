@@ -35,8 +35,7 @@ class UrgentPageDiscardingPolicy : public GraphOwned {
   static void DisableForTesting();
 
  private:
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel new_level);
+  void OnMemoryPressure(base::MemoryPressureLevel new_level);
 
   // Callback called when a discard attempt has completed.
   void PostDiscardAttemptCallback(bool success);
@@ -48,7 +47,8 @@ class UrgentPageDiscardingPolicy : public GraphOwned {
       std::optional<memory_pressure::ReclaimTarget> reclaim_target_kb);
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-  base::MemoryPressureListener memory_pressure_listener_;
+  base::MemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   // True while we are in the process of discarding tab(s) in response to a
   // memory pressure notification. It becomes false once we're done responding

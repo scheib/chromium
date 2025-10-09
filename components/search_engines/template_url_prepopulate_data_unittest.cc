@@ -19,6 +19,7 @@
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/task_environment.h"
 #include "base/values.h"
 #include "components/country_codes/country_codes.h"
 #include "components/google/core/common/google_switches.h"
@@ -191,6 +192,7 @@ class TemplateURLPrepopulateDataTest : public testing::Test {
   }
 
  protected:
+  base::test::TaskEnvironment task_environment_;
   search_engines::SearchEnginesTestEnvironment search_engines_test_environment_;
 };
 
@@ -319,7 +321,7 @@ TEST_F(TemplateURLPrepopulateDataTest, ProvidersFromPrefs) {
   EXPECT_EQ(u"foo", t_urls[0]->short_name());
   EXPECT_EQ(u"fook", t_urls[0]->keyword());
   EXPECT_EQ("foo.com", GetHostFromTemplateURLData(*t_urls[0]));
-  EXPECT_EQ("foi.com", t_urls[0]->favicon_url.host());
+  EXPECT_EQ("foi.com", t_urls[0]->favicon_url.GetHost());
   EXPECT_EQ(1u, t_urls[0]->input_encodings.size());
   EXPECT_EQ(1001, t_urls[0]->prepopulate_id);
   EXPECT_TRUE(t_urls[0]->suggestions_url.empty());
@@ -342,7 +344,7 @@ TEST_F(TemplateURLPrepopulateDataTest, ProvidersFromPrefs) {
   EXPECT_EQ(u"foo", t_urls[0]->short_name());
   EXPECT_EQ(u"fook", t_urls[0]->keyword());
   EXPECT_EQ("foo.com", GetHostFromTemplateURLData(*t_urls[0]));
-  EXPECT_EQ("foi.com", t_urls[0]->favicon_url.host());
+  EXPECT_EQ("foi.com", t_urls[0]->favicon_url.GetHost());
   EXPECT_EQ(1u, t_urls[0]->input_encodings.size());
   EXPECT_EQ(1001, t_urls[0]->prepopulate_id);
   EXPECT_EQ("http://foo.com/suggest?q={searchTerms}",
@@ -404,7 +406,7 @@ TEST_F(TemplateURLPrepopulateDataTest, ClearProvidersFromPrefs) {
   for (size_t i = 0; i < t_urls.size(); ++i) {
     EXPECT_NE(u"foo", t_urls[i]->short_name());
     EXPECT_NE(u"fook", t_urls[i]->keyword());
-    EXPECT_NE("foi.com", t_urls[i]->favicon_url.host());
+    EXPECT_NE("foi.com", t_urls[i]->favicon_url.GetHost());
     EXPECT_NE("foo.com", GetHostFromTemplateURLData(*t_urls[i]));
     EXPECT_NE(1001, t_urls[i]->prepopulate_id);
   }
@@ -434,7 +436,7 @@ TEST_F(TemplateURLPrepopulateDataTest, ProvidersFromPrepopulated) {
   for (size_t i = 0; i < t_urls.size(); ++i) {
     ASSERT_FALSE(t_urls[i]->short_name().empty());
     ASSERT_FALSE(t_urls[i]->keyword().empty());
-    ASSERT_FALSE(t_urls[i]->favicon_url.host().empty());
+    ASSERT_FALSE(t_urls[i]->favicon_url.GetHost().empty());
     ASSERT_FALSE(GetHostFromTemplateURLData(*t_urls[i]).empty());
     ASSERT_FALSE(t_urls[i]->input_encodings.empty());
     EXPECT_GT(t_urls[i]->prepopulate_id, 0);
@@ -479,8 +481,8 @@ TEST_F(TemplateURLPrepopulateDataTest, PrepopulatedAreHttps) {
       CheckUrlIsEmptyOrSecure(t_url->new_tab_url);
       CheckUrlIsEmptyOrSecure(t_url->contextual_search_url);
       CheckUrlIsEmptyOrSecure(t_url->suggestions_url);
-      CheckUrlIsEmptyOrSecure(t_url->favicon_url.scheme());
-      CheckUrlIsEmptyOrSecure(t_url->logo_url.scheme());
+      CheckUrlIsEmptyOrSecure(t_url->favicon_url.GetScheme());
+      CheckUrlIsEmptyOrSecure(t_url->logo_url.GetScheme());
     }
   }
 }

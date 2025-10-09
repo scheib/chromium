@@ -14,6 +14,7 @@
 #include "net/base/load_flags.h"
 #include "net/http/http_log_util.h"
 #include "net/http/http_request_headers.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "net/http/http_util.h"
 #include "net/log/net_log_capture_mode.h"
@@ -111,13 +112,14 @@ std::string CreateAndSerializeBhttpMessage(
     const std::string& method,
     mojom::ObliviousHttpRequestBodyPtr request_body,
     net::HttpRequestHeaders::HeaderVector headers) {
-  std::string host_port = request_url.host();
+  std::string host_port = request_url.GetHost();
   if (request_url.has_port()) {
-    host_port += ":" + request_url.port();
+    host_port += ":" + request_url.GetPort();
   }
 
-  quiche::BinaryHttpRequest bhttp_request(
-      {method, request_url.scheme(), host_port, request_url.PathForRequest()});
+  quiche::BinaryHttpRequest bhttp_request({method, request_url.GetScheme(),
+                                           host_port,
+                                           request_url.PathForRequest()});
   bhttp_request.AddHeaderField({net::HttpRequestHeaders::kHost, host_port});
   // Date should be provided by the client to allow for server anti-replay
   // protections (according to the OHTTP spec).

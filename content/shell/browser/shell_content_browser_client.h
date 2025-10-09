@@ -224,12 +224,6 @@ class ShellContentBrowserClient : public ContentBrowserClient {
         create_throttles_for_navigation_callback;
   }
 
-  void set_override_web_preferences_callback(
-      base::RepeatingCallback<void(blink::web_pref::WebPreferences*)>
-          callback) {
-    override_web_preferences_callback_ = std::move(callback);
-  }
-
 #if BUILDFLAG(IS_IOS)
   bool IsJITEnabled();
   void SetJITEnabled(bool value);
@@ -251,9 +245,6 @@ class ShellContentBrowserClient : public ContentBrowserClient {
   // For GetShellContentBrowserClientInstances().
   friend class ContentBrowserTestContentBrowserClient;
 
-  // Needed so that content_shell can use fieldtrial_testing_config.
-  void SetUpFieldTrials();
-
   // Returns the list of ShellContentBrowserClients ordered by time created.
   // If a test overrides ContentBrowserClient, this list will have more than
   // one item.
@@ -273,8 +264,6 @@ class ShellContentBrowserClient : public ContentBrowserClient {
       url_loader_factory_params_callback_;
   base::RepeatingCallback<void(NavigationThrottleRegistry&)>
       create_throttles_for_navigation_callback_;
-  base::RepeatingCallback<void(blink::web_pref::WebPreferences*)>
-      override_web_preferences_callback_;
 #if BUILDFLAG(IS_IOS)
   std::unique_ptr<permissions::BluetoothDelegateImpl> bluetooth_delegate_;
 #endif

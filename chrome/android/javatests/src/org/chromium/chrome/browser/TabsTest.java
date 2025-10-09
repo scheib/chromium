@@ -101,6 +101,8 @@ import java.util.concurrent.atomic.AtomicReference;
         reason =
                 "https://crbug.com/1347598: Side effects are causing flakes in CI and failures"
                         + " locally. Unbatched to isolate flakes before batching again.")
+// TODO(crbug.com/439491767): Fix broken tests caused by desktop-like incognito window.
+@DisableFeatures(ChromeFeatureList.ANDROID_OPEN_INCOGNITO_AS_WINDOW)
 public class TabsTest {
     @Rule
     public AutoResetCtaTransitTestRule mActivityTestRule =
@@ -279,7 +281,6 @@ public class TabsTest {
                             mActivityTestRule
                                     .getKeyboardDelegate()
                                     .isKeyboardShowing(
-                                            mActivityTestRule.getActivity(),
                                             mActivityTestRule.getActivity().getTabsView());
                     Criteria.checkThat(isKeyboardShowing, Matchers.is(show));
                 });
@@ -476,7 +477,13 @@ public class TabsTest {
                             WebContents webContents = mActivityTestRule.getWebContents();
                             webContents
                                     .getEventForwarder()
-                                    .startFling(SystemClock.uptimeMillis(), 0, -2000, false, true);
+                                    .startFling(
+                                            SystemClock.uptimeMillis(),
+                                            0,
+                                            -2000,
+                                            false,
+                                            true,
+                                            false);
                         });
         ChromeTabUtils.closeCurrentTab(
                 InstrumentationRegistry.getInstrumentation(), mActivityTestRule.getActivity());
@@ -686,9 +693,7 @@ public class TabsTest {
         CriteriaHelper.pollUiThread(
                 () -> {
                     boolean keyboardVisible =
-                            mActivityTestRule
-                                    .getKeyboardDelegate()
-                                    .isKeyboardShowing(mActivityTestRule.getActivity(), urlBar);
+                            mActivityTestRule.getKeyboardDelegate().isKeyboardShowing(urlBar);
                     Criteria.checkThat(keyboardVisible, Matchers.is(true));
                 });
 
@@ -708,9 +713,7 @@ public class TabsTest {
         CriteriaHelper.pollUiThread(
                 () -> {
                     boolean keyboardVisible =
-                            mActivityTestRule
-                                    .getKeyboardDelegate()
-                                    .isKeyboardShowing(mActivityTestRule.getActivity(), urlBar);
+                            mActivityTestRule.getKeyboardDelegate().isKeyboardShowing(urlBar);
                     Criteria.checkThat(keyboardVisible, Matchers.is(true));
                 });
 
@@ -724,9 +727,7 @@ public class TabsTest {
         CriteriaHelper.pollUiThread(
                 () -> {
                     boolean keyboardVisible =
-                            mActivityTestRule
-                                    .getKeyboardDelegate()
-                                    .isKeyboardShowing(mActivityTestRule.getActivity(), urlBar);
+                            mActivityTestRule.getKeyboardDelegate().isKeyboardShowing(urlBar);
                     Criteria.checkThat(keyboardVisible, Matchers.is(false));
                 });
     }

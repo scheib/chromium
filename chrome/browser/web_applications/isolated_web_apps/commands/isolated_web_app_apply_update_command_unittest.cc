@@ -20,7 +20,6 @@
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_trust_checker.h"
 #include "chrome/browser/web_applications/isolated_web_apps/isolated_web_app_url_info.h"
 #include "chrome/browser/web_applications/isolated_web_apps/test/isolated_web_app_builder.h"
-#include "chrome/browser/web_applications/isolated_web_apps/test/test_signed_web_bundle_builder.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/fake_web_contents_manager.h"
 #include "chrome/browser/web_applications/test/web_app_icon_test_utils.h"
@@ -34,10 +33,12 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registry_update.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
-#include "chrome/common/url_constants.h"
 #include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
 #include "components/webapps/browser/install_result_code.h"
 #include "components/webapps/browser/web_contents/web_app_url_loader.h"
+#include "components/webapps/isolated_web_apps/scheme.h"
+#include "components/webapps/isolated_web_apps/test_support/signing_keys.h"
+#include "components/webapps/isolated_web_apps/types/iwa_version.h"
 #include "components/webapps/isolated_web_apps/types/source.h"
 #include "components/webapps/isolated_web_apps/types/storage_location.h"
 #include "content/public/browser/web_contents.h"
@@ -53,7 +54,6 @@ namespace {
 
 using base::test::ErrorIs;
 using base::test::HasValue;
-using base::test::ValueIs;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::Field;
@@ -78,7 +78,7 @@ std::vector<base::FilePath> GetDirContents(const base::FilePath& directory) {
 }
 
 blink::mojom::ManifestPtr CreateDefaultManifest(const GURL& application_url,
-                                                const base::Version version) {
+                                                const IwaVersion& version) {
   auto manifest = blink::mojom::Manifest::New();
   manifest->id = application_url.DeprecatedGetOriginAsURL();
   manifest->scope = application_url.Resolve("/");
@@ -144,13 +144,8 @@ class IsolatedWebAppApplyUpdateCommandTest : public WebAppTest {
     base::WriteFile(installed_path, "");
   }
 
-  base::expected<IsolatedWebAppApplyUpdateCommandSuccess,
-                 IsolatedWebAppApplyUpdateCommandError>
-  ApplyPendingUpdate() {
-    base::test::TestFuture<
-        base::expected<IsolatedWebAppApplyUpdateCommandSuccess,
-                       IsolatedWebAppApplyUpdateCommandError>>
-        future;
+  IsolatedWebAppApplyUpdateCommandResult ApplyPendingUpdate() {
+    base::test::TestFuture<IsolatedWebAppApplyUpdateCommandResult> future;
     fake_provider().scheduler().ApplyPendingIsolatedWebAppUpdate(
         url_info_, /*optional_keep_alive=*/nullptr,
         /*optional_profile_keep_alive=*/nullptr, future.GetCallback());
@@ -164,10 +159,10 @@ class IsolatedWebAppApplyUpdateCommandTest : public WebAppTest {
   }
 
   FakeWebContentsManager::FakePageState& CreateDefaultPageState() {
-    GURL url(
-        base::StrCat({chrome::kIsolatedAppScheme, url::kStandardSchemeSeparator,
-                      test::GetDefaultEd25519WebBundleId().id(),
-                      "/.well-known/_generated_install_page.html"}));
+    GURL url(base::StrCat({webapps::kIsolatedAppScheme,
+                           url::kStandardSchemeSeparator,
+                           test::GetDefaultEd25519WebBundleId().id(),
+                           "/.well-known/_generated_install_page.html"}));
     auto& page_state = fake_web_contents_manager().GetOrCreatePageState(url);
 
     page_state.url_load_result = webapps::WebAppUrlLoaderResult::kUrlLoaded;
@@ -225,11 +220,11 @@ class IsolatedWebAppApplyUpdateCommandTest : public WebAppTest {
 
   IsolatedWebAppStorageLocation installed_location_ =
       IwaStorageOwnedBundle{"installed_folder", /*dev_mode=*/false};
-  base::Version installed_version_ = base::Version("1.0.0");
+  IwaVersion installed_version_ = *IwaVersion::Create("1.0.0");
 
   IwaStorageOwnedBundle update_bundle_location_{"update_folder",
                                                 /*dev_mode=*/false};
-  base::Version update_version_ = base::Version("2.0.0");
+  IwaVersion update_version_ = *IwaVersion::Create("2.0.0");
 };
 
 TEST_F(IsolatedWebAppApplyUpdateCommandTest, Succeeds) {
@@ -242,9 +237,7 @@ TEST_F(IsolatedWebAppApplyUpdateCommandTest, Succeeds) {
       url_info_.origin().GetURL().Resolve(kIconPath));
   icon_state.bitmaps = {web_app::CreateSquareIcon(32, SK_ColorWHITE)};
 
-  EXPECT_THAT(ApplyPendingUpdate(),
-              ValueIs(IsolatedWebAppApplyUpdateCommandSuccess(
-                  update_version_, update_bundle_location_)));
+  EXPECT_THAT(ApplyPendingUpdate(), HasValue());
 
   const WebApp* web_app =
       fake_provider().registrar_unsafe().GetAppById(url_info_.app_id());
@@ -303,7 +296,7 @@ TEST_F(IsolatedWebAppApplyUpdateCommandTest, FailsIfInstalledAppIsNotIsolated) {
 TEST_F(IsolatedWebAppApplyUpdateCommandTest,
        FailsIfInstalledAppHasNoPendingUpdate) {
   test::AwaitStartWebAppProviderAndSubsystems(profile());
-  installed_version_ = base::Version("3.0.0");
+  installed_version_ = *IwaVersion::Create("3.0.0");
   InstallIwa(/*pending_update_info=*/std::nullopt);
   CreateDefaultPageState();
 

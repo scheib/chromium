@@ -44,6 +44,7 @@
 #include "components/permissions/features.h"
 #include "components/permissions/object_permission_context_base.h"
 #include "components/permissions/origin_keyed_permission_action_service.h"
+#include "components/permissions/permission_actions_history.h"
 #include "components/permissions/permission_decision_auto_blocker.h"
 #include "components/permissions/permission_manager.h"
 #include "components/permissions/permission_recovery_success_rate_tracker.h"
@@ -54,6 +55,7 @@
 #include "components/permissions/request_type.h"
 #include "components/privacy_sandbox/privacy_sandbox_features.h"
 #include "components/safe_browsing/buildflags.h"
+#include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
 #include "components/ssl_errors/error_info.h"
@@ -664,8 +666,7 @@ void PageInfo::OnSitePermissionChanged(
     std::optional<url::Origin> requesting_origin,
     bool is_one_time) {
   // Check that we are passing nullopt instead of CONTENT_SETTING_DEFAULT.
-  CHECK(!setting || !std::holds_alternative<ContentSetting>(*setting) ||
-        std::get<ContentSetting>(*setting) != CONTENT_SETTING_DEFAULT);
+  CHECK_NE(setting, PermissionSetting{CONTENT_SETTING_DEFAULT});
   ContentSettingChangedViaPageInfo(type);
 
   auto* info =
@@ -746,6 +747,14 @@ void PageInfo::OnSitePermissionChanged(
     delegate_->GetPermissionDecisionAutoblocker()->RemoveEmbargoAndResetCounts(
         site_url_, type);
   }
+
+  // Also clear heuristic grant data if user removes the granted state.
+  if (setting && (info->delegate().IsBlocked(*setting) ||
+                  info->delegate().IsUndecided(*setting))) {
+    delegate_->GetPermissionActionsHistory()->ResetHeuristicData(site_url_,
+                                                                 type);
+  }
+
   using Constraints = content_settings::ContentSettingConstraints;
   Constraints constraints;
   if (is_one_time) {
@@ -758,6 +767,30 @@ void PageInfo::OnSitePermissionChanged(
   if (type == ContentSettingsType::STORAGE_ACCESS) {
     constraints.set_lifetime(
         permissions::kStorageAccessAPIExplicitPermissionLifetime);
+  }
+  // Enable last-visit tracking for eligible permissions granted from
+  // Site Settings UI. This allows Safety Hub to auto-revoke the permission
+  // if the site is not visited for a finite amount of time.
+  if (base::FeatureList::IsEnabled(
+          permissions::features::
+              kSafetyHubUnusedPermissionRevocationForAllSurfaces) &&
+      setting &&
+      content_settings::CanBeAutoRevokedAsUnusedPermission(
+          type, info->delegate().ToValue(*setting), is_one_time)) {
+    constraints.set_track_last_visit_for_autoexpiration(true);
+  }
+
+  // If notification permission changes from allowed to not allowed, log the
+  // histogram.
+  if (type == ContentSettingsType::NOTIFICATIONS &&
+      setting_old == CONTENT_SETTING_ALLOW &&
+      (!setting ||
+       ToContentSettingForMetrics(info, setting) == CONTENT_SETTING_ASK ||
+       ToContentSettingForMetrics(info, setting) == CONTENT_SETTING_BLOCK)) {
+    safe_browsing::SafeBrowsingMetricsCollector::
+        LogSafeBrowsingNotificationRevocationSourceHistogram(
+            safe_browsing::NotificationRevocationSource::
+                kUserManuallyChangedSiteSetting);
   }
 
   map->SetNarrowestContentSetting(primary_url, site_url_, type, setting,
@@ -844,7 +877,7 @@ void PageInfo::OnRevokeSSLErrorBypassButtonPressed() {
       delegate_->GetStatefulSSLHostStateDelegate();
   DCHECK(stateful_ssl_host_state_delegate);
   stateful_ssl_host_state_delegate->RevokeUserAllowExceptionsHard(
-      site_url().host());
+      site_url().GetHost());
   did_revoke_user_ssl_decisions_ = true;
   RecordPageInfoAction(page_info::PAGE_INFO_RESET_DECISIONS_CLICKED);
 }
@@ -1255,9 +1288,11 @@ void PageInfo::ComputeUIInputs(const GURL& url) {
   DCHECK(delegate);
   DCHECK(web_contents_);
   bool has_cert_allow_exception = delegate->HasCertAllowException(
-      url.host(), web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
+      url.GetHost(),
+      web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
   bool has_http_allow_exception = delegate->IsHttpAllowedForHost(
-      url.host(), web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
+      url.GetHost(),
+      web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
 
   // HTTP allowlist entries can be added because of silent HTTPS-Upgrades
   // without the user proceeding through a warning. Only show a warning decision
@@ -1321,52 +1356,37 @@ void PageInfo::PopulatePermissionInfo(PermissionInfo& permission_info,
   // Check embargo status if the content setting supports embargo.
   if (permissions::PermissionDecisionAutoBlocker::IsEnabledForContentSetting(
           permission_info.type) &&
-      !permission_info.setting &&
       permission_info.source == content_settings::SettingSource::kUser) {
-    content::PermissionResult permission_result(
-        PermissionStatus::ASK, content::PermissionStatusSource::UNSPECIFIED);
-    if (permissions::PermissionUtil::IsPermission(permission_info.type)) {
-      permission_result = delegate_->GetPermissionResult(
-          permissions::PermissionUtil::ContentSettingsTypeToPermissionType(
-              permission_info.type),
-          url::Origin::Create(site_url_), permission_info.requesting_origin);
-    } else if (permission_info.type ==
-               ContentSettingsType::FEDERATED_IDENTITY_API) {
-      std::optional<content::PermissionResult> embargo_result =
-          delegate_->GetPermissionDecisionAutoblocker()->GetEmbargoResult(
-              site_url_, permission_info.type);
-      if (embargo_result) {
-        permission_result = embargo_result.value();
-      }
+    if (delegate_->GetPermissionDecisionAutoblocker()->IsEmbargoed(
+            site_url_, permission_info.type)) {
+      permission_info.setting = setting_info->delegate().ApplyPermissionEmbargo(
+          permission_info.setting.value_or(permission_info.default_setting));
     }
-
-    // If under embargo, update |permission_info| to reflect that.
-    if (permission_result.status == PermissionStatus::DENIED &&
-        (permission_result.source ==
-             content::PermissionStatusSource::MULTIPLE_DISMISSALS ||
-         permission_result.source ==
-             content::PermissionStatusSource::MULTIPLE_IGNORES)) {
-      // TODO(crbug.com/439550565): Support embargoed PermissionSettings.
-      permission_info.setting =
-          permissions::PermissionUtil::PermissionStatusToContentSetting(
-              permission_result.status);
-    }
+    DCHECK(!permission_info.setting ||
+           setting_info->delegate().IsValid(*permission_info.setting))
+        << permission_info.setting;
+    DCHECK(setting_info->delegate().IsValid(permission_info.default_setting))
+        << permission_info.default_setting;
   }
 
 #if BUILDFLAG(IS_ANDROID)
   if (base::FeatureList::IsEnabled(media::kAutoPictureInPictureAndroid) &&
-      permission_info.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE) {
-    // On Android, Auto-PiP does not have a prompt. Set the effective default
-    // setting based on the profile type and global default. Auto-PiP is blocked
-    // in Incognito for privacy, or if turned off globally. The global default
-    // is already in permission_info.default_setting. This logic should be
-    // removed when a prompt is implemented for parity with desktop.
-    ContentSetting default_setting =
+      permission_info.type == ContentSettingsType::AUTO_PICTURE_IN_PICTURE &&
+      delegate_->HasAutoPictureInPictureBeenRegistered()) {
+    // On Android, Auto-PiP does not have a prompt. For sites that have
+    // registered for Auto-PiP, set the effective default setting based on the
+    // profile type and global default. Auto-PiP is blocked in Incognito for
+    // privacy, or if turned off globally. The global default is already in
+    // permission_info.default_setting. This logic should be removed when a
+    // prompt is implemented for parity with desktop.
+    const ContentSetting global_default_setting =
         std::get<ContentSetting>(permission_info.default_setting);
-    permission_info.default_setting = (delegate_->IsIncognitoProfile() ||
-                                       default_setting == CONTENT_SETTING_BLOCK)
-                                          ? CONTENT_SETTING_BLOCK
-                                          : CONTENT_SETTING_ALLOW;
+    const ContentSetting effective_default_setting =
+        (delegate_->IsIncognitoProfile() ||
+         global_default_setting == CONTENT_SETTING_BLOCK)
+            ? CONTENT_SETTING_BLOCK
+            : CONTENT_SETTING_ALLOW;
+    permission_info.default_setting = effective_default_setting;
   }
 #endif  // BUILDFLAG(IS_ANDROID)
 }

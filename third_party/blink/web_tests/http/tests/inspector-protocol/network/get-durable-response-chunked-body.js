@@ -19,17 +19,11 @@
 
       testRunner.log('url: ' + request.url);
       testRunner.log('  isChunked: ' + request.isChunked);
-      testRunner.log('  isH2: ' + request.isH2);
       testRunner.log('  redirected: ' + request.redirected);
-      testRunner.log('  headersSize: ' + request.headersSize);
-      testRunner.log('  receivedDataSize: ' + request.receivedDataSize);
-      if (!request.redirected) // reportedTotalSize is not stable across platforms.
-        testRunner.log('  reportedTotalSize: ' + request.reportedTotalSize);
       // Retrieve body from durable http message storage
       const data = await dp.Network.getResponseBody({requestId});
       testRunner.log('  durableMessage size: ' + (data.result ? data.result.body.length : 'absent'));
-      const expectedBody = 'a'.repeat(request.receivedDataSize);
-      testRunner.log('  payload matches: ' + (data.result?.body === expectedBody));
+      testRunner.log('  payload: ' + JSON.stringify(data?.result));
       testRunner.log('');
     }
   }

@@ -43,12 +43,21 @@ int GetSizeChangeDirectionForWindowComponent(int window_component) {
 }
 
 gfx::Rect GetWindowInitialBoundsInParent(aura::Window* window) {
-  // Floated windows should use their current bounds as a starting point, even
-  // in tablet mode.
-  if (WindowState::Get(window)->IsFloated())
-    return window->bounds();
+  // In tablet mode, use the tablet mode restore bounds unless dragging a
+  // floated window or tabs from a floated window.
+  // TODO(421465978): Remove this code and fix the restore bounds.
+  if (display::Screen::Get()->InTabletMode()) {
+    if (WindowState::Get(window)->IsFloated()) {
+      return window->bounds();
+    }
 
-  if (display::Screen::GetScreen()->InTabletMode()) {
+    aura::Window* tab_drag_source_window =
+        window->GetProperty(kTabDraggingSourceWindowKey);
+    if (tab_drag_source_window &&
+        WindowState::Get(tab_drag_source_window)->IsFloated()) {
+      return tab_drag_source_window->bounds();
+    }
+
     gfx::Rect* override_bounds = window->GetProperty(kRestoreBoundsOverrideKey);
     if (override_bounds && !override_bounds->IsEmpty()) {
       wm::ConvertRectFromScreen(window->GetRootWindow(), override_bounds);
@@ -67,7 +76,7 @@ gfx::Rect GetRestoreBoundsInParent(aura::Window* window, int window_component) {
   // TODO(xdai): Move these logic to WindowState::GetRestoreBoundsInScreen()
   // and let it return the right value.
   gfx::Rect restore_bounds;
-  if (display::Screen::GetScreen()->InTabletMode()) {
+  if (display::Screen::Get()->InTabletMode()) {
     gfx::Rect* override_bounds = window->GetProperty(kRestoreBoundsOverrideKey);
     if (override_bounds && !override_bounds->IsEmpty()) {
       restore_bounds = *override_bounds;

@@ -70,6 +70,7 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
@@ -80,6 +81,7 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/chrome_test_utils.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/download/public/common/download_danger_type.h"
@@ -2305,12 +2307,20 @@ class PdfDownloadTestSplitCacheEnabled
   PdfDownloadTestSplitCacheEnabled()
       : split_cache_experiment_feature_list_(GetSplitCacheTestCase(),
                                              kTestCaseToFeatureMapping) {
+    // When `kPdfGetSaveDataInBlocks` is enabled, PDFs are saved to disk from
+    // memory and are not downloaded. Therefore these tests are only valid when
+    // the feature is disabled.
+    // TODO(crbug.com/394111292): Remove affected tests when the feature is
+    // launched.
+    std::vector<base::test::FeatureRef> disabled(
+        {chrome_pdf::features::kPdfGetSaveDataInBlocks});
+    std::vector<base::test::FeatureRef> enabled;
     if (UseOopif()) {
-      oopif_feature_list_.InitAndEnableFeature(chrome_pdf::features::kPdfOopif);
+      enabled.push_back(chrome_pdf::features::kPdfOopif);
     } else {
-      oopif_feature_list_.InitAndDisableFeature(
-          chrome_pdf::features::kPdfOopif);
+      disabled.push_back(chrome_pdf::features::kPdfOopif);
     }
+    pdf_feature_list_.InitWithFeatures(enabled, disabled);
   }
 
   bool UseOopif() const { return std::get<0>(GetParam()); }
@@ -2391,7 +2401,7 @@ class PdfDownloadTestSplitCacheEnabled
  private:
   net::test::ScopedMutuallyExclusiveFeatureList
       split_cache_experiment_feature_list_;
-  base::test::ScopedFeatureList oopif_feature_list_;
+  base::test::ScopedFeatureList pdf_feature_list_;
   pdf::TestPdfViewerStreamManagerFactory factory_;
 };
 
@@ -3035,7 +3045,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, MAYBE_SaveLargeImage) {
   GURL url = embedded_test_server()->GetURL("/empty.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
 
-  base::FilePath data_file = ui_test_utils::GetTestFilePath(
+  base::FilePath data_file = chrome_test_utils::GetTestFilePath(
       base::FilePath().AppendASCII("downloads"),
       base::FilePath().AppendASCII("large_image.png"));
   std::string png_data;
@@ -4589,7 +4599,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, DISABLED_DownloadLargeDataURL) {
   GURL url = embedded_test_server()->GetURL("/downloads/large_data_url.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
 
-  base::FilePath data_file = ui_test_utils::GetTestFilePath(
+  base::FilePath data_file = chrome_test_utils::GetTestFilePath(
       base::FilePath().AppendASCII("downloads"),
       base::FilePath().AppendASCII("large_image.png"));
   std::string png_data;
@@ -5244,10 +5254,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, MAYBE_NewWindow) {
   EXPECT_FALSE(IsDownloadDetailedUiVisible(browser()->window()));
 
   // The download surface SHOULD be visible in the second window.
-  std::set<Browser*> original_browsers;
-  original_browsers.insert(browser());
-  Browser* download_browser =
-      ui_test_utils::GetBrowserNotInSet(original_browsers);
+  Browser* download_browser = ui_test_utils::GetBrowserNotInSet({browser()});
   ASSERT_TRUE(download_browser);
   EXPECT_NE(download_browser, browser());
   EXPECT_EQ(1, download_browser->tab_strip_model()->count());
@@ -5308,7 +5315,7 @@ IN_PROC_BROWSER_TEST_F(DownloadTest, DownloadTest_History) {
   EXPECT_EQ(file.value(), item->GetTargetFilePath().BaseName().value());
   // Only compare the host name, port will be different for each embedded test
   // server session.
-  EXPECT_EQ(download_url.host(), item->GetURL().host());
+  EXPECT_EQ(download_url.GetHost(), item->GetURL().GetHost());
   // The following are set by download-test1.lib.mock-http-headers.
   std::string etag = item->GetETag();
   base::TrimWhitespaceASCII(etag, base::TRIM_ALL, &etag);

@@ -47,6 +47,7 @@ import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
+import org.chromium.chrome.browser.feed.componentinterfaces.SurfaceCoordinator;
 import org.chromium.chrome.browser.feed.sections.OnSectionHeaderSelectedListener;
 import org.chromium.chrome.browser.feed.sections.SectionHeaderListProperties;
 import org.chromium.chrome.browser.feed.sections.SectionHeaderProperties;
@@ -84,7 +85,11 @@ import org.chromium.ui.modelutil.PropertyModel;
 /** Tests for {@link FeedSurfaceMediator}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
-@EnableFeatures({ChromeFeatureList.WEB_FEED_SORT, ChromeFeatureList.UNO_PHASE_2_FOLLOW_UP})
+@EnableFeatures({
+    ChromeFeatureList.WEB_FEED_SORT,
+    ChromeFeatureList.UNO_PHASE_2_FOLLOW_UP,
+    ChromeFeatureList.FEED_HEADER_REMOVAL
+})
 public class FeedSurfaceMediatorTest {
     static final @Px int TOOLBAR_HEIGHT = 10;
     @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
@@ -116,6 +121,7 @@ public class FeedSurfaceMediatorTest {
     private FeedSurfaceMediator mFeedSurfaceMediator;
 
     @Before
+    @SuppressWarnings("DirectInvocationOnMock")
     public void setUp() {
         // Print logs to stdout.
         ShadowLog.stream = System.out;
@@ -1034,12 +1040,12 @@ public class FeedSurfaceMediatorTest {
     }
 
     private FeedSurfaceMediator createMediator(
-            @FeedSurfaceCoordinator.StreamTabId int tabId, PropertyModel sectionHeaderModel) {
+            @SurfaceCoordinator.StreamTabId int tabId, PropertyModel sectionHeaderModel) {
         return createMediator(tabId, sectionHeaderModel, /* uiConfig= */ null);
     }
 
     private FeedSurfaceMediator createMediator(
-            @FeedSurfaceCoordinator.StreamTabId int tabId,
+            @SurfaceCoordinator.StreamTabId int tabId,
             PropertyModel sectionHeaderModel,
             UiConfig uiConfig) {
         return new FeedSurfaceMediator(

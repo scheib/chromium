@@ -35,6 +35,7 @@
 <translation id="1249250836236328755">Gênero</translation>
 <translation id="1254593899333212300">Conexão direta à Internet</translation>
 <translation id="1272293450992660632">Os valores do PIN não correspondem.</translation>
+<translation id="1279040297980392566">Aguardando o término da verificação. Tente outra vez mais tarde</translation>
 <translation id="1280820357415527819">Pesquisando redes móveis</translation>
 <translation id="1293556467332435079">Arquivos</translation>
 <translation id="1297922636971898492">O Google Drive não está disponível no momento. O upload será reiniciado automaticamente assim que o Google Drive estiver de volta.</translation>
@@ -47,7 +48,7 @@
 <translation id="1363028406613469049">Rastrear</translation>
 <translation id="1378727793141957596">Bem-vindo ao Google Drive!</translation>
 <translation id="1379911846207762492">É possível disponibilizar arquivos off-line para permitir o acesso quando não houver uma conexão de Internet.</translation>
-<translation id="1383876407941801731">Pesquisar</translation>
+<translation id="1383876407941801731">Pesquise</translation>
 <translation id="1388045380422025115">Todos os tipos</translation>
 <translation id="1395262318152388157">Controle deslizante de busca</translation>
 <translation id="1399511500114202393">Nenhum certificado do usuário</translation>
@@ -787,7 +788,7 @@
 <translation id="7075931588889865715">Tailandês com teclado TIS 820-2531</translation>
 <translation id="708278670402572152">Desconectar para ativar a verificação</translation>
 <translation id="7086590977277044826">Tâmil com teclado InScript</translation>
-<translation id="7088615885725309056">Mais antigo</translation>
+<translation id="7088615885725309056">Mais antiga</translation>
 <translation id="7103992300314999525">Macedônio</translation>
 <translation id="7104338189998813914">Ocorreu um problema ao acessar sua conta do OneDrive</translation>
 <translation id="7106346894903675391">Adquirir mais espaço de armazenamento...</translation>
@@ -1078,6 +1079,7 @@
 <translation id="9213073329713032541">Instalação iniciada.</translation>
 <translation id="9219103736887031265">Imagens</translation>
 <translation id="9219908252191632183">Lunar</translation>
+<translation id="931652069802536959">A rede foi bloqueada por uma política</translation>
 <translation id="938470336146445890">Instale um certificado do usuário.</translation>
 <translation id="939736085109172342">Nova pasta</translation>
 <translation id="943972244133411984">Modificado por</translation>

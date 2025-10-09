@@ -58,7 +58,7 @@ class StylePropertyShorthand;
 class StyleResolver;
 class StyleTimeline;
 class WritingDirectionMode;
-class AnimationTrigger;
+class TimelineTrigger;
 
 class CORE_EXPORT CSSAnimations final {
   DISALLOW_NEW();
@@ -133,6 +133,8 @@ class CORE_EXPORT CSSAnimations final {
                                    CSSAnimationUpdate&,
                                    ComputedStyleBuilder&);
 
+  // This performs an update of the given element's set of named triggers, but
+  // only named triggers which are directly declared on this element via CSS.
   static void UpdateNamedTriggers(const ComputedStyleBuilder& style_builder,
                                   const CSSAnimationUpdate& update,
                                   Element& element);
@@ -469,13 +471,13 @@ class CORE_EXPORT CSSAnimations final {
       TransitionUpdateState& state,
       const PropertyHandle& transitioning_property);
 
-  static AnimationTrigger* ComputeTimelineTrigger(
+  static TimelineTrigger* ComputeTimelineTrigger(
       const CSSAnimationData* data,
       wtf_size_t animation_index,
       const CSSAnimationUpdate& update,
       float zoom,
       Element* element,
-      AnimationTrigger* existing_trigger);
+      TimelineTrigger* existing_trigger);
 
   class AnimationEventDelegate final : public AnimationEffect::EventDelegate {
    public:

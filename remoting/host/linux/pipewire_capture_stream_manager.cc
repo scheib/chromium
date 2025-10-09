@@ -8,13 +8,18 @@
 #include <memory>
 #include <vector>
 
+#include "base/check.h"
+#include "base/containers/flat_set.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
+#include "base/notreached.h"
 #include "base/sequence_checker.h"
 #include "base/types/expected.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/linux/dbus_interfaces/org_gnome_Mutter_ScreenCast.h"
+#include "remoting/host/linux/gnome_display_config.h"
 #include "remoting/host/linux/gnome_display_config_dbus_client.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
@@ -33,10 +38,22 @@ PipewireCaptureStreamManager::AddStreamRequest::AddStreamRequest() = default;
 PipewireCaptureStreamManager::AddStreamRequest::AddStreamRequest(
     AddStreamRequest&&) = default;
 PipewireCaptureStreamManager::AddStreamRequest::AddStreamRequest(
-    const ScreenResolution& initial_resolution,
+    VirtualStreamInfo virtual_stream_info,
     AddStreamCallback callback)
-    : initial_resolution(initial_resolution), callback(std::move(callback)) {}
+    : virtual_stream_info(std::move(virtual_stream_info)),
+      callback(std::move(callback)) {}
+PipewireCaptureStreamManager::AddStreamRequest::AddStreamRequest(
+    MonitorStreamInfo monitor_stream_info,
+    AddStreamCallback callback)
+    : monitor_stream_info(std::move(monitor_stream_info)),
+      callback(std::move(callback)) {}
 PipewireCaptureStreamManager::AddStreamRequest::~AddStreamRequest() = default;
+
+PipewireCaptureStreamManager::StreamInfo::StreamInfo() = default;
+PipewireCaptureStreamManager::StreamInfo::StreamInfo(StreamInfo&&) = default;
+PipewireCaptureStreamManager::StreamInfo&
+PipewireCaptureStreamManager::StreamInfo::operator=(StreamInfo&&) = default;
+PipewireCaptureStreamManager::StreamInfo::~StreamInfo() = default;
 
 PipewireCaptureStreamManager::PipewireCaptureStreamManager() = default;
 PipewireCaptureStreamManager::~PipewireCaptureStreamManager() = default;
@@ -52,40 +69,43 @@ PipewireCaptureStreamManager::AddObserver(Observer* observer) {
 
 void PipewireCaptureStreamManager::Init(
     GDBusConnectionRef* connection,
-    base::WeakPtr<GnomeDisplayConfigDBusClient> display_config_client,
+    base::WeakPtr<GnomeDisplayConfigMonitor> display_config_monitor,
     gvariant::ObjectPath screencast_session_path) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(connection);
-  DCHECK(display_config_client);
+  DCHECK(display_config_monitor);
 
   connection_ = connection;
-  display_config_client_ = display_config_client;
   screencast_session_path_ = std::move(screencast_session_path);
 
-  monitors_changed_subscription_ =
-      display_config_client_->SubscribeMonitorsChanged(base::BindRepeating(
-          &PipewireCaptureStreamManager::QueryDisplayInfo, GetWeakPtr()));
-  // Query the initial display info right away.
-  QueryDisplayInfo();
+  if (display_config_monitor) {
+    monitors_changed_subscription_ = display_config_monitor->AddCallback(
+        base::BindRepeating(
+            &PipewireCaptureStreamManager::OnGnomeDisplayConfigChanged,
+            GetWeakPtr()),
+        /*call_with_current_config=*/true);
+  }
 }
 
-base::WeakPtr<PipewireCaptureStream> PipewireCaptureStreamManager::GetStream(
-    webrtc::ScreenId screen_id) const {
+base::WeakPtr<CaptureStream> PipewireCaptureStreamManager::GetStream(
+    webrtc::ScreenId screen_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const auto& it = streams_.find(screen_id);
   if (it == streams_.end()) {
     return nullptr;
   }
-  return it->second->GetWeakPtr();
+  return it->second.stream->GetWeakPtr();
 }
 
-void PipewireCaptureStreamManager::AddStream(
+void PipewireCaptureStreamManager::AddVirtualStream(
     const ScreenResolution& initial_resolution,
     AddStreamCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  pending_add_stream_requests_.emplace(initial_resolution, std::move(callback));
+  pending_add_stream_requests_.emplace_back(
+      AddStreamRequest::VirtualStreamInfo{initial_resolution},
+      std::move(callback));
 
   if (!last_seen_display_config_.has_value()) {
     // We can't safely start adding the stream if we haven't received the
@@ -99,20 +119,45 @@ void PipewireCaptureStreamManager::AddStream(
   }
 }
 
-void PipewireCaptureStreamManager::RemoveStream(webrtc::ScreenId screen_id) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (streams_.erase(screen_id) > 0) {
-    observers_.Notify(&Observer::OnPipewireCaptureStreamRemoved, screen_id);
-  }
+void PipewireCaptureStreamManager::RemoveVirtualStream(
+    webrtc::ScreenId screen_id) {
+  RemoveStream(screen_id, /*can_remove_monitor_stream=*/false);
 }
 
-base::flat_map<webrtc::ScreenId, base::WeakPtr<PipewireCaptureStream>>
-PipewireCaptureStreamManager::GetActiveStreams() const {
+void PipewireCaptureStreamManager::RemoveStream(
+    webrtc::ScreenId screen_id,
+    bool can_remove_monitor_stream) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  auto it = streams_.find(screen_id);
+  if (it == streams_.end()) {
+    LOG(ERROR) << "Cannot find stream for screen ID: " << screen_id;
+    return;
+  }
+  StreamInfo& stream_info = it->second;
+  if (!can_remove_monitor_stream && !stream_info.is_virtual_stream) {
+    LOG(ERROR) << "Cannot remove monitor stream: " << screen_id;
+    return;
+  }
+  if (stream_info.is_deleting) {
+    VLOG(1) << "Stream " << screen_id << " is already being deleted.";
+    return;
+  }
+  stream_info.is_deleting = true;
+  // The virtual monitor will not be removed until the screencast Stop() method
+  // is called.
+  connection_->Call<org_gnome_Mutter_ScreenCast_Stream::Stop>(
+      kScreenCastBusName, stream_info.stream_path, std::tuple(),
+      base::BindOnce(&PipewireCaptureStreamManager::OnStreamStopped,
+                     GetWeakPtr(), screen_id));
+}
+
+base::flat_map<webrtc::ScreenId, base::WeakPtr<CaptureStream>>
+PipewireCaptureStreamManager::GetActiveStreams() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::flat_map<webrtc::ScreenId, base::WeakPtr<PipewireCaptureStream>> output;
-  for (const auto& [screen_id, stream] : streams_) {
-    output[screen_id] = stream->GetWeakPtr();
+  base::flat_map<webrtc::ScreenId, base::WeakPtr<CaptureStream>> output;
+  for (auto& [screen_id, stream_info] : streams_) {
+    output[screen_id] = stream_info.stream->GetWeakPtr();
   }
   return output;
 }
@@ -163,14 +208,85 @@ void PipewireCaptureStreamManager::MaybeAddStreamForCurrentRequest() {
   constexpr std::uint32_t kCursorModeMetadata = 2;
 
   pending_stream_ = std::make_unique<PipewireCaptureStream>();
-  connection_->Call<org_gnome_Mutter_ScreenCast_Session::RecordVirtual>(
-      kScreenCastBusName, screencast_session_path_,
-      std::tuple{std::array{
-          std::pair{"cursor-mode", GVariantFrom(Boxed{kCursorModeMetadata})},
-          std::pair{"is-platform", GVariantFrom(Boxed{true})}}},
-      CheckAddStreamResultAndContinue(
-          &PipewireCaptureStreamManager::OnStreamCreated,
-          "Failed to record virtual monitor"));
+  auto& current_request = pending_add_stream_requests_.front();
+  if (current_request.virtual_stream_info.has_value()) {
+    // Add virtual stream.
+    connection_->Call<org_gnome_Mutter_ScreenCast_Session::RecordVirtual>(
+        kScreenCastBusName, screencast_session_path_,
+        std::tuple{std::array{
+            std::pair{"cursor-mode", GVariantFrom(Boxed{kCursorModeMetadata})},
+            std::pair{"is-platform", GVariantFrom(Boxed{true})}}},
+        CheckAddStreamResultAndContinue(
+            &PipewireCaptureStreamManager::OnStreamCreated,
+            "Failed to create and record virtual monitor"));
+  } else if (current_request.monitor_stream_info.has_value()) {
+    // Add monitor stream.
+    connection_->Call<org_gnome_Mutter_ScreenCast_Session::RecordMonitor>(
+        kScreenCastBusName, screencast_session_path_,
+        std::tuple{
+            current_request.monitor_stream_info->connector,
+            std::array{std::pair{"cursor-mode",
+                                 GVariantFrom(Boxed{kCursorModeMetadata})}}},
+        CheckAddStreamResultAndContinue(
+            &PipewireCaptureStreamManager::OnStreamCreated,
+            "Failed to record monitor"));
+  } else {
+    NOTREACHED();
+  }
+}
+
+void PipewireCaptureStreamManager::MaybeAddMonitorStreams() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(last_seen_display_config_.has_value());
+
+  for (const auto& [connector, monitor] : last_seen_display_config_->monitors) {
+    auto pending_add_stream_request_it = std::find_if(
+        pending_add_stream_requests_.begin(),
+        pending_add_stream_requests_.end(),
+        [connector](const AddStreamRequest& request) {
+          return request.monitor_stream_info.has_value() &&
+                 request.monitor_stream_info->connector == connector;
+        });
+    // Only add monitor stream if it is not in `stream_` and not already in the
+    // add stream request queue.
+    if (pending_add_stream_request_it == pending_add_stream_requests_.end() &&
+        !streams_.contains(GnomeDisplayConfig::GetScreenId(connector))) {
+      HOST_LOG << "Adding monitor stream for " << connector;
+      pending_add_stream_requests_.emplace_back(
+          AddStreamRequest::MonitorStreamInfo{connector},
+          base::BindOnce(
+              [](const std::string& conn, AddStreamResult result) {
+                if (!result.has_value()) {
+                  LOG(ERROR) << "Failed to add monitor stream for monitor "
+                             << conn << ": " << result.error();
+                }
+              },
+              connector));
+    }
+  }
+  if (!pending_add_stream_requests_.empty() && !pending_stream_) {
+    MaybeAddStreamForCurrentRequest();
+  }
+}
+
+void PipewireCaptureStreamManager::RemoveInvalidStreams() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  base::flat_set<webrtc::ScreenId> unseen_active_screen_ids;
+  for (auto& [screen_id, stream_info] : streams_) {
+    if (!stream_info.is_deleting) {
+      unseen_active_screen_ids.insert(screen_id);
+    }
+  }
+  for (const auto& [connector, _] : last_seen_display_config_->monitors) {
+    unseen_active_screen_ids.erase(GnomeDisplayConfig::GetScreenId(connector));
+  }
+  if (!unseen_active_screen_ids.empty()) {
+    for (auto screen_id : unseen_active_screen_ids) {
+      HOST_LOG << "Removing stream for screen ID " << screen_id;
+      RemoveStream(screen_id, /*can_remove_monitor_stream=*/true);
+    }
+  }
 }
 
 void PipewireCaptureStreamManager::RunCurrentAddStreamCallback(
@@ -180,7 +296,7 @@ void PipewireCaptureStreamManager::RunCurrentAddStreamCallback(
 
   pending_stream_.reset();
   auto callback = std::move(pending_add_stream_requests_.front().callback);
-  pending_add_stream_requests_.pop();
+  pending_add_stream_requests_.pop_front();
   auto stream = result.value_or(nullptr);
   std::move(callback).Run(std::move(result));
   if (stream) {
@@ -201,7 +317,7 @@ void PipewireCaptureStreamManager::OnStreamCreated(
     std::tuple<gvariant::ObjectPath> args) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(pending_stream_);
-  HOST_LOG << "Starting initial monitor stream";
+  HOST_LOG << "PipeWire stream created";
   std::tie(pending_stream_path_) = args;
 
   connection_->GetProperty<org_gnome_Mutter_ScreenCast_Stream::Parameters>(
@@ -253,6 +369,20 @@ void PipewireCaptureStreamManager::OnStreamStarted(std::tuple<> args) {
   // Do nothing. Still need to wait for PipeWire-stream-added signal.
 }
 
+void PipewireCaptureStreamManager::OnStreamStopped(
+    webrtc::ScreenId screen_id,
+    base::expected<std::tuple<>, Loggable> result) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!result.has_value()) {
+    LOG(ERROR) << "Failed to stop stream: " << result.error();
+    streams_[screen_id].is_deleting = false;
+    return;
+  }
+  if (streams_.erase(screen_id) != 0) {
+    observers_.Notify(&Observer::OnPipewireCaptureStreamRemoved, screen_id);
+  }
+}
+
 void PipewireCaptureStreamManager::OnPipeWireStreamAdded(
     std::string mapping_id,
     std::tuple<std::uint32_t> args) {
@@ -263,46 +393,69 @@ void PipewireCaptureStreamManager::OnPipeWireStreamAdded(
   // Ensure method is only run this once per stream.
   pending_stream_added_signal_.reset();
 
-  pending_stream_->SetPipeWireStream(
-      get<0>(args),
-      pending_add_stream_requests_.front().initial_resolution.dimensions(),
-      mapping_id, webrtc::kInvalidPipeWireFd);
-  // Start capturing now, which creates the virtual monitor and allows the
-  // video capturer to be created.
+  auto& current_request = pending_add_stream_requests_.front();
+  if (current_request.virtual_stream_info.has_value()) {
+    pending_stream_->SetPipeWireStream(
+        get<0>(args),
+        current_request.virtual_stream_info->initial_resolution.dimensions(),
+        mapping_id, webrtc::kInvalidPipeWireFd);
+  } else if (current_request.monitor_stream_info.has_value()) {
+    pending_stream_->SetPipeWireStream(get<0>(args),
+                                       /*initial_resolution=*/{}, mapping_id,
+                                       webrtc::kInvalidPipeWireFd);
+
+  } else {
+    NOTREACHED();
+  }
+  // Start capturing now, which creates the virtual monitor (if applicable) and
+  // allows the video capturer to be created.
   pending_stream_->StartVideoCapture();
-}
-
-void PipewireCaptureStreamManager::QueryDisplayInfo() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (display_config_client_) {
-    display_config_client_->GetMonitorsConfig(base::BindOnce(
-        &PipewireCaptureStreamManager::OnGnomeDisplayConfigReceived,
-        GetWeakPtr()));
+  if (current_request.monitor_stream_info.has_value()) {
+    AssociatePendingStream(GnomeDisplayConfig::GetScreenId(
+        current_request.monitor_stream_info->connector));
   }
 }
 
-void PipewireCaptureStreamManager::OnGnomeDisplayConfigReceived(
-    GnomeDisplayConfig config) {
+void PipewireCaptureStreamManager::OnGnomeDisplayConfigChanged(
+    const GnomeDisplayConfig& config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // See comment in AddStream().
+  // See comment in AddVirtualStream().
   if (!last_seen_display_config_.has_value()) {
     DCHECK(!pending_stream_);
-    last_seen_display_config_ = std::move(config);
-    if (!pending_add_stream_requests_.empty()) {
-      HOST_LOG << "Adding stream after initial display config is loaded.";
+    DCHECK(streams_.empty());
+    last_seen_display_config_ = config;
+    MaybeAddMonitorStreams();
+    if (!pending_add_stream_requests_.empty() && !pending_stream_) {
+      HOST_LOG
+          << "Adding virtual stream after initial display config is loaded.";
       MaybeAddStreamForCurrentRequest();
     }
+    SetUseDamageRegion();
     return;
   }
-  if (!pending_stream_) {
-    last_seen_display_config_ = std::move(config);
+  // Early-return if we are not in the process of adding a virtual stream.
+  if (!pending_stream_ ||
+      (!pending_add_stream_requests_.empty() &&
+       pending_add_stream_requests_.front().monitor_stream_info.has_value())) {
+    last_seen_display_config_ = config;
+    MaybeAddMonitorStreams();
+    RemoveInvalidStreams();
+    SetUseDamageRegion();
     return;
   }
 
+  // Find the new virtual monitor and associate it with the pending virtual
+  // stream. We can't call MaybeAddMonitorStreams() here since it would create
+  // a monitor stream for the newly created virtual monitor and cause problems.
+  // This, however, means if a new physical or virtual monitor is created
+  // externally, it will cause a race condition and the virtual stream could be
+  // associated with the wrong monitor.
+
   GnomeDisplayConfig previous_config = std::move(*last_seen_display_config_);
-  last_seen_display_config_ = std::move(config);
+  last_seen_display_config_ = config;
+
+  RemoveInvalidStreams();
 
   std::vector<webrtc::ScreenId> new_screen_ids;
   for (const auto& [name, monitor] : last_seen_display_config_->monitors) {
@@ -328,6 +481,7 @@ void PipewireCaptureStreamManager::OnGnomeDisplayConfigReceived(
 void PipewireCaptureStreamManager::AssociatePendingStream(
     webrtc::ScreenId screen_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(!pending_add_stream_requests_.empty());
   DCHECK(!streams_.contains(screen_id));
 
   if (!pending_stream_) {
@@ -337,9 +491,37 @@ void PipewireCaptureStreamManager::AssociatePendingStream(
   HOST_LOG << "Associating pending stream with screen ID " << screen_id;
   pending_stream_->set_screen_id(screen_id);
   auto weak_ptr = pending_stream_->GetWeakPtr();
-  streams_[screen_id] = std::move(pending_stream_);
+  StreamInfo info;
+  info.is_virtual_stream =
+      pending_add_stream_requests_.front().virtual_stream_info.has_value();
+  info.stream = std::move(pending_stream_);
+  info.stream_path = std::move(pending_stream_path_);
+  streams_[screen_id] = std::move(info);
 
+  SetUseDamageRegion();
   RunCurrentAddStreamCallback(base::ok(weak_ptr));
+}
+
+void PipewireCaptureStreamManager::SetUseDamageRegion() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  for (auto& [screen_id, stream_info] : streams_) {
+    const auto monitor_it = last_seen_display_config_->FindMonitor(screen_id);
+    if (monitor_it == last_seen_display_config_->monitors.end()) {
+      LOG(ERROR) << "Cannot find monitor for screen ID " << screen_id;
+      continue;
+    }
+    // Given mutter's bug with the reported damage region, it is only safe to
+    // enable damage region if the monitor is at the top-left corner with
+    // 100% scaling.
+    // See: https://gitlab.gnome.org/GNOME/mutter/-/issues/4269
+    // Note: This bug only seems to happen in virtual streams.
+    bool use_damage_region =
+        !stream_info.is_virtual_stream ||
+        (monitor_it->second.x == 0 && monitor_it->second.y == 0 &&
+         monitor_it->second.scale == 1.0);
+    stream_info.stream->SetUseDamageRegion(use_damage_region);
+  }
 }
 
 }  // namespace remoting

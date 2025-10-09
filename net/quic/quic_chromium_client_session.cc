@@ -66,6 +66,7 @@
 #include "net/spdy/spdy_session.h"
 #include "net/ssl/ssl_connection_status_flags.h"
 #include "net/ssl/ssl_info.h"
+#include "net/third_party/quiche/src/quiche/quic/core/crypto/crypto_protocol.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_stream_priority.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_types.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_utils.h"
@@ -1264,7 +1265,7 @@ void QuicChromiumClientSession::OnOriginFrame(const quic::OriginFrame& frame) {
       return;
     }
     GURL url(base::StrCat({origin_str, "/"}));
-    if (!url.is_valid() || url.path() != "/") {
+    if (!url.is_valid() || url.GetPath() != "/") {
       continue;
     }
     url::SchemeHostPort origin(url);
@@ -1716,18 +1717,11 @@ quic::QuicSSLConfig QuicChromiumClientSession::GetSSLConfig() const {
     config.ech_config_list.assign(ech_config_list_.begin(),
                                   ech_config_list_.end());
   }
-  if (base::FeatureList::IsEnabled(features::kTLSTrustAnchorIDs)) {
-    // TODO(crbug.com/432044228): This should still configure the extension when
-    // `trust_anchor_ids_` is empty, after QUICHE has been updated to make
-    // `trust_anchor_ids` a `std::optional`.
-    if (!trust_anchor_ids_.empty() &&
-        !ssl_context_config.trust_anchor_ids.empty()) {
-      std::vector<uint8_t> selected_trust_anchor_ids =
-          SSLConfig::SelectTrustAnchorIDs(trust_anchor_ids_,
-                                          ssl_context_config.trust_anchor_ids);
-      config.trust_anchor_ids = std::string(selected_trust_anchor_ids.begin(),
-                                            selected_trust_anchor_ids.end());
-    }
+  if (!ssl_context_config.trust_anchor_ids.empty() &&
+      base::FeatureList::IsEnabled(features::kTLSTrustAnchorIDs)) {
+    config.trust_anchor_ids =
+        base::as_string_view(SSLConfig::SelectTrustAnchorIDs(
+            trust_anchor_ids_, ssl_context_config.trust_anchor_ids));
   }
   return config;
 }
@@ -4171,7 +4165,7 @@ QuicChromiumClientSession::Handle::GetGuaranteedLargestMessagePayload() const {
   if (!session_) {
     return 0;
   }
-  return session_->GetGuaranteedLargestMessagePayload();
+  return session_->GetGuaranteedLargestDatagramPayload();
 }
 
 const ConnectionMigrationInformation

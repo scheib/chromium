@@ -79,6 +79,7 @@ All changes to this list should go through Blink's feature review process: http:
     background-size
     baseline-shift
     baseline-source
+    block-ellipsis
     block-size
     border-block-end-color
     border-block-end-style
@@ -198,6 +199,7 @@ All changes to this list should go through Blink's feature review process: http:
     font-family
     font-feature-settings
     font-kerning
+    font-language-override
     font-optical-sizing
     font-palette
     font-size
@@ -241,8 +243,8 @@ All changes to this list should go through Blink's feature review process: http:
     inset-inline-end
     inset-inline-start
     interactivity
-    interest-hide-delay
-    interest-show-delay
+    interest-delay-end
+    interest-delay-start
     interpolate-size
     isolation
     item-tolerance
@@ -314,10 +316,12 @@ All changes to this list should go through Blink's feature review process: http:
     overflow-x
     overflow-y
     overlay
+    overscroll-area
     overscroll-behavior-block
     overscroll-behavior-inline
     overscroll-behavior-x
     overscroll-behavior-y
+    overscroll-position
     padding-block-end
     padding-block-start
     padding-bottom
@@ -353,6 +357,7 @@ All changes to this list should go through Blink's feature review process: http:
     row-rule-style
     row-rule-width
     ruby-align
+    ruby-overhang
     ruby-position
     rx
     ry
@@ -437,13 +442,12 @@ All changes to this list should go through Blink's feature review process: http:
     text-wrap-mode
     text-wrap-style
     timeline-scope
-    timeline-trigger-behavior
     timeline-trigger-exit-range-end
     timeline-trigger-exit-range-start
     timeline-trigger-name
     timeline-trigger-range-end
     timeline-trigger-range-start
-    timeline-trigger-timeline
+    timeline-trigger-source
     top
     touch-action
     transform
@@ -487,6 +491,7 @@ All changes to this list should go through Blink's feature review process: http:
     -webkit-column-break-inside
         break-inside
     -webkit-line-clamp
+        block-ellipsis
         continue
         max-lines
     -webkit-mask-box-image
@@ -643,7 +648,9 @@ All changes to this list should go through Blink's feature review process: http:
         column-rule-width
     columns
         column-count
+        column-height
         column-width
+        column-wrap
     contain-intrinsic-size
         contain-intrinsic-height
         contain-intrinsic-width
@@ -699,6 +706,7 @@ All changes to this list should go through Blink's feature review process: http:
         font-family
         font-feature-settings
         font-kerning
+        font-language-override
         font-optical-sizing
         font-size
         font-size-adjust
@@ -763,9 +771,10 @@ All changes to this list should go through Blink's feature review process: http:
         inset-inline-end
         inset-inline-start
     interest-delay
-        interest-hide-delay
-        interest-show-delay
+        interest-delay-end
+        interest-delay-start
     line-clamp
+        block-ellipsis
         continue
         max-lines
     list-style
@@ -919,13 +928,12 @@ All changes to this list should go through Blink's feature review process: http:
         text-wrap-mode
         text-wrap-style
     timeline-trigger
-        timeline-trigger-behavior
         timeline-trigger-exit-range-end
         timeline-trigger-exit-range-start
         timeline-trigger-name
         timeline-trigger-range-end
         timeline-trigger-range-start
-        timeline-trigger-timeline
+        timeline-trigger-source
     transition
         transition-behavior
         transition-delay

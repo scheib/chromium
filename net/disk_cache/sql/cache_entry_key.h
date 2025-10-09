@@ -10,6 +10,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/types/strong_alias.h"
 #include "net/base/net_export.h"
 
 namespace disk_cache {
@@ -36,6 +37,8 @@ namespace disk_cache {
 // the main cache key string.
 class NET_EXPORT_PRIVATE CacheEntryKey {
  public:
+  using Hash = base::StrongAlias<class HashTag, int32_t>;
+
   explicit CacheEntryKey(std::string str = "");
   ~CacheEntryKey();
 
@@ -48,9 +51,11 @@ class NET_EXPORT_PRIVATE CacheEntryKey {
   bool operator==(const CacheEntryKey& other) const;
 
   const std::string& string() const;
+  Hash hash() const { return hash_; }
 
  private:
   scoped_refptr<const base::RefCountedString> data_;
+  Hash hash_;
 };
 
 }  // namespace disk_cache
@@ -62,7 +67,8 @@ namespace std {
 template <>
 struct hash<disk_cache::CacheEntryKey> {
   std::size_t operator()(const disk_cache::CacheEntryKey& k) const {
-    return std::hash<std::string>{}(k.string());
+    // Narrowing conversion happens when sizeof(std::size_t) is less than 64.
+    return k.hash().value();
   }
 };
 

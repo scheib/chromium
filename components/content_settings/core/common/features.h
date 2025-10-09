@@ -72,10 +72,6 @@ COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
 BASE_DECLARE_FEATURE(kApproximateGeolocationPermission);
 
 COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
-extern const base::FeatureParam<bool>
-    kApproximateGeolocationPermissionSampleData;
-
-COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
 extern const base::FeatureParam<int> kApproximateGeolocationPermissionPromptArm;
 
 // Feature to enable the feedback button in the User Bypass UI.
@@ -126,6 +122,11 @@ BASE_DECLARE_FEATURE(kTrackingProtection3pcd);
 // Forces unpartitioned storage access with third-party cookie blocking.
 COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
 BASE_DECLARE_FEATURE(kNativeUnpartitionedStoragePermittedWhen3PCOff);
+
+// Shows the option to disable the v8 optimizer for unfamiliar sites on the
+// site settings page.
+COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
+BASE_DECLARE_FEATURE(kBlockV8OptimizerOnUnfamiliarSitesSetting);
 
 ////////////////////////////////////////////////////////////
 // Start of third-party cookie access heuristics features //
@@ -247,11 +248,6 @@ extern const base::FeatureParam<bool>
 //////////////////////////////////////////////////////////
 // End of third-party cookie access heuristics features //
 //////////////////////////////////////////////////////////
-
-// Whether we should partition content settings (by StoragePartitions for
-// non-ios platforms).
-COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
-BASE_DECLARE_FEATURE(kContentSettingsPartitioning);
 
 COMPONENT_EXPORT(CONTENT_SETTINGS_FEATURES)
 extern const char kUseTestMetadataName[];

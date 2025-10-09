@@ -83,6 +83,8 @@ class SharedDictionaryManagerOnDisk : public SharedDictionaryManager {
       base::Time end_time,
       base::OnceCallback<void(const std::vector<url::Origin>&)> callback)
       override;
+  void HandleMemoryPressure(
+      base::MemoryPressureLevel memory_pressure_level) override;
 
   SharedDictionaryDiskCache& disk_cache() { return disk_cache_; }
   net::SQLitePersistentSharedDictionaryStore& metadata_store() {
@@ -101,7 +103,8 @@ class SharedDictionaryManagerOnDisk : public SharedDictionaryManager {
       base::OnceCallback<void(net::SharedDictionaryInfo)> callback);
 
   void UpdateDictionaryLastFetchTime(net::SharedDictionaryInfo& info,
-                                     base::Time last_fetch_time);
+                                     base::Time last_fetch_time,
+                                     const std::optional<base::TimeDelta>& ttl);
   void UpdateDictionaryLastUsedTime(net::SharedDictionaryInfo& info);
 
   // Posts a MismatchingEntryDeletionTask if this method is called for the first
@@ -173,9 +176,6 @@ class SharedDictionaryManagerOnDisk : public SharedDictionaryManager {
     return writing_disk_cache_key_tokens_;
   }
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
-
   uint64_t cache_max_size() const { return cache_max_size_; }
   uint64_t cache_max_count() const { return cache_max_count_; }
 
@@ -195,7 +195,6 @@ class SharedDictionaryManagerOnDisk : public SharedDictionaryManager {
   bool expired_entry_deletion_task_queued_ = false;
 
   bool cleanup_task_disabled_for_testing_ = false;
-  std::unique_ptr<base::AsyncMemoryPressureListener> memory_pressure_listener_;
 
   base::WeakPtrFactory<SharedDictionaryManagerOnDisk> weak_factory_{this};
 };

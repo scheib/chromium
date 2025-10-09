@@ -46,6 +46,7 @@ backgroundSize
 basePalette
 baselineShift
 baselineSource
+blockEllipsis
 blockSize
 border
 borderBlock
@@ -210,6 +211,7 @@ fontDisplay
 fontFamily
 fontFeatureSettings
 fontKerning
+fontLanguageOverride
 fontOpticalSizing
 fontPalette
 fontSize
@@ -272,8 +274,8 @@ insetInlineEnd
 insetInlineStart
 interactivity
 interestDelay
-interestHideDelay
-interestShowDelay
+interestDelayEnd
+interestDelayStart
 interpolateSize
 isolation
 item
@@ -364,11 +366,13 @@ overflowX
 overflowY
 overlay
 overrideColors
+overscrollArea
 overscrollBehavior
 overscrollBehaviorBlock
 overscrollBehaviorInline
 overscrollBehaviorX
 overscrollBehaviorY
+overscrollPosition
 pad
 padding
 paddingBlock
@@ -421,6 +425,7 @@ rowRuleOutset
 rowRuleStyle
 rowRuleWidth
 rubyAlign
+rubyOverhang
 rubyPosition
 rule
 ruleColor
@@ -531,13 +536,12 @@ textWrapMode
 textWrapStyle
 timelineScope
 timelineTrigger
-timelineTriggerBehavior
 timelineTriggerExitRangeEnd
 timelineTriggerExitRangeStart
 timelineTriggerName
 timelineTriggerRangeEnd
 timelineTriggerRangeStart
-timelineTriggerTimeline
+timelineTriggerSource
 top
 touchAction
 transform

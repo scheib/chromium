@@ -15,8 +15,10 @@
 #include "components/site_isolation/site_isolation_policy.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/login_metrics.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
@@ -46,13 +48,13 @@ void RecordLoginDetectionMetrics(LoginDetectionType type,
                                  const std::optional<GURL>& provider,
                                  ukm::SourceId ukm_source_id) {
   base::UmaHistogramEnumeration("Login.PageLoad.DetectionType", type);
-  base::UmaHistogramEnumeration(
-      content::kBrowserAssistedLoginTypeHistogram,
-      content::BrowserAssistedLoginType::kNonFedCmOAuth);
 
   if (type == LoginDetectionType::kNoLogin) {
     return;
   }
+  base::UmaHistogramEnumeration(
+      content::kBrowserAssistedLoginTypeHistogram,
+      content::BrowserAssistedLoginType::kNonFedCmOAuth);
   ukm::builders::LoginDetectionV2 builder(ukm_source_id);
   builder.SetPage_LoginType(static_cast<int64_t>(type))
       .Record(ukm::UkmRecorder::Get());

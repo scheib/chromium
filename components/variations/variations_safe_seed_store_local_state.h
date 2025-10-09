@@ -50,7 +50,6 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsSafeSeedStoreLocalState
   void SetFetchTime(const base::Time& fetch_time) override;
   int GetMilestone() const override;
   base::Time GetTimeForStudyDateChecks() const override;
-  StoredSeed GetCompressedSeed() const override;
   StoreSeedResult SetCompressedSeed(ValidatedSeedInfo seed_info) override;
   std::string GetLocale() const override;
   void SetLocale(const std::string& locale) override;
@@ -64,6 +63,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsSafeSeedStoreLocalState
                               std::string* base64_seed_signature) override;
   void ReadSeedData(
       SeedReaderWriter::ReadSeedDataCallback done_callback) override;
+  void AllowToPurgeSeedDataFromMemory() override;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
 

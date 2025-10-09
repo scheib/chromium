@@ -3,11 +3,13 @@
 // found in the LICENSE file.
 
 #include "base/strings/stringprintf.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/permissions/quiet_notification_permission_ui_config.h"
 #include "chrome/browser/permissions/quiet_notification_permission_ui_state.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/views/content_setting_bubble_contents.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/infobars/confirm_infobar.h"
@@ -22,7 +24,6 @@
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_manager.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "components/omnibox/browser/test_location_bar_model.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_actions_history.h"
@@ -154,6 +155,13 @@ class QuietPromptInteractiveUITest : public InteractiveBrowserTest {
             ->GetActiveWebContents()
             ->GetBrowserContext());
   }
+
+  const base::HistogramTester& HistogramTester() const {
+    return histogram_tester_;
+  }
+
+ protected:
+  base::HistogramTester histogram_tester_;
 
  private:
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
@@ -411,6 +419,11 @@ IN_PROC_BROWSER_TEST_P(QuietPromptInteractiveParamUITest,
       If([should_show]() { return should_show; },
          Then(WaitForShow(InfobarElementId)),
          Else(EnsureNotPresent(InfobarElementId))),
+      Do([&] {
+        histogram_tester_.ExpectBucketCount(
+            "Permissions.QuietPrompt.Preignore.PageReloadInfoBar", should_show,
+            1);
+      }),
       NameView(kLocationBarView, GetLocationBarView()),
       SetOnIncompatibleAction(OnIncompatibleAction::kIgnoreAndContinue,
                               "Screenshot not supported in all test modes."),

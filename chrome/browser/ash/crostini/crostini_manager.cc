@@ -82,11 +82,13 @@
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/components/dbus/anomaly_detector/anomaly_detector_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/vm_applications/apps.pb.h"
 #include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/scheduler_config/scheduler_configuration_manager.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -218,6 +220,30 @@ void EmitTimeInStageHistogram(base::TimeDelta duration,
   DCHECK(!name.empty());
   base::UmaHistogramCustomTimes(name, duration, base::Milliseconds(10),
                                 base::Hours(6), 50);
+}
+
+vm_tools::concierge::VmInfo::VmType ToConciergeServiceVmType(
+    vm_tools::apps::VmType type) {
+  // Keep in sync with
+  // https://source.chromium.org/chromiumos/chromiumos/codesearch/+/HEAD:src/platform2/vm_tools/concierge/vm_util.cc;l=1303
+  using VmType = vm_tools::concierge::VmInfo::VmType;
+  using AppsVmType = vm_tools::apps::VmType;
+  switch (type) {
+    case AppsVmType::TERMINA:
+      return VmType::VmInfo_VmType_TERMINA;
+    case AppsVmType::PLUGIN_VM:
+      return VmType::VmInfo_VmType_PLUGIN_VM;
+    case AppsVmType::BOREALIS:
+      return VmType::VmInfo_VmType_BOREALIS;
+    case AppsVmType::ARCVM:
+      return VmType::VmInfo_VmType_ARC_VM;
+    case AppsVmType::BRUSCHETTA:
+      return VmType::VmInfo_VmType_BRUSCHETTA;
+    case AppsVmType::BAGUETTE:
+      return VmType::VmInfo_VmType_BAGUETTE;
+    default:
+      return VmType::VmInfo_VmType_UNKNOWN;
+  }
 }
 
 }  // namespace
@@ -952,6 +978,9 @@ void CrostiniManager::CrostiniRestarter::SetUpBaguetteUserFinished(
   if (ReturnEarlyIfNeeded()) {
     return;
   }
+
+  // If arc sideloading is enabled, configure the guest for that.
+  crostini_manager_->ConfigureForArcSideload();
 
   // Wait for Baguette's 'services are ready' signals
   WaitUntilBaguetteReady(result, kBaguetteVmReadyWaitTimeout);
@@ -2133,20 +2162,40 @@ void CrostiniManager::ExportDiskImage(guest_os::GuestId vm_id,
   request.set_generate_sha256_digest(false);
   request.set_force(force);
 
-  std::vector<base::ScopedFD> fds;
-  base::File file(export_path,
-                  base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-  if (!file.IsValid()) {
-    LOG(ERROR) << "Failed to open " << export_path;
-    return;
-  }
-
-  fds.emplace_back(file.TakePlatformFile());
-
-  GetConciergeClient()->ExportDiskImage(
-      std::move(fds), std::move(request),
+  // Blocking calls may not be made from the main thread (base::File() here),
+  // but dbus calls MUST be made from the main thread so we have to get a little
+  // sneaky with our routing here.
+  auto cb = base::BindPostTaskToCurrentDefault(
       base::BindOnce(&CrostiniManager::OnExportDiskImage,
                      weak_ptr_factory_.GetWeakPtr(), vm_id));
+
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(
+          [](base::FilePath export_path) {
+            return base::File(export_path, base::File::FLAG_CREATE_ALWAYS |
+                                               base::File::FLAG_WRITE |
+                                               base::File::FLAG_READ);
+          },
+          export_path),
+      base::BindOnce(
+          [](base::FilePath export_path,
+             vm_tools::concierge::ExportDiskImageRequest request,
+             chromeos::DBusMethodCallback<
+                 vm_tools::concierge::ExportDiskImageResponse> cb,
+             base::File file) {
+            std::vector<base::ScopedFD> fds;
+            if (!file.IsValid()) {
+              LOG(ERROR) << "Failed to open " << export_path;
+              return;
+            }
+
+            fds.emplace_back(file.TakePlatformFile());
+
+            GetConciergeClient()->ExportDiskImage(
+                std::move(fds), std::move(request), std::move(cb));
+          },
+          export_path, std::move(request), std::move(cb)));
 }
 
 void CrostiniManager::OnExportDiskImage(
@@ -2173,6 +2222,7 @@ void CrostiniManager::OnExportDiskImage(
                << ", failure_reason=" << response->failure_reason();
     std::move(it->second).Run(CrostiniResult::DISK_IMAGE_FAILED);
     disk_image_callbacks_.erase(it);
+    return;
   }
 
   disk_image_uuid_to_guest_id_.emplace(response->command_uuid(), vm_id);
@@ -2199,24 +2249,54 @@ void CrostiniManager::ImportDiskImage(guest_os::GuestId vm_id,
   }
   disk_image_callbacks_.emplace(vm_id, std::move(callback));
 
-  base::File file(import_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
-  if (!file.IsValid()) {
-    LOG(ERROR) << "Failed to open " << import_path;
-    return;
-  }
-
   vm_tools::concierge::ImportDiskImageRequest request;
   request.set_vm_name(vm_id.vm_name);
   request.set_cryptohome_id(user_id_hash);
+  request.set_vm_type(ToConciergeServiceVmType(vm_id.vm_type));
   // All vm's are stored in root except pluginvm, which is not supported in this
   // flow.
   request.set_storage_location(vm_tools::concierge::STORAGE_CRYPTOHOME_ROOT);
-  request.set_source_size(file.GetLength());
 
-  GetConciergeClient()->ImportDiskImage(
-      base::ScopedFD(file.TakePlatformFile()), std::move(request),
+  // Blocking calls may not be made from the main thread (base::File() here),
+  // but dbus calls MUST be made from the main thread so we have to get a little
+  // sneaky with our routing here.
+  auto cb = base::BindPostTaskToCurrentDefault(
       base::BindOnce(&CrostiniManager::OnImportDiskImage,
                      weak_ptr_factory_.GetWeakPtr(), vm_id));
+
+  struct ImportFileInfo {
+    int64_t file_length;
+    base::File file;
+  };
+
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(
+          [](base::FilePath import_path) {
+            base::File file(import_path,
+                            base::File::FLAG_OPEN | base::File::FLAG_READ);
+            return (struct ImportFileInfo){file.GetLength(), std::move(file)};
+          },
+          import_path),
+      base::BindOnce(
+          [](base::FilePath import_path,
+             vm_tools::concierge::ImportDiskImageRequest request,
+             chromeos::DBusMethodCallback<
+                 vm_tools::concierge::ImportDiskImageResponse> cb,
+             struct ImportFileInfo file_info) {
+            if (!file_info.file.IsValid()) {
+              LOG(ERROR) << "Failed to open " << import_path;
+              return;
+            }
+            if (file_info.file_length >= 0) {
+              request.set_source_size(file_info.file_length);
+            }
+
+            GetConciergeClient()->ImportDiskImage(
+                base::ScopedFD(file_info.file.TakePlatformFile()),
+                std::move(request), std::move(cb));
+          },
+          import_path, std::move(request), std::move(cb)));
 }
 
 void CrostiniManager::OnImportDiskImage(
@@ -2241,8 +2321,23 @@ void CrostiniManager::OnImportDiskImage(
   if (response->status() != vm_tools::concierge::DISK_STATUS_IN_PROGRESS) {
     LOG(ERROR) << "Failed to import image: status=" << response->status()
                << ", failure_reason=" << response->failure_reason();
-    std::move(it->second).Run(CrostiniResult::DISK_IMAGE_FAILED);
+    CrostiniResult result;
+    switch (response->status()) {
+      case vm_tools::concierge::DISK_STATUS_FAILED:
+        result = CrostiniResult::DISK_IMAGE_FAILED;
+        break;
+      case vm_tools::concierge::DISK_STATUS_BAD_IMAGE:
+        result = CrostiniResult::DISK_IMAGE_BAD_IMAGE;
+        break;
+      case vm_tools::concierge::DISK_STATUS_NOT_ENOUGH_SPACE:
+        result = CrostiniResult::DISK_IMAGE_FAILED_NO_SPACE;
+        break;
+      default:
+        result = CrostiniResult::DISK_IMAGE_FAILED;
+    }
+    std::move(it->second).Run(result);
     disk_image_callbacks_.erase(it);
+    return;
   }
 
   disk_image_uuid_to_guest_id_.emplace(response->command_uuid(), vm_id);
@@ -2964,6 +3059,20 @@ void CrostiniManager::OnStartTerminaVm(
       break;
   }
 
+  uint32_t seneschal_server_handle =
+      response->vm_info().seneschal_server_handle();
+
+  if (response->status() == vm_tools::concierge::VM_STATUS_RUNNING) {
+    // Baguette does not start containers (which is the only case we get a
+    // VM_STATUS_STARTING), so we need to share fonts as soon as possible.
+    if (GetTerminaFlavor(profile_) == TerminaFlavor::BAGUETTE) {
+      guest_os::GuestOsSharePathFactory::GetForProfile(profile_)->SharePath(
+          vm_name, seneschal_server_handle,
+          base::FilePath(file_manager::util::kSystemFontsPath),
+          base::DoNothing());
+    }
+  }
+
   // The UI can only resize the default VM, so only (maybe) show the
   // notification for the default VM, if we got a value, and if the value isn't
   // an error (the API we call for space returns -1 on error).
@@ -3012,8 +3121,6 @@ void CrostiniManager::OnStartTerminaVm(
   DCHECK_EQ(response->status(), vm_tools::concierge::VM_STATUS_STARTING);
   bool wait_for_tremplin = running_vms_.find(vm_name) == running_vms_.end();
 
-  uint32_t seneschal_server_handle =
-      response->vm_info().seneschal_server_handle();
   running_vms_[vm_name] =
       VmInfo{VmState::STARTING, std::move(response->vm_info()), false};
   // If we thought a container was running for this VM, we're wrong. This can

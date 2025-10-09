@@ -5,16 +5,23 @@
 package org.chromium.chrome.browser.dom_distiller;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.StringRes;
 
 import org.chromium.base.lifetime.DestroyChecker;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.theme.ThemeColorProvider;
+import org.chromium.chrome.browser.theme.ThemeUtils;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.dom_distiller.core.DomDistillerService;
@@ -35,34 +42,57 @@ public class ReaderModeBottomSheetCoordinator {
     private final ReaderModeBottomSheetContent mBottomSheetContent;
     private final ReaderModeBottomSheetView mReaderModeBottomSheetView;
     private final DomDistillerService mDomDistillerService;
+    private final ThemeColorProvider mThemeColorProvider;
+    private final ThemeColorProvider.ThemeColorObserver mThemeColorObserver;
+    private final ThemeColorProvider.TintObserver mThemeTintObserver;
+
+    private @Nullable Tab mTab;
 
     /**
      * @param context The {@link Context} associated with this coordinator.
      * @param profile The {@link Profile} associated with this coordinator.
      * @param bottomSheetController Allows displaying content in the bottom sheet.
+     * @param themeColorProvider Provides the theme color for the bottom sheet.
      */
     public ReaderModeBottomSheetCoordinator(
-            Context context, Profile profile, BottomSheetController bottomSheetController) {
+            Context context,
+            Profile profile,
+            BottomSheetController bottomSheetController,
+            ThemeColorProvider themeColorProvider) {
         mContext = context;
         mBottomSheetController = bottomSheetController;
         mDestroyChecker = new DestroyChecker();
         mDomDistillerService = DomDistillerServiceFactory.getForProfile(profile);
+        mThemeColorProvider = themeColorProvider;
 
-        mPropertyModel = new PropertyModel(ReaderModeBottomSheetProperties.ALL_KEYS);
-        mPropertyModel.set(
-                ReaderModeBottomSheetProperties.CONTENT_VIEW,
-                DistilledPagePrefsView.create(
-                        mContext, mDomDistillerService.getDistilledPagePrefs()));
         mReaderModeBottomSheetView =
                 (ReaderModeBottomSheetView)
                         LayoutInflater.from(mContext)
                                 .inflate(R.layout.reader_mode_bottom_sheet, /* root= */ null);
 
+        mPropertyModel = new PropertyModel(ReaderModeBottomSheetProperties.ALL_KEYS);
         mChangeProcessor =
                 PropertyModelChangeProcessor.create(
                         mPropertyModel,
                         mReaderModeBottomSheetView,
                         ReaderModeBottomSheetViewBinder::bind);
+
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.CONTENT_VIEW,
+                ReaderModePrefsView.create(mContext, mDomDistillerService.getDistilledPagePrefs()));
+
+        mThemeColorObserver =
+                (color, shouldAnimate) -> {
+                    updateThemeProperties();
+                };
+        mThemeColorProvider.addThemeColorObserver(mThemeColorObserver);
+
+        mThemeTintObserver =
+                (tint, activityFocusTint, brandedColorScheme) -> {
+                    updateThemeProperties();
+                };
+        mThemeColorProvider.addTintObserver(mThemeTintObserver);
+
         mBottomSheetContent = new ReaderModeBottomSheetContent(mReaderModeBottomSheetView);
     }
 
@@ -72,28 +102,37 @@ public class ReaderModeBottomSheetCoordinator {
      * @param showFullSheet Whether the bottomsheet should be shown fully, if false it's shown in a
      *     peeked state.
      */
-    public void show(boolean showFullSheet) {
+    public void show(Tab tab) {
         mDestroyChecker.checkNotDestroyed();
+        setTab(tab);
         // Only try to show the bottom sheet if it's not already showing. BottomSheetController
         // makes a copy of the sheet content, so equals comparison isn't useful here.
         boolean showing =
-                mBottomSheetController.getCurrentSheetContent()
-                        instanceof ReaderModeBottomSheetContent;
-        if (!showing) {
-            showing =
-                    mBottomSheetController.requestShowContent(
-                            mBottomSheetContent, /* animate= */ true);
-        }
+                mBottomSheetController.getCurrentSheetContent() == mBottomSheetContent;
 
-        if (showing && showFullSheet) {
-            mBottomSheetController.expandSheet();
+        // Workaround for a bug where the bottom sheet will get stuck in the NONE state after the
+        // activity is recreated by a theme change.
+        if (!showing) {
+            showing = mBottomSheetController.requestShowContent(
+                            mBottomSheetContent, /* animate= */ true);
+            if (showing) {
+                ReaderModeMetrics.reportReaderModePrefsOpened();
+            }
         }
+    }
+
+    /** Hides the reader mode bottom sheet. */
+    public void hide() {
+        mDestroyChecker.checkNotDestroyed();
+        mBottomSheetController.hideContent(mBottomSheetContent, /* animate= */ true);
     }
 
     /** Destroys the coordinator. */
     public void destroy() {
         mDestroyChecker.destroy();
         mChangeProcessor.destroy();
+        mThemeColorProvider.removeThemeColorObserver(mThemeColorObserver);
+        mThemeColorProvider.removeTintObserver(mThemeTintObserver);
     }
 
     private class ReaderModeBottomSheetContent implements BottomSheetContent {
@@ -119,13 +158,16 @@ public class ReaderModeBottomSheetCoordinator {
         }
 
         @Override
-        public void destroy() {
-            ReaderModeBottomSheetCoordinator.this.destroy();
-        }
+        public void destroy() {}
 
         @Override
         public int getPriority() {
-            return BottomSheetContent.ContentPriority.HIGH;
+            return BottomSheetContent.ContentPriority.LOW;
+        }
+
+        @Override
+        public int getPeekHeight() {
+            return ((ReaderModeBottomSheetView) mContentView).getPeekHeight();
         }
 
         @Override
@@ -136,6 +178,16 @@ public class ReaderModeBottomSheetCoordinator {
         @Override
         public boolean swipeToDismissEnabled() {
             return true;
+        }
+
+        @Override
+        public boolean hideOnScroll() {
+            // This bottom sheet is "persistent", but the default #hideOnScroll behavior is too
+            // buggy when the sheet interacts with the bottom controls. Correct implementation for
+            // this is to integrate BottomSheetManager directly with BottomControlsStacker, but the
+            // implementation is non-trivial. Instead, this sheet will be easily dismissable and
+            // come back on scroll up.
+            return false;
         }
 
         @Override
@@ -159,20 +211,48 @@ public class ReaderModeBottomSheetCoordinator {
         }
 
         @Override
-        public boolean hasCustomScrimLifecycle() {
-            return false;
-        }
-
-        @Override
-        public int getPeekHeight() {
-            return mContentView.findViewById(R.id.drag_handle).getHeight()
-                    + mContentView.findViewById(R.id.title).getHeight();
-        }
-
-        @Override
-        public boolean hideOnScroll() {
+        public boolean canSuppressInAnyState() {
             return true;
         }
+
+        @Override
+        public @ColorInt int getSheetBackgroundColorOverride() {
+            return mPropertyModel.containsKey(ReaderModeBottomSheetProperties.BACKGROUND_COLOR)
+                    ? mPropertyModel.get(ReaderModeBottomSheetProperties.BACKGROUND_COLOR)
+                    : Color.TRANSPARENT;
+        }
+    }
+
+    void setTab(Tab tab) {
+        mTab = tab;
+        // Update the theme properties to handle the case where the bottom sheet is shown in both
+        // incognito and regular tabs.
+        updateThemeProperties();
+    }
+
+    private void updateThemeProperties() {
+        // A non-null tab is required to get the correct color for the toolbar. This could be called prior to showing the bottom sheet and in that case we want to early return.
+        if (mTab == null) return;
+        @ColorInt int color = mThemeColorProvider.getThemeColor();
+        @BrandedColorScheme int brandedColorScheme = mThemeColorProvider.getBrandedColorScheme();
+
+        mPropertyModel.set(ReaderModeBottomSheetProperties.BACKGROUND_COLOR, color);
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.SECONDARY_BACKGROUND_COLOR,
+                ThemeUtils.getTextBoxColorForToolbarBackground(mContext, mTab, color));
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.ICON_TINT,
+                ThemeUtils.getThemedToolbarIconTint(mContext, brandedColorScheme));
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.PRIMARY_TEXT_COLOR,
+                OmniboxResourceProvider.getUrlBarPrimaryTextColor(mContext, brandedColorScheme));
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.SECONDARY_TEXT_COLOR,
+                OmniboxResourceProvider.getUrlBarSecondaryTextColor(mContext, brandedColorScheme));
+        mPropertyModel.set(
+                ReaderModeBottomSheetProperties.ICON_TINT,
+                ThemeUtils.getThemedToolbarIconTint(mContext, brandedColorScheme));
+        mBottomSheetController.onSheetBackgroundColorOverrideChanged();
     }
 
     // For testing methods.

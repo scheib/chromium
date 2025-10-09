@@ -11,6 +11,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "components/autofill/core/browser/data_model/autofill_ai/entity_type.h"
 #include "components/autofill/core/browser/foundations/test_autofill_client.h"
 #include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/browser/test_utils/autofill_testing_pref_service.h"
@@ -22,6 +23,7 @@
 #include "components/optimization_guide/core/model_execution/model_execution_prefs.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
+#include "components/sync/test/test_sync_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -31,6 +33,7 @@ namespace {
 
 using ::base::Bucket;
 using ::base::BucketsAre;
+using ::testing::Return;
 using ::testing::Values;
 
 constexpr auto kAutofillPredictionSettingsDisable =
@@ -62,9 +65,16 @@ std::string GetTestSuffix(
       return "kServerClassificationModel";
     case AutofillAiAction::kUseCachedServerClassificationModelResults:
       return "kUseCachedServerClassificationModelResults";
+    case AutofillAiAction::kImportToWallet:
+      return "kImportToWallet";
   }
   NOTREACHED();
 }
+
+class MockSyncService : public syncer::TestSyncService {
+ public:
+  MOCK_CONST_METHOD0(GetActiveDataTypes, syncer::DataTypeSet());
+};
 
 // A test fixture that sets up default state so that all AutofillAI-related
 // actions are permitted.
@@ -74,15 +84,19 @@ class AutofillAiPermissionUtilsTest : public ::testing::Test {
     // Features.
     feature_list_.InitWithFeaturesAndParameters(
         {{features::kAutofillAiWithDataSchema, {}},
+         {features::kAutofillAiWalletVehicleRegistration, {}},
          {features::kAutofillAiServerModel,
           {{"autofill_ai_model_use_cache_results", "true"}}}},
         {});
 
     // Pref and identity state.
     client().set_entity_data_manager(std::make_unique<EntityDataManager>(
-        webdata_helper_.autofill_webdata_service(), /*history_service=*/nullptr,
+        client().GetPrefs(), client().GetIdentityManager(),
+        client().GetSyncService(), webdata_helper_.autofill_webdata_service(),
+        /*history_service=*/nullptr,
         /*strike_database=*/nullptr));
     client().SetUpPrefsAndIdentityForAutofillAi();
+    client().set_sync_service(&sync_service_);
   }
 
   void AddEntity() {
@@ -92,12 +106,14 @@ class AutofillAiPermissionUtilsTest : public ::testing::Test {
 
   TestAutofillClient& client() { return client_; }
   EntityDataManager& edm() { return *client().GetEntityDataManager(); }
+  MockSyncService& sync_service() { return sync_service_; }
 
  private:
   base::test::ScopedFeatureList feature_list_;
   base::test::TaskEnvironment task_environment_;
   AutofillWebDataServiceTestHelper webdata_helper_{
       std::make_unique<EntityTable>()};
+  MockSyncService sync_service_;
   TestAutofillClient client_;
 };
 
@@ -105,7 +121,12 @@ class AutofillAiMayPerformActionTest
     : public AutofillAiPermissionUtilsTest,
       public ::testing::WithParamInterface<AutofillAiAction> {
  public:
-  using AutofillAiPermissionUtilsTest::AutofillAiPermissionUtilsTest;
+  AutofillAiMayPerformActionTest() {
+    client().GetSyncService()->GetUserSettings()->SetSelectedType(
+        syncer::UserSelectableType::kPayments, true);
+    ON_CALL(sync_service(), GetActiveDataTypes())
+        .WillByDefault(Return(syncer::DataTypeSet{syncer::AUTOFILL_VALUABLE}));
+  }
 };
 
 // Verifies that the test fixture sets up the client so that everything but
@@ -540,6 +561,119 @@ TEST_F(AutofillAiPermissionUtilsTest, OptInStatusMetrics) {
   EXPECT_TRUE(SetAutofillAiOptInStatus(client(), kOptedOut));
   EXPECT_THAT(histogram_tester.GetAllSamples("Autofill.Ai.OptIn.Change"),
               BucketsAre(Bucket(kOptedIn, 1), Bucket(kOptedOut, 2)));
+}
+
+// Tests that the prefs affect MayPerformAutofillAiAction() for kFilling and
+// kImport. The `bool` parameters are the pref values.
+class AutofillAiMayPerformFillOrImportTest
+    : public AutofillAiPermissionUtilsTest,
+      public testing::WithParamInterface<
+          std::tuple<AutofillAiAction, bool, bool>> {
+ public:
+  AutofillAiAction action() const { return std::get<0>(GetParam()); }
+  bool identity_entities_enabled() const { return std::get<1>(GetParam()); }
+  bool travel_entities_enabled() const { return std::get<2>(GetParam()); }
+
+  void SetUp() override {
+    AutofillAiPermissionUtilsTest::SetUp();
+    client().GetPrefs()->SetBoolean(prefs::kAutofillAiIdentityEntitiesEnabled,
+                                    identity_entities_enabled());
+    client().GetPrefs()->SetBoolean(prefs::kAutofillAiTravelEntitiesEnabled,
+                                    travel_entities_enabled());
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    ,
+    AutofillAiMayPerformFillOrImportTest,
+    testing::Combine(testing::Values(AutofillAiAction::kFilling,
+                                     AutofillAiAction::kImport),
+                     testing::Bool(),
+                     testing::Bool()));
+
+// Tests that MayPerformAutofillAiAction() without an EntityType parameter is
+// independent of the prefs.
+TEST_P(AutofillAiMayPerformFillOrImportTest, WithoutEntityParameter) {
+  EXPECT_TRUE(MayPerformAutofillAiAction(client(), action()));
+  EXPECT_TRUE(MayPerformAutofillAiAction(client(), action()));
+}
+
+// Tests that MayPerformAutofillAiAction() depends on the given EntityType and
+// the pref state.
+TEST_P(AutofillAiMayPerformFillOrImportTest,
+       PrefsAndEntityAffectMayPerformAutofillAiAction) {
+  using enum EntityTypeName;
+  EXPECT_EQ(
+      MayPerformAutofillAiAction(client(), action(), EntityType(kPassport)),
+      identity_entities_enabled());
+  EXPECT_EQ(
+      MayPerformAutofillAiAction(client(), action(), EntityType(kVehicle)),
+      travel_entities_enabled());
+}
+
+class AutofillAiMayPerformImportToWalletTest
+    : public AutofillAiPermissionUtilsTest {
+ public:
+  AutofillAiMayPerformImportToWalletTest() {
+    client().GetSyncService()->GetUserSettings()->SetSelectedType(
+        syncer::UserSelectableType::kPayments, true);
+    ON_CALL(sync_service(), GetActiveDataTypes())
+        .WillByDefault(Return(syncer::DataTypeSet{syncer::AUTOFILL_VALUABLE}));
+  }
+};
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_TrueWhenSyncingWallet) {
+  client().SetImportingToWalletEnabled(true);
+  EXPECT_TRUE(MayPerformAutofillAiAction(client(),
+                                         AutofillAiAction::kImportToWallet,
+                                         EntityType(EntityTypeName::kVehicle)));
+}
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_FalseWhenWalletPrefDisabled) {
+  client().SetImportingToWalletEnabled(false);
+  EXPECT_FALSE(
+      MayPerformAutofillAiAction(client(), AutofillAiAction::kImportToWallet,
+                                 EntityType(EntityTypeName::kVehicle)));
+}
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_FalseEntityTypeIsNotWalletable) {
+  client().SetImportingToWalletEnabled(true);
+  EXPECT_FALSE(
+      MayPerformAutofillAiAction(client(), AutofillAiAction::kImportToWallet,
+                                 EntityType(EntityTypeName::kPassport)));
+}
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_FalseWhenFeatureIsOff) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(
+      features::kAutofillAiWalletVehicleRegistration);
+  client().SetImportingToWalletEnabled(true);
+  EXPECT_FALSE(
+      MayPerformAutofillAiAction(client(), AutofillAiAction::kImportToWallet,
+                                 EntityType(EntityTypeName::kPassport)));
+}
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_FalseWhenNotSyncingWallet) {
+  client().GetSyncService()->GetUserSettings()->SetSelectedType(
+      syncer::UserSelectableType::kPayments, false);
+  client().SetImportingToWalletEnabled(true);
+  EXPECT_FALSE(
+      MayPerformAutofillAiAction(client(), AutofillAiAction::kImportToWallet,
+                                 EntityType(EntityTypeName::kVehicle)));
+}
+
+TEST_F(AutofillAiMayPerformImportToWalletTest,
+       ImportToWallet_FalseWhenAutofillValuableIsNotActive) {
+  ON_CALL(sync_service(), GetActiveDataTypes())
+      .WillByDefault(Return(syncer::DataTypeSet()));
+  EXPECT_FALSE(
+      MayPerformAutofillAiAction(client(), AutofillAiAction::kImportToWallet,
+                                 EntityType(EntityTypeName::kVehicle)));
 }
 
 }  // namespace

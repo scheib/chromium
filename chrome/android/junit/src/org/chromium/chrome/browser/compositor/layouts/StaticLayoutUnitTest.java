@@ -11,6 +11,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -64,6 +65,7 @@ import org.chromium.url.JUnitTestGURLs;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 /** Unit tests for {@link StaticLayout}. */
 @RunWith(BaseRobolectricTestRunner.class)
@@ -142,6 +144,7 @@ public class StaticLayoutUnitTest {
         doReturn(2).when(mTabModel).getCount();
         doReturn(mTab1).when(mTabModel).getTabAt(0);
         doReturn(mTab2).when(mTabModel).getTabAt(1);
+        doAnswer(invocation -> List.of(mTab1, mTab2).iterator()).when(mTabModel).iterator();
         doNothing().when(mTab1).addObserver(mTabObserverCaptor.capture());
         doNothing().when(mTab2).addObserver(mTabObserverCaptor.capture());
         doReturn(POSITION1).when(mTabModel).indexOf(mTab1);
@@ -206,6 +209,7 @@ public class StaticLayoutUnitTest {
                 mStaticLayout.getBrowserControlsStateProviderForTesting());
     }
 
+    @SuppressWarnings("DirectInvocationOnMock")
     private void initAndAssertAllProperties() {
         assertEquals(mTab1, mTabModelSelector.getCurrentTab());
         assertEquals(TAB1_ID, mModel.get(LayoutTab.TAB_ID));
@@ -393,14 +397,14 @@ public class StaticLayoutUnitTest {
         BrowserControlsOffsetTagsInfo tagsInfo = new BrowserControlsOffsetTagsInfo();
         mBrowserControlsStateProviderObserverCaptor
                 .getValue()
-                .onControlsConstraintsChanged(null, tagsInfo, 0, false);
+                .onOffsetTagsInfoChanged(null, tagsInfo, 0, false);
         assertEquals(tagsInfo.getContentOffsetTag(), mModel.get(LayoutTab.CONTENT_OFFSET_TAG));
         assertEquals(0, (int) mModel.get(LayoutTab.CONTENT_OFFSET));
 
         tagsInfo = new BrowserControlsOffsetTagsInfo();
         mBrowserControlsStateProviderObserverCaptor
                 .getValue()
-                .onControlsConstraintsChanged(null, tagsInfo, 0, true);
+                .onOffsetTagsInfoChanged(null, tagsInfo, 0, true);
         assertEquals(tagsInfo.getContentOffsetTag(), mModel.get(LayoutTab.CONTENT_OFFSET_TAG));
         assertEquals(offset, (int) mModel.get(LayoutTab.CONTENT_OFFSET));
     }

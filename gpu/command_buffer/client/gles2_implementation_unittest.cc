@@ -39,16 +39,11 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if !defined(GLES2_SUPPORT_CLIENT_SIDE_ARRAYS)
-#define GLES2_SUPPORT_CLIENT_SIDE_ARRAYS
-#endif
-
 using testing::_;
 using testing::AtLeast;
 using testing::AnyNumber;
 using testing::DoAll;
 using testing::InSequence;
-using testing::Invoke;
 using testing::Mock;
 using testing::Pointee;
 using testing::SaveArg;
@@ -195,8 +190,6 @@ class GLES2ImplementationTest : public testing::Test {
     TestContext() : commands_(nullptr), token_(0) {}
 
     bool Initialize(ShareGroup* share_group,
-                    bool bind_generates_resource_client,
-                    bool bind_generates_resource_service,
                     bool lose_context_when_out_of_memory,
                     bool transfer_buffer_initialize_fail,
                     bool sync_query,
@@ -247,8 +240,6 @@ class GLES2ImplementationTest : public testing::Test {
       gl_capabilities_.max_transform_feedback_separate_attribs =
           kMaxTransformFeedbackSeparateAttribs;
       gl_capabilities_.max_uniform_buffer_bindings = kMaxUniformBufferBindings;
-      gl_capabilities_.bind_generates_resource_chromium =
-          bind_generates_resource_service ? 1 : 0;
       capabilities_.sync_query = sync_query;
       gl_capabilities_.sync_query = sync_query;
       gl_capabilities_.occlusion_query_boolean = occlusion_query_boolean;
@@ -263,14 +254,9 @@ class GLES2ImplementationTest : public testing::Test {
       {
         InSequence sequence;
 
-        const bool support_client_side_arrays = true;
-        gl_.reset(new GLES2Implementation(helper_.get(),
-                                          share_group,
-                                          transfer_buffer_.get(),
-                                          bind_generates_resource_client,
-                                          lose_context_when_out_of_memory,
-                                          support_client_side_arrays,
-                                          gpu_control_.get()));
+        gl_ = std::make_unique<GLES2Implementation>(
+            helper_.get(), share_group, transfer_buffer_.get(),
+            lose_context_when_out_of_memory, gpu_control_.get());
       }
 
       // The client should be set to something non-null.
@@ -346,43 +332,25 @@ class GLES2ImplementationTest : public testing::Test {
     return gl_->query_tracker_->GetQuery(id);
   }
 
-  QueryTracker* GetQueryTracker() {
-    return gl_->query_tracker_.get();
-  }
+  QueryTracker* GetQueryTracker() { return gl_->query_tracker_.get(); }
 
   struct ContextInitOptions {
-    ContextInitOptions()
-        : bind_generates_resource_client(true),
-          bind_generates_resource_service(true),
-          lose_context_when_out_of_memory(false),
-          transfer_buffer_initialize_fail(false),
-          sync_query(true),
-          occlusion_query_boolean(true),
-          timer_queries(true),
-          major_version(2),
-          minor_version(0) {}
-
-    bool bind_generates_resource_client;
-    bool bind_generates_resource_service;
-    bool lose_context_when_out_of_memory;
-    bool transfer_buffer_initialize_fail;
-    bool sync_query;
-    bool occlusion_query_boolean;
-    bool timer_queries;
-    int major_version;
-    int minor_version;
+    bool lose_context_when_out_of_memory = false;
+    bool transfer_buffer_initialize_fail = false;
+    bool sync_query = true;
+    bool occlusion_query_boolean = true;
+    bool timer_queries = true;
+    int major_version = 2;
+    int minor_version = 0;
   };
 
   bool Initialize(const ContextInitOptions& init_options) {
     bool success = true;
-    share_group_ = new ShareGroup(init_options.bind_generates_resource_client,
-                                  0 /* tracing_id */);
+    share_group_ = base::MakeRefCounted<ShareGroup>(/*tracing_id=*/0);
 
     for (int i = 0; i < kNumTestContexts; i++) {
       if (!test_contexts_[i].Initialize(
               share_group_.get(),
-              init_options.bind_generates_resource_client,
-              init_options.bind_generates_resource_service,
               init_options.lose_context_when_out_of_memory,
               init_options.transfer_buffer_initialize_fail,
               init_options.sync_query,
@@ -624,8 +592,6 @@ class GLES2ImplementationStrictSharedTest : public GLES2ImplementationTest {
 
 void GLES2ImplementationStrictSharedTest::SetUp() {
   ContextInitOptions init_options;
-  init_options.bind_generates_resource_client = false;
-  init_options.bind_generates_resource_service = false;
   ASSERT_TRUE(Initialize(init_options));
 }
 
@@ -838,675 +804,6 @@ TEST_F(GLES2ImplementationTest, GetShaderSource) {
   EXPECT_STREQ(kString.str, buf);
   EXPECT_EQ(buf[sizeof(kString)], kBad);
 }
-
-#if defined(GLES2_SUPPORT_CLIENT_SIDE_ARRAYS)
-
-TEST_F(GLES2ImplementationTest, DrawArraysClientSideBuffers) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawArrays draw;
-    cmds::BindBuffer restore;
-  };
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLint kFirst = 1;
-  const GLsizei kCount = 2;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      std::size(verts) * kNumComponents2 * sizeof(verts[0][0]);
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize2);
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem1.id, mem1.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem2.id, mem2.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(
-      kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kFirst, kCount);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(
-      kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->DrawArrays(GL_POINTS, kFirst, kCount);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, DrawArraysInstancedANGLEClientSideBuffers) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::VertexAttribDivisorANGLE divisor;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawArraysInstancedANGLE draw;
-    cmds::BindBuffer restore;
-  };
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLint kFirst = 1;
-  const GLsizei kCount = 2;
-  const GLuint kDivisor = 1;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      1 * kNumComponents2 * sizeof(verts[0][0]);
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize2);
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.divisor.Init(kAttribIndex2, kDivisor);
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem1.id, mem1.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem2.id, mem2.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(
-      kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kFirst, kCount, 1);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(
-      kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribDivisorANGLE(kAttribIndex2, kDivisor);
-  gl_->DrawArraysInstancedANGLE(GL_POINTS, kFirst, kCount, 1);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, DrawElementsClientSideBuffers) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  static const uint16_t indices[] = {
-      1, 2,
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::BindBuffer bind_to_index_emu;
-    cmds::BufferData set_index_size;
-    cmds::BufferSubData copy_data0;
-    cmd::SetToken set_token0;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawElements draw;
-    cmds::BindBuffer restore;
-    cmds::BindBuffer restore_element;
-  };
-  const GLsizei kIndexSize = sizeof(indices);
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kEmuIndexBufferId =
-      GLES2Implementation::kClientSideElementArrayId;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLsizei kCount = 2;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      std::size(verts) * kNumComponents2 * sizeof(verts[0][0]);
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedMemory(kIndexSize);
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem3 = GetExpectedMemory(kSize2);
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.bind_to_index_emu.Init(GL_ELEMENT_ARRAY_BUFFER, kEmuIndexBufferId);
-  expected.set_index_size.Init(
-      GL_ELEMENT_ARRAY_BUFFER, kIndexSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data0.Init(
-      GL_ELEMENT_ARRAY_BUFFER, 0, kIndexSize, mem1.id, mem1.offset);
-  expected.set_token0.Init(GetNextToken());
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem2.id, mem2.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem3.id, mem3.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(kAttribIndex2, kNumComponents2,
-                             GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kCount, GL_UNSIGNED_SHORT, 0);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-  expected.restore_element.Init(GL_ELEMENT_ARRAY_BUFFER, 0);
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->DrawElements(GL_POINTS, kCount, GL_UNSIGNED_SHORT, indices);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, DrawElementsClientSideBuffersIndexUint) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  static const uint32_t indices[] = {
-      1, 2,
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::BindBuffer bind_to_index_emu;
-    cmds::BufferData set_index_size;
-    cmds::BufferSubData copy_data0;
-    cmd::SetToken set_token0;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawElements draw;
-    cmds::BindBuffer restore;
-    cmds::BindBuffer restore_element;
-  };
-  const GLsizei kIndexSize = sizeof(indices);
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kEmuIndexBufferId =
-      GLES2Implementation::kClientSideElementArrayId;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLsizei kCount = 2;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      std::size(verts) * kNumComponents2 * sizeof(verts[0][0]);
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedMemory(kIndexSize);
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem3 = GetExpectedMemory(kSize2);
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.bind_to_index_emu.Init(GL_ELEMENT_ARRAY_BUFFER, kEmuIndexBufferId);
-  expected.set_index_size.Init(
-      GL_ELEMENT_ARRAY_BUFFER, kIndexSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data0.Init(
-      GL_ELEMENT_ARRAY_BUFFER, 0, kIndexSize, mem1.id, mem1.offset);
-  expected.set_token0.Init(GetNextToken());
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem2.id, mem2.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem3.id, mem3.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(kAttribIndex2, kNumComponents2,
-                             GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kCount, GL_UNSIGNED_INT, 0);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-  expected.restore_element.Init(GL_ELEMENT_ARRAY_BUFFER, 0);
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->DrawElements(GL_POINTS, kCount, GL_UNSIGNED_INT, indices);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, DrawElementsClientSideBuffersInvalidIndexUint) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  static const uint32_t indices[] = {1, 0x90000000};
-
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLsizei kCount = 2;
-
-  EXPECT_CALL(*command_buffer(), OnFlush())
-      .Times(1)
-      .RetiresOnSaturation();
-
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->DrawElements(GL_POINTS, kCount, GL_UNSIGNED_INT, indices);
-
-  EXPECT_EQ(static_cast<GLenum>(GL_INVALID_OPERATION), gl_->GetError());
-}
-
-TEST_F(GLES2ImplementationTest,
-       DrawElementsClientSideBuffersServiceSideIndices) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::BindBuffer bind_to_index;
-    cmds::GetMaxValueInBufferCHROMIUM get_max;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawElements draw;
-    cmds::BindBuffer restore;
-  };
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kClientIndexBufferId = 0x789;
-  const GLuint kIndexOffset = 0x40;
-  const GLuint kMaxIndex = 2;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLsizei kCount = 2;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      std::size(verts) * kNumComponents2 * sizeof(verts[0][0]);
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedResultMemory(sizeof(uint32_t));
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem3 = GetExpectedMemory(kSize2);
-
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.bind_to_index.Init(GL_ELEMENT_ARRAY_BUFFER, kClientIndexBufferId);
-  expected.get_max.Init(kClientIndexBufferId, kCount, GL_UNSIGNED_SHORT,
-                        kIndexOffset, mem1.id, mem1.offset);
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem2.id, mem2.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(kAttribIndex1, kNumComponents1,
-                             GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem3.id, mem3.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(kAttribIndex2, kNumComponents2,
-                             GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kCount, GL_UNSIGNED_SHORT, kIndexOffset);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-
-  EXPECT_CALL(*command_buffer(), OnFlush())
-      .WillOnce(SetMemory(mem1.ptr,kMaxIndex))
-      .RetiresOnSaturation();
-
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, kClientIndexBufferId);
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->DrawElements(GL_POINTS, kCount, GL_UNSIGNED_SHORT,
-                    reinterpret_cast<const void*>(kIndexOffset));
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, DrawElementsInstancedANGLEClientSideBuffers) {
-  static const float verts[][4] = {
-    { 12.0f, 23.0f, 34.0f, 45.0f, },
-    { 56.0f, 67.0f, 78.0f, 89.0f, },
-    { 13.0f, 24.0f, 35.0f, 46.0f, },
-  };
-  static const uint16_t indices[] = {
-      1, 2,
-  };
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable1;
-    cmds::EnableVertexAttribArray enable2;
-    cmds::VertexAttribDivisorANGLE divisor;
-    cmds::BindBuffer bind_to_index_emu;
-    cmds::BufferData set_index_size;
-    cmds::BufferSubData copy_data0;
-    cmd::SetToken set_token0;
-    cmds::BindBuffer bind_to_emu;
-    cmds::BufferData set_size;
-    cmds::BufferSubData copy_data1;
-    cmd::SetToken set_token1;
-    cmds::VertexAttribPointer set_pointer1;
-    cmds::BufferSubData copy_data2;
-    cmd::SetToken set_token2;
-    cmds::VertexAttribPointer set_pointer2;
-    cmds::DrawElementsInstancedANGLE draw;
-    cmds::BindBuffer restore;
-    cmds::BindBuffer restore_element;
-  };
-  const GLsizei kIndexSize = sizeof(indices);
-  const GLuint kEmuBufferId = GLES2Implementation::kClientSideArrayId;
-  const GLuint kEmuIndexBufferId =
-      GLES2Implementation::kClientSideElementArrayId;
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kClientStride = sizeof(verts[0]);
-  const GLsizei kCount = 2;
-  const GLsizei kSize1 =
-      std::size(verts) * kNumComponents1 * sizeof(verts[0][0]);
-  const GLsizei kSize2 =
-      1 * kNumComponents2 * sizeof(verts[0][0]);
-  const GLuint kDivisor = 1;
-  const GLsizei kEmuOffset1 = 0;
-  const GLsizei kEmuOffset2 = kSize1;
-  const GLsizei kTotalSize = kSize1 + kSize2;
-
-  ExpectedMemoryInfo mem1 = GetExpectedMemory(kIndexSize);
-  ExpectedMemoryInfo mem2 = GetExpectedMemory(kSize1);
-  ExpectedMemoryInfo mem3 = GetExpectedMemory(kSize2);
-
-  Cmds expected;
-  expected.enable1.Init(kAttribIndex1);
-  expected.enable2.Init(kAttribIndex2);
-  expected.divisor.Init(kAttribIndex2, kDivisor);
-  expected.bind_to_index_emu.Init(GL_ELEMENT_ARRAY_BUFFER, kEmuIndexBufferId);
-  expected.set_index_size.Init(
-      GL_ELEMENT_ARRAY_BUFFER, kIndexSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data0.Init(
-      GL_ELEMENT_ARRAY_BUFFER, 0, kIndexSize, mem1.id, mem1.offset);
-  expected.set_token0.Init(GetNextToken());
-  expected.bind_to_emu.Init(GL_ARRAY_BUFFER, kEmuBufferId);
-  expected.set_size.Init(GL_ARRAY_BUFFER, kTotalSize, 0, 0, GL_DYNAMIC_DRAW);
-  expected.copy_data1.Init(
-      GL_ARRAY_BUFFER, kEmuOffset1, kSize1, mem2.id, mem2.offset);
-  expected.set_token1.Init(GetNextToken());
-  expected.set_pointer1.Init(
-      kAttribIndex1, kNumComponents1, GL_FLOAT, GL_FALSE, 0, kEmuOffset1);
-  expected.copy_data2.Init(
-      GL_ARRAY_BUFFER, kEmuOffset2, kSize2, mem3.id, mem3.offset);
-  expected.set_token2.Init(GetNextToken());
-  expected.set_pointer2.Init(kAttribIndex2, kNumComponents2,
-                             GL_FLOAT, GL_FALSE, 0, kEmuOffset2);
-  expected.draw.Init(GL_POINTS, kCount, GL_UNSIGNED_SHORT, 0, 1);
-  expected.restore.Init(GL_ARRAY_BUFFER, 0);
-  expected.restore_element.Init(GL_ELEMENT_ARRAY_BUFFER, 0);
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  gl_->EnableVertexAttribArray(kAttribIndex2);
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kClientStride, verts);
-  gl_->VertexAttribDivisorANGLE(kAttribIndex2, kDivisor);
-  gl_->DrawElementsInstancedANGLE(
-      GL_POINTS, kCount, GL_UNSIGNED_SHORT, indices, 1);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, GetVertexBufferPointerv) {
-  static const float verts[1] = { 0.0f, };
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kStride1 = 12;
-  const GLsizei kStride2 = 0;
-  const GLuint kBufferId = 0x123;
-  const GLint kOffset2 = 0x456;
-
-  // It's all cached on the client side so no get commands are issued.
-  struct Cmds {
-    cmds::BindBuffer bind;
-    cmds::VertexAttribPointer set_pointer;
-  };
-
-  Cmds expected;
-  expected.bind.Init(GL_ARRAY_BUFFER, kBufferId);
-  expected.set_pointer.Init(kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE,
-                            kStride2, kOffset2);
-
-  // Set one client side buffer.
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kStride1, verts);
-  // Set one VBO
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kStride2,
-                           reinterpret_cast<const void*>(kOffset2));
-  // now get them both.
-  void* ptr1 = nullptr;
-  void* ptr2 = nullptr;
-
-  gl_->GetVertexAttribPointerv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_POINTER, &ptr1);
-  gl_->GetVertexAttribPointerv(
-      kAttribIndex2, GL_VERTEX_ATTRIB_ARRAY_POINTER, &ptr2);
-
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-  EXPECT_TRUE(static_cast<const void*>(&verts) == ptr1);
-  EXPECT_TRUE(ptr2 == reinterpret_cast<void*>(kOffset2));
-}
-
-TEST_F(GLES2ImplementationTest, GetVertexAttrib) {
-  static const float verts[1] = { 0.0f, };
-  const GLuint kAttribIndex1 = 1;
-  const GLuint kAttribIndex2 = 3;
-  const GLint kNumComponents1 = 3;
-  const GLint kNumComponents2 = 2;
-  const GLsizei kStride1 = 12;
-  const GLsizei kStride2 = 0;
-  const GLuint kBufferId = 0x123;
-  const GLint kOffset2 = 0x456;
-
-  // Only one set and one get because the client side buffer's info is stored
-  // on the client side.
-  struct Cmds {
-    cmds::EnableVertexAttribArray enable;
-    cmds::BindBuffer bind;
-    cmds::VertexAttribPointer set_pointer;
-    cmds::GetVertexAttribfv get2;  // for getting the value from attrib1
-  };
-
-  ExpectedMemoryInfo mem2 = GetExpectedResultMemory(16);
-
-  Cmds expected;
-  expected.enable.Init(kAttribIndex1);
-  expected.bind.Init(GL_ARRAY_BUFFER, kBufferId);
-  expected.set_pointer.Init(kAttribIndex2, kNumComponents2, GL_FLOAT, GL_FALSE,
-                            kStride2, kOffset2);
-  expected.get2.Init(kAttribIndex1,
-                     GL_CURRENT_VERTEX_ATTRIB,
-                     mem2.id, mem2.offset);
-
-  FourFloats current_attrib(1.2f, 3.4f, 5.6f, 7.8f);
-
-  // One call to flush to wait for last call to GetVertexAttribiv
-  // as others are all cached.
-  EXPECT_CALL(*command_buffer(), OnFlush())
-      .WillOnce(SetMemory(
-          mem2.ptr, SizedResultHelper<FourFloats>(current_attrib)))
-      .RetiresOnSaturation();
-
-  gl_->EnableVertexAttribArray(kAttribIndex1);
-  // Set one client side buffer.
-  gl_->VertexAttribPointer(kAttribIndex1, kNumComponents1,
-                           GL_FLOAT, GL_FALSE, kStride1, verts);
-  // Set one VBO
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
-  gl_->VertexAttribPointer(kAttribIndex2, kNumComponents2,
-                           GL_FLOAT, GL_FALSE, kStride2,
-                           reinterpret_cast<const void*>(kOffset2));
-  // first get the service side once to see that we make a command
-  GLint buffer_id = 0;
-  GLint enabled = 0;
-  GLint size = 0;
-  GLint stride = 0;
-  GLint type = 0;
-  GLint normalized = 1;
-  float current[4] = {};
-
-  gl_->GetVertexAttribiv(
-      kAttribIndex2, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &buffer_id);
-  EXPECT_EQ(kBufferId, static_cast<GLuint>(buffer_id));
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &buffer_id);
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled);
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_SIZE, &size);
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &stride);
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_TYPE, &type);
-  gl_->GetVertexAttribiv(
-      kAttribIndex1, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &normalized);
-  gl_->GetVertexAttribfv(
-      kAttribIndex1, GL_CURRENT_VERTEX_ATTRIB, &current[0]);
-
-  EXPECT_EQ(0, buffer_id);
-  EXPECT_EQ(GL_TRUE, enabled);
-  EXPECT_EQ(kNumComponents1, size);
-  EXPECT_EQ(kStride1, stride);
-  EXPECT_EQ(GL_FLOAT, type);
-  EXPECT_EQ(GL_FALSE, normalized);
-  EXPECT_EQ(0, memcmp(&current_attrib, &current, sizeof(current_attrib)));
-
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-TEST_F(GLES2ImplementationTest, ReservedIds) {
-  // Only the get error command should be issued.
-  struct Cmds {
-    cmds::GetError get;
-  };
-  Cmds expected;
-
-  ExpectedMemoryInfo mem1 = GetExpectedResultMemory(
-      sizeof(cmds::GetError::Result));
-
-  expected.get.Init(mem1.id, mem1.offset);
-
-  // One call to flush to wait for GetError
-  EXPECT_CALL(*command_buffer(), OnFlush())
-      .WillOnce(SetMemory(mem1.ptr, GLuint(GL_NO_ERROR)))
-      .RetiresOnSaturation();
-
-  gl_->BindBuffer(
-      GL_ARRAY_BUFFER,
-      GLES2Implementation::kClientSideArrayId);
-  gl_->BindBuffer(
-      GL_ARRAY_BUFFER,
-      GLES2Implementation::kClientSideElementArrayId);
-  GLenum err = gl_->GetError();
-  EXPECT_EQ(static_cast<GLenum>(GL_INVALID_OPERATION), err);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-}
-
-#endif  // defined(GLES2_SUPPORT_CLIENT_SIDE_ARRAYS)
 
 TEST_F(GLES2ImplementationTest, ReadPixels2Reads) {
   struct Cmds {
@@ -2170,16 +1467,26 @@ TEST_F(GLES2ImplementationTest, GetIntegerDisjointValue) {
 TEST_F(GLES2ImplementationTest, GetIntegerCacheWrite) {
   struct PNameValue {
     GLenum pname;
-    GLint expected;
+    GLuint expected;
   };
+
+  GLuint buffer_ids[2];
+  gl_->GenBuffers(std::size(buffer_ids), buffer_ids);
+  GLuint framebuffer_id;
+  gl_->GenFramebuffers(1, &framebuffer_id);
+  GLuint renderbuffer_id;
+  gl_->GenRenderbuffers(1, &renderbuffer_id);
+  GLuint texture_ids[3];
+  gl_->GenTextures(std::size(texture_ids), texture_ids);
+
   gl_->ActiveTexture(GL_TEXTURE4);
-  gl_->BindBuffer(GL_ARRAY_BUFFER, 2);
-  gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 3);
-  gl_->BindFramebuffer(GL_FRAMEBUFFER, 4);
-  gl_->BindRenderbuffer(GL_RENDERBUFFER, 5);
-  gl_->BindTexture(GL_TEXTURE_2D, 6);
-  gl_->BindTexture(GL_TEXTURE_CUBE_MAP, 7);
-  gl_->BindTexture(GL_TEXTURE_EXTERNAL_OES, 8);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_ids[0]);
+  gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer_ids[1]);
+  gl_->BindFramebuffer(GL_FRAMEBUFFER, framebuffer_id);
+  gl_->BindRenderbuffer(GL_RENDERBUFFER, renderbuffer_id);
+  gl_->BindTexture(GL_TEXTURE_2D, texture_ids[0]);
+  gl_->BindTexture(GL_TEXTURE_CUBE_MAP, texture_ids[1]);
+  gl_->BindTexture(GL_TEXTURE_EXTERNAL_OES, texture_ids[2]);
 
   const auto pairs = std::to_array<PNameValue>({
       {
@@ -2188,31 +1495,31 @@ TEST_F(GLES2ImplementationTest, GetIntegerCacheWrite) {
       },
       {
           GL_ARRAY_BUFFER_BINDING,
-          2,
+          buffer_ids[0],
       },
       {
           GL_ELEMENT_ARRAY_BUFFER_BINDING,
-          3,
+          buffer_ids[1],
       },
       {
           GL_FRAMEBUFFER_BINDING,
-          4,
+          framebuffer_id,
       },
       {
           GL_RENDERBUFFER_BINDING,
-          5,
+          renderbuffer_id,
       },
       {
           GL_TEXTURE_BINDING_2D,
-          6,
+          texture_ids[0],
       },
       {
           GL_TEXTURE_BINDING_CUBE_MAP,
-          7,
+          texture_ids[1],
       },
       {
           GL_TEXTURE_BINDING_EXTERNAL_OES,
-          8,
+          texture_ids[2],
       },
   });
   size_t num_pairs =
@@ -2221,7 +1528,7 @@ TEST_F(GLES2ImplementationTest, GetIntegerCacheWrite) {
     const PNameValue& pv = pairs[ii];
     GLint v = -1;
     gl_->GetIntegerv(pv.pname, &v);
-    EXPECT_EQ(pv.expected, v);
+    EXPECT_EQ(pv.expected, static_cast<GLuint>(v));
   }
 
   ExpectedMemoryInfo result1 =
@@ -3632,7 +2939,6 @@ TEST_F(GLES2ImplementationTest, ErrorQuery) {
   EXPECT_EQ(static_cast<GLuint>(GL_INVALID_ENUM), result);
 }
 
-#if !defined(GLES2_SUPPORT_CLIENT_SIDE_ARRAYS)
 TEST_F(GLES2ImplementationTest, VertexArrays) {
   const GLuint kAttribIndex1 = 1;
   const GLint kNumComponents1 = 3;
@@ -3657,7 +2963,6 @@ TEST_F(GLES2ImplementationTest, VertexArrays) {
                            kClientStride, nullptr);
   EXPECT_EQ(GL_NO_ERROR, CheckError());
 }
-#endif
 
 TEST_F(GLES2ImplementationTest, Disable) {
   struct Cmds {
@@ -3720,10 +3025,10 @@ TEST_F(GLES2ImplementationTest, LimitSizeAndOffsetTo32Bit) {
   const GLfloat buf[] = { 1.0, 1.0, 1.0, 1.0 };
   const GLubyte indices[] = { 0 };
 
-  const GLuint kClientArrayBufferId = 0x789;
-  const GLuint kClientElementArrayBufferId = 0x790;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kClientArrayBufferId);
-  gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, kClientElementArrayBufferId);
+  GLuint buffer_ids[2];
+  gl_->GenBuffers(2, buffer_ids);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_ids[0]);
+  gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer_ids[1]);
   EXPECT_EQ(GL_NO_ERROR, CheckError());
 
   // Call BufferData() should succeed with legal paramaters.
@@ -4230,8 +3535,9 @@ TEST_F(GLES2ImplementationTest, MapBufferRangeUnmapBufferWrite) {
       .WillOnce(SetMemory(result.ptr, uint32_t(1)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_WRITE_BIT);
   EXPECT_TRUE(mem != nullptr);
@@ -4247,8 +3553,9 @@ TEST_F(GLES2ImplementationTest, MapBufferRangeWriteWithInvalidateBit) {
       .WillOnce(SetMemory(result.ptr, uint32_t(1)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   GLsizeiptr kSize = 64;
   void* mem = gl_->MapBufferRange(
@@ -4269,8 +3576,9 @@ TEST_F(GLES2ImplementationTest, MapBufferRangeWriteWithGLError) {
       .WillOnce(SetMemory(result.ptr, uint32_t(0)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_WRITE_BIT);
   EXPECT_TRUE(mem == nullptr);
@@ -4284,8 +3592,9 @@ TEST_F(GLES2ImplementationTest, MapBufferRangeUnmapBufferRead) {
       .WillOnce(SetMemory(result.ptr, uint32_t(1)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_READ_BIT);
   EXPECT_TRUE(mem != nullptr);
@@ -4302,8 +3611,9 @@ TEST_F(GLES2ImplementationTest, MapBufferRangeReadWithGLError) {
       .WillOnce(SetMemory(result.ptr, uint32_t(0)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_READ_BIT);
   EXPECT_TRUE(mem == nullptr);
@@ -4314,8 +3624,9 @@ TEST_F(GLES2ImplementationTest, UnmapBufferFails) {
   EXPECT_FALSE(gl_->UnmapBuffer(GL_ARRAY_BUFFER));
   EXPECT_EQ(GL_INVALID_OPERATION, CheckError());
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   // Buffer is unmapped.
   EXPECT_FALSE(gl_->UnmapBuffer(GL_ARRAY_BUFFER));
@@ -4330,8 +3641,9 @@ TEST_F(GLES2ImplementationTest, BufferDataUnmapsDataStore) {
       .WillOnce(SetMemory(result.ptr, uint32_t(1)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_WRITE_BIT);
   EXPECT_TRUE(mem != nullptr);
@@ -4352,15 +3664,16 @@ TEST_F(GLES2ImplementationTest, DeleteBuffersUnmapsDataStore) {
       .WillOnce(SetMemory(result.ptr, uint32_t(1)))
       .RetiresOnSaturation();
 
-  const GLuint kBufferId = 123;
-  gl_->BindBuffer(GL_ARRAY_BUFFER, kBufferId);
+  GLuint buffer_id = 0;
+  gl_->GenBuffers(1, &buffer_id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, buffer_id);
 
   void* mem = gl_->MapBufferRange(GL_ARRAY_BUFFER, 10, 64, GL_MAP_WRITE_BIT);
   EXPECT_TRUE(mem != nullptr);
 
   std::vector<uint8_t> data(16);
   // DeleteBuffers unmaps the data store.
-  gl_->DeleteBuffers(1, &kBufferId);
+  gl_->DeleteBuffers(1, &buffer_id);
 
   EXPECT_FALSE(gl_->UnmapBuffer(GL_ARRAY_BUFFER));
   EXPECT_EQ(GL_INVALID_OPERATION, CheckError());
@@ -4413,10 +3726,10 @@ TEST_F(GLES2ImplementationTest, SignalSyncToken) {
   // run when the sync token is reached.
   base::OnceClosure signal_closure;
   EXPECT_CALL(*gpu_control_, DoSignalSyncToken(_, _))
-      .WillOnce(Invoke([&signal_closure](const SyncToken& sync_token,
-                                         base::OnceClosure* callback) {
+      .WillOnce([&signal_closure](const SyncToken& sync_token,
+                                  base::OnceClosure* callback) {
         signal_closure = std::move(*callback);
-      }));
+      });
   gl_->SignalSyncToken(sync_token,
                        base::BindOnce(&CountCallback, &signaled_count));
   EXPECT_EQ(0, signaled_count);
@@ -4447,10 +3760,10 @@ TEST_F(GLES2ImplementationTest, SignalSyncTokenAfterContextLoss) {
   // run when the sync token is reached.
   base::OnceClosure signal_closure;
   EXPECT_CALL(*gpu_control_, DoSignalSyncToken(_, _))
-      .WillOnce(Invoke([&signal_closure](const SyncToken& sync_token,
-                                         base::OnceClosure* callback) {
+      .WillOnce([&signal_closure](const SyncToken& sync_token,
+                                  base::OnceClosure* callback) {
         signal_closure = std::move(*callback);
-      }));
+      });
   gl_->SignalSyncToken(sync_token,
                        base::BindOnce(&CountCallback, &signaled_count));
   EXPECT_EQ(0, signaled_count);
@@ -4494,107 +3807,10 @@ TEST_F(GLES2ImplementationTest, ReportLossReentrant) {
   EXPECT_EQ(0, lost_count);
 }
 
-TEST_F(GLES2ImplementationManualInitTest, FailInitOnBGRMismatch1) {
-  ContextInitOptions init_options;
-  init_options.bind_generates_resource_client = false;
-  init_options.bind_generates_resource_service = true;
-  EXPECT_FALSE(Initialize(init_options));
-}
-
-TEST_F(GLES2ImplementationManualInitTest, FailInitOnBGRMismatch2) {
-  ContextInitOptions init_options;
-  init_options.bind_generates_resource_client = true;
-  init_options.bind_generates_resource_service = false;
-  EXPECT_FALSE(Initialize(init_options));
-}
-
 TEST_F(GLES2ImplementationManualInitTest, FailInitOnTransferBufferFail) {
   ContextInitOptions init_options;
   init_options.transfer_buffer_initialize_fail = true;
   EXPECT_FALSE(Initialize(init_options));
-}
-
-TEST_F(GLES2ImplementationTest, DiscardableMemoryDelete) {
-  const GLuint texture_id = 1;
-  EXPECT_FALSE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
-  EXPECT_TRUE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-
-  // Deleting a texture should clear its discardable entry.
-  gl_->DeleteTextures(1, &texture_id);
-  EXPECT_FALSE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-}
-
-TEST_F(GLES2ImplementationTest, DiscardableTextureLockFail) {
-  const GLuint texture_id = 1;
-  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
-  EXPECT_TRUE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-
-  // Unlock the handle on the client side.
-  gl_->UnlockDiscardableTextureCHROMIUM(texture_id);
-
-  // Unlock and delete the handle on the service side.
-  ClientDiscardableHandle client_handle =
-      share_group_->discardable_texture_manager()->GetHandleForTesting(
-          texture_id);
-  ServiceDiscardableHandle service_handle(client_handle.BufferForTesting(),
-                                          client_handle.byte_offset(),
-                                          client_handle.shm_id());
-  service_handle.Unlock();
-  EXPECT_TRUE(service_handle.Delete());
-
-  // Trying to re-lock the texture via GL should fail and delete the entry.
-  EXPECT_FALSE(gl_->LockDiscardableTextureCHROMIUM(texture_id));
-  EXPECT_FALSE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-}
-
-TEST_F(GLES2ImplementationTest, DiscardableTextureDoubleInitError) {
-  const GLuint texture_id = 1;
-  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
-  EXPECT_EQ(GL_NO_ERROR, CheckError());
-  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
-  EXPECT_EQ(GL_INVALID_VALUE, CheckError());
-}
-
-TEST_F(GLES2ImplementationTest, DiscardableTextureLockError) {
-  const GLuint texture_id = 1;
-  EXPECT_FALSE(gl_->LockDiscardableTextureCHROMIUM(texture_id));
-  EXPECT_EQ(GL_INVALID_VALUE, CheckError());
-}
-
-TEST_F(GLES2ImplementationTest, DiscardableTextureLockCounting) {
-  const GLint texture_id = 1;
-  gl_->InitializeDiscardableTextureCHROMIUM(texture_id);
-  EXPECT_TRUE(
-      share_group_->discardable_texture_manager()->TextureIsValid(texture_id));
-
-  // Bind the texture.
-  gl_->BindTexture(GL_TEXTURE_2D, texture_id);
-  GLint bound_texture_id = 0;
-  gl_->GetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture_id);
-  EXPECT_EQ(texture_id, bound_texture_id);
-
-  // Lock the texture 3 more times (for 4 locks total).
-  for (int i = 0; i < 3; ++i) {
-    gl_->LockDiscardableTextureCHROMIUM(texture_id);
-  }
-
-  // Unlock 4 times. Only after the last unlock should the texture be unbound.
-  for (int i = 0; i < 4; ++i) {
-    gl_->UnlockDiscardableTextureCHROMIUM(texture_id);
-    bound_texture_id = 0;
-    gl_->GetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture_id);
-    if (i < 3) {
-      EXPECT_EQ(texture_id, bound_texture_id);
-    } else {
-      EXPECT_EQ(0, bound_texture_id);
-    }
-  }
 }
 
 struct ErrorMessageCounter {
@@ -4627,6 +3843,111 @@ TEST_F(GLES2ImplementationTest, DeleteZero) {
   EXPECT_EQ(GL_NO_ERROR, CheckError());
   gl_->DeleteSync(0);
   EXPECT_EQ(GL_NO_ERROR, CheckError());
+}
+
+TEST_F(GLES2ImplementationTest, BindBuffer) {
+  struct Cmds {
+    cmds::GenBuffersImmediate gen;
+    GLuint id;
+    cmds::BindBuffer cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kBuffersStartId;
+  expected.cmd.Init(GL_ARRAY_BUFFER, kBuffersStartId);
+
+  gl_->GenBuffers(1, &expected.id);
+  gl_->BindBuffer(GL_ARRAY_BUFFER, expected.id);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
+  ClearCommands();
+  gl_->BindBuffer(GL_ARRAY_BUFFER, expected.id);
+  EXPECT_TRUE(NoCommandsWritten());
+}
+
+TEST_F(GLES2ImplementationTest, BindBufferBase) {
+  struct Cmds {
+    cmds::GenBuffersImmediate gen;
+    GLuint id;
+    cmds::BindBufferBase cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kBuffersStartId;
+  expected.cmd.Init(GL_TRANSFORM_FEEDBACK_BUFFER, 2, kBuffersStartId);
+
+  gl_->GenBuffers(1, &expected.id);
+  gl_->BindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 2, expected.id);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
+}
+
+TEST_F(GLES2ImplementationTest, BindBufferRange) {
+  struct Cmds {
+    cmds::GenBuffersImmediate gen;
+    GLuint id;
+    cmds::BindBufferRange cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kBuffersStartId;
+  expected.cmd.Init(GL_TRANSFORM_FEEDBACK_BUFFER, 2, kBuffersStartId, 4, 4);
+
+  gl_->GenBuffers(1, &expected.id);
+  gl_->BindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER, 2, expected.id, 4, 4);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
+}
+
+TEST_F(GLES2ImplementationTest, BindFramebuffer) {
+  struct Cmds {
+    cmds::GenFramebuffersImmediate gen;
+    GLuint id;
+    cmds::BindFramebuffer cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kFramebuffersStartId;
+  expected.cmd.Init(GL_FRAMEBUFFER, kFramebuffersStartId);
+
+  gl_->GenFramebuffers(1, &expected.id);
+  gl_->BindFramebuffer(GL_FRAMEBUFFER, expected.id);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
+  ClearCommands();
+  gl_->BindFramebuffer(GL_FRAMEBUFFER, expected.id);
+  EXPECT_TRUE(NoCommandsWritten());
+}
+
+TEST_F(GLES2ImplementationTest, BindRenderbuffer) {
+  struct Cmds {
+    cmds::GenRenderbuffersImmediate gen;
+    GLuint id;
+    cmds::BindRenderbuffer cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kFramebuffersStartId;
+  expected.cmd.Init(GL_RENDERBUFFER, kFramebuffersStartId);
+
+  gl_->GenRenderbuffers(1, &expected.id);
+  gl_->BindRenderbuffer(GL_RENDERBUFFER, expected.id);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
+  ClearCommands();
+  gl_->BindRenderbuffer(GL_RENDERBUFFER, expected.id);
+  EXPECT_TRUE(NoCommandsWritten());
+}
+
+TEST_F(GLES2ImplementationTest, BindSampler) {
+  struct Cmds {
+    cmds::GenSamplersImmediate gen;
+    GLuint id;
+    cmds::BindSampler cmd;
+  };
+  Cmds expected;
+  expected.gen.Init(1, &expected.id);
+  expected.id = kSamplersStartId;
+  expected.cmd.Init(1, kSamplersStartId);
+
+  gl_->GenSamplers(1, &expected.id);
+  gl_->BindSampler(1, expected.id);
+  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
 }
 
 #include "gpu/command_buffer/client/gles2_implementation_unittest_autogen.h"

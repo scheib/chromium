@@ -113,6 +113,9 @@ _OS_SPECIFIC_FILTER['linux'] = [
 _OS_SPECIFIC_FILTER['mac'] = [
     # Flaky: crbug.com/40651570
     'ChromeDriverTest.testActionsMultiTouchPoint',
+    # Flaky: https://crbug.com/446461733 (consistently times out on first attempt
+    # then succeeds on retry)
+    'ChromeDriverTest.testDoesntCrashOnClosingBrowserFromAsyncScript',
     # Flaky: https://crbug.com/1156576.
     'ChromeDriverTestLegacy.testContextMenuEventFired',
     # Flaky: https://crbug.com/1336871.
@@ -6281,7 +6284,7 @@ class ChromeDriverPageLoadTimeoutTest(ChromeDriverBaseTestWithWebServer):
     self._CheckPageLoadTimeout(self._driver.Refresh)
 
 
-class ChromeDriverAndroidTest(ChromeDriverBaseTest):
+class ChromeDriverAndroidTest(ChromeDriverBaseTestWithWebServer):
   """End to end tests for Android-specific tests."""
 
   def testLatestAndroidAppInstalled(self):
@@ -6357,6 +6360,64 @@ class ChromeDriverAndroidTest(ChromeDriverBaseTest):
 
       # Verify that the second tab target is indeed in a different window.
       self.assertNotEqual(window1['windowId'], window2['windowId'])
+
+  def testAndroidScrollsMultipleWindows(self):
+      """ Regression test for crbug.com/413382905
+      """
+      self._driver = self.CreateDriver()
+      size = self._driver.GetWindowRect()
+
+      old_target_id = self._driver.GetCurrentWindowHandle()
+      window1 = self._driver.SendCommandAndGetResult(
+          'Browser.getWindowForTarget', {'targetId': old_target_id})
+      new_window1 = self._driver.NewWindow(window_type='window')
+      new_window2 = self._driver.NewWindow(window_type='window')
+      new_window3 = self._driver.NewWindow(window_type='window')
+
+      # Switch to first window
+      self._driver.SwitchToWindow(new_window1['handle'])
+      self.assertTrue(
+          self.WaitForCondition(
+              lambda: self._driver.GetCurrentWindowHandle() !=
+                old_target_id))
+      window1_target_id = self._driver.GetCurrentWindowHandle()
+      self.assertNotEqual(None, window1_target_id)
+      self.assertNotEqual(old_target_id, window1_target_id)
+
+      scroll_top = 'return document.documentElement.scrollTop;'
+
+      # Scroll first window.
+      self._driver.Load(self.GetHttpUrlForFile(
+            '/chromedriver/touch_action_tests.html'))
+      self.assertEqual(0, self._driver.ExecuteScript(scroll_top))
+      self._driver.ExecuteScript('window.scrollTo(0, %d);' % 53)
+      self.assertAlmostEqual(53,
+          self._driver.ExecuteScript(scroll_top), delta=1)
+
+      # Switch to second window
+      self._driver.SwitchToWindow(new_window2['handle'])
+      self.assertTrue(
+          self.WaitForCondition(
+              lambda: self._driver.GetCurrentWindowHandle() !=
+                window1_target_id))
+      window2_target_id = self._driver.GetCurrentWindowHandle()
+      self.assertNotEqual(None, window2_target_id)
+      self.assertNotEqual(window1_target_id, window2_target_id)
+
+      # Scroll second window.
+      self._driver.Load(self.GetHttpUrlForFile(
+            '/chromedriver/touch_action_tests.html'))
+      self.assertEqual(0, self._driver.ExecuteScript(scroll_top))
+      self._driver.ExecuteScript('window.scrollTo(0, %d);' % 25)
+
+      # Assert both windows were independently scrolled and positions
+      # maintained.
+      self._driver.SwitchToWindow(new_window1['handle'])
+      self.assertAlmostEqual(53,
+          self._driver.ExecuteScript(scroll_top), delta=1)
+      self._driver.SwitchToWindow(new_window2['handle'])
+      self.assertAlmostEqual(25,
+          self._driver.ExecuteScript(scroll_top), delta=1)
 
   def testAndroidPrefs(self):
     package_name = constants.PACKAGE_INFO[_ANDROID_PACKAGE_KEY].package
@@ -7466,6 +7527,12 @@ class RemoteBrowserTest(ChromeDriverBaseTest):
 class LaunchDesktopTest(ChromeDriverBaseTest):
   """Tests that launching desktop Chrome works."""
 
+  def testBrowserPIDReturnedInCapabilities(self):
+    """Browser PID should be returned for desktop clients in the chrome-specific
+    capability 'goog:processID'."""
+    driver = self.CreateDriver()
+    self.assertTrue(driver.capabilities['goog:processID'] > 0)
+
   def testExistingDevToolsPortFile(self):
     """If a DevTools port file already exists before startup, then we should
     ignore it and get our debug port number from the new file."""
@@ -7518,8 +7585,7 @@ class LaunchDesktopTest(ChromeDriverBaseTest):
     # the http client in the CommandExecutor has a relatively small timeout for
     # HTTP requests.
     # S/A: //chrome/teest/chromedriver/client/command_executor.py
-    self.assertIn('probably user data directory is already in use',
-                  str(exception))
+    self.assertIn('Chrome instance exited', str(exception))
 
   def testHelpfulErrorMessage_NormalExitIfTimedOut(self):
     """If Chrome times out to start, we should provide a useful error message.
@@ -8772,7 +8838,7 @@ class BidiTest(ChromeDriverBaseTestWithWebServer):
     expected_titles = [''] + ['iframes' for _ in range(0, 10)]
     self.assertListEqual(expected_titles, sorted(titles))
 
-  def testInsecureSertificatesNotAllowed(self):
+  def testInsecureCertificatesNotAllowed(self):
     driver = self.CreateDriver(
         web_socket_url=True,
         accept_insecure_certs=False)
@@ -8785,7 +8851,7 @@ class BidiTest(ChromeDriverBaseTestWithWebServer):
                                 'net::ERR_CERT_AUTHORITY_INVALID'):
       self.navigateTo(conn, self.GetHttpsUrlForFile('/%s.html' % page_name))
 
-  def testInsecureSertificatesAllowed(self):
+  def testInsecureCertificatesAllowed(self):
     driver = self.CreateDriver(
         web_socket_url=True,
         accept_insecure_certs=True)

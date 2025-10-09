@@ -72,7 +72,6 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
     base::WeakPtr<PageNode> page_node;
     GURL main_frame_url;
     blink::mojom::PermissionStatus notification_permission_status;
-    std::optional<size_t> site_engagement;
   };
 
   // Schedules the PageNodes in |page_node_and_permission_vector| to be loaded
@@ -81,6 +80,7 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
       std::vector<PageNodeData> page_node_and_permission_vector);
 
   void SetMockLoaderForTesting(std::unique_ptr<mechanism::PageLoader> loader);
+  void SetMaxLoadedTabCountForTesting(size_t max_tabs_to_load);
   void SetMaxSimultaneousLoadsForTesting(size_t loading_slots);
   void SetFreeMemoryForTesting(size_t free_memory_mb);
   void ResetPolicyForTesting();
@@ -94,8 +94,7 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
 
   // Holds data about a PageNode waiting to be loaded by this policy.
   struct PageNodeToLoadData {
-    PageNodeToLoadData(const PageNode* page_node,
-                       std::optional<size_t> site_engagement);
+    explicit PageNodeToLoadData(const PageNode* page_node);
     ~PageNodeToLoadData();
 
     // Move-only.
@@ -118,8 +117,6 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
     // Initialized to nullopt and set asynchronously with the proper value from
     // the sites database.
     std::optional<bool> updates_title_or_favicon_in_bg;
-
-    std::optional<size_t> site_engagement;
   };
 
   // Comparator used to sort PageNodeToLoadData.
@@ -130,8 +127,7 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   base::Value::Dict DescribeSystemNodeData(
       const SystemNode* node) const override;
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel new_level);
+  void OnMemoryPressure(base::MemoryPressureLevel new_level);
 
   // Returns the SiteDataReader instance for |page_node|, if any. Virtual for
   // testing.
@@ -153,9 +149,9 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // Calculates a |score| for the given tab.
   void ScoreTab(PageNodeToLoadData* page_node_to_load_data);
 
-  // Schedule the task that will initialize |PageNodeToLoadData::used_in_bg|
-  // from the local site characteristics database.
-  void SetUsedInBackgroundAsync(PageNodeToLoadData* page_node_to_load_data);
+  // Schedule the task that looks up whether `page_node` was used in the
+  // background from the local site characteristics database.
+  void SetUsedInBackgroundAsync(const PageNode* page_node);
 
   // Invoke "NotifyAllTabsScored" if all tabs are scored.
   void DispatchNotifyAllTabsScoredIfNeeded();
@@ -220,11 +216,12 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // The mechanism used to load the pages.
   std::unique_ptr<performance_manager::mechanism::PageLoader> page_loader_;
 
-  base::MemoryPressureListener memory_pressure_listener_;
+  base::MemoryPressureListenerRegistration
+      memory_pressure_listener_registration_;
 
   // The set of PageNodes that have been restored for which we need to schedule
   // loads.
-  std::vector<std::unique_ptr<PageNodeToLoadData>> page_nodes_to_load_;
+  std::vector<PageNodeToLoadData> page_nodes_to_load_;
 
   // The set of PageNodes that BackgroundTabLoadingPolicy has initiated loading,
   // and for which we are waiting for the loading to actually start. This signal
@@ -252,11 +249,15 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // Used to overwrite the amount of free memory available on the system.
   size_t free_memory_mb_for_testing_ = 0;
 
-  // The minimum total number of restored tabs to load.
+  // The minimum total number of restored tabs to load, unless overridden in a
+  // test.
   static constexpr uint32_t kMinTabsToLoad = 4;
+  uint32_t min_tabs_to_load_ = kMinTabsToLoad;
 
-  // The maximum total number of restored tabs to load.
+  // The maximum total number of restored tabs to load, unless overridden in a
+  // test.
   static constexpr uint32_t kMaxTabsToLoad = 20;
+  uint32_t max_tabs_to_load_ = kMaxTabsToLoad;
 
   // The minimum amount of memory to keep free.
   static constexpr uint32_t kDesiredAmountOfFreeMemoryMb = 150;
@@ -288,6 +289,8 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   FRIEND_TEST_ALL_PREFIXES(BackgroundTabLoadingPolicyTest, ShouldLoad_OldTab);
   FRIEND_TEST_ALL_PREFIXES(BackgroundTabLoadingPolicyTest,
                            ShouldLoad_SiteEngagement);
+  FRIEND_TEST_ALL_PREFIXES(BackgroundTabLoadingPolicyTest,
+                           ScheduleLoadForRestoredTabsWithLoadingStatusChanged);
   FRIEND_TEST_ALL_PREFIXES(BackgroundTabLoadingPolicySiteEngagementTest,
                            ShouldLoad_NoBackgroundCommunication);
   FRIEND_TEST_ALL_PREFIXES(BackgroundTabLoadingPolicySiteEngagementTest,

@@ -6,8 +6,6 @@
 
 #include <memory>
 
-#include "base/callback_list.h"
-#include "base/no_destructor.h"
 #include "chrome/browser/page_info/page_info_features.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/ui/browser.h"
@@ -39,16 +37,6 @@
 #include "ui/views/layout/box_layout.h"
 #include "url/gurl.h"
 
-namespace {
-PageInfoBubbleView::PageInfoBubbleCreatedCallbackList&
-GetPageInfoBubbleCreatedCallbackList() {
-  static base::NoDestructor<
-      PageInfoBubbleView::PageInfoBubbleCreatedCallbackList>
-      bubble_created_callback_list;
-  return *bubble_created_callback_list;
-}
-}  // namespace
-
 using bubble_anchor_util::AnchorConfiguration;
 using bubble_anchor_util::GetPageInfoAnchorConfiguration;
 using bubble_anchor_util::GetPageInfoAnchorRect;
@@ -60,9 +48,9 @@ class InternalPageInfoBubbleView : public PageInfoBubbleViewBase {
   METADATA_HEADER(InternalPageInfoBubbleView, PageInfoBubbleViewBase)
 
  public:
-  // If |anchor_view| is nullptr, or has no Widget, |parent_window| may be
+  // If |anchor| is nullptr, or has no Widget, |parent_window| may be
   // provided to ensure this bubble is closed when the parent closes.
-  InternalPageInfoBubbleView(views::View* anchor_view,
+  InternalPageInfoBubbleView(views::BubbleAnchor anchor,
                              const gfx::Rect& anchor_rect,
                              gfx::NativeView parent_window,
                              content::WebContents* web_contents,
@@ -78,12 +66,12 @@ class InternalPageInfoBubbleView : public PageInfoBubbleViewBase {
 ////////////////////////////////////////////////////////////////////////////////
 
 InternalPageInfoBubbleView::InternalPageInfoBubbleView(
-    views::View* anchor_view,
+    views::BubbleAnchor anchor,
     const gfx::Rect& anchor_rect,
     gfx::NativeView parent_window,
     content::WebContents* web_contents,
     const GURL& url)
-    : PageInfoBubbleViewBase(anchor_view,
+    : PageInfoBubbleViewBase(anchor,
                              anchor_rect,
                              parent_window,
                              PageInfoBubbleViewBase::BUBBLE_INTERNAL_PAGE,
@@ -144,7 +132,7 @@ BEGIN_METADATA(InternalPageInfoBubbleView)
 END_METADATA
 
 PageInfoBubbleView::PageInfoBubbleView(
-    views::View* anchor_view,
+    views::BubbleAnchor anchor,
     const gfx::Rect& anchor_rect,
     gfx::NativeView parent_window,
     content::WebContents* associated_web_contents,
@@ -152,7 +140,7 @@ PageInfoBubbleView::PageInfoBubbleView(
     base::OnceClosure initialized_callback,
     PageInfoClosingCallback closing_callback,
     bool allow_extended_site_info)
-    : PageInfoBubbleViewBase(anchor_view,
+    : PageInfoBubbleViewBase(anchor,
                              anchor_rect,
                              parent_window,
                              PageInfoBubbleViewBase::BUBBLE_PAGE_INFO,
@@ -205,7 +193,7 @@ PageInfoBubbleView::~PageInfoBubbleView() {
 // static
 views::BubbleDialogDelegateView* PageInfoBubbleView::CreatePageInfoBubble(
     std::unique_ptr<PageInfoBubbleSpecification> specification) {
-  views::View* const anchor_view = specification->anchor_view();
+  views::BubbleAnchor const anchor = specification->anchor();
   const gfx::Rect& anchor_rect = specification->anchor_rect();
   content::WebContents* const web_contents = specification->web_contents();
 
@@ -216,19 +204,15 @@ views::BubbleDialogDelegateView* PageInfoBubbleView::CreatePageInfoBubble(
   if (PageInfo::IsFileOrInternalPage(url) ||
       url.SchemeIs(extensions::kExtensionScheme) ||
       url.SchemeIs(dom_distiller::kDomDistillerScheme)) {
-    InternalPageInfoBubbleView* const internal_page_bubble =
-        new InternalPageInfoBubbleView(anchor_view, anchor_rect, parent_view,
-                                       web_contents, url);
-    GetPageInfoBubbleCreatedCallbackList().Notify(
-        web_contents, internal_page_bubble->GetWidget());
-    return internal_page_bubble;
+    return new InternalPageInfoBubbleView(anchor, anchor_rect, parent_view,
+                                          web_contents, url);
   }
 
-  PageInfoBubbleView* const bubble = new PageInfoBubbleView(
-      anchor_view, anchor_rect, parent_view, web_contents, url,
-      specification->initialized_callback(),
-      specification->page_info_closing_callback(),
-      specification->show_extended_site_info());
+  PageInfoBubbleView* const bubble =
+      new PageInfoBubbleView(anchor, anchor_rect, parent_view, web_contents,
+                             url, specification->initialized_callback(),
+                             specification->page_info_closing_callback(),
+                             specification->show_extended_site_info());
   if (specification->permission_page_type().has_value()) {
     bubble->OpenPermissionPage(specification->permission_page_type().value());
   }
@@ -236,16 +220,7 @@ views::BubbleDialogDelegateView* PageInfoBubbleView::CreatePageInfoBubble(
     bubble->OpenMerchantTrustPage(
         page_info::MerchantBubbleOpenReferrer::kLocationBarChip);
   }
-  GetPageInfoBubbleCreatedCallbackList().Notify(web_contents,
-                                                bubble->GetWidget());
   return bubble;
-}
-
-// static
-base::CallbackListSubscription
-PageInfoBubbleView::RegisterPageInfoCreatedCallback(
-    PageInfoBubbleCreatedCallback callback) {
-  return GetPageInfoBubbleCreatedCallbackList().Add(std::move(callback));
 }
 
 void PageInfoBubbleView::OpenMainPage(base::OnceClosure initialized_callback) {
@@ -403,11 +378,13 @@ void ShowPageInfoDialogImpl(Browser* browser,
   AnchorConfiguration configuration =
       GetPageInfoAnchorConfiguration(browser, anchor);
   gfx::Rect anchor_rect =
-      configuration.anchor_view ? gfx::Rect() : GetPageInfoAnchorRect(browser);
+      std::holds_alternative<std::nullptr_t>(configuration.anchor)
+          ? GetPageInfoAnchorRect(browser)
+          : gfx::Rect();
   gfx::NativeWindow parent_window = browser->window()->GetNativeWindow();
 
   PageInfoBubbleSpecification::Builder page_info_bubble_builder(
-      configuration.anchor_view, parent_window, web_contents, virtual_url);
+      configuration.anchor, parent_window, web_contents, virtual_url);
   page_info_bubble_builder.AddAnchorRect(anchor_rect)
       .AddInitializedCallback(std::move(initialized_callback))
       .AddPageInfoClosingCallback(std::move(closing_callback));

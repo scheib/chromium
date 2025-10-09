@@ -54,6 +54,7 @@
 #include "components/input/timeout_monitor.h"
 #include "components/input/utils.h"
 #include "components/viz/common/features.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/accessibility/browser_accessibility_state_impl.h"
 #include "content/browser/bad_message.h"
@@ -349,12 +350,11 @@ std::unique_ptr<RenderWidgetHostImpl> RenderWidgetHostImpl::Create(
     base::SafeRef<SiteInstanceGroup> site_instance_group,
     int32_t routing_id,
     bool hidden,
-    bool renderer_initiated_creation,
-    std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue) {
+    bool renderer_initiated_creation) {
   return base::WrapUnique(new RenderWidgetHostImpl(
       frame_tree, /*self_owned=*/false, frame_sink_id, delegate,
       std::move(site_instance_group), routing_id, hidden,
-      renderer_initiated_creation, std::move(frame_token_message_queue)));
+      renderer_initiated_creation));
 }
 
 // static
@@ -364,15 +364,13 @@ RenderWidgetHostImpl* RenderWidgetHostImpl::CreateSelfOwned(
     RenderWidgetHostDelegate* delegate,
     base::SafeRef<SiteInstanceGroup> site_instance_group,
     int32_t routing_id,
-    bool hidden,
-    std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue) {
+    bool hidden) {
   viz::FrameSinkId frame_sink_id =
       DefaultFrameSinkId(*site_instance_group, routing_id);
   return new RenderWidgetHostImpl(frame_tree, /*self_owned=*/true,
                                   frame_sink_id, delegate,
                                   std::move(site_instance_group), routing_id,
-                                  hidden, /*renderer_initiated_creation=*/true,
-                                  std::move(frame_token_message_queue));
+                                  hidden, /*renderer_initiated_creation=*/true);
 }
 
 RenderWidgetHostImpl::RenderWidgetHostImpl(
@@ -383,8 +381,7 @@ RenderWidgetHostImpl::RenderWidgetHostImpl(
     base::SafeRef<SiteInstanceGroup> site_instance_group,
     int32_t routing_id,
     bool hidden,
-    bool renderer_initiated_creation,
-    std::unique_ptr<FrameTokenMessageQueue> frame_token_message_queue)
+    bool renderer_initiated_creation)
     : frame_tree_(frame_tree),
       self_owned_(self_owned),
       waiting_for_init_(renderer_initiated_creation),
@@ -397,14 +394,14 @@ RenderWidgetHostImpl::RenderWidgetHostImpl(
       last_view_screen_rect_(kInvalidScreenRect),
       last_window_screen_rect_(kInvalidScreenRect),
       new_content_rendering_delay_(blink::kNewContentRenderingDelay),
-      frame_token_message_queue_(std::move(frame_token_message_queue)),
       render_frame_metadata_provider_(
 #if BUILDFLAG(IS_MAC)
-          ui::WindowResizeHelperMac::Get()->task_runner(),
+          ui::WindowResizeHelperMac::Get()->task_runner()
 #else
-          GetUIThreadTaskRunner({BrowserTaskType::kUserInput}),
+          GetUIThreadTaskRunner({BrowserTaskType::kUserInput})
 #endif
-          frame_token_message_queue_.get()),
+              ,
+          this),
       frame_sink_id_(frame_sink_id),
       compositor_metric_recorder_(
           (frame_tree && frame_tree->is_primary())
@@ -415,9 +412,6 @@ RenderWidgetHostImpl::RenderWidgetHostImpl(
 
   // The page should be hidden during prerendering.
   CHECK(!frame_tree_ || !frame_tree_->is_prerendering() || hidden);
-
-  CHECK(frame_token_message_queue_);
-  frame_token_message_queue_->Init(this);
 
   CHECK(delegate_);
   CHECK_NE(IPC::mojom::kRoutingIdNone, routing_id_);
@@ -1591,10 +1585,6 @@ void RenderWidgetHostImpl::ForwardMouseEventWithLatencyInfo(
   CHECK_GE(mouse_event.GetType(), WebInputEvent::Type::kMouseTypeFirst);
   CHECK_LE(mouse_event.GetType(), WebInputEvent::Type::kMouseTypeLast);
 
-  if (delegate_ && delegate_->PreHandleMouseEvent(mouse_event)) {
-    return;
-  }
-
   for (auto& mouse_event_callback : mouse_event_callbacks_) {
     if (mouse_event_callback.Run(mouse_event)) {
       return;
@@ -2303,7 +2293,7 @@ void RenderWidgetHostImpl::ResetStateForCreatedRenderWidget(
   // is working properly.
   SetupInputRouter();
 
-  frame_token_message_queue_->Reset();
+  render_frame_metadata_provider_.ResetFrameTokenMessageQueue();
 }
 
 void RenderWidgetHostImpl::UpdateTextDirection(
@@ -2543,7 +2533,7 @@ void RenderWidgetHostImpl::DidOverscroll(
     ui::DidOverscrollParams overscroll_params = {
         params->accumulated_overscroll, params->latest_overscroll_delta,
         params->current_fling_velocity, params->causal_event_viewport_point,
-        params->overscroll_behavior};
+        params->overscroll_behavior,    params->source_device};
     view_->DidOverscroll(overscroll_params);
   }
 }
@@ -2729,6 +2719,13 @@ void RenderWidgetHostImpl::OnInputEventPreDispatch(
 void RenderWidgetHostImpl::OnInvalidInputEventSource() {
   bad_message::ReceivedBadMessage(
       GetProcess(), bad_message::INPUT_ROUTER_INVALID_EVENT_SOURCE);
+}
+
+std::string RenderWidgetHostImpl::GetMainFrameLastCommittedURLSpec() {
+  if (!frame_tree() || !frame_tree()->GetMainFrame()) {
+    return std::string();
+  }
+  return frame_tree()->GetMainFrame()->GetLastCommittedURL().spec();
 }
 
 void RenderWidgetHostImpl::ShowPopup(const gfx::Rect& initial_screen_rect,
@@ -3553,8 +3550,9 @@ void RenderWidgetHostImpl::WindowSnapshotReachedScreen(int snapshot_id) {
 void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
     int snapshot_id,
     int retry_count,
-    const SkBitmap& bitmap) {
+    const viz::CopyOutputBitmapWithMetadata& result) {
   static constexpr int kMaxRetries = 5;
+  const SkBitmap& bitmap = result.bitmap;
   if (bitmap.drawsNothing() && retry_count < kMaxRetries) {
     GetView()->CopyFromSurface(
         gfx::Rect(), gfx::Size(),
@@ -3727,7 +3725,7 @@ bool RenderWidgetHostImpl::IsHidden() const {
 
 void RenderWidgetHostImpl::DidProcessFrame(uint32_t frame_token,
                                            base::TimeTicks activation_time) {
-  frame_token_message_queue_->DidProcessFrame(frame_token, activation_time);
+  render_frame_metadata_provider_.DidProcessFrame(frame_token, activation_time);
 }
 
 #if BUILDFLAG(IS_MAC)

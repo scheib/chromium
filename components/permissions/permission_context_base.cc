@@ -35,6 +35,7 @@
 #include "components/content_settings/core/common/features.h"
 #include "components/guest_view/buildflags/buildflags.h"
 #include "components/permissions/features.h"
+#include "components/permissions/permission_actions_history.h"
 #include "components/permissions/permission_context_base.h"
 #include "components/permissions/permission_decision.h"
 #include "components/permissions/permission_decision_auto_blocker.h"
@@ -48,6 +49,7 @@
 #include "components/permissions/resolvers/content_setting_permission_resolver.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/permission_result.h"
 #include "content/public/browser/render_frame_host.h"
@@ -55,6 +57,7 @@
 #include "content/public/common/content_features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom.h"
 #include "url/gurl.h"
 
@@ -144,15 +147,15 @@ void PermissionContextBase::RequestPermission(
   // Check the content setting to see if the user has already made a decision,
   // or if the origin is under embargo. If so, respect that decision.
   DCHECK(rfh);
-  content::PermissionResult result = GetPermissionStatus(
-      *request_data->resolver, rfh, request_data->requesting_origin,
-      request_data->embedding_origin);
+  content::PermissionResult result = GetPermissionStatus(*request_data, rfh);
 
   bool status_ignorable = PermissionUtil::CanPermissionRequestIgnoreStatus(
       request_data, result.source);
 
-  if (!status_ignorable && (result.status == PermissionStatus::GRANTED ||
-                            result.status == PermissionStatus::DENIED)) {
+  if (!status_ignorable &&
+      (result.status == PermissionStatus::GRANTED ||
+       result.status == PermissionStatus::DENIED ||
+       result.status == PermissionStatus::UNSATISFIED_OPTIONS)) {
     static constexpr char kResetInstructions[] =
         " This can be reset in "
 #if BUILDFLAG(IS_ANDROID)
@@ -215,24 +218,30 @@ void PermissionContextBase::RequestPermission(
         PermissionUmaUtil::RecordPermissionRequestedFromFrame(
             content_settings_type_, rfh);
         break;
+      case content::PermissionStatusSource::ACTOR_OVERRIDE:
       case content::PermissionStatusSource::FENCED_FRAME:
       case content::PermissionStatusSource::INSECURE_ORIGIN:
       case content::PermissionStatusSource::VIRTUAL_URL_DIFFERENT_ORIGIN:
+      case content::PermissionStatusSource::HEURISTIC_GRANT:
         break;
     }
 
     // If we are under embargo, record the embargo reason for which we have
     // suppressed the prompt.
     PermissionUmaUtil::RecordEmbargoPromptSuppressionFromSource(result.source);
-    NotifyPermissionSet(*request_data, std::move(callback),
-                        /*persist=*/false,
+    bool persist =
+        result.source == content::PermissionStatusSource::HEURISTIC_GRANT;
+    PermissionDecision allow_decision =
+        result.source == content::PermissionStatusSource::HEURISTIC_GRANT
+            ? PermissionDecision::kAllowThisTime
+            : PermissionDecision::kAllow;
+    NotifyPermissionSet(*request_data, std::move(callback), persist,
                         result.status == blink::mojom::PermissionStatus::GRANTED
-                            ? PermissionDecision::kAllow
+                            ? allow_decision
                             : PermissionDecision::kDeny,
                         /*is_final_decision=*/true);
     return;
   }
-
   PermissionUmaUtil::RecordPermissionRequestedFromFrame(content_settings_type_,
                                                         rfh);
 
@@ -286,6 +295,24 @@ GURL PermissionContextBase::GetEffectiveEmbedderOrigin(
 }
 
 content::PermissionResult PermissionContextBase::GetPermissionStatus(
+    const PermissionRequestData& request_data,
+    content::RenderFrameHost* render_frame_host) const {
+  if (base::FeatureList::IsEnabled(blink::features::kGeolocationElement) &&
+      request_data.IsEligibleForHeuristicAutoGrant() &&
+      PermissionsClient::Get()
+          ->GetPermissionActionsHistory(browser_context_)
+          ->CheckHeuristicallyAutoGranted(request_data.requesting_origin,
+                                          content_settings_type_)) {
+    return content::PermissionResult(
+        PermissionStatus::GRANTED,
+        content::PermissionStatusSource::HEURISTIC_GRANT);
+  }
+  return GetPermissionStatus(*request_data.resolver, render_frame_host,
+                             request_data.requesting_origin,
+                             request_data.embedding_origin);
+}
+
+content::PermissionResult PermissionContextBase::GetPermissionStatus(
     const PermissionResolver& resolver,
     content::RenderFrameHost* render_frame_host,
     const GURL& requesting_origin,
@@ -294,6 +321,21 @@ content::PermissionResult PermissionContextBase::GetPermissionStatus(
   if (IsPermissionKillSwitchOn()) {
     return content::PermissionResult(
         PermissionStatus::DENIED, content::PermissionStatusSource::KILL_SWITCH);
+  }
+
+  if (base::FeatureList::IsEnabled(features::kGlicActorPermissionsAutoReject) &&
+      render_frame_host) {
+    content::WebContents* web_contents =
+        content::WebContents::FromRenderFrameHost(render_frame_host);
+    bool is_actor_operating =
+        PermissionsClient::Get()->IsActorOperatingOnWebContents(web_contents);
+    PermissionUmaUtil::RecordPermissionAutoRejectForActor(
+        content_settings_type_, is_actor_operating);
+    if (is_actor_operating) {
+      return content::PermissionResult(
+          PermissionStatus::DENIED,
+          content::PermissionStatusSource::ACTOR_OVERRIDE);
+    }
   }
 
   if (!IsPermissionAvailableToOrigins(requesting_origin, embedding_origin)) {
@@ -357,9 +399,7 @@ content::PermissionResult PermissionContextBase::GetPermissionStatus(
     // possible.
     // TODO(crbug.com/40068594): Scope granted permissions to a
     // StoragePartition.
-    if (base::FeatureList::IsEnabled(
-            features::kMitigateUnpartitionedWebviewPermissions) &&
-        !guest->IsPermissionRequestable(content_settings_type_)) {
+    if (!guest->IsPermissionRequestable(content_settings_type_)) {
       return content::PermissionResult(
           PermissionStatus::DENIED,
           content::PermissionStatusSource::UNSPECIFIED);
@@ -535,7 +575,7 @@ void PermissionContextBase::DecidePermission(
   auto cleanup_cb =
       base::BindOnce(&PermissionContextBase::CleanUpRequest,
                      weak_factory_.GetWeakPtr(), web_contents, request_data->id,
-                     request_data->embedded_permission_element_initiated);
+                     request_data->IsEmbeddedPermissionElementInitiated());
   PermissionRequestID permission_request_id = request_data->id;
 
   std::unique_ptr<PermissionRequest> request =
@@ -679,7 +719,7 @@ void PermissionContextBase::NotifyPermissionSet(
   }
 
   if (is_final_decision) {
-    UpdateTabContext(request_data.id, request_data.requesting_origin,
+    UpdateTabContext(request_data,
                      decision == PermissionDecision::kAllow ||
                          decision == PermissionDecision::kAllowThisTime);
     if (rfh && decision == PermissionDecision::kAllow) {
@@ -730,10 +770,6 @@ void PermissionContextBase::UpdateSetting(
   if (info && content_settings::CanBeAutoRevokedAsUnusedPermission(
                   content_settings_type(), info->delegate().ToValue(setting),
                   is_one_time)) {
-    // For #2, by definition, that should be all of them. If that changes in
-    // the future, consider whether revocation for such permission makes
-    // sense, and/or change this to an early return so that we don't
-    // unnecessarily record timestamps where we don't need them.
     constraints.set_track_last_visit_for_autoexpiration(true);
   }
 

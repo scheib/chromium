@@ -37,6 +37,7 @@
 #include "base/gtest_prod_util.h"
 #include "third_party/blink/public/common/css/forced_colors.h"
 #include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/css/preferred_contrast.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/frame/color_scheme.mojom-blink-forward.h"
 #include "third_party/blink/public/web/web_css_origin.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -576,7 +577,7 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   void EnvironmentVariableChanged();
   void InvalidateEnvDependentStylesIfNeeded();
 
-  bool HasComplexSafaAreaConstraints();
+  bool HasComplexSafeAreaConstraints();
   void SetNeedsToUpdateComplexSafeAreaConstraints();
 
   void MarkAllElementsForStyleRecalc(const StyleChangeReasonForTracing& reason);
@@ -604,6 +605,9 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
     anchored_element_dirty_set_.insert(&element);
   }
   void MarkForDefaultAnchorScrollShift(Element& element) {
+    anchored_element_dirty_set_.insert(&element);
+  }
+  void MarkAnchorRememberedOffsetsChanged(Element& element) {
     anchored_element_dirty_set_.insert(&element);
   }
 
@@ -727,8 +731,11 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   void SetPageColorSchemes(const CSSValue* color_scheme);
   ColorSchemeFlags GetPageColorSchemes() const { return page_color_schemes_; }
-  mojom::PreferredColorScheme GetPreferredColorScheme() const {
+  mojom::blink::PreferredColorScheme GetPreferredColorScheme() const {
     return preferred_color_scheme_;
+  }
+  mojom::blink::PreferredContrast GetPreferredContrast() const {
+    return preferred_contrast_;
   }
   bool GetForceDarkModeEnabled() const { return force_dark_mode_enabled_; }
   ForcedColors GetForcedColors() const { return forced_colors_; }
@@ -770,11 +777,17 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   void RevisitStyleSheetForInspector(StyleSheetContents* contents,
                                      const RuleFeatureSet* features) const;
 
+  // Call when @route rules may need to be re-evaluated, because the current URL
+  // has changed.
+  void RoutesMayHaveChanged() { SetNeedsActiveStyleUpdate(GetDocument()); }
+
  private:
   void UpdateCounters(const Element& element,
                       CountersAttachmentContext& context);
   // FontSelectorClient implementation.
   void FontsNeedUpdate(FontSelector*, FontInvalidationReason) override;
+  mojom::blink::ColorScheme AdjustAboutBlankColorScheme(
+      mojom::blink::ColorScheme root_color_scheme) const;
 
   AncestorAnalysis AnalyzeInclusiveAncestor(const Node&);
   AncestorAnalysis AnalyzeExclusiveAncestor(const Node&);
@@ -910,9 +923,6 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
   void RecalcPositionTryStyleForPseudoElement(PseudoElement& pseudo_element,
                                               const StyleRecalcChange,
                                               const StyleRecalcContext&);
-
-  void RecalcTransitionPseudoStyle();
-  void RebuildTransitionPseudoLayoutTrees();
 
   // We may need to update whitespaces in the layout tree after a flat tree
   // removal which caused a layout subtree to be detached.
@@ -1151,6 +1161,10 @@ class CORE_EXPORT StyleEngine final : public GarbageCollected<StyleEngine>,
 
   // The color of the canvas backdrop for the used color-scheme.
   Color color_scheme_background_;
+
+  // This data member should be initialized in the constructor in order to avoid
+  // including full mojom headers from this header.
+  mojom::blink::PreferredContrast preferred_contrast_;
 
   // Forced colors is set in WebThemeEngine.
   ForcedColors forced_colors_{ForcedColors::kNone};

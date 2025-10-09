@@ -292,6 +292,7 @@ class ComputedStyle final : public ComputedStyleBase {
   friend class css_longhand::BorderTopWidth;
   friend class css_longhand::ColumnRuleWidth;
   friend class css_longhand::OutlineWidth;
+  friend class ComputedStylePropertyMap;
   // Access to private Appearance() and HasAppearance().
   friend class LayoutTheme;
   friend class StyleAdjuster;
@@ -510,6 +511,13 @@ class ComputedStyle final : public ComputedStyleBase {
     return HasAnchorFunctions() && !HasAnchorEvaluator();
   }
 
+  bool MayUseImplicitAnchor() const {
+    return !PositionAnchor() && HasOutOfFlowPosition() &&
+           (HasAnchorFunctions() ||
+            AlignSelf().GetPosition() == ItemPosition::kAnchorCenter ||
+            JustifySelf().GetPosition() == ItemPosition::kAnchorCenter);
+  }
+
   // For containing blocks, use |HasNonInitialBackdropFilter()| which includes
   // will-change: backdrop-filter.
   static bool HasBackdropFilter(const FilterOperations& backdrop_filter) {
@@ -616,9 +624,13 @@ class ComputedStyle final : public ComputedStyleBase {
     //
     // [1]: https://github.com/w3c/csswg-drafts/issues/11494
     const GapDataList<EBorderStyle> rule_style = ColumnRuleStyle();
-    if (rule_style.HasSingleValue() &&
+    bool is_legacy_column_rule_behavior =
+        rule_style.HasSingleValue() &&
         ColumnRuleWidthInternal().HasSingleValue() &&
-        !BorderStyleIsVisible(rule_style.GetLegacyValue())) {
+        !BorderStyleIsVisible(rule_style.GetLegacyValue());
+    if (!RuntimeEnabledFeatures::
+            DecoupleResolvedColumnRuleWidthFromStyleEnabled() &&
+        is_legacy_column_rule_behavior) {
       return GapDataList<int>(0);
     }
 
@@ -684,7 +696,9 @@ class ComputedStyle final : public ComputedStyleBase {
 
   // outline-width
   int OutlineWidth() const {
-    if (OutlineStyle() == EBorderStyle::kNone) {
+    if (!RuntimeEnabledFeatures::
+            DecoupleResolvedColumnRuleWidthFromStyleEnabled() &&
+        OutlineStyle() == EBorderStyle::kNone) {
       return 0;
     }
     return OutlineWidthInternal();
@@ -842,7 +856,8 @@ class ComputedStyle final : public ComputedStyleBase {
   // If true, the ComputedStyle must be recalculated when fonts are updated.
   bool DependsOnFontMetrics() const {
     return HasGlyphRelativeUnits() || HasFontSizeAdjust() ||
-           CustomStyleCallbackDependsOnFont();
+           CustomStyleCallbackDependsOnFont() ||
+           (StyleType() == kPseudoIdFirstLetter && !InitialLetter().IsNormal());
   }
 
   template <typename Functor>
@@ -853,7 +868,7 @@ class ComputedStyle final : public ComputedStyleBase {
 
     DCHECK_EQ(StyleType(), kPseudoIdNone);
 
-    for (const auto& pseudo_style : *GetPseudoElementStyleCache()) {
+    for (const auto& [key, pseudo_style] : *GetPseudoElementStyleCache()) {
       if (func(*pseudo_style)) {
         return true;
       }
@@ -973,9 +988,6 @@ class ComputedStyle final : public ComputedStyleBase {
   // FIXME: Replace callers of operator== wth a named method instead, e.g.
   // inheritedEquals().
   CORE_EXPORT bool operator==(const ComputedStyle& other) const;
-  bool operator!=(const ComputedStyle& other) const {
-    return !(*this == other);
-  }
 
   bool InheritedEqual(const ComputedStyle&) const;
   bool NonInheritedEqual(const ComputedStyle&) const;
@@ -1006,8 +1018,8 @@ class ComputedStyle final : public ComputedStyleBase {
   bool HasVariables() const;
   CORE_EXPORT wtf_size_t GetVariableNamesCount() const;
   CORE_EXPORT const Vector<AtomicString>& GetVariableNames() const;
-  CORE_EXPORT const StyleInheritedVariables* InheritedVariables() const;
-  CORE_EXPORT const StyleNonInheritedVariables* NonInheritedVariables() const;
+  CORE_EXPORT const StyleInheritedVariables& InheritedVariables() const;
+  CORE_EXPORT const StyleNonInheritedVariables& NonInheritedVariables() const;
 
   // Handles both inherited and non-inherited variables
   CORE_EXPORT CSSVariableData* GetVariableData(const AtomicString&) const;
@@ -1142,16 +1154,11 @@ class ComputedStyle final : public ComputedStyleBase {
 
   // grid-template-*
   const ComputedGridTrackList& GridTemplateColumns() const {
-    return ComputedGridTemplate(
-        SpecifiedGridTemplateColumns(),
-        /*use_masonry_default=*/IsDisplayMasonryBox() &&
-            MasonryTrackSizingDirection() == kForColumns);
+    return ComputedGridTemplate(SpecifiedGridTemplateColumns());
   }
 
   const ComputedGridTrackList& GridTemplateRows() const {
-    return ComputedGridTemplate(SpecifiedGridTemplateRows(),
-                                /*use_masonry_default=*/IsDisplayMasonryBox() &&
-                                    MasonryTrackSizingDirection() == kForRows);
+    return ComputedGridTemplate(SpecifiedGridTemplateRows());
   }
 
   // Masonry utility functions.
@@ -2236,17 +2243,10 @@ class ComputedStyle final : public ComputedStyleBase {
   }
 
   // Pseudo-element styles.
-  static bool HasPseudoElementStyle(unsigned pseudo_styles, PseudoId pseudo) {
-    DCHECK(pseudo >= kFirstPublicPseudoId);
-    DCHECK(pseudo <= kLastTrackedPublicPseudoId);
-    return (1 << (pseudo - kFirstPublicPseudoId)) & pseudo_styles;
-  }
-
   bool HasAnyPseudoElementStyles() const;
   bool HasAnyHighlightPseudoElementStyles() const;
   bool HasPseudoElementStyle(PseudoId pseudo) const {
-    return ComputedStyle::HasPseudoElementStyle(PseudoElementStylesInternal(),
-                                                pseudo);
+    return PseudoIdFlags::FromBits(PseudoElementStylesInternal()).Has(pseudo);
   }
 
   // This function may return values not defined as the enum values. See
@@ -2581,6 +2581,10 @@ class ComputedStyle final : public ComputedStyleBase {
             static_cast<int>(visibility)) == static_cast<int>(visibility);
   }
 
+  // Returns whether the animation-trigger property names a trigger. The name
+  // might refer to a trigger elsewhere in the DOM.
+  bool HasAnimationTrigger() const;
+
  private:
   bool IsInlineSizeContainer() const {
     return ContainerType() & kContainerTypeInlineSize;
@@ -2679,8 +2683,7 @@ class ComputedStyle final : public ComputedStyleBase {
   }
 
   static CORE_EXPORT const ComputedGridTrackList& ComputedGridTemplate(
-      const Member<ComputedGridTrackList>& track_list,
-      const bool use_masonry_default);
+      const Member<ComputedGridTrackList>& track_list);
 
   [[nodiscard]] bool HasPropertyDependingOnCurrentColor() const;
 
@@ -2872,14 +2875,10 @@ inline bool ComputedStyle::HasAnyHighlightPseudoElementStyles() const {
                     kPseudoIdHighlight <= kLastTrackedPublicPseudoId,
                 "kPseudoIdHighlight must be public");
 
-  const unsigned mask = (1 << (kPseudoIdSelection - kFirstPublicPseudoId)) |
-                        (1 << (kPseudoIdSearchText - kFirstPublicPseudoId)) |
-                        (1 << (kPseudoIdTargetText - kFirstPublicPseudoId)) |
-                        (1 << (kPseudoIdSpellingError - kFirstPublicPseudoId)) |
-                        (1 << (kPseudoIdGrammarError - kFirstPublicPseudoId)) |
-                        (1 << (kPseudoIdHighlight - kFirstPublicPseudoId));
-
-  return mask & PseudoElementStylesInternal();
+  PseudoIdFlags flags = PseudoIdFlags::FromBits(PseudoElementStylesInternal());
+  return flags.Has(kPseudoIdSelection) || flags.Has(kPseudoIdSearchText) ||
+         flags.Has(kPseudoIdTargetText) || flags.Has(kPseudoIdSpellingError) ||
+         flags.Has(kPseudoIdGrammarError) || flags.Has(kPseudoIdHighlight);
 }
 
 class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
@@ -2922,8 +2921,7 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
 
   // Pseudo-elements
   bool HasPseudoElementStyle(PseudoId pseudo) const {
-    return ComputedStyle::HasPseudoElementStyle(PseudoElementStylesInternal(),
-                                                pseudo);
+    return PseudoIdFlags::FromBits(PseudoElementStylesInternal()).Has(pseudo);
   }
 
   // animations
@@ -3192,9 +3190,6 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
            Display() == EDisplay::kTableColumn ||
            Display() == EDisplay::kTableColumnGroup;
   }
-  bool IsDisplayMasonryBox() const {
-    return ComputedStyle::IsDisplayMasonryBox(Display());
-  }
   DisplayStyle GetDisplayStyle() const {
     return DisplayStyle(Display(), StyleType(), GetContentData());
   }
@@ -3232,17 +3227,11 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
 
   // grid-template-*
   const ComputedGridTrackList& GridTemplateColumns() const {
-    return ComputedStyle::ComputedGridTemplate(
-        SpecifiedGridTemplateColumns(),
-        /*use_masonry_default=*/IsDisplayMasonryBox() &&
-            MasonryTrackSizingDirection() == kForColumns);
+    return ComputedStyle::ComputedGridTemplate(SpecifiedGridTemplateColumns());
   }
 
   const ComputedGridTrackList& GridTemplateRows() const {
-    return ComputedStyle::ComputedGridTemplate(
-        SpecifiedGridTemplateRows(),
-        /*use_masonry_default=*/IsDisplayMasonryBox() &&
-            MasonryTrackSizingDirection() == kForRows);
+    return ComputedStyle::ComputedGridTemplate(SpecifiedGridTemplateRows());
   }
 
   // letter-spacing
@@ -3322,11 +3311,6 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
   }
   StyleImage* MaskBoxImageSource() const {
     return MaskBoxImageInternal().GetImage();
-  }
-
-  // masonry
-  GridTrackSizingDirection MasonryTrackSizingDirection() const {
-    return ComputedStyle::MasonryTrackSizingDirection(MasonryDirection());
   }
 
   // opacity
@@ -3561,10 +3545,10 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
 
   // Variables
   const StyleInheritedVariables* InheritedVariables() const {
-    return InheritedVariablesInternal().Get();
+    return &InheritedVariablesInternal();
   }
   const StyleNonInheritedVariables* NonInheritedVariables() const {
-    return NonInheritedVariablesInternal().Get();
+    return &NonInheritedVariablesInternal();
   }
   CSSVariableData* GetVariableData(const AtomicString&,
                                    bool is_inherited_property) const;
@@ -3625,8 +3609,6 @@ class ComputedStyleBuilder final : public ComputedStyleBuilderBase {
   }
 
  private:
-  mutable bool has_own_inherited_variables_ = false;
-  mutable bool has_own_non_inherited_variables_ = false;
   mutable bool has_own_animations_ = false;
   mutable bool has_own_transitions_ = false;
 };

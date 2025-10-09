@@ -17,7 +17,6 @@
 #include "base/trace_event/trace_event.h"
 #include "base/types/expected.h"
 #include "base/types/expected_macros.h"
-#include "third_party/microsoft_dxheaders/src/include/composition/dcomp-preview.h"
 #include "ui/gfx/color_space_win.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/transform_util.h"
@@ -385,7 +384,7 @@ void DCLayerTree::Initialize(
 
   hdr_metadata_helper_ = std::make_unique<HDRMetadataHelperWin>(d3d11_device_);
 
-  if (Microsoft::WRL::ComPtr<PREVIEW_IDCompositionDevice5> dcomp_device5;
+  if (Microsoft::WRL::ComPtr<IDCompositionDevice5> dcomp_device5;
       SUCCEEDED(dcomp_device_.As(&dcomp_device5))) {
     hr = dcomp_device5->CreateDynamicTexture(&primary_plane_surface_);
     if (FAILED(hr)) {
@@ -1304,6 +1303,16 @@ base::expected<void, CommitError> DCLayerTree::CommitAndClearPendingOverlays(
         overlay.overlay_image = std::move(video_image);
         overlay.content_rect = gfx::RectF(overlay.overlay_image->size());
 
+        if (!overlay.overlay_image->dcomp_visual_content()) {
+          // If `PresentToSwapChain` succeeded for but failed to produce content
+          // for us to place in the DComp visual, force a solid color background
+          // to avoid seeing through the video hole punch in the primary plane.
+          //
+          // Note this assumes the video is opaque and that black is a
+          // reasonable fallback color.
+          overlay.background_color = SkColors::kBlack;
+        }
+
         if (overlay_position_adjustment) {
           overlay.transform = overlay_position_adjustment->transform;
           overlay.quad_rect = overlay_position_adjustment->quad_rect;
@@ -1385,7 +1394,11 @@ base::expected<void, CommitError> DCLayerTree::CommitAndClearPendingOverlays(
     }
   }
 
-  if (primary_plane_surface_ && !did_update_primary_plane_damage) {
+  if (primary_plane_surface_ && primary_plane_surface_serial_ &&
+      !did_update_primary_plane_damage) {
+    // We need to commit the visual tree after `SetTexture`. We expect the
+    // primary plane overlay to be removed from the visual tree this frame,
+    // which will cause commit to happen.
     DVLOG(1) << "Reset primary_plane_surface_ damage.";
     primary_plane_surface_->SetTexture(nullptr);
     primary_plane_surface_serial_ = 0;

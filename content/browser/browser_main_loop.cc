@@ -45,12 +45,14 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/initialization_util.h"
+#include "base/threading/platform_thread_metrics.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/timer/hi_res_timer_manager.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
+#include "build/android_buildflags.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
@@ -390,16 +392,6 @@ std::unique_ptr<base::MemoryPressureMonitor> CreateMemoryPressureMonitor(
 
   return monitor;
 }
-
-#if BUILDFLAG(IS_CHROMEOS)
-mojo::PendingRemote<data_decoder::mojom::BleScanParser> GetBleScanParser() {
-  static base::NoDestructor<data_decoder::DataDecoder> decoder;
-  mojo::PendingRemote<data_decoder::mojom::BleScanParser> ble_scan_parser;
-  decoder->GetService()->BindBleScanParser(
-      ble_scan_parser.InitWithNewPipeAndPassReceiver());
-  return ble_scan_parser;
-}
-#endif  // BUILDFLAG(IS_CHROMEOS)
 
 class OopDataDecoder : public data_decoder::ServiceProvider {
  public:
@@ -770,10 +762,7 @@ void BrowserMainLoop::PostCreateMainMessageLoop() {
 
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
       sql::SqlMemoryDumpProvider::GetInstance(), "Sql", nullptr);
-#if BUILDFLAG(IS_CHROMEOS)
-  device::BluetoothAdapterFactory::SetBleScanParserCallback(
-      base::BindRepeating(&GetBleScanParser));
-#else
+#if !BUILDFLAG(IS_CHROMEOS)
   // Chrome Remote Desktop needs TransitionalURLLoaderFactoryOwner on ChromeOS.
   network::TransitionalURLLoaderFactoryOwner::DisallowUsageInProcess();
 #endif
@@ -860,6 +849,12 @@ int BrowserMainLoop::PreCreateThreads() {
   base::UmaHistogramBoolean("SiteIsolation.IsSitePerProcessOrStricter",
                             SiteIsolationPolicy::IsSitePerProcessOrStricter());
 
+#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(IS_DESKTOP_ANDROID)
+  base::UmaHistogramBoolean(
+      "SiteIsolation.IsSitePerProcessOrStricter.AndroidDesktop",
+      SiteIsolationPolicy::IsSitePerProcessOrStricter());
+#endif
+
   // Generate the browser process salt. This is then accessible by calls to
   // GetPseudonymizationSalt in the browser process. This generation is only
   // needed in the browser process, because for other processes it is
@@ -884,7 +879,7 @@ void BrowserMainLoop::CreateStartupTasks() {
       GetUIThreadTaskRunner({BrowserTaskType::kStartup}));
 #else
   startup_task_runner_ = std::make_unique<StartupTaskRunner>(
-      base::OnceCallback<void(int, base::TimeDelta)>(),
+      base::OnceCallback<void(int, base::TimeDelta, base::TimeDelta)>(),
       base::SingleThreadTaskRunner::GetCurrentDefault());
 #endif
   StartupTask pre_create_threads = base::BindOnce(
@@ -922,7 +917,7 @@ void BrowserMainLoop::CreateStartupTasks() {
 #if BUILDFLAG(IS_ANDROID)
   startup_task_runner_->StartRunningTasksAsync();
 #else
-  startup_task_runner_->RunAllTasksNow();
+  startup_task_runner_->RunAllTasksNow(false);
 #endif
 }
 
@@ -945,8 +940,8 @@ BrowserMainLoop::gpu_channel_establish_factory() const {
 }
 
 #if BUILDFLAG(IS_ANDROID)
-void BrowserMainLoop::SynchronouslyFlushStartupTasks() {
-  startup_task_runner_->RunAllTasksNow();
+void BrowserMainLoop::SynchronouslyFlushStartupTasks(bool was_posted) {
+  startup_task_runner_->RunAllTasksNow(was_posted);
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
@@ -1059,6 +1054,16 @@ int BrowserMainLoop::PreMainMessageLoopRun() {
                         BindOnce(enable_message_pump_metrics, "BrowserIO"));
                   },
                   base::Unretained(this)));
+
+#if BUILDFLAG(IS_ANDROID)
+  base::PlatformThreadPriorityMonitor::Get().RegisterCurrentThread("UIThread");
+  GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce([] {
+        base::PlatformThreadPriorityMonitor::Get().RegisterCurrentThread(
+            "IOThread");
+      }));
+  base::PlatformThreadPriorityMonitor::Get().Start();
+#endif  // BUILDFLAG(IS_ANDROID)
 
   // If the UI thread blocks, the whole UI is unresponsive. Do not allow
   // unresponsive tasks from the UI thread and instantiate a

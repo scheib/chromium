@@ -12,6 +12,7 @@
 #include "base/containers/heap_array.h"
 #include "base/containers/span.h"
 #include "base/notreached.h"
+#include "build/build_config.h"
 #include "components/signin/internal/identity_manager/account_capabilities_constants.h"
 #include "components/signin/public/identity_manager/tribool.h"
 
@@ -36,14 +37,8 @@ AccountCapabilities& AccountCapabilities::operator=(
 base::span<const std::string_view>
 AccountCapabilities::GetSupportedAccountCapabilityNames() {
   static constexpr auto kCapabilityNames = std::to_array<std::string_view>({
-#if BUILDFLAG(IS_IOS)
-#define ACCOUNT_CAPABILITY_TEMPORARY_NOT_IOS(cpp_label, java_label, name)
-#else
-#define ACCOUNT_CAPABILITY_TEMPORARY_NOT_IOS ACCOUNT_CAPABILITY
-#endif
 #define ACCOUNT_CAPABILITY(cpp_label, java_label, value) cpp_label,
 #include "components/signin/internal/identity_manager/account_capabilities_list.h"
-#undef ACCOUNT_CAPABILITY_TEMPORARY_NOT_IOS
 #undef ACCOUNT_CAPABILITY
   });
   return kCapabilityNames;
@@ -79,7 +74,7 @@ signin::Tribool AccountCapabilities::GetCapabilityByName(
 }
 
 // clang-format off
-// keep-sorted start newline_separated=yes sticky_prefixes=#if group_prefixes=#endif,can,has,is,must block=yes
+// keep-sorted start newline_separated=yes sticky_prefixes=#if group_prefixes=AccountCapabilities,#endif block=yes
 // clang-format on
 signin::Tribool AccountCapabilities::can_fetch_family_member_info() const {
   return GetCapabilityByName(kCanFetchFamilyMemberInfoCapabilityName);
@@ -88,6 +83,14 @@ signin::Tribool AccountCapabilities::can_fetch_family_member_info() const {
 signin::Tribool AccountCapabilities::can_have_email_address_displayed() const {
   return GetCapabilityByName(kCanHaveEmailAddressDisplayedCapabilityName);
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+signin::Tribool
+AccountCapabilities::can_make_chrome_search_engine_choice_screen_choice()
+    const {
+  return GetCapabilityByName(kCanMakeChromeSearchEngineChoiceScreenChoice);
+}
+#endif
 
 signin::Tribool AccountCapabilities::can_run_chrome_privacy_sandbox_trials()
     const {
@@ -159,14 +162,10 @@ signin::Tribool AccountCapabilities::is_opted_in_to_parental_supervision()
   return GetCapabilityByName(kIsOptedInToParentalSupervisionCapabilityName);
 }
 
-signin::Tribool AccountCapabilities::
-    is_subject_to_account_level_enterprise_policies() const {
-#if BUILDFLAG(IS_IOS)
-  return signin::Tribool::kUnknown;
-#else
+signin::Tribool
+AccountCapabilities::is_subject_to_account_level_enterprise_policies() const {
   return GetCapabilityByName(
       kIsSubjectToAccountLevelEnterprisePoliciesCapabilityName);
-#endif
 }
 
 signin::Tribool AccountCapabilities::

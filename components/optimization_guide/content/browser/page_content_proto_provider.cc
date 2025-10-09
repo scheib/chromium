@@ -15,15 +15,20 @@
 #include "components/optimization_guide/content/browser/media_transcript_provider.h"
 #include "components/optimization_guide/content/browser/page_content_proto_util.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
+#include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/media_session.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/base/schemeful_site.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
+#include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom-data-view.h"
+#include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom-forward.h"
+#include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom.h"
 
 namespace optimization_guide {
 
@@ -66,7 +71,7 @@ blink::mojom::AIPageContentOptionsPtr ApplyOptionsOverridesForSubframe(
   // TODO(crbug.com/389737599): There's a bug with scheduling idle tasks in an
   // OOPIF with site isolation if there are no other main frames in the process.
   // See crbug.com/40785325.
-  auto new_options = blink::mojom::AIPageContentOptions::New(input);
+  auto new_options = input.Clone();
   new_options->on_critical_path = true;
   return new_options;
 }
@@ -239,6 +244,8 @@ void ComputeContentNodeMetrics(
 void RecordPageContentExtractionMetrics(
     base::TimeDelta total_latency,
     ukm::SourceId source_id,
+    blink::mojom::AIPageContentMode mode,
+    bool on_critical_path,
     optimization_guide::proto::AnnotatedPageContent proto) {
   ContentNodeMetrics metrics;
   auto total_size = proto.ByteSizeLong();
@@ -247,19 +254,55 @@ void RecordPageContentExtractionMetrics(
   ComputeContentNodeMetrics(proto.root_node(), &metrics);
   UMA_HISTOGRAM_TIMES("OptimizationGuide.AIPageContent.TotalLatency",
                       total_latency);
+  if (mode == blink::mojom::AIPageContentMode::kDefault) {
+    if (on_critical_path) {
+      UMA_HISTOGRAM_TIMES(
+          "OptimizationGuide.AIPageContent.TotalLatency.Default.CriticalPath",
+          total_latency);
+    } else {
+      UMA_HISTOGRAM_TIMES(
+          "OptimizationGuide.AIPageContent.TotalLatency.Default."
+          "NotCriticalPath",
+          total_latency);
+    }
+  } else if (mode == blink::mojom::AIPageContentMode::kActionableElements) {
+    if (on_critical_path) {
+      UMA_HISTOGRAM_TIMES(
+          "OptimizationGuide.AIPageContent.TotalLatency.ActionableElements."
+          "CriticalPath",
+          total_latency);
+    } else {
+      UMA_HISTOGRAM_TIMES(
+          "OptimizationGuide.AIPageContent.TotalLatency.ActionableElements."
+          "NotCriticalPath",
+          total_latency);
+    }
+  }
   // 10KB bucket up to 5MB.
   // TODO(crbug.com/392115749): Use provided metrics when available.
-  UMA_HISTOGRAM_CUSTOM_COUNTS(
-      "OptimizationGuide.AnnotatedPageContent.TotalSize2", total_size / 1024,
-      10, 5000, 50);
-  UMA_HISTOGRAM_CUSTOM_COUNTS(
-      "OptimizationGuide.AnnotatedPageContent.TotalNodeCount",
-      metrics.node_count, 1, kMaxNodeLimit, 50);
+  if (mode == blink::mojom::AIPageContentMode::kDefault) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS(
+        "OptimizationGuide.AnnotatedPageContent.TotalSize2.Default",
+        total_size / 1024, 10, 5000, 50);
+    UMA_HISTOGRAM_CUSTOM_COUNTS(
+        "OptimizationGuide.AnnotatedPageContent.TotalNodeCount.Default",
+        metrics.node_count, 1, kMaxNodeLimit, 50);
+  } else if (mode == blink::mojom::AIPageContentMode::kActionableElements) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS(
+        "OptimizationGuide.AnnotatedPageContent.TotalSize2.ActionableElements",
+        total_size / 1024, 10, 5000, 50);
+    UMA_HISTOGRAM_CUSTOM_COUNTS(
+        "OptimizationGuide.AnnotatedPageContent.TotalNodeCount."
+        "ActionableElements",
+        metrics.node_count, 1, kMaxNodeLimit, 50);
+  }
   UMA_HISTOGRAM_CUSTOM_COUNTS(
       "OptimizationGuide.AnnotatedPageContent.TotalWordCount",
       metrics.word_count, 1, kMaxWordLimit, 50);
 
   ukm::builders::OptimizationGuide_AnnotatedPageContent(source_id)
+      .SetMode(static_cast<int64_t>(mode))
+      .SetOnCriticalPath(on_critical_path)
       .SetTotalSize(ukm::GetExponentialBucketMinForBytes(total_size))
       .SetExtractionLatency(ukm::GetExponentialBucketMinForUserTiming(
           total_latency.InMilliseconds()))
@@ -292,6 +335,8 @@ void OnGotAIPageContentForAllFrames(
     OnAIPageContentDone done_callback) {
   optimization_guide::AIPageContentResult page_content;
   optimization_guide::FrameTokenSet frame_token_set;
+  auto mode = main_frame_options->mode;
+  bool on_critical_path = main_frame_options->on_critical_path;
 
   if (auto result = optimization_guide::ConvertAIPageContentToProto(
           std::move(main_frame_options), main_frame_token, *page_content_map,
@@ -316,10 +361,11 @@ void OnGotAIPageContentForAllFrames(
         render_frame_host->GetWeakDocumentPtr();
   }
 
-  base::ThreadPool::PostTask(
-      FROM_HERE, {base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(RecordPageContentExtractionMetrics,
-                     elapsed_timer.Elapsed(), source_id, page_content.proto));
+  base::ThreadPool::PostTask(FROM_HERE, {base::TaskPriority::BEST_EFFORT},
+                             base::BindOnce(
+                                 RecordPageContentExtractionMetrics,
+                                 elapsed_timer.Elapsed(), source_id, mode, on_critical_path,
+                                 page_content.proto));
   std::move(done_callback).Run(std::move(page_content));
 }
 
@@ -347,15 +393,19 @@ AIPageContentResult::AIPageContentResult(AIPageContentResult&& other) = default;
 AIPageContentResult& AIPageContentResult::operator=(
     AIPageContentResult&& other) = default;
 
-blink::mojom::AIPageContentOptionsPtr DefaultAIPageContentOptions() {
+blink::mojom::AIPageContentOptionsPtr DefaultAIPageContentOptions(
+    bool on_critical_path) {
   auto options = blink::mojom::AIPageContentOptions::New();
   options->mode = blink::mojom::AIPageContentMode::kDefault;
+  options->on_critical_path = on_critical_path;
   return options;
 }
 
-blink::mojom::AIPageContentOptionsPtr ActionableAIPageContentOptions() {
+blink::mojom::AIPageContentOptionsPtr ActionableAIPageContentOptions(
+    bool on_critical_path) {
   auto options = blink::mojom::AIPageContentOptions::New();
   options->mode = blink::mojom::AIPageContentMode::kActionableElements;
+  options->on_critical_path = on_critical_path;
   return options;
 }
 
@@ -377,6 +427,9 @@ void GetAIPageContent(content::WebContents* web_contents,
   const auto* main_frame_rph =
       web_contents->GetPrimaryMainFrame()->GetProcess();
 
+  const url::Origin& top_level_origin =
+      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin();
+
   web_contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
       [&](content::RenderFrameHost* rfh) {
         if (!rfh->IsRenderFrameLive()) {
@@ -384,12 +437,26 @@ void GetAIPageContent(content::WebContents* web_contents,
         }
 
         auto* parent_frame = rfh->GetParentOrOuterDocument();
+        content::GlobalRenderFrameHostToken frame_token =
+            rfh->GetGlobalFrameToken();
+
+        const url::Origin& frame_origin = rfh->GetLastCommittedOrigin();
+        if (options->include_same_site_only &&
+            (!net::SchemefulSite::IsSameSite(top_level_origin, frame_origin) ||
+             rfh->IsFencedFrameRoot())) {
+          CHECK(page_content_map->find(frame_token) == page_content_map->end());
+          (*page_content_map)[frame_token] =
+              blink::mojom::RedactedFrameMetadata::New(
+                  blink::mojom::RedactedFrameMetadata_Reason::kCrossSite);
+          return;
+        }
 
         // Skip dispatching IPCs for non-local root frames. The local root
         // provides data for itself and all child local frames.
         const bool is_local_root =
             !parent_frame ||
             parent_frame->GetRenderWidgetHost() != rfh->GetRenderWidgetHost();
+
         if (!is_local_root) {
           return;
         }
@@ -407,16 +474,15 @@ void GetAIPageContent(content::WebContents* web_contents,
         agent_ptr->GetAIPageContent(
             std::move(options_to_use),
             mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-                base::BindOnce(&OnGotAIPageContentForFrame,
-                               rfh->GetGlobalFrameToken(), std::move(agent),
-                               page_content_map.get(),
+                base::BindOnce(&OnGotAIPageContentForFrame, frame_token,
+                               std::move(agent), page_content_map.get(),
                                concurrent.CreateClosure()),
                 nullptr));
       });
 
   std::move(concurrent)
       .Done(base::BindOnce(
-          &OnGotAIPageContentForAllFrames, std::move(options),
+          &OnGotAIPageContentForAllFrames, options.Clone(),
           base::ElapsedTimer(),
           web_contents->GetPrimaryMainFrame()->GetGlobalFrameToken(),
           web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId(),

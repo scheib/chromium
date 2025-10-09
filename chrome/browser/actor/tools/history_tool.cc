@@ -45,10 +45,14 @@ HistoryTool::HistoryTool(TaskId task_id,
 HistoryTool::~HistoryTool() = default;
 
 void HistoryTool::Validate(ValidateCallback callback) {
+  PostResponseTask(std::move(callback), MakeOkResult());
+}
+
+mojom::ActionResultPtr HistoryTool::TimeOfUseValidation(
+    const optimization_guide::proto::AnnotatedPageContent* last_observation) {
   NavigationController& controller = web_contents()->GetController();
   mojom::ActionResultPtr result;
 
-  // TODO(crbug.com/411462297): Move these checks to TimeOfUseValidation.
   if (direction_ == HistoryToolRequest::Direction::kBack &&
       !controller.CanGoBack()) {
     result = MakeResult(mojom::ActionResultCode::kHistoryNoBackEntries);
@@ -59,10 +63,7 @@ void HistoryTool::Validate(ValidateCallback callback) {
     result = MakeOkResult();
   }
 
-  // TODO(crbug.com/402731599): Additional validation here (e.g. is URL in
-  // allowlist).
-
-  PostResponseTask(std::move(callback), std::move(result));
+  return result;
 }
 
 void HistoryTool::Invoke(InvokeCallback callback) {
@@ -109,15 +110,21 @@ std::string HistoryTool::JournalEvent() const {
                                                             : "Forward";
 }
 
-std::unique_ptr<ObservationDelayController> HistoryTool::GetObservationDelayer()
-    const {
+std::unique_ptr<ObservationDelayController> HistoryTool::GetObservationDelayer(
+    std::optional<ObservationDelayController::PageStabilityConfig>
+        page_stability_config) {
   return std::make_unique<ObservationDelayController>(
-      *web_contents()->GetPrimaryMainFrame());
+      *web_contents()->GetPrimaryMainFrame(), task_id(), journal(),
+      page_stability_config);
 }
 
 void HistoryTool::UpdateTaskBeforeInvoke(ActorTask& task,
                                          InvokeCallback callback) const {
   task.AddTab(tab_handle_, std::move(callback));
+}
+
+tabs::TabHandle HistoryTool::GetTargetTab() const {
+  return tab_handle_;
 }
 
 void HistoryTool::DidStartNavigation(NavigationHandle* navigation_handle) {
@@ -168,9 +175,11 @@ void HistoryTool::DidFinishNavigation(NavigationHandle* navigation_handle) {
 
     if (!navigation_handle->HasCommitted()) {
       result = MakeResult(mojom::ActionResultCode::kHistoryFailedBeforeCommit,
+                          /*requires_page_stabilization=*/false,
                           details_msg(navigation_handle));
     } else if (navigation_handle->IsErrorPage()) {
       result = MakeResult(mojom::ActionResultCode::kHistoryErrorPage,
+                          /*requires_page_stabilization=*/false,
                           details_msg(navigation_handle));
     } else {
       result = MakeOkResult();

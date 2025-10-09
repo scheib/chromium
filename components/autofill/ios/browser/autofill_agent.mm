@@ -72,8 +72,8 @@
 #import "components/autofill/ios/form_util/form_util_java_script_feature.h"
 #import "components/feature_engagement/public/feature_constants.h"
 #import "components/grit/components_resources.h"
+#import "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
 #import "components/plus_addresses/core/common/features.h"
-#import "components/plus_addresses/grit/plus_addresses_strings.h"
 #import "components/prefs/ios/pref_observer_bridge.h"
 #import "components/prefs/pref_change_registrar.h"
 #import "components/prefs/pref_service.h"
@@ -160,7 +160,7 @@ bool ContainsFocusableField(const FormData& form, FieldRendererId field_id) {
       _webFramesManagerObserverBridge;
 
   // The pref service for which this agent was created.
-  raw_ptr<PrefService> _prefService;
+  raw_ptr<PrefService, DanglingUntriaged> _prefService;
 
   // The unique renderer ID of the most recent autocomplete field;
   // tracks the currently-focused form element in order to force filling of
@@ -638,8 +638,7 @@ bool ContainsFocusableField(const FormData& form, FieldRendererId field_id) {
       // Show any plus_address suggestions.
       value = SysUTF16ToNSString(popup_suggestion.main_text.value);
       if (!popup_suggestion.labels.empty() &&
-          !popup_suggestion.labels.front().empty() &&
-          _delegate.isKeyboardAccessoryUpgradeEnabled) {
+          !popup_suggestion.labels.front().empty()) {
         displayDescription =
             SysUTF16ToNSString(popup_suggestion.labels[0][0].value);
       }
@@ -695,6 +694,11 @@ bool ContainsFocusableField(const FormData& form, FieldRendererId field_id) {
                    kIPHAutofillHomeWorkProfileSuggestionFeature) {
       suggestion.featureForIPH =
           SuggestionFeatureForIPH::kHomeAndWorkAddressSuggestion;
+    } else if (popup_suggestion.iph_metadata.feature ==
+               &feature_engagement::
+                   kIPHAutofillAccountNameEmailSuggestionFeature) {
+      suggestion.featureForIPH =
+          SuggestionFeatureForIPH::kAccountNameEmailSuggestion;
     }
 
     // Put "clear form" entry at the front of the suggestions.
@@ -874,7 +878,8 @@ bool ContainsFocusableField(const FormData& form, FieldRendererId field_id) {
 - (void)webState:(web::WebState*)webState
     didSubmitDocumentWithFormData:(const FormData&)formData
                    hasUserGesture:(BOOL)hasUserGesture
-                          inFrame:(web::WebFrame*)frame {
+                          inFrame:(web::WebFrame*)frame
+                   perfectFilling:(BOOL)perfectFilling {
   if (![self isAutofillEnabled] || !frame) {
     return;
   }

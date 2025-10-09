@@ -101,8 +101,8 @@ void Patch::Commit() {
       buffer_fragment_ ? buffer_fragment_ : target_,
       target_->IsElementNode() ? &To<Element>(*target_)
                                : target_->parentElement(),
-      ParserContentPolicy::kDisallowScriptingAndPluginContent,
-      ParserPrefetchPolicy::kDisallowPrefetching);
+      ParserContentPolicy::kAllowScriptingContentAndDoNotMarkAlreadyStarted,
+      ParserPrefetchPolicy::kDisallowPrefetching, /*registry*/ nullptr);
 }
 
 void Patch::DispatchPatchEvent() {

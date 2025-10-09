@@ -509,7 +509,7 @@ bool LayoutView::ShouldUsePaginatedLayout(const Document& document) {
 PhysicalRect LayoutView::ViewRect() const {
   NOT_DESTROYED();
   if (GetDocument().Printing()) {
-    return PhysicalRect(PhysicalOffset(), Size());
+    return PhysicalRect(PhysicalOffset(), StitchedSize());
   }
 
   if (!frame_view_)
@@ -918,10 +918,40 @@ void LayoutView::UpdateFromStyle() {
     SetHasBoxDecorationBackground(true);
 }
 
-void LayoutView::StyleDidChange(StyleDifference diff,
-                                const ComputedStyle* old_style) {
+void LayoutView::UpdateAfterLayout() {
   NOT_DESTROYED();
-  LayoutBlockFlow::StyleDidChange(diff, old_style);
+  LayoutBlockFlow::UpdateAfterLayout();
+  if (cached_scroll_dimensions_.has_value() && GetFrame()->Owner() &&
+      !GetFrame()->Owner()->IsDisplayNone() && !GetDocument().Printing()) {
+    auto* scrollable_area = GetScrollableArea();
+    CHECK(scrollable_area);
+    // Only restore scroll offset if the scroll dimensions match
+    if (scrollable_area->ScrollWidth() == cached_scroll_dimensions_->width &&
+        scrollable_area->ScrollHeight() == cached_scroll_dimensions_->height &&
+        scrollable_area->ScrollOrigin() == cached_scroll_dimensions_->origin) {
+      scrollable_area->SetScrollOffset(cached_scroll_dimensions_->offset,
+                                       mojom::blink::ScrollType::kProgrammatic,
+                                       cc::ScrollSourceType::kAbsoluteScroll);
+    }
+    cached_scroll_dimensions_.reset();
+  }
+}
+
+void LayoutView::CacheScrollDimensions() {
+  NOT_DESTROYED();
+  auto* scrollable_area = GetScrollableArea();
+  CHECK(scrollable_area);
+  cached_scroll_dimensions_.emplace(CachedScrollDimensions{
+      scrollable_area->ScrollWidth(), scrollable_area->ScrollHeight(),
+      scrollable_area->ScrollOrigin(), scrollable_area->GetScrollOffset()});
+}
+
+void LayoutView::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
+  NOT_DESTROYED();
+  LayoutBlockFlow::StyleDidChange(diff, old_style, style_change_context);
 
   LocalFrame& frame = GetFrameView()->GetFrame();
   VisualViewport& visual_viewport = frame.GetPage()->GetVisualViewport();

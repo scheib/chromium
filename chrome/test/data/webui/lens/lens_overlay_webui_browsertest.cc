@@ -37,10 +37,8 @@ class LensOverlayWebUIBrowserTest : public WebUIMochaBrowserTest {
     set_test_loader_host(chrome::kChromeUILensOverlayHost);
     scoped_feature_list_.InitWithFeatures(
         /*enabled_features=*/{lens::features::kLensOverlay},
-        /*disabled_features=*/{
-            lens::features::kLensOverlayContextualSearchbox,
-            lens::features::
-                kLensOverlayContextualSearchboxForOmniboxSuggestions});
+        /*disabled_features=*/{lens::features::kLensOverlayContextualSearchbox,
+                               lens::features::kLensSearchZeroStateCsb});
   }
 
   void SetUp() override {
@@ -160,10 +158,6 @@ IN_PROC_BROWSER_TEST_F(LensOverlayTest, MAYBE_ManualRegionSelection) {
   RunOverlayTest("lens/overlay/region_selection_test.js", "mocha.run()");
 }
 
-IN_PROC_BROWSER_TEST_F(LensOverlayTest, TextSelection) {
-  RunOverlayTest("lens/overlay/text_selection_test.js", "mocha.run()");
-}
-
 IN_PROC_BROWSER_TEST_F(LensOverlayTest, ObjectSelection) {
   RunOverlayTest("lens/overlay/object_selection_test.js", "mocha.run()");
 }
@@ -187,13 +181,6 @@ IN_PROC_BROWSER_TEST_F(LensOverlayTest,
   RunOverlayTest(
       "lens/overlay/selection_overlay_test.js",
       "runMochaSuite('SelectionOverlay WithObjects')");
-}
-
-IN_PROC_BROWSER_TEST_F(LensOverlayTest,
-                       SelectionOverlayWithTranslatedWords) {
-  RunOverlayTest(
-      "lens/overlay/selection_overlay_test.js",
-      "runMochaSuite('SelectionOverlay WithTranslatedWords')");
 }
 
 IN_PROC_BROWSER_TEST_F(LensOverlayTest,

@@ -494,29 +494,32 @@ void ReadAnythingAppController::OnNodeWillBeDeleted(ui::AXTree* tree,
 
 void ReadAnythingAppController::OnNodeDeleted(ui::AXTree* tree,
                                               ui::AXNodeID node_id) {
-  if (displayed_nodes_pending_deletion_.contains(node_id)) {
-    displayed_nodes_pending_deletion_.erase(node_id);
+  if (!displayed_nodes_pending_deletion_.contains(node_id)) {
+    return;
+  }
 
-    // Instead of redrawing everything, we inform the webui that the node is
-    // being deleted and it will adjust on that side. See OnNodeWillBeDeleted.
-    if (IsReadAloudEnabled()) {
-      return;
-    }
+  displayed_nodes_pending_deletion_.erase(node_id);
 
-    // For Google Docs, we extract text from the "annotated canvas" element
-    // nodes, which hold the currently visible text on screen. As the user
-    // scrolls, these canvas elements are dynamically updated, resulting in
-    // frequent calls to OnNodeDeleted. We found that redrawing content in the
-    // Reading Model panel after node deletion during scrolling can lead to
-    // unexpected behavior (e.g., an empty side panel). Therefore, Google Docs
-    // require special handling to ensure correct text extraction and avoid
-    // these issues.
-    if (displayed_nodes_pending_deletion_.empty() && !IsGoogleDocs()) {
-      Draw(false);
-      if (model_.has_selection()) {
-        DrawSelection();
-      }
-    }
+  // For Google Docs, we extract text from the "annotated canvas" element
+  // nodes, which hold the currently visible text on screen. As the user
+  // scrolls, these canvas elements are dynamically updated, resulting in
+  // frequent calls to OnNodeDeleted. We found that redrawing content in the
+  // Reading Model panel after node deletion during scrolling can lead to
+  // unexpected behavior (e.g., an empty side panel). Therefore, Google Docs
+  // require special handling to ensure correct text extraction and avoid
+  // these issues.
+  if (!displayed_nodes_pending_deletion_.empty() || IsGoogleDocs()) {
+    return;
+  }
+
+  // Instead of redrawing everything when Read aloud is enabled, we inform
+  // the webui that the node is being deleted and it will adjust on that
+  // side. See OnNodeWillBeDeleted.
+  if (!IsReadAloudEnabled()) {
+    Draw(false);
+  }
+  if (model_.has_selection()) {
+    DrawSelection();
   }
 }
 
@@ -745,9 +748,12 @@ void ReadAnythingAppController::RecordEstimatedWordsSeen() {
 }
 
 void ReadAnythingAppController::RecordEstimatedWordsHeard() {
-  VLOG(1) << "Words heard: " << model_.words_heard();
-  base::UmaHistogramCustomCounts(kWordsHeardHistogramName, model_.words_heard(),
-                                 1, kMaxWordsConsumed, kWordsConsumedBuckets);
+  if (IsReadAloudEnabled()) {
+    VLOG(1) << "Words heard: " << model_.words_heard();
+    base::UmaHistogramCustomCounts(kWordsHeardHistogramName,
+                                   model_.words_heard(), 1, kMaxWordsConsumed,
+                                   kWordsConsumedBuckets);
+  }
   model_.set_words_heard(0);
 }
 
@@ -1018,6 +1024,9 @@ void ReadAnythingAppController::DrawSelection() {
 
 void ReadAnythingAppController::DrawEmptyState() {
   ExecuteJavaScript("chrome.readingMode.showEmpty();");
+}
+
+void ReadAnythingAppController::LogEmptyState() {
   base::UmaHistogramEnumeration(ReadAnythingAppModel::kEmptyStateHistogramName,
                                 ReadAnythingAppModel::EmptyState::kShown);
 }
@@ -1096,6 +1105,13 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
       .SetProperty("darkTheme", &ReadAnythingAppController::DarkTheme)
       .SetProperty("yellowTheme", &ReadAnythingAppController::YellowTheme)
       .SetProperty("blueTheme", &ReadAnythingAppController::BlueTheme)
+      .SetProperty("highContrastTheme",
+                   &ReadAnythingAppController::HighContrastTheme)
+      .SetProperty("lowContrastTheme",
+                   &ReadAnythingAppController::LowContrastTheme)
+      .SetProperty("sepiaLightTheme",
+                   &ReadAnythingAppController::SepiaLightTheme)
+      .SetProperty("sepiaDarkTheme", &ReadAnythingAppController::SepiaDarkTheme)
       .SetProperty("autoHighlighting",
                    &ReadAnythingAppController::AutoHighlighting)
       .SetProperty("wordHighlighting",
@@ -1125,6 +1141,8 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
       .SetProperty("isGoogleDocs", &ReadAnythingAppController::IsGoogleDocs)
       .SetProperty("isReadAloudEnabled",
                    &ReadAnythingAppController::IsReadAloudEnabled)
+      .SetProperty("isTsTextSegmentationEnabled",
+                   &ReadAnythingAppController::IsTsTextSegmentationEnabled)
       .SetProperty("isChromeOsAsh", &ReadAnythingAppController::IsChromeOsAsh)
       .SetProperty("baseLanguageForSpeech",
                    &ReadAnythingAppController::GetLanguageCodeForSpeech)
@@ -1150,6 +1168,7 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
       .SetMethod("onCopy", &ReadAnythingAppController::OnCopy)
       .SetMethod("onNoTextContent", &ReadAnythingAppController::OnNoTextContent)
       .SetMethod("updateWordsSeen", &ReadAnythingAppController::UpdateWordsSeen)
+      .SetMethod("logEmptyState", &ReadAnythingAppController::LogEmptyState)
       .SetMethod("updateWordsHeard",
                  &ReadAnythingAppController::UpdateWordsHeard)
       .SetMethod("onFontSizeChanged",
@@ -1171,6 +1190,8 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
                  &ReadAnythingAppController::OnSpeechRateChange)
       .SetMethod("getStoredVoice", &ReadAnythingAppController::GetStoredVoice)
       .SetMethod("onVoiceChange", &ReadAnythingAppController::OnVoiceChange)
+      .SetMethod("logExtensionState",
+                 &ReadAnythingAppController::LogExtensionState)
       .SetMethod("onLanguagePrefChange",
                  &ReadAnythingAppController::OnLanguagePrefChange)
       .SetMethod("getLanguagesEnabledInPref",
@@ -1196,11 +1217,8 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
                  &ReadAnythingAppController::InitAXPositionWithNode)
       .SetMethod("resetGranularityIndex",
                  &ReadAnythingAppController::ResetGranularityIndex)
-      .SetMethod("getCurrentTextStartIndex",
-                 &ReadAnythingAppController::GetCurrentTextStartIndex)
-      .SetMethod("getCurrentTextEndIndex",
-                 &ReadAnythingAppController::GetCurrentTextEndIndex)
-      .SetMethod("getCurrentText", &ReadAnythingAppController::GetCurrentText)
+      .SetMethod("getCurrentTextContent",
+                 &ReadAnythingAppController::GetCurrentTextContent)
       .SetMethod("shouldShowUi", &ReadAnythingAppController::ShouldShowUI)
       .SetMethod("onIsSpeechActiveChanged",
                  &ReadAnythingAppController::OnIsSpeechActiveChanged)
@@ -1226,6 +1244,8 @@ gin::ObjectTemplateBuilder ReadAnythingAppController::GetObjectTemplateBuilder(
                  &ReadAnythingAppController::SendInstallVoicePackRequest)
       .SetMethod("sendUninstallVoiceRequest",
                  &ReadAnythingAppController::SendUninstallVoiceRequest)
+      .SetMethod("getCurrentTextSegments",
+                 &ReadAnythingAppController::GetCurrentTextSegments)
       .SetMethod("getHighlightForCurrentSegmentIndex",
                  &ReadAnythingAppController::GetHighlightForCurrentSegmentIndex)
       .SetMethod("getValidatedFontName",
@@ -1365,6 +1385,22 @@ int ReadAnythingAppController::YellowTheme() const {
 
 int ReadAnythingAppController::BlueTheme() const {
   return base::to_underlying(read_anything::mojom::Colors::kBlue);
+}
+
+int ReadAnythingAppController::HighContrastTheme() const {
+  return base::to_underlying(read_anything::mojom::Colors::kHighContrast);
+}
+
+int ReadAnythingAppController::LowContrastTheme() const {
+  return base::to_underlying(read_anything::mojom::Colors::kLowContrast);
+}
+
+int ReadAnythingAppController::SepiaLightTheme() const {
+  return base::to_underlying(read_anything::mojom::Colors::kSepiaLight);
+}
+
+int ReadAnythingAppController::SepiaDarkTheme() const {
+  return base::to_underlying(read_anything::mojom::Colors::kSepiaDark);
 }
 
 bool ReadAnythingAppController::IsHighlightOn() {
@@ -1576,6 +1612,10 @@ bool ReadAnythingAppController::IsReadAloudEnabled() const {
   return features::IsReadAnythingReadAloudEnabled();
 }
 
+bool ReadAnythingAppController::IsTsTextSegmentationEnabled() const {
+  return features::IsReadAnythingReadAloudTSTextSegmentationEnabled();
+}
+
 bool ReadAnythingAppController::IsChromeOsAsh() const {
 #if BUILDFLAG(IS_CHROMEOS)
   return true;
@@ -1760,15 +1800,8 @@ void ReadAnythingAppController::OnCopy() const {
   page_handler_->OnCopy();
 }
 
-void ReadAnythingAppController::OnNoTextContent(bool previouslyHadContent) {
-  if (previouslyHadContent) {
-    Distill();
-  } else {
-    // If updateContent was called on a page with no valid content and
-    // reading mode previously didn't have content, ensure the empty state
-    // is now showing. Otherwise, the loading screen may never terminate.
-    DrawEmptyState();
-  }
+void ReadAnythingAppController::OnNoTextContent() {
+  Distill();
 }
 
 void ReadAnythingAppController::UpdateWordsSeen(int words_seen) {
@@ -1857,6 +1890,12 @@ void ReadAnythingAppController::OnVoiceChange(const std::string& voice,
   std::string base_lang = std::string(language::ExtractBaseLanguage(lang));
   page_handler_->OnVoiceChange(voice, base_lang);
   read_aloud_model_.SetVoice(voice, base_lang);
+}
+
+void ReadAnythingAppController::LogExtensionState() {
+#if !BUILDFLAG(IS_CHROMEOS)
+  page_handler_->LogExtensionState();
+#endif
 }
 
 void ReadAnythingAppController::OnLanguagePrefChange(const std::string& lang,
@@ -1987,9 +2026,11 @@ bool ReadAnythingAppController::IsSpeechTreeInitialized() {
   return read_aloud_model_.speech_tree_initialized();
 }
 
-std::vector<ui::AXNodeID> ReadAnythingAppController::GetCurrentText() {
-  return read_aloud_model_.GetCurrentText(model_.is_pdf(), model_.IsDocs(),
-                                          model_.GetCurrentlyVisibleNodes());
+std::u16string ReadAnythingAppController::GetCurrentTextContent() {
+  return read_aloud_model_
+      .GetCurrentText(model_.is_pdf(), model_.IsDocs(),
+                      model_.GetCurrentlyVisibleNodes())
+      .text;
 }
 
 void ReadAnythingAppController::PreprocessTextForSpeech() {
@@ -2003,14 +2044,6 @@ void ReadAnythingAppController::MovePositionToNextGranularity() {
 
 void ReadAnythingAppController::MovePositionToPreviousGranularity() {
   read_aloud_model_.MovePositionToPreviousGranularity();
-}
-
-int ReadAnythingAppController::GetCurrentTextStartIndex(ui::AXNodeID node_id) {
-  return read_aloud_model_.GetCurrentTextStartIndex(node_id);
-}
-
-int ReadAnythingAppController::GetCurrentTextEndIndex(ui::AXNodeID node_id) {
-  return read_aloud_model_.GetCurrentTextEndIndex(node_id);
 }
 
 void ReadAnythingAppController::SetLanguageForTesting(
@@ -2043,6 +2076,7 @@ void ReadAnythingAppController::OnDeviceLocked() {
 }
 #else
 void ReadAnythingAppController::OnTtsEngineInstalled() {
+  VLOG(1) << "OnTtsEngineInstalled";
   ExecuteJavaScript("chrome.readingMode.onTtsEngineInstalled()");
 }
 #endif
@@ -2156,6 +2190,32 @@ int ReadAnythingAppController::GetAccessibleBoundary(const std::u16string& text,
       shorter_string.length() - 1, ax::mojom::MoveDirection::kBackward,
       ax::mojom::TextAffinity::kDefaultValue);
   return word_ends;
+}
+
+v8::Local<v8::Value> ReadAnythingAppController::GetCurrentTextSegments() {
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  auto context = isolate->GetCurrentContext();
+
+  std::vector<ReadAloudTextSegment> nodes =
+      read_aloud_model_.GetCurrentTextSegments(
+          model_.is_pdf(), model_.IsDocs(), model_.GetCurrentlyVisibleNodes());
+
+  v8::Local<v8::Array> highlight_array = v8::Array::New(isolate, nodes.size());
+  for (int i = 0; i < (int)nodes.size(); i++) {
+    v8::Local<v8::Object> obj = v8::Object::New(isolate);
+    auto checked = obj->DefineOwnProperty(
+        context, v8::String::NewFromUtf8(isolate, "nodeId").ToLocalChecked(),
+        v8::Number::New(isolate, nodes[i].id));
+    checked = obj->DefineOwnProperty(
+        context, v8::String::NewFromUtf8(isolate, "start").ToLocalChecked(),
+        v8::Number::New(isolate, nodes[i].text_start));
+    checked = obj->DefineOwnProperty(
+        context, v8::String::NewFromUtf8(isolate, "length").ToLocalChecked(),
+        v8::Number::New(isolate, (nodes[i].text_end - nodes[i].text_start)));
+    checked = highlight_array->Set(isolate->GetCurrentContext(), i, obj);
+  }
+  return highlight_array;
 }
 
 v8::Local<v8::Value>

@@ -50,6 +50,7 @@ import java.util.function.DoubleConsumer;
 @RunWith(BaseRobolectricTestRunner.class)
 @EnableFeatures({
     ChromeFeatureList.HISTORY_PANE_ANDROID,
+    ChromeFeatureList.ENABLE_ESCAPE_HANDLING_FOR_SECONDARY_ACTIVITIES
 })
 public class HistoryPaneUnitTest {
     @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
@@ -68,7 +69,6 @@ public class HistoryPaneUnitTest {
     @Mock private UserPrefs.Natives mUserPrefsNatives;
     @Mock private LargeIconBridge.Natives mLargeIconBridgeNatives;
     @Mock private SigninManager mSigninManager;
-    @Mock private IdentityServicesProvider.Natives mIdentityServicesProvider;
     @Mock private IdentityServicesProvider mIdentityService;
     @Mock private IdentityManager mIdentityManager;
     @Mock private SyncService mSyncService;

@@ -64,7 +64,7 @@
 #include "ui/views/view_class_properties.h"
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#include "components/plus_addresses/resources/vector_icons.h"
+#include "components/plus_addresses/core/browser/resources/vector_icons.h"
 #endif
 
 namespace autofill::popup_cell_utils {
@@ -158,6 +158,7 @@ std::u16string GetIconAccessibleName(Suggestion::Icon icon) {
     case Suggestion::Icon::kEdit:
     case Suggestion::Icon::kEmail:
     case Suggestion::Icon::kError:
+    case Suggestion::Icon::kFlight:
     case Suggestion::Icon::kGlobe:
     case Suggestion::Icon::kGoogle:
     case Suggestion::Icon::kGoogleMonochrome:
@@ -322,6 +323,9 @@ std::optional<ui::ImageModel> GetIconImageModelFromIcon(Suggestion::Icon icon) {
     case Suggestion::Icon::kError:
       return ui::ImageModel::FromVectorIcon(vector_icons::kErrorIcon,
                                             ui::kColorSysError, kIconSize);
+    case Suggestion::Icon::kFlight:
+      return ImageModelFromVectorIcon(vector_icons::kFlightIcon,
+                                      kChromeRefreshIconSize);
     case Suggestion::Icon::kGlobe:
       return ImageModelFromVectorIcon(kGlobeIcon, kIconSize);
     case Suggestion::Icon::kGoogle:
@@ -607,7 +611,8 @@ void AddSuggestionContentToView(
   // Adjust the row height based on the number of subtexts (lines of text).
   int row_height = views::MenuConfig::instance().touchable_menu_height;
   if (!subtext_views.empty() ||
-      (suggestion.type == SuggestionType::kCreditCardEntry &&
+      ((suggestion.type == SuggestionType::kCreditCardEntry ||
+        suggestion.type == SuggestionType::kVirtualCreditCardEntry) &&
        base::FeatureList::IsEnabled(
            autofill::features::kAutofillEnableNewFopDisplayDesktop))) {
     row_height += kAutofillPopupAdditionalDoubleRowHeight;

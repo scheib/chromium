@@ -45,7 +45,8 @@ class MasonryLayoutAlgorithmTest : public BaseLayoutAlgorithmTest {
       CHECK(collapsed_track_indexes_.empty());
 
       Vector<LayoutUnit> intrinsic_repeat_track_sizes =
-          algorithm.GetIntrinsicRepeaterTrackSizes(grid_axis_tracks_.value());
+          algorithm.GetIntrinsicRepeaterTrackSizes(!masonry_items.IsEmpty(),
+                                                   grid_axis_tracks_.value());
       grid_axis_tracks_ = algorithm.ComputeGridAxisTracks(
           SizingConstraint::kLayout, &intrinsic_repeat_track_sizes,
           masonry_items, collapsed_track_indexes_, start_offset,
@@ -1234,10 +1235,9 @@ TEST_F(MasonryLayoutAlgorithmTest, RowAutoFillAutoFitAutoNoCollapse) {
 
 TEST_F(MasonryLayoutAlgorithmTest, UpdateRunningPositionsForSpan) {
   Vector<wtf_size_t> collapsed_track_indexes;
-  MasonryRunningPositions running_positions(
-      /*track_count=*/4,
-      /*initial_running_position=*/LayoutUnit(),
-      /*tie_threshold=*/LayoutUnit(), collapsed_track_indexes);
+  MasonryRunningPositions running_positions = InitializeMasonryRunningPositions(
+      {LayoutUnit(), LayoutUnit(), LayoutUnit(), LayoutUnit()},
+      /*tie_threshold=*/LayoutUnit());
 
   Vector<LayoutUnit> expected_running_positions = {
       LayoutUnit(0), LayoutUnit(3), LayoutUnit(3), LayoutUnit(0)};

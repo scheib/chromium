@@ -6,18 +6,10 @@
 #define CHROME_BROWSER_ACTOR_UI_MOCKS_MOCK_ACTOR_UI_STATE_MANAGER_H_
 
 #include "chrome/browser/actor/actor_task.h"
-#include "chrome/browser/actor/task_id.h"
 #include "chrome/browser/actor/ui/actor_ui_state_manager_interface.h"
 #include "chrome/browser/actor/ui/actor_ui_tab_controller_interface.h"
+#include "chrome/common/actor/task_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#if BUILDFLAG(ENABLE_GLIC)
-#include "chrome/browser/glic/widget/glic_window_controller.h"
-#include "chrome/common/actor.mojom.h"
-#endif
-
-namespace tabs {
-class TabInterface;
-}
 
 namespace actor::ui {
 
@@ -31,25 +23,11 @@ class MockActorUiStateManager : public ActorUiStateManagerInterface {
               (AsyncUiEvent event, UiCompleteCallback callback),
               (override));
   MOCK_METHOD(void, OnUiEvent, (SyncUiEvent event), (override));
-  MOCK_METHOD(ActorUiTabControllerInterface*,
-              GetUiTabController,
-              (tabs::TabInterface * tab),
-              (override));
   MOCK_METHOD(void, MaybeShowToast, (BrowserWindowInterface * bwi), (override));
-  MOCK_METHOD(TaskIconUiState, GetTaskIconUiState, (), (const override));
-
-#if BUILDFLAG(ENABLE_GLIC)
-  MOCK_METHOD(void,
-              OnGlicUpdateFloatyState,
-              (glic::GlicWindowController::State floaty_state,
-               glic::mojom::CurrentView current_view),
-              (override));
   MOCK_METHOD(base::CallbackListSubscription,
-              RegisterTaskIconStateChange,
-              (TaskIconStateChangeCallback callback),
+              RegisterActorTaskStateChange,
+              (ActorTaskStateChangeCallback callback),
               (override));
-
-#endif
 };
 
 }  // namespace actor::ui

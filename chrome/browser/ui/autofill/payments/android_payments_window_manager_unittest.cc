@@ -8,29 +8,20 @@
 #include <string_view>
 
 #include "base/test/mock_callback.h"
-#include "chrome/browser/ui/android/autofill/autofill_payments_window_bridge.h"
+#include "chrome/browser/ui/android/autofill/payments/payments_window_bridge.h"
+#include "chrome/browser/ui/android/autofill/payments/payments_window_delegate.h"
+#include "chrome/browser/ui/autofill/payments/android_payments_window_manager.h"
 #include "chrome/browser/ui/autofill/payments/android_payments_window_manager_test_api.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "components/autofill/content/browser/test_autofill_client_injector.h"
 #include "components/autofill/content/browser/test_content_autofill_client.h"
 #include "components/autofill/core/browser/payments/payments_window_manager.h"
 #include "components/autofill/core/browser/payments/test_payments_autofill_client.h"
+#include "content/public/browser/web_contents.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
 namespace autofill {
-
-class MockAutofillPaymentsWindowBridge : public AutofillPaymentsWindowBridge {
- public:
-  explicit MockAutofillPaymentsWindowBridge(content::WebContents& web_contents)
-      : AutofillPaymentsWindowBridge(web_contents) {}
-
-  MOCK_METHOD(void,
-              OpenEphemeralTab,
-              (const GURL&, const std::u16string&),
-              (override));
-  MOCK_METHOD(void, CloseEphemeralTab, (), (override));
-};
 
 class TestContentAutofillClientForWindowManagerTest
     : public TestContentAutofillClient {
@@ -46,6 +37,26 @@ class TestContentAutofillClientForWindowManagerTest
 };
 
 namespace payments {
+
+class MockPaymentsWindowDelegate : public PaymentsWindowDelegate {
+ public:
+  MockPaymentsWindowDelegate() = default;
+
+  MOCK_METHOD(void, OnDidFinishNavigationForBnpl, (const GURL&), (override));
+  MOCK_METHOD(void, WebContentsDestroyed, (), (override));
+};
+
+class MockPaymentsWindowBridge : public PaymentsWindowBridge {
+ public:
+  explicit MockPaymentsWindowBridge(PaymentsWindowDelegate* delegate)
+      : PaymentsWindowBridge(delegate) {}
+
+  MOCK_METHOD(void,
+              OpenEphemeralTab,
+              (const GURL&, const std::u16string&, content::WebContents&),
+              (override));
+  MOCK_METHOD(void, CloseEphemeralTab, (), (override));
+};
 
 constexpr std::string_view kBnplInitialUrl = "https://www.bnplinitialurl.com/";
 constexpr std::string_view kBnplSuccessUrlPrefix =
@@ -76,14 +87,12 @@ class AndroidPaymentsWindowManagerTest
     window_manager().InitBnplFlow(std::move(context));
   }
 
-  void SetUpMockAutofillPaymentsWindowBridge() {
-    std::unique_ptr<autofill::MockAutofillPaymentsWindowBridge>
-        autofill_payments_window_bridge_ptr =
-            std::make_unique<autofill::MockAutofillPaymentsWindowBridge>(
-                *web_contents());
+  void SetUpMockPaymentsWindowBridge() {
+    MockPaymentsWindowDelegate mock_delegate;
+    std::unique_ptr<MockPaymentsWindowBridge> payments_window_bridge_ptr =
+        std::make_unique<MockPaymentsWindowBridge>(&mock_delegate);
     test_api(window_manager())
-        .SetAutofillPaymentsWindowBridge(
-            std::move(autofill_payments_window_bridge_ptr));
+        .SetPaymentsWindowBridge(std::move(payments_window_bridge_ptr));
   }
 
   base::MockCallback<PaymentsWindowManager::OnBnplPopupClosedCallback>
@@ -100,12 +109,13 @@ class AndroidPaymentsWindowManagerTest
 TEST_F(AndroidPaymentsWindowManagerTest, InitBnplFlow) {
   // The flow should not be ongoing initially.
   EXPECT_TRUE(test_api(window_manager()).NoOngoingFlow());
-  SetUpMockAutofillPaymentsWindowBridge();
-  EXPECT_CALL(static_cast<autofill::MockAutofillPaymentsWindowBridge&>(
-                  test_api(window_manager()).GetAutofillPaymentsWindowBridge()),
+  SetUpMockPaymentsWindowBridge();
+  EXPECT_CALL(static_cast<MockPaymentsWindowBridge&>(
+                  test_api(window_manager()).GetPaymentsWindowBridge()),
               OpenEphemeralTab(
                   GURL(kBnplInitialUrl),
-                  BnplIssuerIdToDisplayName(BnplIssuer::IssuerId::kBnplAffirm)))
+                  BnplIssuerIdToDisplayName(BnplIssuer::IssuerId::kBnplAffirm),
+                  testing::A<content::WebContents&>()))
       .Times(1);
 
   InitBnplFlowForTest();
@@ -238,10 +248,10 @@ TEST_F(AndroidPaymentsWindowManagerTest,
 
 TEST_F(AndroidPaymentsWindowManagerTest,
        OnDidFinishNavigationForBnpl_WhenSuccessUrl_ClosesTab) {
-  SetUpMockAutofillPaymentsWindowBridge();
+  SetUpMockPaymentsWindowBridge();
   InitBnplFlowForTest();
-  EXPECT_CALL(static_cast<autofill::MockAutofillPaymentsWindowBridge&>(
-                  test_api(window_manager()).GetAutofillPaymentsWindowBridge()),
+  EXPECT_CALL(static_cast<MockPaymentsWindowBridge&>(
+                  test_api(window_manager()).GetPaymentsWindowBridge()),
               CloseEphemeralTab())
       .Times(1);
 
@@ -251,10 +261,10 @@ TEST_F(AndroidPaymentsWindowManagerTest,
 
 TEST_F(AndroidPaymentsWindowManagerTest,
        OnDidFinishNavigationForBnpl_WhenFailureUrl_ClosesTab) {
-  SetUpMockAutofillPaymentsWindowBridge();
+  SetUpMockPaymentsWindowBridge();
   InitBnplFlowForTest();
-  EXPECT_CALL(static_cast<autofill::MockAutofillPaymentsWindowBridge&>(
-                  test_api(window_manager()).GetAutofillPaymentsWindowBridge()),
+  EXPECT_CALL(static_cast<MockPaymentsWindowBridge&>(
+                  test_api(window_manager()).GetPaymentsWindowBridge()),
               CloseEphemeralTab())
       .Times(1);
 
@@ -264,10 +274,10 @@ TEST_F(AndroidPaymentsWindowManagerTest,
 
 TEST_F(AndroidPaymentsWindowManagerTest,
        OnDidFinishNavigationForBnpl_WhenNotFinished_DoesNotCloseTab) {
-  SetUpMockAutofillPaymentsWindowBridge();
+  SetUpMockPaymentsWindowBridge();
   InitBnplFlowForTest();
-  EXPECT_CALL(static_cast<autofill::MockAutofillPaymentsWindowBridge&>(
-                  test_api(window_manager()).GetAutofillPaymentsWindowBridge()),
+  EXPECT_CALL(static_cast<MockPaymentsWindowBridge&>(
+                  test_api(window_manager()).GetPaymentsWindowBridge()),
               CloseEphemeralTab())
       .Times(0);
 

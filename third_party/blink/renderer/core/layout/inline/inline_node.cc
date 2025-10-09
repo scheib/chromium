@@ -1311,8 +1311,7 @@ void InlineNode::SegmentBidiRuns(InlineNodeData* data) const {
   String text_content_with_out_of_flow;
   wtf_size_t text_len = text_content.length();
   InlineItems& items = data->items;
-  if (data->HasFloatingOrOutOfFlowPositioned() &&
-      RuntimeEnabledFeatures::LineBreakOofNoOrcEnabled()) [[unlikely]] {
+  if (data->HasFloatingOrOutOfFlowPositioned()) [[unlikely]] {
     StringBuilder builder;
     wtf_size_t last_offset = 0;
     for (const auto item_ptr : items) {
@@ -1355,7 +1354,6 @@ void InlineNode::SegmentBidiRuns(InlineNodeData* data) const {
     if (out_of_flow_items.empty()) {
       item_index = InlineItem::SetBidiLevel(items, item_index, end, level);
     } else {
-      DCHECK(RuntimeEnabledFeatures::LineBreakOofNoOrcEnabled());
       wtf_size_t num_out_of_flow_in_this_run = 0;
       while (end > out_of_flow_items[out_of_flow_item_index].text_offset) {
 #if EXPENSIVE_DCHECKS_ARE_ON()
@@ -1374,7 +1372,6 @@ void InlineNode::SegmentBidiRuns(InlineNodeData* data) const {
 #if EXPENSIVE_DCHECKS_ARE_ON()
   if (!out_of_flow_items.empty()) {
     // Check the BiDi level for OOF items are set correctly.
-    DCHECK(RuntimeEnabledFeatures::LineBreakOofNoOrcEnabled());
     DCHECK_EQ(out_of_flow_item_index, out_of_flow_items.size() - 1);
     out_of_flow_item_index = 0;
     for (const auto item_ptr : items) {
@@ -1451,7 +1448,11 @@ void InlineNode::ShapeText(InlineItemsData* data,
   InlineItem::CheckIndex(*items);
 #endif  // EXPENSIVE_DCHECKS_ARE_ON()
 
-  ShapeResultSpacing<String> spacing(text_content, IsSvgText());
+  ShapeResultSpacing<String> spacing(
+      text_content,
+      /*allow_word_spacing_anywhere=*/IsSvgText() ||
+          (RuntimeEnabledFeatures::WordSpacingWhiteSpacePreEnabled() &&
+           Style().ShouldPreserveWhiteSpaces()));
   TextAutoSpace auto_space(*data);
 
   const bool allow_shape_cache =
@@ -1990,7 +1991,7 @@ static LayoutUnit ComputeContentSize(InlineNode node,
       const Font* font = RuntimeEnabledFeatures::TabSizeAncestorEnabled()
                              ? &node.FontForTab()
                              : style.GetFont();
-      const SimpleFontData* font_data = font->PrimaryFont();
+      const SimpleFontData* font_data = font->PrimaryFontForTabSize();
       // Sync with `ShapeResult::CreateForTabulationCharacters()`.
       TextRunLayoutUnit glyph_advance = TextRunLayoutUnit::FromFloatRound(
           font->TabWidth(font_data, tab_size, position));
@@ -2204,8 +2205,8 @@ MinMaxSizesResult InlineNode::ComputeMinMaxSizes(
         LineBreakerMode::kMaxContent, &max_size_cache, nullptr, nullptr);
   }
 
-  // Negative text-indent can make min > max. Ensure min is the minimum size.
-  sizes.min_size = std::min(sizes.min_size, sizes.max_size);
+  // Negative text-indent can make min > max. Ensure max encompasses the min.
+  sizes.max_size = std::max(sizes.min_size, sizes.max_size);
 
   return MinMaxSizesResult(sizes, depends_on_block_constraints);
 }

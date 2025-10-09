@@ -55,6 +55,7 @@
 #include "ui/base/metadata/base_type_conversion.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/clip_recorder.h"
 #include "ui/compositor/compositor.h"
@@ -1025,8 +1026,7 @@ const View* View::GetViewByID(int id) const {
 
   internal::ScopedChildrenLock lock(this);
   for (views::View* child : children_) {
-    const View* view = child->GetViewByID(id);
-    if (view) {
+    if (const View* view = child->GetViewByID(id)) {
       return view;
     }
   }
@@ -1047,6 +1047,26 @@ void View::SetID(int id) {
   OnPropertyChanged(&id_, kPropertyEffectsNone);
 }
 
+const View* View::GetViewByElementId(ui::ElementIdentifier element_id) const {
+  if (element_id == GetProperty(kElementIdentifierKey)) {
+    return const_cast<View*>(this);
+  }
+
+  internal::ScopedChildrenLock lock(this);
+  for (views::View* child : children_) {
+    if (const View* view = child->GetViewByElementId(element_id)) {
+      return view;
+    }
+  }
+
+  return nullptr;
+}
+
+View* View::GetViewByElementId(ui::ElementIdentifier element_id) {
+  return const_cast<View*>(
+      const_cast<const View*>(this)->GetViewByElementId(element_id));
+}
+
 base::CallbackListSubscription View::AddIDChangedCallback(
     PropertyChangedCallback callback) {
   return AddPropertyChangedCallback(&id_, callback);
@@ -1061,8 +1081,21 @@ void View::SetGroup(int gid) {
   }
 }
 
+void View::SetOwnedGroup(int group_id) {
+  // Don't change the owned group once it's set.
+  DCHECK(owned_group_ == -1 || owned_group_ == group_id);
+  if (owned_group_ != group_id) {
+    owned_group_ = group_id;
+    OnPropertyChanged(&owned_group_, kPropertyEffectsNone);
+  }
+}
+
 int View::GetGroup() const {
   return group_;
+}
+
+int View::GetOwnedGroup() const {
+  return owned_group_;
 }
 
 base::CallbackListSubscription View::AddGroupChangedCallback(
@@ -1596,7 +1629,7 @@ bool View::IsMouseHovered() const {
     return false;
   }
 
-  gfx::Point cursor_pos(display::Screen::GetScreen()->GetCursorScreenPoint());
+  gfx::Point cursor_pos(display::Screen::Get()->GetCursorScreenPoint());
   ConvertPointFromScreen(this, &cursor_pos);
   return HitTestPoint(cursor_pos);
 }
@@ -2000,12 +2033,18 @@ bool View::IsFocusable() const {
 
 FocusManager* View::GetFocusManager() {
   Widget* widget = GetWidget();
+  // If the View is not yet in a Widget hierarchy, it might have a
+  // FocusManager set via a property for detached scenarios.
+  FocusManager* focus_manager = GetProperty(kDetachedViewFocusManagerKey);
+  if (focus_manager) {
+    CHECK(!widget);
+    return focus_manager;
+  }
   return widget ? widget->GetFocusManager() : nullptr;
 }
 
 const FocusManager* View::GetFocusManager() const {
-  const Widget* widget = GetWidget();
-  return widget ? widget->GetFocusManager() : nullptr;
+  return const_cast<View*>(this)->GetFocusManager();
 }
 
 void View::RequestFocus() {
@@ -2764,7 +2803,10 @@ int View::GetVerticalDragThreshold() {
 }
 
 PaintInfo::ScaleType View::GetPaintScaleType() const {
-  return PaintInfo::ScaleType::kScaleWithEdgeSnapping;
+  if (::features::IsPixelCanvasRecordingEnabled()) {
+    return PaintInfo::ScaleType::kScaleWithEdgeSnapping;
+  }
+  return PaintInfo::ScaleType::kUniformScaling;
 }
 
 void View::HandlePropertyChangeEffects(PropertyEffects effects) {
@@ -3138,6 +3180,11 @@ void View::DoRemoveChildView(View* view,
   }
 
   view->parent_ = nullptr;
+  // Make sure the sub-tree of this view detaches from widget the same moment
+  // they're removed from previous view hierarchy.
+  if (is_removed_from_widget) {
+    view->SetWidget(nullptr);
+  }
 
   if (delete_removed_view && !view->owned_by_client_) {
     view_to_be_deleted.reset(view);
@@ -3177,8 +3224,8 @@ void View::PropagateRemoveNotifications(View* old_parent,
 
   if (is_removed_from_widget) {
     RemovedFromWidget();
+    GetViewAccessibility().OnViewRemovedFromWidget();
     observers_.Notify(&ViewObserver::OnViewRemovedFromWidget, this);
-    widget_ = nullptr;
   }
 }
 
@@ -3916,6 +3963,7 @@ ADD_READONLY_PROPERTY_METADATA(bool, EnabledInViewsSubtree)
 ADD_PROPERTY_METADATA(View::FocusBehavior, FocusBehavior)
 ADD_PROPERTY_METADATA(bool, FlipCanvasOnPaintForRTLUI)
 ADD_PROPERTY_METADATA(int, Group)
+ADD_PROPERTY_METADATA(int, OwnedGroup)
 ADD_PROPERTY_METADATA(int, Height)
 ADD_PROPERTY_METADATA(int, ID)
 ADD_READONLY_PROPERTY_METADATA(bool, IsDrawn);

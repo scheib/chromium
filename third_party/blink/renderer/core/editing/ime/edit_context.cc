@@ -29,6 +29,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/geometry/dom_rect.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/text/text_boundaries.h"
 #include "third_party/blink/renderer/platform/wtf/decimal.h"
@@ -159,40 +160,49 @@ void EditContext::DispatchTextFormatEvent(
 
     String underline_thickness;
     String underline_style;
+    // Use values defined in spec [1] for `TextFormat::underlineStyle` &
+    // `TextFormat::underlineThickness`
+    // TODO(crbug.com/354497121): Remove this change and update the TextFormat
+    // attribute type as per the spec [1] when the feature is enabled by
+    // default.
+    // [1]: https://w3c.github.io/edit-context/#textformatupdateevent
+    bool use_spec_values = RuntimeEnabledFeatures::
+        UseSpecValuesInTextFormatUpdateEventStylesEnabled();
     switch (ime_text_span.thickness) {
       case ui::ImeTextSpan::Thickness::kNone:
-        underline_thickness = "None";
+        underline_thickness = use_spec_values ? "none" : "None";
         break;
       case ui::ImeTextSpan::Thickness::kThin:
-        underline_thickness = "Thin";
+        underline_thickness = use_spec_values ? "thin" : "Thin";
         break;
       case ui::ImeTextSpan::Thickness::kThick:
-        underline_thickness = "Thick";
+        underline_thickness = use_spec_values ? "thick" : "Thick";
         break;
     }
     switch (ime_text_span.underline_style) {
       case ui::ImeTextSpan::UnderlineStyle::kNone:
-        underline_style = "None";
+        underline_style = use_spec_values ? "none" : "None";
         break;
       case ui::ImeTextSpan::UnderlineStyle::kSolid:
-        underline_style = "Solid";
+        underline_style = use_spec_values ? "solid" : "Solid";
         break;
       case ui::ImeTextSpan::UnderlineStyle::kDot:
-        underline_style = "Dotted";
+        underline_style = use_spec_values ? "dotted" : "Dotted";
         break;
       case ui::ImeTextSpan::UnderlineStyle::kDash:
-        underline_style = "Dashed";
+        underline_style = use_spec_values ? "dashed" : "Dashed";
         break;
       case ui::ImeTextSpan::UnderlineStyle::kSquiggle:
-        underline_style = "Squiggle";
+        underline_style = use_spec_values ? "wavy" : "Squiggle";
         break;
     }
 
-    text_formats.push_back(TextFormat::Create(
-        range_start, range_end,
-        underline_style, underline_thickness));
+    text_formats.push_back(
+        TextFormat::Create(range_start, range_end, underline_style,
+                           underline_thickness, ASSERT_NO_EXCEPTION));
 
-    if (underline_style != "None" || underline_thickness != "None") {
+    String none_value = use_spec_values ? "none" : "None";
+    if (underline_style != none_value || underline_thickness != none_value) {
       is_text_format_underline_style_or_thickness_not_none = true;
     }
   }

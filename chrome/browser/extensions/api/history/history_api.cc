@@ -34,6 +34,9 @@
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/buildflags/buildflags.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 
@@ -252,16 +255,17 @@ ExtensionFunction::ResponseAction HistoryGetVisitsFunction::Run() {
 
   history::HistoryService* hs = HistoryServiceFactory::GetForProfile(
       GetProfile(), ServiceAccessType::EXPLICIT_ACCESS);
-  hs->QueryURL(url,
-               true,  // Retrieve full history of a URL.
-               base::BindOnce(&HistoryGetVisitsFunction::QueryComplete,
-                              base::Unretained(this)),
-               &task_tracker_);
+  // Retrieve full history of a URL.
+  hs->QueryURLAndVisits(url, history::VisitQuery404sPolicy::kExclude404s,
+                        base::BindOnce(&HistoryGetVisitsFunction::QueryComplete,
+                                       base::Unretained(this)),
+                        &task_tracker_);
   AddRef();               // Balanced in QueryComplete().
   return RespondLater();  // QueryComplete() will be called asynchronously.
 }
 
-void HistoryGetVisitsFunction::QueryComplete(history::QueryURLResult result) {
+void HistoryGetVisitsFunction::QueryComplete(
+    history::QueryURLAndVisitsResult result) {
   VisitItemList visit_item_vec;
   if (result.success && !result.visits.empty()) {
     for (const history::VisitRow& visit : result.visits)
@@ -281,6 +285,9 @@ ExtensionFunction::ResponseAction HistorySearchFunction::Run() {
   history::QueryOptions options;
   options.SetRecentDayRange(1);
   options.max_count = 100;
+  // TODO: crbug.com/443117133 - Change to `kInclude404s` after
+  //   `history::kVisitedLinksOn404` is enabled everywhere.
+  options.policy_for_404_visits = history::VisitQuery404sPolicy::kExclude404s;
 
   if (params->query.start_time)
     options.begin_time = GetTime(*params->query.start_time);

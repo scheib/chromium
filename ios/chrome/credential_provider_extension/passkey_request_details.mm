@@ -4,6 +4,8 @@
 
 #import "ios/chrome/credential_provider_extension/passkey_request_details.h"
 
+#import <AuthenticationServices/AuthenticationServices.h>
+
 #import "base/apple/foundation_util.h"
 #import "base/check.h"
 #import "components/webauthn/core/browser/passkey_model_utils.h"
@@ -46,6 +48,22 @@
 
 @implementation PasskeyRequestDetails {
   PRFData* _prf;
+  // Caches whether the registration request supports the large blob extension.
+  BOOL _largeBlobCheckSupported;
+}
+
+// Checks if Large Blob support is requested from the registration input.
+// This is determined by the presence of the 'largeBlob' property on the input
+// object which indicates that support is either required or preferred.
++ (BOOL)isLargeBlobSupportRequestedFromRegistrationInput:
+    (ASPasskeyRegistrationCredentialExtensionInput*)registrationInput
+    API_AVAILABLE(ios(18.0)) {
+  if (!IsPasskeyLargeBlobEnabled()) {
+    return NO;
+  }
+  // The presence of the Large Blob input means support is either required or
+  // preferred.
+  return registrationInput.largeBlob ? YES : NO;
 }
 
 - (instancetype)initWithParameters:(ASPasskeyCredentialRequestParameters*)
@@ -125,14 +143,20 @@
       if (IsPasskeyPRFEnabled()) {
         _prf = [PRFData fromRequest:passkeyCredentialRequest];
       }
+
+      // Registration side large blob extension.
+      _largeBlobCheckSupported = [PasskeyRequestDetails
+          isLargeBlobSupportRequestedFromRegistrationInput:
+              passkeyCredentialRequest.registrationExtensionInput];
     }
   }
   return self;
 }
 
 - (ASPasskeyRegistrationCredential*)
-     createPasskeyForGaia:(NSString*)gaia
-    securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets {
+           createPasskeyForGaia:(NSString*)gaia
+          securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets
+    didCompleteUserVerification:(BOOL)didCompleteUserVerification {
   NSArray<NSData*>* prfInputs = nil;
   if (@available(iOS 18.0, *)) {
     if (_prf.inputValues) {
@@ -145,7 +169,8 @@
   }
   PasskeyCreationOutput passkeyCreationOutput = PerformPasskeyCreation(
       self.clientDataHash, self.relyingPartyIdentifier, self.userName,
-      self.userHandle, gaia, securityDomainSecrets, prfInputs);
+      self.userHandle, gaia, securityDomainSecrets, prfInputs,
+      didCompleteUserVerification);
   if (@available(iOS 18.0, *)) {
     if (passkeyCreationOutput.credential) {
       if ([passkeyCreationOutput.prf_outputs count]) {
@@ -156,14 +181,18 @@
       } else if (_prf.checkForSupport) {
         [passkeyCreationOutput.credential setPRFIsSupported];
       }
+      if (_largeBlobCheckSupported) {
+        [passkeyCreationOutput.credential setLargeBlobIsSupported];
+      }
     }
   }
   return passkeyCreationOutput.credential;
 }
 
 - (ASPasskeyAssertionCredential*)
-    assertPasskeyCredential:(id<Credential>)credential
-      securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets {
+        assertPasskeyCredential:(id<Credential>)credential
+          securityDomainSecrets:(NSArray<NSData*>*)securityDomainSecrets
+    didCompleteUserVerification:(BOOL)didCompleteUserVerification {
   NSArray<NSData*>* prfInputs = nil;
   PRFInputValues* inputValues = nil;
   if (@available(iOS 18.0, *)) {
@@ -182,7 +211,7 @@
   }
   PasskeyAssertionOutput passkeyAssertionOutput = PerformPasskeyAssertion(
       credential, self.clientDataHash, self.allowedCredentials,
-      securityDomainSecrets, prfInputs);
+      securityDomainSecrets, prfInputs, didCompleteUserVerification);
   if (@available(iOS 18.0, *)) {
     if (passkeyAssertionOutput.credential &&
         [passkeyAssertionOutput.prf_outputs count]) {

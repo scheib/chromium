@@ -11,8 +11,10 @@
 #import "ios/chrome/browser/location_bar/model/web_location_bar_impl.h"
 #import "ios/chrome/browser/location_bar/ui_bundled/location_bar_model_delegate_ios.h"
 #import "ios/chrome/browser/location_bar/ui_bundled/location_bar_url_loader.h"
+#import "ios/chrome/browser/ntp/ui_bundled/incognito/incognito_view.h"
 #import "ios/chrome/browser/omnibox/coordinator/omnibox_coordinator.h"
 #import "ios/chrome/browser/omnibox/model/chrome_omnibox_client_ios.h"
+#import "ios/chrome/browser/omnibox/public/omnibox_presentation_context.h"
 #import "ios/chrome/browser/omnibox/ui/popup/omnibox_popup_presenter.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
@@ -55,7 +57,10 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   OmniboxCoordinator* _omniboxCoordinator;
   UIViewController* _baseViewController;
   BOOL _isNewTabPage;
+  BOOL _incognito;
   BOOL _shouldExitTabGrid;
+
+  UIView* _incognitoView;
 
   raw_ptr<Browser> _browser;
   raw_ptr<ChromeOmniboxClientIOS> _omniboxClient;
@@ -86,7 +91,9 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
     ProfileIOS* profile = _browser->GetProfile();
 
-    if (profile->IsOffTheRecord()) {
+    _incognito = profile->IsOffTheRecord();
+
+    if (_incognito) {
       self.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     }
     if (_isNewTabPage) {
@@ -117,7 +124,7 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
                                        _locationBar.get(), _browser,
                                        feature_engagement::TrackerFactory::
                                            GetForProfile(profile))
-                     isLensOverlay:NO];
+               presentationContext:OmniboxPresentationContext::kLocationBar];
     _omniboxCoordinator.presenterDelegate = self;
 
     [_omniboxCoordinator start];
@@ -176,6 +183,25 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
   [self.view addSubview:closeButton];
 
+  BOOL isIncognitoNTP = _isNewTabPage && _incognito;
+
+  if (isIncognitoNTP) {
+    IncognitoView* incognitoView = [[IncognitoView alloc] init];
+    _incognitoView = incognitoView;
+    incognitoView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:incognitoView];
+    [NSLayoutConstraint activateConstraints:@[
+      [incognitoView.leadingAnchor
+          constraintEqualToAnchor:self.view.leadingAnchor],
+      [incognitoView.topAnchor
+          constraintEqualToAnchor:_omniboxContainer.bottomAnchor],
+      [incognitoView.trailingAnchor
+          constraintEqualToAnchor:self.view.trailingAnchor],
+      [incognitoView.bottomAnchor
+          constraintEqualToAnchor:self.view.bottomAnchor],
+    ]];
+  }
+
   _omniboxPopupContainer = [[UIView alloc] init];
   _omniboxPopupContainer.translatesAutoresizingMaskIntoConstraints = NO;
   [self.view addSubview:_omniboxPopupContainer];
@@ -224,7 +250,9 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
   AddSameConstraints(editView, _omniboxContainer);
 
-  [_omniboxCoordinator focusOmnibox];
+  if (!isIncognitoNTP) {
+    [_omniboxCoordinator focusOmnibox];
+  }
 }
 
 #pragma mark - LocationBarURLLoader
@@ -246,13 +274,13 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
       web_params.https_upgrade_type = web::HttpsUpgradeType::kOmnibox;
     }
     NSMutableDictionary<NSString*, NSString*>* combinedExtraHeaders =
-        [web_navigation_util::VariationHeadersForURL(
-            url, _browser->GetProfile()->IsOffTheRecord()) mutableCopy];
+        [web_navigation_util::VariationHeadersForURL(url, _incognito)
+            mutableCopy];
     [combinedExtraHeaders addEntriesFromDictionary:web_params.extra_headers];
     web_params.extra_headers = [combinedExtraHeaders copy];
     UrlLoadParams params = UrlLoadParams::InNewTab(web_params);
     params.disposition = disposition;
-    params.in_incognito = _browser->GetProfile()->IsOffTheRecord();
+    params.in_incognito = _incognito;
     if (_isNewTabPage &&
         params.disposition == WindowOpenDisposition::CURRENT_TAB) {
       params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
@@ -310,9 +338,11 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 }
 
 - (void)popupDidOpenForPresenter:(OmniboxPopupPresenter*)presenter {
+  _incognitoView.hidden = YES;
 }
 
 - (void)popupDidCloseForPresenter:(OmniboxPopupPresenter*)presenter {
+  _incognitoView.hidden = NO;
 }
 
 #pragma mark - Private

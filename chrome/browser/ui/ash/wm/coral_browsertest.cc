@@ -22,6 +22,7 @@
 #include "ash/wm/overview/birch/coral_chip_button.h"
 #include "ash/wm/overview/overview_test_util.h"
 #include "base/command_line.h"
+#include "base/scoped_observation.h"
 #include "base/test/run_until.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/app_restore/app_restore_test_util.h"
@@ -31,13 +32,17 @@
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/ash/util/ash_test_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/ui_test_utils.h"
 #include "chromeos/ash/services/coral/public/mojom/coral_service.mojom.h"
 #include "components/app_restore/restore_data.h"
 #include "content/public/test/browser_test.h"
 #include "gmock/gmock.h"
+#include "ui/aura/window.h"
+#include "ui/aura/window_observer.h"
 
 namespace ash {
 namespace {
@@ -84,6 +89,31 @@ aura::Window* GetNativeWindowForSwa(SystemWebAppType swa_type) {
   return it == browsers->end() ? nullptr : (*it)->window()->GetNativeWindow();
 }
 
+class WindowDestroyedObserver : public aura::WindowObserver {
+ public:
+  explicit WindowDestroyedObserver(aura::Window* window) {
+    CHECK(window);
+    window_observation_.Observe(window);
+  }
+
+  void Wait() {
+    if (window_observation_.IsObserving()) {
+      run_loop_.Run();
+    }
+  }
+
+  // aura::WindowObserver:
+  void OnWindowDestroyed(aura::Window* window) override {
+    window_observation_.Reset();
+    run_loop_.Quit();
+  }
+
+ private:
+  base::RunLoop run_loop_;
+  base::ScopedObservation<aura::Window, aura::WindowObserver>
+      window_observation_{this};
+};
+
 }  // namespace
 
 class CoralBrowserTest : public InProcessBrowserTest {
@@ -109,6 +139,14 @@ class CoralBrowserTest : public InProcessBrowserTest {
   void SetUpCommandLine(base::CommandLine* command_line) override {
     InProcessBrowserTest::SetUpCommandLine(command_line);
     command_line->AppendSwitch(switches::kForceBirchFakeCoralGroup);
+  }
+
+  void CloseBrowserAndNativeWindowSynchronously(
+      BrowserWindowInterface* browser) {
+    WindowDestroyedObserver window_destroyed_observer(
+        browser->GetWindow()->GetNativeWindow());
+    CloseBrowserSynchronously(browser);
+    window_destroyed_observer.Wait();
   }
 
  private:
@@ -418,18 +456,30 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, CloseTabAppUpdateChip) {
   Profile* primary_profile = ProfileManager::GetPrimaryUserProfile();
 
   // Create two browsers. A url appears in both browsers.
-  test::CreateAndShowBrowser(primary_profile, {GURL("https://youtube.com")});
-  test::CreateAndShowBrowser(primary_profile, {GURL("https://youtube.com"),
-                                               GURL("https://google.com")});
+  BrowserWindowInterface* const normal_browser1 = test::CreateAndShowBrowser(
+      primary_profile, {GURL("https://youtube.com")});
+  BrowserWindowInterface* const normal_browser2 = test::CreateAndShowBrowser(
+      primary_profile,
+      {GURL("https://youtube.com"), GURL("https://google.com")});
 
   test::InstallSystemAppsForTesting(primary_profile);
 
-  // Open two File windows and two PWA windows.
+  // Open two File windows.
+  auto browser_created_observer =
+      std::make_optional<ui_test_utils::BrowserCreatedObserver>();
   test::CreateSystemWebApp(primary_profile, SystemWebAppType::FILE_MANAGER);
+  BrowserWindowInterface* const file_browser1 =
+      browser_created_observer->Wait();
+  browser_created_observer.emplace();
   test::CreateSystemWebApp(primary_profile, SystemWebAppType::FILE_MANAGER);
-  test::InstallAndLaunchPWA(primary_profile, GURL("https://www.youtube.com/"),
-                            /*launch_in_browser=*/false,
-                            /*app_title=*/u"YouTube");
+  BrowserWindowInterface* const file_browser2 =
+      browser_created_observer->Wait();
+
+  // Open two PWA windows.
+  BrowserWindowInterface* const pwa_browser1 = test::InstallAndLaunchPWA(
+      primary_profile, GURL("https://www.youtube.com/"),
+      /*launch_in_browser=*/false,
+      /*app_title=*/u"YouTube");
   test::InstallAndLaunchPWA(primary_profile, GURL("https://www.gmail.com/"),
                             /*launch_in_browser=*/false,
                             /*app_title=*/u"Gmail");
@@ -465,34 +515,23 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, CloseTabAppUpdateChip) {
 
   // Closing the first browser with the duplicated tab (https://youtube.com)
   // will not change the group.
-  SelectFirstBrowser();
-  CloseBrowserSynchronously(browser());
+  CloseBrowserAndNativeWindowSynchronously(normal_browser1);
   EXPECT_EQ(group->entities.size(), 4u);
 
   // Closing the next browser will decrease the items in the group.
-  SelectFirstBrowser();
-  CloseBrowserSynchronously(browser());
+  CloseBrowserAndNativeWindowSynchronously(normal_browser2);
   EXPECT_EQ(group->entities.size(), 2u);
 
   // Closing a duplicated window (file manager) will not change the group.
-  SelectFirstBrowser();
-  EXPECT_TRUE(
-      browser()->window()->GetNativeWindow()->GetTitle().starts_with(u"Files"));
-  CloseBrowserSynchronously(browser());
+  CloseBrowserAndNativeWindowSynchronously(file_browser1);
   EXPECT_EQ(group->entities.size(), 2u);
 
   // Closing a non-duplicated window will decrease the items in the group.
-  SelectFirstBrowser();
-  EXPECT_TRUE(
-      browser()->window()->GetNativeWindow()->GetTitle().starts_with(u"Files"));
-  CloseBrowserSynchronously(browser());
+  CloseBrowserAndNativeWindowSynchronously(file_browser2);
   EXPECT_EQ(group->entities.size(), 1u);
 
   // Closing the last app window in group will remove the chip.
-  SelectFirstBrowser();
-  EXPECT_TRUE(browser()->window()->GetNativeWindow()->GetTitle().starts_with(
-      u"YouTube"));
-  CloseBrowserSynchronously(browser());
+  CloseBrowserAndNativeWindowSynchronously(pwa_browser1);
 
   EXPECT_FALSE(GetBirchChipButton());
 }
@@ -503,7 +542,7 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, CloseWindowRemoveTwoChips) {
   Profile* primary_profile = ProfileManager::GetPrimaryUserProfile();
 
   // Create a browser containing 8 tabs.
-  test::CreateAndShowBrowser(
+  BrowserWindowInterface* const browser = test::CreateAndShowBrowser(
       primary_profile,
       {GURL("https://mail.google.com"), GURL("https://youtube.com"),
        GURL("https://google.com"), GURL("https://earth.google.com"),
@@ -546,9 +585,8 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, CloseWindowRemoveTwoChips) {
   ASSERT_EQ(GetBirchChipsNum(), 2u);
 
   // Closing the first browser with all items in groups.
-  SelectFirstBrowser();
-  EXPECT_EQ(8, browser()->tab_strip_model()->GetTabCount());
-  CloseBrowserSynchronously(browser());
+  EXPECT_EQ(8, browser->GetTabStripModel()->GetTabCount());
+  CloseBrowserAndNativeWindowSynchronously(browser);
 
   // Two chips are removed.
   EXPECT_EQ(0u, GetBirchChipsNum());
@@ -688,17 +726,25 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, MoveWindowToOtherDeskUpdateChip) {
 
   // TODO(crbug.com/378159705): move this to a test helper.
   // Create a browser containing 8 tabs.
+  auto browser_created_observer =
+      std::make_optional<ui_test_utils::BrowserCreatedObserver>();
   test::CreateAndShowBrowser(
       primary_profile,
       {GURL("https://mail.google.com"), GURL("https://youtube.com"),
        GURL("https://google.com"), GURL("https://earth.google.com"),
        GURL("https://maps.google.com"), GURL("https://docs.google.com"),
        GURL("https://calendar.google.com"), GURL("https://chat.google.com")});
+  BrowserWindowInterface* const regular_browser =
+      browser_created_observer->Wait();
 
   test::InstallSystemAppsForTesting(primary_profile);
 
-  // Open a File window and a PWA window.
+  // Open a File window.
+  browser_created_observer.emplace();
   test::CreateSystemWebApp(primary_profile, SystemWebAppType::FILE_MANAGER);
+  BrowserWindowInterface* const file_browser = browser_created_observer->Wait();
+
+  // Open a PWA window.
   test::InstallAndLaunchPWA(primary_profile, GURL("https://www.youtube.com/"),
                             /*launch_in_browser=*/false,
                             /*app_title=*/u"YouTube");
@@ -746,15 +792,13 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, MoveWindowToOtherDeskUpdateChip) {
       BirchCoralProvider::Get()->GetGroupById(base::Token(2, 3));
   EXPECT_EQ(group_2->entities.size(), 4u);
 
-  auto* browser_list = BrowserList::GetInstance();
-
   auto* desks_controller = DesksController::Get();
 
   auto* new_desk = desks_controller->GetDeskAtIndex(1);
 
   // Move the browser window to another desk.
-  ASSERT_EQ(8, browser_list->get(0)->tab_strip_model()->GetTabCount());
-  auto* browser_window = browser_list->get(0)->window()->GetNativeWindow();
+  ASSERT_EQ(8, regular_browser->GetTabStripModel()->GetTabCount());
+  auto* browser_window = regular_browser->GetWindow()->GetNativeWindow();
   desks_controller->MoveWindowFromActiveDeskTo(
       browser_window, new_desk, browser_window->GetRootWindow(),
       DesksMoveWindowFromActiveDeskSource::kSendToDesk);
@@ -765,7 +809,7 @@ IN_PROC_BROWSER_TEST_F(CoralBrowserTest, MoveWindowToOtherDeskUpdateChip) {
   EXPECT_EQ(group_2->entities.size(), 1u);
 
   // Move the Files app to another desk.
-  auto* file_window = browser_list->get(1)->window()->GetNativeWindow();
+  auto* file_window = file_browser->GetWindow()->GetNativeWindow();
   ASSERT_EQ(file_window->GetTitle(), u"Files");
   desks_controller->MoveWindowFromActiveDeskTo(
       file_window, new_desk, file_window->GetRootWindow(),

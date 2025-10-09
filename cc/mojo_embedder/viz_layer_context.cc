@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -87,6 +88,15 @@ void ComputePropertyTreeNodeUpdate(
       old_node->delegates_to_parent_for_backface ==
           new_node.delegates_to_parent_for_backface &&
       old_node->will_change_transform == new_node.will_change_transform &&
+      old_node->maximum_animation_scale == new_node.maximum_animation_scale &&
+      old_node->node_and_ancestors_are_animated_or_invertible ==
+          new_node.node_and_ancestors_are_animated_or_invertible &&
+      old_node->is_invertible == new_node.is_invertible &&
+      old_node->ancestors_are_invertible == new_node.ancestors_are_invertible &&
+      old_node->node_and_ancestors_are_flat ==
+          new_node.node_and_ancestors_are_flat &&
+      old_node->node_or_ancestors_will_change_transform ==
+          new_node.node_or_ancestors_will_change_transform &&
       old_node->visible_frame_element_id == new_node.visible_frame_element_id) {
     return;
   }
@@ -124,6 +134,14 @@ void ComputePropertyTreeNodeUpdate(
   wire->delegates_to_parent_for_backface =
       new_node.delegates_to_parent_for_backface;
   wire->will_change_transform = new_node.will_change_transform;
+  wire->maximum_animation_scale = new_node.maximum_animation_scale;
+  wire->node_and_ancestors_are_animated_or_invertible =
+      new_node.node_and_ancestors_are_animated_or_invertible;
+  wire->is_invertible = new_node.is_invertible;
+  wire->ancestors_are_invertible = new_node.ancestors_are_invertible;
+  wire->node_and_ancestors_are_flat = new_node.node_and_ancestors_are_flat;
+  wire->node_or_ancestors_will_change_transform =
+      new_node.node_or_ancestors_will_change_transform;
   wire->visible_frame_element_id = new_node.visible_frame_element_id;
   wire->damage_reasons_bit_mask = new_node.damage_reasons().ToEnumBitmask();
   wire->moved_by_safe_area_bottom = new_node.moved_by_safe_area_bottom;
@@ -433,7 +451,8 @@ viz::mojom::ScrollTreeUpdatePtr ComputeScrollTreePropertiesUpdate(
   if (old_tree.synced_scroll_offset_map() ==
           new_tree.synced_scroll_offset_map() &&
       old_tree.scrolling_contents_cull_rects() ==
-          new_tree.scrolling_contents_cull_rects()) {
+          new_tree.scrolling_contents_cull_rects() &&
+      old_tree.elastic_overscroll() == new_tree.elastic_overscroll()) {
     return nullptr;
   }
 
@@ -441,6 +460,7 @@ viz::mojom::ScrollTreeUpdatePtr ComputeScrollTreePropertiesUpdate(
   wire->synced_scroll_offsets = new_tree.synced_scroll_offset_map();
   wire->scrolling_contents_cull_rects =
       new_tree.scrolling_contents_cull_rects();
+  wire->elastic_overscroll = new_tree.elastic_overscroll();
 
   return wire;
 }
@@ -922,6 +942,10 @@ void SerializeLayer(LayerImpl& layer,
       tile_display_extra->is_directly_composited_image =
           picture_layer.IsDirectlyCompositedImage();
       tile_display_extra->nearest_neighbor = picture_layer.nearest_neighbor();
+      tile_display_extra->content_color_usage =
+          picture_layer.GetContentColorUsage();
+      tile_display_extra->recorded_bounds =
+          picture_layer.GetRasterSource()->recorded_bounds();
       wire.layer_extra = viz::mojom::LayerExtra::NewTileDisplayLayerExtra(
           std::move(tile_display_extra));
       SerializePictureLayerTileUpdates(picture_layer, resource_provider,
@@ -1234,10 +1258,34 @@ VizLayerContext::VizLayerContext(viz::mojom::CompositorFrameSink& frame_sink,
   auto context = viz::mojom::PendingLayerContext::New();
   context->receiver = service_.BindNewEndpointAndPassReceiver();
   context->client = client_receiver_.BindNewEndpointAndPassRemote();
+  client_receiver_.set_disconnect_with_reason_handler(base::BindOnce(
+      &VizLayerContext::OnMojoConnectionError, weak_factory_.GetWeakPtr()));
   auto settings = viz::mojom::LayerContextSettings::New();
   settings->draw_mode_is_gpu = host_impl.GetDrawMode() == DRAW_MODE_HARDWARE;
+  settings->enable_early_damage_check =
+      host_impl.settings().enable_early_damage_check;
+  settings->damaged_frame_limit = host_impl.settings().damaged_frame_limit;
+  settings->scrollbar_animator = host_impl.settings().scrollbar_animator;
+  settings->scrollbar_fade_delay = host_impl.settings().scrollbar_fade_delay;
+  settings->scrollbar_fade_duration =
+      host_impl.settings().scrollbar_fade_duration;
+  settings->scrollbar_thinning_duration =
+      host_impl.settings().scrollbar_thinning_duration;
+  settings->idle_thickness_scale = host_impl.settings().idle_thickness_scale;
+  settings->top_controls_show_threshold =
+      host_impl.settings().top_controls_show_threshold;
+  settings->top_controls_hide_threshold =
+      host_impl.settings().top_controls_hide_threshold;
+  settings->minimum_occlusion_tracking_size =
+      host_impl.settings().minimum_occlusion_tracking_size;
   settings->enable_edge_anti_aliasing =
       host_impl.settings().enable_edge_anti_aliasing;
+  settings->enable_backface_visibility_interop =
+      host_impl.settings().enable_backface_visibility_interop;
+  settings->enable_fluent_scrollbar =
+      host_impl.settings().enable_fluent_scrollbar;
+  settings->enable_fluent_overlay_scrollbar =
+      host_impl.settings().enable_fluent_overlay_scrollbar;
   frame_sink.BindLayerContext(std::move(context), std::move(settings));
 }
 
@@ -1278,10 +1326,11 @@ base::TimeTicks VizLayerContext::UpdateDisplayTreeFrom(
   }
   DCHECK_NE(host_impl_->next_frame_token(), viz::kInvalidFrameToken);
   update->next_frame_token = host_impl_->next_frame_token();
+  update->send_frame_token_to_embedder =
+      host_impl_->send_frame_token_to_embedder();
   update->background_color = tree.background_color();
 
   const ViewportPropertyIds& property_ids = tree.viewport_property_ids();
-  update->elastic_overscroll = tree.elastic_overscroll()->Current(true);
   update->overscroll_elasticity_transform =
       property_ids.overscroll_elasticity_transform;
   update->page_scale_transform = property_ids.page_scale_transform;
@@ -1290,6 +1339,10 @@ base::TimeTicks VizLayerContext::UpdateDisplayTreeFrom(
   update->browser_controls_params = tree.browser_controls_params();
   update->browser_controls_offset_tag_modifications =
       host_impl_->browser_controls_manager()->GetOffsetTagModifications();
+  update->top_controls_shown_ratio =
+      host_impl_->browser_controls_manager()->TopControlsShownRatio();
+  update->bottom_controls_shown_ratio =
+      host_impl_->browser_controls_manager()->BottomControlsShownRatio();
   update->inner_scroll = property_ids.inner_scroll;
   update->outer_clip = property_ids.outer_clip;
   update->outer_scroll = property_ids.outer_scroll;
@@ -1365,6 +1418,15 @@ base::TimeTicks VizLayerContext::UpdateDisplayTreeFrom(
       old_trees.scroll_tree(), property_trees.scroll_tree());
 
   last_committed_property_trees_ = property_trees;
+
+  // Some deltas are normally not copied when adopting a new pending tree.
+  // See details in ScrollTree::operator=(const ScrollTree& from).
+  // However, we want to remember the last updates committed to viz.
+  last_committed_property_trees_.scroll_tree_mutable()
+      .synced_scroll_offset_map() =
+      property_trees.scroll_tree().synced_scroll_offset_map();
+  last_committed_property_trees_.scroll_tree_mutable().elastic_overscroll() =
+      property_trees.scroll_tree().elastic_overscroll();
 
   if (tree.needs_surface_ranges_sync() || needs_full_sync_) {
     update->surface_ranges.emplace();
@@ -1495,6 +1557,20 @@ VizLayerContext::MaybeSerializeAnimationTimeline(
   wire->new_animations = std::move(new_animations);
   wire->removed_animations = std::move(removed_animations);
   return wire;
+}
+
+void VizLayerContext::OnMojoConnectionError(uint32_t custom_reason,
+                                            const std::string& description) {
+  if (!custom_reason) {
+    // When LayerContextImpl drops the connection on its destruction, we will
+    // receive a connection error here with no custom reason. In this case there
+    // is no action necessary. In all cases where action is necessary on this
+    // side, LayerContextImpl will give a reason for the connection error.
+    return;
+  }
+
+  DLOG(ERROR) << description;
+  host_impl_->DidLoseLayerTreeFrameSink();
 }
 
 }  // namespace cc::mojo_embedder

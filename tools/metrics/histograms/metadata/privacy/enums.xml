@@ -52,25 +52,6 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="First-party resource Allowed"/>
 </enum>
 
-<enum name="ClearOnExitSyncEvent">
-  <int value="0" label="Profile startup, sync is disabled"/>
-  <int value="1" label="Profile startup, sync is paused"/>
-  <int value="2" label="Profile startup, sync is active"/>
-  <int value="3" label="Re-login to a sync paused account"/>
-  <int value="4" label="Logout of a sync paused account"/>
-  <int value="5"
-      label="Profile shutdown, sync is active, started paused, consent change"/>
-  <int value="6"
-      label="Profile shutdown, sync is active, started paused, no consent
-             change"/>
-  <int value="7"
-      label="Profile shutdown, sync is active, started active, consent change"/>
-  <int value="8"
-      label="Profile shutdown, sync is active, started active, no consent
-             change"/>
-  <int value="9" label="Profile shutdown, sync is paused"/>
-</enum>
-
 <enum name="ConsentAuditorFeature">
   <int value="0" label="CHROME_SYNC"/>
   <int value="1" label="PLAY_STORE"/>
@@ -439,6 +420,38 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(//content/browser/private_aggregation/private_aggregation_pending_contributions.h:TruncationResult) -->
 
+<!-- LINT.IfChange(PrivacySandboxPromptTypeCombination) -->
+
+<enum name="PrivacySandboxPromptTypeCombination">
+  <int value="0" label="PSNone_NSNone"/>
+  <int value="1" label="PSConsent_NSNone"/>
+  <int value="2" label="PSNoticeROW_NSNone"/>
+  <int value="3" label="PSNoticeEEA_NSNone"/>
+  <int value="4" label="PSNoticeRestricted_NSNone"/>
+  <int value="8" label="PSNone_NSConsent"/>
+  <int value="9" label="PSConsent_NSConsent"/>
+  <int value="10" label="PSNoticeROW_NSConsent"/>
+  <int value="11" label="PSNoticeEEA_NSConsent"/>
+  <int value="12" label="PSNoticeRestricted_NSConsent"/>
+  <int value="16" label="PSNone_NSNoticeROW"/>
+  <int value="17" label="PSConsent_NSNoticeROW"/>
+  <int value="18" label="PSNoticeROW_NSNoticeROW"/>
+  <int value="19" label="PSNoticeEEA_NSNoticeROW"/>
+  <int value="20" label="PSNoticeRestricted_NSNoticeROW"/>
+  <int value="24" label="PSNone_NSNoticeEEA"/>
+  <int value="25" label="PSConsent_NSNoticeEEA"/>
+  <int value="26" label="PSNoticeROW_NSNoticeEEA"/>
+  <int value="27" label="PSNoticeEEA_NSNoticeEEA"/>
+  <int value="28" label="PSNoticeRestricted_NSNoticeEEA"/>
+  <int value="32" label="PSNone_NSNoticeRestricted"/>
+  <int value="33" label="PSConsent_NSNoticeRestricted"/>
+  <int value="34" label="PSNoticeROW_NSNoticeRestricted"/>
+  <int value="35" label="PSNoticeEEA_NSNoticeRestricted"/>
+  <int value="36" label="PSNoticeRestricted_NSNoticeRestricted"/>
+</enum>
+
+<!-- LINT.ThenChange(//chrome/browser/privacy_sandbox/privacy_sandbox_service.h:PrivacySandboxPromptTypeCombination) -->
+
 <!-- LINT.IfChange(PrivacySandboxSentimentSurveyStatus) -->
 
 <enum name="PrivacySandboxSentimentSurveyStatus">
@@ -482,6 +495,19 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(//chrome/android/java/src/org/chromium/chrome/browser/privacy_sandbox/PrivacySandboxSurveyController.java:PrivacySandboxSurveyTypes) -->
 
+<!-- LINT.IfChange(PrivacySandboxWhatsNewSurveyStatus) -->
+
+<enum name="PrivacySandboxWhatsNewSurveyStatus">
+  <int value="0" label="Survey was successfully launched"/>
+  <int value="1" label="Feature not enabled"/>
+  <int value="2" label="Failed to fetch HaTS service"/>
+  <int value="3" label="Failed to launch survey"/>
+  <int value="4" label="Launched delayed survey"/>
+  <int value="5" label="WebContents destroyed at the moment of launch"/>
+</enum>
+
+<!-- LINT.ThenChange(/chrome/browser/privacy_sandbox/incognito/privacy_sandbox_whats_new_survey_service.h:PrivacySandboxWhatsNewSurveyStatus) -->
+
 <enum name="QuickDeleteAction">
   <int value="0" label="Entry from menu item clicked"/>
   <int value="1" label="Delete button on dialog clicked"/>
@@ -499,6 +525,16 @@ chromium-metrics-reviews@google.com.
   <int value="12" label="last four weeks deletion time range selected"/>
   <int value="13" label="All time deletion time range selected"/>
 </enum>
+
+<!-- LINT.IfChange(RollBack3pcdNoticeAction) -->
+
+<enum name="RollBack3pcdNoticeAction">
+  <int value="0" label="kGotIt"/>
+  <int value="1" label="kSettings"/>
+  <int value="2" label="kClosed"/>
+</enum>
+
+<!-- LINT.ThenChange(//chrome/browser/privacy_sandbox/roll_back_3pcd_notice_action.h:RollBack3pcdNoticeAction) -->
 
 <enum name="SecCookieDeprecationHeaderStatus">
   <int value="0" label="kSet"/>

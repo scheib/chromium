@@ -26,6 +26,7 @@ import android.content.res.Resources;
 import android.database.DataSetObserver;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -40,7 +41,6 @@ import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.base.Callback;
 import org.chromium.base.lifetime.LifetimeAssert;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.build.annotations.RequiresNonNull;
@@ -66,6 +66,7 @@ import org.chromium.ui.listmenu.ListMenuUtils.AccessibilityListObserver;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.util.AttrUtils;
 import org.chromium.ui.widget.AnchoredPopupWindow;
 import org.chromium.ui.widget.AnchoredPopupWindow.HorizontalOrientation;
 import org.chromium.ui.widget.RectProvider;
@@ -74,6 +75,7 @@ import org.chromium.ui.widget.ViewRectProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * A coordinator for the overflow menu for tabs and tab groups. This applies to both the
@@ -140,6 +142,7 @@ public abstract class TabOverflowMenuCoordinator<T> {
             mContext.registerComponentCallbacks(mComponentCallbacks);
 
             mContentView = LayoutInflater.from(mContext).inflate(menuLayout, null);
+            clipContentViewOutline();
 
             TouchTrackingListView touchTrackingListView =
                     mContentView.findViewById(R.id.tab_group_action_menu_list);
@@ -179,9 +182,7 @@ public abstract class TabOverflowMenuCoordinator<T> {
             mMenuWindow.setVerticalOverlapAnchor(verticalOverlapAnchor);
             mMenuWindow.setPreferredHorizontalOrientation(horizontalOrientation);
             mMenuWindow.setElevation(
-                    mContentView
-                            .getResources()
-                            .getDimensionPixelSize(R.dimen.tab_overflow_menu_elevation));
+                    mContentView.getResources().getDimension(R.dimen.tab_overflow_menu_elevation));
             // Override animation style or animate from anchor as default.
             if (animStyle == Resources.ID_NULL) {
                 mMenuWindow.setAnimateFromAnchor(true);
@@ -230,6 +231,16 @@ public abstract class TabOverflowMenuCoordinator<T> {
             // If mLifetimeAssert is GC'ed before this is called, it will throw an exception
             // with a stack trace showing the stack during LifetimeAssert.create().
             LifetimeAssert.destroy(mLifetimeAssert);
+        }
+
+        private void clipContentViewOutline() {
+            GradientDrawable outlineDrawable = new GradientDrawable();
+            outlineDrawable.setShape(GradientDrawable.RECTANGLE);
+            outlineDrawable.setCornerRadius(
+                    AttrUtils.getDimensionPixelSize(
+                            mContentView.getContext(), R.attr.popupBgCornerRadius));
+            mContentView.setBackground(outlineDrawable);
+            mContentView.setClipToOutline(true);
         }
     }
 
@@ -441,7 +452,11 @@ public abstract class TabOverflowMenuCoordinator<T> {
         afterCreate();
         modelList.addObserver(
                 new AccessibilityListObserver(
-                        mMenuHolder.getContentView(), /* headerModelList= */ null, modelList));
+                        mMenuHolder.getContentView(),
+                        /* headerView= */ null,
+                        mMenuHolder.getContentView().findViewById(R.id.tab_group_action_menu_list),
+                        /* headerModelList= */ null,
+                        modelList));
         mMenuHolder.show();
     }
 
@@ -509,7 +524,9 @@ public abstract class TabOverflowMenuCoordinator<T> {
                     if (mMenuHolder != null) {
                         mMenuHolder.dismiss();
                     }
-                });
+                },
+                /* flyoutController= */ null,
+                /* drillDownOverrideValue= */ true);
     }
 
     public void configureMenuItemsForTesting(ModelList modelList, T id) {
@@ -537,6 +554,11 @@ public abstract class TabOverflowMenuCoordinator<T> {
     public @Nullable ModelList getModelListForTesting() {
         if (mMenuHolder == null) return null;
         return mMenuHolder.mModelList;
+    }
+
+    public @Nullable View getContentViewForTesting() {
+        if (mMenuHolder == null) return null;
+        return mMenuHolder.getContentView();
     }
 
     /**

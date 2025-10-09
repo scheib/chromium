@@ -49,7 +49,7 @@ void TabManagementTool::Validate(ValidateCallback callback) {
 void TabManagementTool::Invoke(InvokeCallback callback) {
   callback_ = std::move(callback);
 
-  // TODO(crbug.com/411462297): Only the create action is hooked up and
+  // TODO(crbug.com/445993857): Only the create action is hooked up and
   // implemented.
   switch (action_) {
     case kCreate: {
@@ -101,7 +101,9 @@ std::string TabManagementTool::JournalEvent() const {
 }
 
 std::unique_ptr<ObservationDelayController>
-TabManagementTool::GetObservationDelayer() const {
+TabManagementTool::GetObservationDelayer(
+    std::optional<ObservationDelayController::PageStabilityConfig>
+        page_stability_config) {
   return nullptr;
 }
 
@@ -113,6 +115,10 @@ void TabManagementTool::UpdateTaskAfterInvoke(ActorTask& task,
   } else {
     std::move(callback).Run(std::move(result));
   }
+}
+
+tabs::TabHandle TabManagementTool::GetTargetTab() const {
+  return target_tab_.value_or(tabs::TabHandle::Null());
 }
 
 void TabManagementTool::OnTabStripModelChanged(

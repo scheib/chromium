@@ -106,6 +106,7 @@
 
 #if BUILDFLAG(ENABLE_VULKAN)
 #include "components/viz/common/gpu/vulkan_context_provider.h"
+#include "gpu/command_buffer/service/drm_modifiers_filter_vulkan.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_util.h"
 #endif  // BUILDFLAG(ENABLE_VULKAN)
@@ -147,9 +148,7 @@ namespace {
 base::AtomicSequenceNumber g_raster_decoder_id;
 
 // Controls whether we may yield during rasterization.
-BASE_FEATURE(kGpuYieldRasterization,
-             "GpuYieldRasterization",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kGpuYieldRasterization, base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Controls how many ops are rastered before checking if we should yield.
 const base::FeatureParam<int> kGpuYieldRasterizationOpCount(
@@ -487,16 +486,19 @@ class RasterDecoderImpl final : public RasterDecoder,
 
   ~RasterDecoderImpl() override;
 
+  // RasterDecoder implementation.
+  ContextResult Initialize(bool enable_gpu_rasterization,
+                           bool lose_context_when_out_of_memory) override;
+  int GetRasterDecoderId() const override;
+  int DecoderIdForTest() override;
+  ServiceTransferCache* GetTransferCacheForTest() override;
+  void SetUpForRasterCHROMIUMForTest() override;
+  void SetOOMErrorForTest() override;
+  void DisableFlushWorkaroundForTest() override;
   gles2::GLES2Util* GetGLES2Util() override { return &util_; }
 
   // DecoderContext implementation.
   base::WeakPtr<DecoderContext> AsWeakPtr() override;
-  ContextResult Initialize(
-      const scoped_refptr<gl::GLSurface>& surface,
-      const scoped_refptr<gl::GLContext>& context,
-      bool offscreen,
-      const gles2::DisallowedFeatures& disallowed_features,
-      const ContextCreationAttribs& attrib_helper) override;
   void Destroy(bool have_context) override;
   bool MakeCurrent() override;
   gl::GLContext* GetGLContext() override;
@@ -598,12 +600,6 @@ class RasterDecoderImpl final : public RasterDecoder,
     NOTIMPLEMENTED();
     return false;
   }
-  int GetRasterDecoderId() const override;
-  int DecoderIdForTest() override;
-  ServiceTransferCache* GetTransferCacheForTest() override;
-  void SetUpForRasterCHROMIUMForTest() override;
-  void SetOOMErrorForTest() override;
-  void DisableFlushWorkaroundForTest() override;
 
   // ErrorClientState implementation.
   void OnContextLostError() override;
@@ -703,8 +699,10 @@ class RasterDecoderImpl final : public RasterDecoder,
                                  GLint yoffset,
                                  GLint x,
                                  GLint y,
-                                 GLsizei width,
-                                 GLsizei height,
+                                 GLsizei src_width,
+                                 GLsizei src_height,
+                                 GLsizei dst_width,
+                                 GLsizei dst_height,
                                  const volatile GLbyte* mailboxes);
   void DoWritePixelsINTERNAL(GLint x_offset,
                              GLint y_offset,
@@ -946,7 +944,7 @@ constexpr RasterDecoderImpl::CommandInfo RasterDecoderImpl::command_info[] = {
 };
 
 // static
-RasterDecoder* RasterDecoder::Create(
+std::unique_ptr<RasterDecoder> RasterDecoder::Create(
     DecoderClient* client,
     CommandBufferServiceBase* command_buffer_service,
     gles2::Outputter* outputter,
@@ -956,10 +954,10 @@ RasterDecoder* RasterDecoder::Create(
     SharedImageManager* shared_image_manager,
     scoped_refptr<SharedContextState> shared_context_state,
     bool is_privileged) {
-  return new RasterDecoderImpl(client, command_buffer_service, outputter,
-                               gpu_feature_info, gpu_preferences,
-                               std::move(memory_tracker), shared_image_manager,
-                               std::move(shared_context_state), is_privileged);
+  return std::make_unique<RasterDecoderImpl>(
+      client, command_buffer_service, outputter, gpu_feature_info,
+      gpu_preferences, std::move(memory_tracker), shared_image_manager,
+      std::move(shared_context_state), is_privileged);
 }
 
 RasterDecoder::RasterDecoder(DecoderClient* client,
@@ -1054,19 +1052,12 @@ base::WeakPtr<DecoderContext> RasterDecoderImpl::AsWeakPtr() {
 }
 
 ContextResult RasterDecoderImpl::Initialize(
-    const scoped_refptr<gl::GLSurface>& surface,
-    const scoped_refptr<gl::GLContext>& context,
-    bool offscreen,
-    const gles2::DisallowedFeatures& disallowed_features,
-    const ContextCreationAttribs& attrib_helper) {
+    bool enable_gpu_rasterization,
+    bool lose_context_when_out_of_memory) {
   TRACE_EVENT0("gpu", "RasterDecoderImpl::Initialize");
   DCHECK(shared_context_state_->IsCurrent(nullptr));
 
   set_initialized();
-
-  if (!offscreen) {
-    return ContextResult::kFatalFailure;
-  }
 
   if (gpu_preferences_.enable_gpu_debugging)
     set_debug(true);
@@ -1074,22 +1065,17 @@ ContextResult RasterDecoderImpl::Initialize(
   if (gpu_preferences_.enable_gpu_command_logging)
     SetLogCommands(true);
 
-  DCHECK_EQ(surface.get(), shared_context_state_->surface());
-  DCHECK_EQ(context.get(), shared_context_state_->context());
-
   // Create GPU Tracer for timing values.
   gpu_tracer_ = std::make_unique<gles2::GPUTracer>(
       this, shared_context_state_->GrContextIsGL());
 
-  // Save the loseContextWhenOutOfMemory context creation attribute.
-  lose_context_when_out_of_memory_ =
-      attrib_helper.lose_context_when_out_of_memory;
+  lose_context_when_out_of_memory_ = lose_context_when_out_of_memory;
 
   CHECK_GL_ERROR();
 
   query_manager_ = std::make_unique<RasterQueryManager>(shared_context_state_);
 
-  if (attrib_helper.enable_gpu_rasterization) {
+  if (enable_gpu_rasterization) {
     DCHECK(gr_context() || graphite_shared_context());
     use_gpu_raster_ = true;
     paint_cache_ = std::make_unique<cc::ServicePaintCache>();
@@ -1175,8 +1161,6 @@ Capabilities RasterDecoderImpl::GetCapabilities() {
   caps.using_vulkan_context =
       shared_context_state_->GrContextIsVulkan() ? true : false;
 
-  caps.max_copy_texture_chromium_size =
-      feature_info()->workarounds().max_copy_texture_chromium_size;
   caps.texture_format_etc1_npot =
       feature_info()->feature_flags().oes_compressed_etc1_rgb8_texture &&
       !feature_info()->workarounds().etc1_power_of_two_only;
@@ -1940,13 +1924,16 @@ void RasterDecoderImpl::DoCopySharedImageINTERNAL(
     GLint yoffset,
     GLint x,
     GLint y,
-    GLsizei width,
-    GLsizei height,
+    GLsizei src_width,
+    GLsizei src_height,
+    GLsizei dst_width,
+    GLsizei dst_height,
     const volatile GLbyte* mailboxes) {
   CopySharedImageHelper helper(&shared_image_representation_factory_,
                                shared_context_state_.get());
   auto result =
-      helper.CopySharedImage(xoffset, yoffset, x, y, width, height, mailboxes);
+      helper.CopySharedImage(xoffset, yoffset, x, y, src_width, src_height,
+                             dst_width, dst_height, mailboxes);
   if (!result.has_value()) {
     LOCAL_SET_GL_ERROR(result.error().gl_error,
                        result.error().function_name.c_str(),

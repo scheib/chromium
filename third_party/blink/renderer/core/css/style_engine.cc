@@ -244,7 +244,8 @@ StyleEngine::StyleEngine(Document& document)
           MakeGarbageCollected<StyleSheetCollection>(document)),
       preferred_color_scheme_(mojom::blink::PreferredColorScheme::kLight),
       owner_preferred_color_scheme_(mojom::blink::PreferredColorScheme::kLight),
-      owner_color_scheme_(mojom::blink::ColorScheme::kLight) {
+      owner_color_scheme_(mojom::blink::ColorScheme::kLight),
+      preferred_contrast_(mojom::blink::PreferredContrast::kNoPreference) {
   if (document.GetFrame()) {
     resolver_ = MakeGarbageCollected<StyleResolver>(document);
     global_rule_set_ = MakeGarbageCollected<CSSGlobalRuleSet>();
@@ -600,7 +601,7 @@ void StyleEngine::MediaQueryAffectingValueChanged(
     return;
   }
 
-  for (auto text_track : text_tracks) {
+  for (auto& text_track : text_tracks) {
     bool style_needs_recalc = false;
     auto style_sheets = text_track->GetCSSStyleSheets();
     for (const auto& sheet : style_sheets) {
@@ -746,14 +747,7 @@ MixinMap StyleEngine::EffectiveMixinsForTreeScope(TreeScope& tree_scope) {
     return collection->Mixins();
   }
 
-  const MixinMap& child_mixins = collection->Mixins();
-  for (const auto& [name, value] : child_mixins.mixins) {
-    inherited_mixins.mixins.insert(name, value);
-  }
-  inherited_mixins.media_query_result_flags.Add(
-      child_mixins.media_query_result_flags);
-  inherited_mixins.media_query_set_results.AppendVector(
-      child_mixins.media_query_set_results);
+  inherited_mixins.Merge(collection->Mixins());
   return inherited_mixins;
 }
 
@@ -1768,7 +1762,7 @@ void StyleEngine::ClassChangedForElement(const SpaceSplitString& old_classes,
 
   // Class vectors tend to be very short. This is faster than using a hash
   // table.
-  WTF::Vector<bool> remaining_class_bits(old_classes.size());
+  Vector<bool> remaining_class_bits(old_classes.size());
 
   InvalidationLists invalidation_lists;
   bool affecting_has_state = false;
@@ -2495,7 +2489,7 @@ void StyleEngine::ApplyRuleSetInvalidationForTreeScope(
       // recalc, or if the host is not rendered.
       return;
     }
-    for (auto rule_set : rule_sets) {
+    for (const auto& rule_set : rule_sets) {
       if (rule_set->HasSlottedRules()) {
         invalidate_slotted = true;
         break;
@@ -2513,7 +2507,7 @@ void StyleEngine::ApplyRuleSetInvalidationForTreeScope(
   //
   // We do a similar thing for :part(), descending into all shadows.
   if (invalidation_scope != kInvalidateAllScopes) {
-    for (auto rule_set : rule_sets) {
+    for (const auto& rule_set : rule_sets) {
       if (rule_set->HasUAShadowPseudoElementRules() ||
           rule_set->HasPartPseudoRules()) {
         invalidation_scope = kInvalidateAllScopes;
@@ -3285,7 +3279,7 @@ void StyleEngine::InvalidateEnvDependentStylesIfNeeded() {
   });
 }
 
-bool StyleEngine::HasComplexSafaAreaConstraints() {
+bool StyleEngine::HasComplexSafeAreaConstraints() {
   DCHECK(RuntimeEnabledFeatures::UpdateComplexSafaAreaConstraintsEnabled());
   if (needs_to_update_complex_safe_area_constraints_) {
     has_complex_safe_area_constraints_ = ElementHasComplexSafeAreaConstraint(
@@ -3949,30 +3943,9 @@ void StyleEngine::RecalcPositionTryStyleForPseudoElement(
   pseudo_element.RecalcStyle(style_recalc_change, style_recalc_context);
 }
 
-void StyleEngine::RecalcTransitionPseudoStyle() {
-  // TODO(khushalsagar) : This forces a style recalc and layout tree rebuild
-  // for the pseudo-element tree each time we do a style recalc phase. See if
-  // we can optimize this to only when the pseudo-element tree is dirtied.
-  SelectorFilterParentScope filter_scope(
-      nullptr, SelectorFilterParentScope::ScopeType::kRoot);
-
-  ViewTransitionUtils::ForEachTransition(
-      *document_, [&](ViewTransition& transition) {
-        transition.RecalcTransitionPseudoTreeStyle();
-      });
-}
-
-void StyleEngine::RebuildTransitionPseudoLayoutTrees() {
-  ViewTransitionUtils::ForEachTransition(
-      *document_, [&](ViewTransition& transition) {
-        transition.RebuildTransitionPseudoLayoutTree();
-      });
-}
-
 void StyleEngine::RecalcStyle() {
   RecalcStyle(
       {}, StyleRecalcContext::FromAncestors(style_recalc_root_.RootElement()));
-  RecalcTransitionPseudoStyle();
 }
 
 void StyleEngine::ClearEnsuredDescendantStyles(Element& root) {
@@ -4034,9 +4007,6 @@ void StyleEngine::RebuildLayoutTree(Element* size_container) {
         size_container ? size_container->GetReattachParent() : nullptr;
     RebuildLayoutTreeForTraversalRootAncestors(root_element.GetReattachParent(),
                                                container_parent);
-    if (size_container == nullptr) {
-      RebuildTransitionPseudoLayoutTrees();
-    }
     layout_tree_rebuild_root_.Clear();
     propagate_to_root = IsA<HTMLHtmlElement>(root_element) ||
                         IsA<HTMLBodyElement>(root_element);
@@ -4327,9 +4297,12 @@ void StyleEngine::UpdateColorScheme() {
   } else {
     preferred_color_scheme_ = owner_preferred_color_scheme_;
   }
+  mojom::blink::PreferredContrast old_preferred_contrast = preferred_contrast_;
+  preferred_contrast_ = settings->GetPreferredContrast();
   bool old_force_dark_mode_enabled = force_dark_mode_enabled_;
   force_dark_mode_enabled_ = settings->GetForceDarkModeEnabled();
   bool media_feature_override_color_scheme = false;
+  bool media_feature_override_contrast = false;
 
   // TODO(1479201): Should DevTools emulation use the WebPreferences API
   // overrides?
@@ -4345,26 +4318,43 @@ void StyleEngine::UpdateColorScheme() {
       preferred_color_scheme_ = preferred_color_scheme_override.value();
       media_feature_override_color_scheme = true;
     }
+    if (std::optional<mojom::blink::PreferredContrast>
+            preferred_contrast_override = overrides->GetPreferredContrast()) {
+      preferred_contrast_ = preferred_contrast_override.value();
+      media_feature_override_contrast = true;
+    }
   }
 
   const PreferenceOverrides* preference_overrides =
       GetDocument().GetPage()->GetPreferenceOverrides();
-  if (preference_overrides && !media_feature_override_color_scheme) {
-    std::optional<mojom::blink::PreferredColorScheme>
-        preferred_color_scheme_override =
-            preference_overrides->GetPreferredColorScheme();
-    if (preferred_color_scheme_override.has_value()) {
-      preferred_color_scheme_ = preferred_color_scheme_override.value();
+  if (preference_overrides) {
+    if (!media_feature_override_color_scheme) {
+      std::optional<mojom::blink::PreferredColorScheme>
+          preferred_color_scheme_override =
+              preference_overrides->GetPreferredColorScheme();
+      if (preferred_color_scheme_override.has_value()) {
+        preferred_color_scheme_ = preferred_color_scheme_override.value();
+      }
+    }
+    if (!media_feature_override_contrast) {
+      std::optional<mojom::blink::PreferredContrast>
+          preferred_contrast_override =
+              preference_overrides->GetPreferredContrast();
+      if (preferred_contrast_override.has_value()) {
+        preferred_contrast_ = preferred_contrast_override.value();
+      }
     }
   }
 
   if (GetDocument().Printing()) {
     preferred_color_scheme_ = mojom::blink::PreferredColorScheme::kLight;
+    preferred_contrast_ = mojom::blink::PreferredContrast::kNoPreference;
     force_dark_mode_enabled_ = false;
   }
 
   if (forced_colors_ != old_forced_colors ||
       preferred_color_scheme_ != old_preferred_color_scheme ||
+      preferred_contrast_ != old_preferred_contrast ||
       force_dark_mode_enabled_ != old_force_dark_mode_enabled) {
     PlatformColorsChanged();
   }
@@ -4454,6 +4444,10 @@ void StyleEngine::UpdateColorSchemeBackground(bool color_scheme_changed) {
     if (auto* root_element = GetDocument().documentElement()) {
       if (const ComputedStyle* style = root_element->GetComputedStyle()) {
         root_color_scheme = style->UsedColorScheme();
+        if (RuntimeEnabledFeatures::
+                AboutBlankPageRespectsDarkModeOnUserActionEnabled()) {
+          root_color_scheme = AdjustAboutBlankColorScheme(root_color_scheme);
+        }
       } else if (SupportsDarkColorScheme()) {
         root_color_scheme = mojom::blink::ColorScheme::kDark;
       }
@@ -4518,6 +4512,30 @@ void StyleEngine::UpdateForcedBackgroundColor() {
       GetDocument().GetPage()->GetColorProviderForPainting(
           color_scheme, forced_colors_ != ForcedColors::kNone),
       GetDocument().IsInWebAppScope());
+}
+
+mojom::blink::ColorScheme StyleEngine::AdjustAboutBlankColorScheme(
+    mojom::blink::ColorScheme root_color_scheme) const {
+  // In browser contexts with a dark mode preference, about:blank should
+  // open in a dark color scheme when the user types about:blank into
+  // address bar or user is opening about:blank as a new tab page.
+  //
+  // Users were previously getting blinded when opening a new tab
+  // to about:blank or navigating to about:blank while in dark mode
+  // with no obvious user facing setting to override this behavior.
+  // Now we adjust to dark mode by default in these scenarios.
+  // The detection of this scenario is not intended to be perfect,
+  // though to capture a majority of known user scenarios.
+  // See https://issues.chromium.org/issues/40190899
+
+  const bool likely_user_initiated_aboutblank =
+      GetDocument().IsInMainFrame() && GetDocument().Url().IsAboutBlankURL() &&
+      !GetDocument().GetPage()->OpenedByDOM();
+  if (preferred_color_scheme_ == mojom::blink::PreferredColorScheme::kDark &&
+      likely_user_initiated_aboutblank) {
+    return mojom::blink::ColorScheme::kDark;
+  }
+  return root_color_scheme;
 }
 
 Color StyleEngine::ColorAdjustBackgroundColor() const {

@@ -676,23 +676,6 @@ void BindPressureManager(
 }
 #endif  // BUILDFLAG(ENABLE_COMPUTE_PRESSURE)
 
-VibrationManagerBinder& GetVibrationManagerBinderOverride() {
-  static base::NoDestructor<VibrationManagerBinder> binder;
-  return *binder;
-}
-
-void BindVibrationManager(
-    RenderFrameHostImpl* frame,
-    mojo::PendingReceiver<device::mojom::VibrationManager> receiver) {
-  const auto& binder = GetVibrationManagerBinderOverride();
-  if (binder) {
-    binder.Run(std::move(receiver), frame->CreateVibrationManagerListener());
-  } else {
-    GetDeviceService().BindVibrationManager(
-        std::move(receiver), frame->CreateVibrationManagerListener());
-  }
-}
-
 void BindMediaPlayerObserverClientHandler(
     RenderFrameHost* frame_host,
     mojo::PendingReceiver<media::mojom::MediaPlayerObserverClient> receiver) {
@@ -899,9 +882,6 @@ void PopulateFrameBinders(RenderFrameHostImpl* host, mojo::BinderMap* map) {
 
   map->Add<blink::mojom::WebSensorProvider>(base::BindRepeating(
       &RenderFrameHostImpl::GetSensorProvider, base::Unretained(host)));
-
-  map->Add<device::mojom::VibrationManager>(
-      base::BindRepeating(&BindVibrationManager, base::Unretained(host)));
 
   map->Add<payments::mojom::PaymentManager>(base::BindRepeating(
       &RenderFrameHostImpl::CreatePaymentManager, base::Unretained(host)));
@@ -1248,6 +1228,14 @@ void PopulateBinderMapWithContext(
   map->Add<blink::mojom::AnchorElementInteractionHost>(
       &AnchorElementInteractionHostImpl::Create);
 
+  map->Add<device::mojom::VibrationManager>(
+      [](RenderFrameHost* host,
+         mojo::PendingReceiver<device::mojom::VibrationManager> receiver) {
+        GetDeviceService().BindVibrationManager(
+            std::move(receiver), static_cast<RenderFrameHostImpl*>(host)
+                                     ->CreateVibrationManagerListener());
+      });
+
 #if BUILDFLAG(IS_CHROMEOS)
   if (base::FeatureList::IsEnabled(features::kWebLockScreenApi)) {
     map->Add<blink::mojom::LockScreenService>(&LockScreenServiceImpl::Create);
@@ -1494,6 +1482,8 @@ void PopulateSharedWorkerBinders(SharedWorkerHost* host, mojo::BinderMap* map) {
 
   map->Add<blink::mojom::WebTransportConnector>(base::BindRepeating(
       &SharedWorkerHost::CreateWebTransportConnector, base::Unretained(host)));
+  map->Add<blink::mojom::WebSocketConnector>(base::BindRepeating(
+      &SharedWorkerHost::CreateWebSocketConnector, base::Unretained(host)));
   map->Add<blink::mojom::CacheStorage>(base::BindRepeating(
       &SharedWorkerHost::BindCacheStorage, base::Unretained(host)));
   map->Add<blink::mojom::CodeCacheHost>(base::BindRepeating(
@@ -1576,8 +1566,6 @@ void PopulateSharedWorkerBinders(SharedWorkerHost* host, mojo::BinderMap* map) {
   map->Add<blink::mojom::IDBFactory>(
       BindWorkerReceiverForStorageKeyAndBucketContext(
           &RenderProcessHostImpl::BindIndexedDB, host));
-  map->Add<blink::mojom::WebSocketConnector>(BindWorkerReceiverForStorageKey(
-      &RenderProcessHostImpl::CreateWebSocketConnector, host));
   map->Add<blink::mojom::LockManager>(BindWorkerReceiverForStorageKey(
       &RenderProcessHostImpl::CreateLockManager, host));
   map->Add<blink::mojom::QuotaManagerHost>(BindWorkerReceiverForStorageKey(
@@ -1662,6 +1650,8 @@ void PopulateServiceWorkerBinders(ServiceWorkerHost* host,
   map->Add<ukm::mojom::UkmRecorderFactory>(&BindUkmRecorderFactory);
 
   // worker host binders
+  map->Add<blink::mojom::WebSocketConnector>(base::BindRepeating(
+      &ServiceWorkerHost::CreateWebSocketConnector, base::Unretained(host)));
   map->Add<blink::mojom::WebTransportConnector>(base::BindRepeating(
       &ServiceWorkerHost::CreateWebTransportConnector, base::Unretained(host)));
   map->Add<blink::mojom::CacheStorage>(base::BindRepeating(
@@ -1778,9 +1768,6 @@ void PopulateBinderMapWithContext(
   map->Add<blink::mojom::FileSystemAccessManager>(
       BindServiceWorkerReceiverForStorageKey(
           &RenderProcessHostImpl::BindFileSystemAccessManager, host));
-  map->Add<blink::mojom::WebSocketConnector>(
-      BindServiceWorkerReceiverForStorageKey(
-          &RenderProcessHostImpl::CreateWebSocketConnector, host));
   map->Add<blink::mojom::LockManager>(BindServiceWorkerReceiverForStorageKey(
       &RenderProcessHostImpl::CreateLockManager, host));
   map->Add<blink::mojom::QuotaManagerHost>(
@@ -1815,10 +1802,6 @@ void PopulateBinderMap(ServiceWorkerHost* host, mojo::BinderMap* map) {
 
 void OverrideBatteryMonitorBinderForTesting(BatteryMonitorBinder binder) {
   internal::GetBatteryMonitorBinderOverride() = std::move(binder);
-}
-
-void OverrideVibrationManagerBinderForTesting(VibrationManagerBinder binder) {
-  internal::GetVibrationManagerBinderOverride() = std::move(binder);
 }
 
 }  // namespace content

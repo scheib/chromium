@@ -248,7 +248,8 @@ jboolean EventForwarder::OnGestureEvent(JNIEnv* env,
       ScalePoint(view_->GetLocationOnScreen(x, y), 1.f / dip_scale);
   return view_->OnGestureEvent(GestureEventAndroid(
       type, gfx::PointF(x / dip_scale, y / dip_scale), root_location, time_ms,
-      scale, 0, 0, 0, 0, /*target_viewport*/ false, /*synthetic_scroll*/ false,
+      ui::GestureDeviceType::DEVICE_TOUCHSCREEN, scale, 0, 0, 0, 0,
+      /*target_viewport*/ false, /*synthetic_scroll*/ false,
       /*prevent_boosting*/ false));
 }
 
@@ -296,6 +297,42 @@ jboolean EventForwarder::OnGenericMotionEvent(
   return view_->OnGenericMotionEvent(*event);
 }
 
+void EventForwarder::OnMouseWheelEvent(
+    JNIEnv* env,
+    const JavaParamRef<jobject>& motion_event,
+    jlong time_ns,
+    jfloat x,
+    jfloat y,
+    jfloat raw_x,
+    jfloat raw_y,
+    jfloat delta_x,
+    jfloat delta_y) {
+  ui::MotionEventAndroid::Pointer pointer(
+      /*id=*/0, x, y, /*touch_major_pixels=*/0.0f, /*touch_minor_pixels=*/0.0f,
+      /*pressure=*/0,
+      /*orientation_rad=*/0.0f, /*tilt_rad=*/0.0f, /*tool_type=*/0);
+
+  auto* window = view_->GetWindowAndroid();
+  float pixels_per_tick =
+      window ? window->mouse_wheel_scroll_factor()
+             : ui::kDefaultMouseWheelTickMultiplier * view_->GetDipScale();
+  auto event = ui::MotionEventAndroidFactory::CreateFromJava(
+      env, motion_event,
+      /*pix_to_dip=*/1.f / view_->GetDipScale(),
+      /*ticks_x=*/delta_x / pixels_per_tick,
+      /*ticks_y=*/delta_y / pixels_per_tick,
+      /*tick_multiplier=*/pixels_per_tick,
+      /*oldest_event_time=*/base::TimeTicks::FromJavaNanoTime(time_ns),
+      /*android_action=*/0,
+      /*pointer_count=*/1, /*history_size=*/0, /*action_index=*/0,
+      /*android_action_button=*/0, /*android_gesture_classification=*/0,
+      /*android_button_state=*/0,
+      /*raw_offset_x_pixels=*/raw_x - x,
+      /*raw_offset_y_pixels=*/raw_y - y, /*for_touch_handle=*/false, &pointer,
+      nullptr);
+  view_->OnMouseWheelEvent(*event);
+}
+
 jboolean EventForwarder::OnKeyUp(JNIEnv* env,
                                  const ui::KeyEventAndroid& key_event) {
   return view_->OnKeyUp(key_event);
@@ -326,7 +363,8 @@ void EventForwarder::DoubleTap(JNIEnv* env,
   float dip_scale = view_->GetDipScale();
   view_->OnGestureEvent(GestureEventAndroid(
       GESTURE_EVENT_TYPE_DOUBLE_TAP, gfx::PointF(x / dip_scale, y / dip_scale),
-      gfx::PointF(), time_ms, 0, 0, 0, 0, 0, /*target_viewport*/ true,
+      gfx::PointF(), time_ms, ui::GestureDeviceType::DEVICE_TOUCHSCREEN, 0, 0,
+      0, 0, 0, /*target_viewport*/ true,
       /*synthetic_scroll*/ false, /*prevent_boosting*/ false));
 }
 
@@ -335,31 +373,45 @@ void EventForwarder::StartFling(JNIEnv* env,
                                 jfloat velocity_x,
                                 jfloat velocity_y,
                                 jboolean synthetic_scroll,
-                                jboolean prevent_boosting) {
-  CancelFling(env, time_ms, prevent_boosting);
+                                jboolean prevent_boosting,
+                                jboolean is_touchpad_event) {
+  CancelFling(env, time_ms, prevent_boosting, is_touchpad_event);
 
   if (velocity_x == 0 && velocity_y == 0)
     return;
   float dip_scale = view_->GetDipScale();
-  // Use velocity as delta in scroll event.
+  ui::GestureDeviceType source =
+      is_touchpad_event ? ui::GestureDeviceType::DEVICE_TOUCHPAD
+                        : ui::GestureDeviceType::DEVICE_TOUCHSCREEN;
+  // Fling start event is expected to always be following a scroll start event.
+  // Flings from e.g. joystick start from stopped state; send a synthetic scroll
+  // start first. This is not required by touchpad flings which happen at the
+  // end of a scroll.
+  if (!is_touchpad_event) {
+    // Use velocity as delta in scroll event.
+    view_->OnGestureEvent(GestureEventAndroid(
+        GESTURE_EVENT_TYPE_SCROLL_START, gfx::PointF(), gfx::PointF(), time_ms,
+        source, 0, velocity_x / dip_scale, velocity_y / dip_scale, 0, 0,
+        /*target_viewport*/ true, synthetic_scroll,
+        /*prevent_boosting*/ false));
+  }
   view_->OnGestureEvent(GestureEventAndroid(
-      GESTURE_EVENT_TYPE_SCROLL_START, gfx::PointF(), gfx::PointF(), time_ms, 0,
-      velocity_x / dip_scale, velocity_y / dip_scale, 0, 0,
-      /*target_viewport*/ true, synthetic_scroll,
-      /*prevent_boosting*/ false));
-  view_->OnGestureEvent(GestureEventAndroid(
-      GESTURE_EVENT_TYPE_FLING_START, gfx::PointF(), gfx::PointF(), time_ms, 0,
-      0, 0, velocity_x / dip_scale, velocity_y / dip_scale,
+      GESTURE_EVENT_TYPE_FLING_START, gfx::PointF(), gfx::PointF(), time_ms,
+      source, 0, 0, 0, velocity_x / dip_scale, velocity_y / dip_scale,
       /*target_viewport*/ true, synthetic_scroll,
       /*prevent_boosting*/ false));
 }
 
 void EventForwarder::CancelFling(JNIEnv* env,
                                  jlong time_ms,
-                                 jboolean prevent_boosting) {
+                                 jboolean prevent_boosting,
+                                 jboolean is_touchpad_event) {
+  ui::GestureDeviceType source =
+      is_touchpad_event ? ui::GestureDeviceType::DEVICE_TOUCHPAD
+                        : ui::GestureDeviceType::DEVICE_TOUCHSCREEN;
   view_->OnGestureEvent(GestureEventAndroid(
-      GESTURE_EVENT_TYPE_FLING_CANCEL, gfx::PointF(), gfx::PointF(), time_ms, 0,
-      0, 0, 0, 0,
+      GESTURE_EVENT_TYPE_FLING_CANCEL, gfx::PointF(), gfx::PointF(), time_ms,
+      source, 0, 0, 0, 0, 0,
       /*target_viewport*/ false, /*synthetic_scroll*/ false, prevent_boosting));
 }
 

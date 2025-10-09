@@ -15,9 +15,12 @@ namespace partition_alloc {
 namespace {
 
 enum ExternalMetadataTrialGroupPercentage {
-  kEnabled = 10,   // 10%
-  kDisabled = 10,  // 10%
+  kEnabled = 50,   // 50%
+  kDisabled = 50,  // 50%
 };
+// Rather than doing percentage group based assignment, set all clients to
+// enabled when true.
+constexpr bool kDefaultEnableExternalMetadataTrial = true;
 
 ExternalMetadataTrialGroup s_externalMetadataJoinedGroup =
     ExternalMetadataTrialGroup::kUndefined;
@@ -31,6 +34,11 @@ void SetExternalMetadataTrialGroup(ExternalMetadataTrialGroup group) {
 namespace internal {
 
 ExternalMetadataTrialGroup SelectExternalMetadataTrialGroup() {
+  if constexpr (kDefaultEnableExternalMetadataTrial) {
+    auto group = ExternalMetadataTrialGroup::kEnabled;
+    SetExternalMetadataTrialGroup(group);
+    return group;
+  }
   uint32_t random = internal::RandomValue() /
                     static_cast<double>(std::numeric_limits<uint32_t>::max()) *
                     100.0;

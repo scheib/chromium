@@ -332,10 +332,12 @@ Ja disa gjëra që mund të provosh për të filluar.</translation>
 <translation id="2083190527011054446">Natën e mirë <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Hap zgjedhësin e emoji</translation>
 <translation id="2088116547584365419">lojërat</translation>
+<translation id="2093792000875799555">Lajmet për Steam për Chromebook</translation>
 <translation id="209965399369889474">Nuk është lidhur në rrjet</translation>
 <translation id="2107581415810719320">Butoni tjetër <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">Kablloja jote USB-C nuk mbështet Thunderbolt. Cilësia e funksionimit të pajisjes mund të jetë e kufizuar.</translation>
 <translation id="2108303511227308752">Shkurtorja për Alt + Backspace është ndryshuar. Për të përdorur tastin Delete, shtyp tastin <ph name="LAUNCHER_KEY_NAME" /> key + Backspace.</translation>
+<translation id="2115680839221566783">Bateria në <ph name="PERCENTAGE" />%. Karikimi në pritje.</translation>
 <translation id="2126242104232412123">Tavolinë e re</translation>
 <translation id="2132302418721800944">Regjistro ekranin e plotë</translation>
 <translation id="2135456203358955318">Zmadhuesi i stacionuar</translation>
@@ -1588,6 +1590,7 @@ Nuk ka pajisje të lidhura.</translation>
 <translation id="612734058257491180">"Asistenti i Google" nuk ofrohet në një sesion për vizitorët.</translation>
 <translation id="6127395413317891856">Je offline. Kontrollo lidhjen tënde dhe provo përsëri.</translation>
 <translation id="6129953537138746214">Hapësirë</translation>
+<translation id="6136872094979134163">Lajmet për Steam për Chromebook nuk mund të merren.</translation>
 <translation id="6137566720514957455">Hap dialogun e heqjes për <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="6141205840878048728">Në çfarë dëshiron të fokusohesh?</translation>
 <translation id="6141988275892716286">Konfirmo shkarkimin</translation>
@@ -1677,6 +1680,7 @@ Nuk ka pajisje të lidhura.</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> në <ph name="RECEIVER_NAME" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> ngjarje</translation>
+<translation id="6448529022565414427">Karikimi në pritje</translation>
 <translation id="6449483711453944360">Aplikacionet për Linux dhe dritaret "E fshehta" nuk mbështeten aktualisht</translation>
 <translation id="6450245544201845082">Shkurtorja e klikimit me butonin djathtas është aktualisht joaktive</translation>
 <translation id="6452181791372256707">Refuzo</translation>

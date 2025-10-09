@@ -46,6 +46,7 @@
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/service_utils.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/shared_image/shared_memory_image_backing_factory.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/task_graph.h"
@@ -56,7 +57,6 @@
 #include "gpu/ipc/service/gles2_command_buffer_stub.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "gpu/ipc/service/gpu_channel_manager_delegate.h"
-#include "gpu/ipc/service/gpu_memory_buffer_factory.h"
 #include "gpu/ipc/service/image_decode_accelerator_stub.h"
 #include "gpu/ipc/service/raster_command_buffer_stub.h"
 #include "gpu/ipc/service/webgpu_command_buffer_stub.h"
@@ -135,7 +135,6 @@ class GPU_IPC_SERVICE_EXPORT GpuChannelMessageFilter
       Scheduler* scheduler,
       ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
       const gfx::GpuExtraInfo& gpu_extra_info,
-      gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory,
       scoped_refptr<base::SingleThreadTaskRunner> main_task_runner);
   GpuChannelMessageFilter(const GpuChannelMessageFilter&) = delete;
   GpuChannelMessageFilter& operator=(const GpuChannelMessageFilter&) = delete;
@@ -258,7 +257,6 @@ class GPU_IPC_SERVICE_EXPORT GpuChannelMessageFilter
   const gfx::GpuExtraInfo gpu_extra_info_;
   gpu::GpuMemoryBufferConfigurationSet supported_gmb_configurations_;
   bool supported_gmb_configurations_inited_ = false;
-  raw_ptr<gpu::GpuMemoryBufferFactory> gpu_memory_buffer_factory_ = nullptr;
   base::ThreadChecker io_thread_checker_;
 
   bool allow_process_kill_for_testing_ = false;
@@ -274,7 +272,6 @@ GpuChannelMessageFilter::GpuChannelMessageFilter(
     Scheduler* scheduler,
     ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
     const gfx::GpuExtraInfo& gpu_extra_info,
-    gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory,
     scoped_refptr<base::SingleThreadTaskRunner> main_task_runner)
     : gpu_channel_(gpu_channel),
       channel_token_(channel_token),
@@ -286,8 +283,7 @@ GpuChannelMessageFilter::GpuChannelMessageFilter(
               gpu_channel,
               static_cast<int32_t>(
                   GpuChannelReservedRoutes::kImageDecodeAccelerator))),
-      gpu_extra_info_(gpu_extra_info),
-      gpu_memory_buffer_factory_(gpu_memory_buffer_factory) {
+      gpu_extra_info_(gpu_extra_info) {
   // GpuChannel and CommandBufferStub implementations assume that it is not
   // possible to simultaneously execute tasks on these two task runners.
   DCHECK_EQ(main_task_runner_, gpu_channel->task_runner());
@@ -314,6 +310,7 @@ void GpuChannelMessageFilter::Destroy() {
   image_decode_accelerator_stub_->Shutdown();
 
   gpu_channel_ = nullptr;
+  scheduler_ = nullptr;
 }
 
 void GpuChannelMessageFilter::AddRoute(int32_t route_id,
@@ -453,13 +450,28 @@ void GpuChannelMessageFilter::CreateGpuMemoryBuffer(
   gfx::GpuMemoryBufferHandle handle;
 
   if (IsNativeBufferSupported(buffer_format, buffer_usage)) {
-    handle = gpu_memory_buffer_factory_->CreateNativeGmbHandle(size, format,
-                                                               buffer_usage);
+#if BUILDFLAG(IS_ANDROID)
+    // Creation of native buffer handles is not supported on Android (the
+    // only way that a non-null GpuMemoryBufferHandle can be created on
+    // Android is by importing an external AHB).
+    std::move(callback).Run(std::move(handle));
+#else
+    base::AutoLock auto_lock(gpu_channel_lock_);
+    if (!gpu_channel_) {
+      std::move(callback).Run(gfx::GpuMemoryBufferHandle());
+      return;
+    }
+
+    handle =
+        gpu_channel_->shared_image_stub()
+            ->factory()
+            ->CreateNativeGpuMemoryBufferHandle(size, format, buffer_usage);
+#endif
   } else {
     if (SharedMemoryImageBackingFactory::IsBufferUsageSupported(buffer_usage) &&
         SharedMemoryImageBackingFactory::IsSizeValidForFormat(size, format)) {
       handle = SharedMemoryImageBackingFactory::CreateGpuMemoryBufferHandle(
-          size, buffer_format, buffer_usage);
+          size, format);
     }
   }
   if (handle.is_null()) {
@@ -629,9 +641,17 @@ void GpuChannelMessageFilter::CopyNativeGmbToSharedMemoryAsync(
     gfx::GpuMemoryBufferHandle buffer_handle,
     base::UnsafeSharedMemoryRegion shared_memory,
     CopyNativeGmbToSharedMemoryAsyncCallback callback) {
+  base::AutoLock auto_lock(gpu_channel_lock_);
+  if (!gpu_channel_) {
+    std::move(callback).Run(false);
+    return;
+  }
+
   std::move(callback).Run(
-      gpu_memory_buffer_factory_->FillSharedMemoryRegionWithBufferContents(
-          std::move(buffer_handle), std::move(shared_memory)));
+      gpu_channel_->shared_image_stub()
+          ->factory()
+          ->CopyNativeBufferToSharedMemoryAsync(std::move(buffer_handle),
+                                                std::move(shared_memory)));
 }
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -685,9 +705,9 @@ GpuChannel::GpuChannel(
     int32_t client_id,
     uint64_t client_tracing_id,
     bool is_gpu_host,
+    bool enable_extra_handles_validation,
     ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
-    const gfx::GpuExtraInfo& gpu_extra_info,
-    gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory)
+    const gfx::GpuExtraInfo& gpu_extra_info)
     : gpu_channel_manager_(gpu_channel_manager),
       scheduler_(scheduler),
       sync_point_manager_(sync_point_manager),
@@ -697,16 +717,17 @@ GpuChannel::GpuChannel(
       io_task_runner_(io_task_runner),
       share_group_(share_group),
       is_gpu_host_(is_gpu_host),
+      enable_extra_handles_validation_(enable_extra_handles_validation),
       filter_(base::MakeRefCounted<GpuChannelMessageFilter>(
           this,
           channel_token,
           scheduler,
           image_decode_accelerator_worker,
           gpu_extra_info,
-          gpu_memory_buffer_factory,
           std::move(task_runner))) {
   DCHECK(gpu_channel_manager_);
   DCHECK(client_id_);
+  DCHECK(!(is_gpu_host_ && enable_extra_handles_validation_));
 }
 
 GpuChannel::~GpuChannel() {
@@ -739,15 +760,15 @@ std::unique_ptr<GpuChannel> GpuChannel::Create(
     int32_t client_id,
     uint64_t client_tracing_id,
     bool is_gpu_host,
+    bool enable_extra_handles_validation,
     ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
-    const gfx::GpuExtraInfo& gpu_extra_info,
-    gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory) {
+    const gfx::GpuExtraInfo& gpu_extra_info) {
   auto gpu_channel = base::WrapUnique(new GpuChannel(
       gpu_channel_manager, channel_token, scheduler, sync_point_manager,
       std::move(share_group), std::move(task_runner), std::move(io_task_runner),
       client_id, client_tracing_id, is_gpu_host,
-      image_decode_accelerator_worker, gpu_extra_info,
-      gpu_memory_buffer_factory));
+      enable_extra_handles_validation, image_decode_accelerator_worker,
+      gpu_extra_info));
 
   if (!gpu_channel->CreateSharedImageStub(gpu_extra_info)) {
     LOG(ERROR) << "GpuChannel: Failed to create SharedImageStub";
@@ -756,7 +777,7 @@ std::unique_ptr<GpuChannel> GpuChannel::Create(
   return gpu_channel;
 }
 
-void GpuChannel::Init(IPC::ChannelHandle channel_handle,
+void GpuChannel::Init(mojo::MessagePipeHandle channel_handle,
                       base::WaitableEvent* shutdown_event) {
   sync_channel_ = IPC::SyncChannel::Create(this, io_task_runner_.get(),
                                            task_runner_.get(), shutdown_event);
@@ -798,15 +819,8 @@ CommandBufferStub* GpuChannel::LookupCommandBuffer(int32_t route_id) {
 }
 
 bool GpuChannel::HasActiveStatefulContext() const {
-  for (auto& kv : stubs_) {
-    ContextType context_type = kv.second->context_type();
-    if (context_type == CONTEXT_TYPE_WEBGL1 ||
-        context_type == CONTEXT_TYPE_WEBGL2 ||
-        context_type == CONTEXT_TYPE_WEBGPU) {
-      return true;
-    }
-  }
-  return false;
+  return std::ranges::any_of(
+      stubs_, [](const auto& kv) { return kv.second->has_stateful_context(); });
 }
 
 void GpuChannel::MarkAllContextsLost() {
@@ -987,36 +1001,6 @@ void GpuChannel::CreateCommandBuffer(
   }
 
   int32_t stream_id = init_params->stream_id;
-  int32_t share_group_id = init_params->share_group_id;
-  CommandBufferStub* share_group = LookupCommandBuffer(share_group_id);
-
-  if (!share_group && share_group_id != IPC::mojom::kRoutingIdNone) {
-    LOG(ERROR) << "ContextResult::kFatalFailure: invalid share group id";
-    return;
-  }
-
-  if (share_group && stream_id != share_group->stream_id()) {
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "stream id does not match share group stream id";
-    return;
-  }
-
-  if (share_group && !share_group->decoder_context()) {
-    // This should catch test errors where we did not Initialize the
-    // share_group's CommandBuffer.
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "shared context was not initialized";
-    return;
-  }
-
-  if (share_group && share_group->decoder_context()->WasContextLost()) {
-    // The caller should retry to get a context.
-    LOG(ERROR) << "ContextResult::kTransientFailure: "
-                  "shared context was already lost";
-    responder.set_result(ContextResult::kTransientFailure);
-    return;
-  }
-
   CommandBufferId command_buffer_id =
       CommandBufferIdFromChannelAndRoute(client_id_, route_id);
 
@@ -1028,30 +1012,33 @@ void GpuChannel::CreateCommandBuffer(
   }
 
   std::unique_ptr<CommandBufferStub> stub;
-  if (init_params->attribs.context_type == CONTEXT_TYPE_WEBGPU) {
-    if (!gpu_channel_manager_->gpu_preferences().enable_webgpu) {
-      DLOG(ERROR) << "ContextResult::kFatalFailure: WebGPU not enabled";
-      return;
-    }
+  switch (init_params->attribs->which()) {
+    case mojom::ContextCreationAttribs::Tag::kGles:
+      stub = std::make_unique<GLES2CommandBufferStub>(
+          this, *init_params, command_buffer_id, sequence_id, stream_id,
+          route_id);
+      break;
+    case mojom::ContextCreationAttribs::Tag::kRaster:
+      stub = std::make_unique<RasterCommandBufferStub>(
+          this, *init_params, command_buffer_id, sequence_id, stream_id,
+          route_id);
+      break;
+    case mojom::ContextCreationAttribs::Tag::kWebgpu:
+      if (!gpu_channel_manager_->gpu_preferences().enable_webgpu) {
+        DLOG(ERROR) << "ContextResult::kFatalFailure: WebGPU not enabled";
+        return;
+      }
 
-    stub = std::make_unique<WebGPUCommandBufferStub>(
-        this, *init_params, command_buffer_id, sequence_id, stream_id,
-        route_id);
-  } else if (init_params->attribs.enable_raster_interface &&
-             !init_params->attribs.enable_gles2_interface) {
-    stub = std::make_unique<RasterCommandBufferStub>(
-        this, *init_params, command_buffer_id, sequence_id, stream_id,
-        route_id);
-  } else {
-    stub = std::make_unique<GLES2CommandBufferStub>(
-        this, *init_params, command_buffer_id, sequence_id, stream_id,
-        route_id);
+      stub = std::make_unique<WebGPUCommandBufferStub>(
+          this, *init_params, command_buffer_id, sequence_id, stream_id,
+          route_id);
+      break;
   }
 
   stub->BindEndpoints(std::move(receiver), std::move(client), io_task_runner_);
 
   auto stub_result =
-      stub->Initialize(share_group, *init_params, std::move(shared_state_shm));
+      stub->Initialize(*init_params, std::move(shared_state_shm));
   if (stub_result != gpu::ContextResult::kSuccess) {
     DLOG(ERROR) << "GpuChannel::CreateCommandBuffer(): failed to initialize "
                    "CommandBufferStub";

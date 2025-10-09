@@ -22,9 +22,6 @@
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
-#include "chrome/browser/apps/app_service/app_service_proxy.h"
-#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -33,6 +30,7 @@
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
@@ -137,21 +135,21 @@ webapps::AppId InstallWebAppFromPage(Browser* browser, const GURL& app_url) {
   auto* provider = WebAppProvider::GetForTest(browser->profile());
   DCHECK(provider);
   test::WaitUntilReady(provider);
+  base::test::TestFuture<const webapps::AppId&, webapps::InstallResultCode>
+      install_future;
   provider->scheduler().FetchManifestAndInstall(
       webapps::WebappInstallSource::MENU_BROWSER_TAB,
       browser->tab_strip_model()->GetActiveWebContents()->GetWeakPtr(),
-      base::BindOnce(&AutoAcceptDialogCallback),
-      base::BindLambdaForTesting(
-          [&run_loop, &app_id](const webapps::AppId& installed_app_id,
-                               webapps::InstallResultCode code) {
-            DCHECK_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-            app_id = installed_app_id;
-            run_loop.Quit();
-          }),
+      base::BindOnce(&AutoAcceptDialogCallback), install_future.GetCallback(),
       FallbackBehavior::kAllowFallbackDataAlways);
+  if (!install_future.Wait()) {
+    return webapps::AppId();
+  }
 
-  run_loop.Run();
-  return app_id;
+  EXPECT_EQ(install_future.Get<webapps::InstallResultCode>(),
+            webapps::InstallResultCode::kSuccessNewInstall);
+
+  return install_future.Get<webapps::AppId>();
 }
 
 webapps::AppId InstallWebAppFromPageAndCloseAppBrowser(Browser* browser,
@@ -162,17 +160,16 @@ webapps::AppId InstallWebAppFromPageAndCloseAppBrowser(Browser* browser,
   chrome::AddTabAt(browser, app_url, /*index=*/-1,
                    /*foreground=*/true);
 
-  ui_test_utils::BrowserChangeObserver observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   webapps::AppId app_id = InstallWebAppFromPage(browser, app_url);
 
-  Browser* app_browser = observer.Wait();
+  Browser* app_browser = browser_created_observer.Wait();
   DCHECK_NE(app_browser, browser);
   DCHECK(AppBrowserController::IsForWebApp(app_browser, app_id));
-  ui_test_utils::BrowserChangeObserver on_close(
-      app_browser, ui_test_utils::BrowserChangeObserver::ChangeType::kRemoved);
+  ui_test_utils::BrowserDestroyedObserver browser_destroyed_observer(
+      app_browser);
   chrome::CloseWindow(app_browser);
-  on_close.Wait();
+  browser_destroyed_observer.Wait();
 
   return app_id;
 }
@@ -217,20 +214,26 @@ Browser* LaunchWebAppBrowser(Profile* profile,
   SCOPED_TRACE(base::StrCat({"Attempted to launch ", app_id, " at ",
                              start_url.possibly_invalid_spec(), " with scope ",
                              scope.possibly_invalid_spec()}));
-  content::WebContents* web_contents =
-      apps::AppServiceProxyFactory::GetForProfile(profile)
-          ->BrowserAppLauncher()
-          ->LaunchAppWithParamsForTesting(apps::AppLaunchParams(
-              app_id, apps::LaunchContainer::kLaunchContainerWindow,
-              disposition, apps::LaunchSource::kFromTest));
 
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForLocalAppsUnchecked(profile);
+  base::test::TestFuture<base::WeakPtr<Browser>,
+                         base::WeakPtr<content::WebContents>,
+                         apps::LaunchContainer>
+      future;
+  provider->scheduler().LaunchAppWithCustomParams(
+      apps::AppLaunchParams(app_id,
+                            apps::LaunchContainer::kLaunchContainerWindow,
+                            disposition, apps::LaunchSource::kFromTest),
+      future.GetCallback());
+  content::WebContents* web_contents = future.template Get<1>().get();
   if (!web_contents) {
     return nullptr;
   }
 
   // Some tests load the "/hung" url, which never finishes loading. Thus exclude
   // that case from waiting for loading to stop.
-  bool will_url_finish_loading = start_url.path() != "/hung";
+  bool will_url_finish_loading = start_url.GetPath() != "/hung";
   if (will_url_finish_loading) {
     content::WaitForLoadStop(web_contents);
   }
@@ -263,8 +266,10 @@ Browser* LaunchWebAppBrowserAndWait(Profile* profile,
           app_id));
   Browser* const app_browser =
       LaunchWebAppBrowser(profile, app_id, disposition);
-  url_observer.Wait();
-  content::WaitForLoadStop(url_observer.web_contents());
+  if (app_browser) {
+    url_observer.Wait();
+    content::WaitForLoadStop(url_observer.web_contents());
+  }
   return app_browser;
 }
 
@@ -279,20 +284,24 @@ Browser* LaunchBrowserForWebAppInTab(Profile* profile,
                              start_url.possibly_invalid_spec(), " with scope ",
                              scope.possibly_invalid_spec()}));
 
-  content::WebContents* web_contents =
-      apps::AppServiceProxyFactory::GetForProfile(profile)
-          ->BrowserAppLauncher()
-          ->LaunchAppWithParamsForTesting(apps::AppLaunchParams(
-              app_id, apps::LaunchContainer::kLaunchContainerTab, disposition,
-              apps::LaunchSource::kFromTest));
-
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForLocalAppsUnchecked(profile);
+  base::test::TestFuture<base::WeakPtr<Browser>,
+                         base::WeakPtr<content::WebContents>,
+                         apps::LaunchContainer>
+      future;
+  provider->scheduler().LaunchAppWithCustomParams(
+      apps::AppLaunchParams(app_id, apps::LaunchContainer::kLaunchContainerTab,
+                            disposition, apps::LaunchSource::kFromTest),
+      future.GetCallback());
+  content::WebContents* web_contents = future.template Get<1>().get();
   if (!web_contents) {
     return nullptr;
   }
 
   // Some tests load the "/hung" url, which never finishes loading. Thus exclude
   // that case from waiting for loading to stop.
-  bool will_url_finish_loading = start_url.path() != "/hung";
+  bool will_url_finish_loading = start_url.GetPath() != "/hung";
   if (will_url_finish_loading) {
     content::WaitForLoadStop(web_contents);
   }
@@ -327,10 +336,16 @@ Browser* LaunchWebAppToURL(Profile* profile,
                                WindowOpenDisposition::NEW_FOREGROUND_TAB,
                                apps::LaunchSource::kFromCommandLine);
   params.override_url = url;
-  content::WebContents* const web_contents =
-      apps::AppServiceProxyFactory::GetForProfile(profile)
-          ->BrowserAppLauncher()
-          ->LaunchAppWithParamsForTesting(std::move(params));
+
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForLocalAppsUnchecked(profile);
+  base::test::TestFuture<base::WeakPtr<Browser>,
+                         base::WeakPtr<content::WebContents>,
+                         apps::LaunchContainer>
+      future;
+  provider->scheduler().LaunchAppWithCustomParams(std::move(params),
+                                                  future.GetCallback());
+  content::WebContents* web_contents = future.template Get<1>().get();
   EXPECT_TRUE(web_contents);
 
   Browser* browser = chrome::FindBrowserWithTab(web_contents);
@@ -447,9 +462,9 @@ Browser* FindWebAppBrowser(Profile* profile, const webapps::AppId& app_id) {
   return nullptr;
 }
 
-void CloseAndWait(Browser* browser) {
+void CloseAndWait(BrowserWindowInterface* browser) {
   BrowserWaiter waiter(browser);
-  browser->window()->Close();
+  browser->GetWindow()->Close();
   waiter.AwaitRemoved();
 }
 
@@ -482,7 +497,7 @@ std::optional<webapps::AppId> ForceInstallWebApp(Profile* profile, GURL url) {
   return policy_app_id;
 }
 
-BrowserWaiter::BrowserWaiter(Browser* filter) : filter_(filter) {
+BrowserWaiter::BrowserWaiter(BrowserWindowInterface* filter) : filter_(filter) {
   BrowserList::AddObserver(this);
 }
 

@@ -469,7 +469,7 @@ public class OfflinePageBridge {
      * @param uiAction UI action, like showing infobar or toast on certain case.
      */
     public void scheduleDownload(
-            WebContents webContents, String nameSpace, String url, int uiAction) {
+            @Nullable WebContents webContents, String nameSpace, String url, int uiAction) {
         scheduleDownload(webContents, nameSpace, url, uiAction, new OfflinePageOrigin());
     }
 
@@ -582,17 +582,6 @@ public class OfflinePageBridge {
     public boolean isShowingTrustedOfflinePage(WebContents webContents) {
         return org.chromium.chrome.browser.offlinepages.OfflinePageBridgeJni.get()
                 .isShowingTrustedOfflinePage(mNativeOfflinePageBridge, webContents);
-    }
-
-    /**
-     * Tries to acquire the storage access permssion if not yet.
-     *
-     * @param webContents Contents of the page to check.
-     * @param callback Callback to notify the result.
-     */
-    public void acquireFileAccessPermission(WebContents webContents, Callback<Boolean> callback) {
-        org.chromium.chrome.browser.offlinepages.OfflinePageBridgeJni.get()
-                .acquireFileAccessPermission(mNativeOfflinePageBridge, webContents, callback);
     }
 
     @CalledByNative
@@ -726,7 +715,7 @@ public class OfflinePageBridge {
         void getAllPages(
                 long nativeOfflinePageBridge,
                 List<OfflinePageItem> offlinePages,
-                final Callback<List<OfflinePageItem>> callback);
+                Callback<List<OfflinePageItem>> callback);
 
         void willCloseTab(long nativeOfflinePageBridge, WebContents webContents);
 
@@ -829,8 +818,5 @@ public class OfflinePageBridge {
                 long nativeOfflinePageBridge,
                 @JniType("std::string") String url,
                 Callback<LoadUrlParams> callback);
-
-        void acquireFileAccessPermission(
-                long nativeOfflinePageBridge, WebContents webContents, Callback<Boolean> callback);
     }
 }

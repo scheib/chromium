@@ -46,6 +46,8 @@ class IpProtectionCoreImpl
   using ProxyTokenManagerMap =
       absl::flat_hash_map<ProxyLayer,
                           std::unique_ptr<IpProtectionTokenManager>>;
+  using InitialTokensMap =
+      base::flat_map<ProxyLayer, std::vector<BlindSignedAuthToken>>;
 
   IpProtectionCoreImpl(
       MaskedDomainListManager* masked_domain_list_manager,
@@ -83,6 +85,9 @@ class IpProtectionCoreImpl
   IpProtectionTokenManager* GetIpProtectionTokenManagerForTesting(
       ProxyLayer proxy_layer);
   IpProtectionProxyConfigManager* GetIpProtectionProxyConfigManagerForTesting();
+  std::optional<BlindSignedAuthToken> GetAuthTokenForTesting(
+      ProxyLayer proxy_layer,
+      const std::string& geo_id);
 
   std::optional<std::string> GetProbabilisticRevealToken(
       const GURL& url,
@@ -91,6 +96,22 @@ class IpProtectionCoreImpl
   // `NetworkChangeNotifier::NetworkChangeObserver` implementation.
   void OnNetworkChanged(
       net::NetworkChangeNotifier::ConnectionType type) override;
+
+  // Returns the status of the IP Protection Proxy. This will only return kOk if
+  // the status is available and active (where all necessary features are on,
+  // etc), otherwise, specify the error message or just 'kUnavailable' if no
+  // further details can be provided.
+  IpProxyStatus GetIpProxyStatus() override;
+
+  bool IsProxyBypassed() override;
+
+  // Sets the bypass status for the IP Protection proxy.
+  //
+  // If `bypass_proxy` is set to `true`, all requests that would normally be
+  // routed through the IP Protection proxy will instead bypass it.
+  void SetBypassProxy(bool bypass_proxy) override;
+
+  void RecordTokenDemand(size_t chain_index) override;
 
  protected:
   // Set the enabled status of IP Protection.
@@ -128,6 +149,10 @@ class IpProtectionCoreImpl
   int quic_requests_ = 0;
 
   MdlType mdl_type_;
+
+  // If true, all requests that would normally be routed through the IP
+  // Protection proxy will instead bypass it.
+  bool bypassed_by_devtools_ = false;
 
   // List of TRACKING_PROTECTION content setting exceptions.
   std::vector<content_settings::HostIndexedContentSettings>

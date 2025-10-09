@@ -50,11 +50,15 @@ template("define_override_androidx_targets") {
   }
 
   android_library("core_overrides_java") {
+    resources_package = "androidx.core"
     visibility = [
       ":*",
       "//third_party/androidx:*",
     ]
-    sources = [ "local_modifications/core/java/androidx/core/content/res/TypedArrayUtils.java" ]
+    sources = [
+      "local_modifications/core/java/androidx/core/content/res/TypedArrayUtils.java",
+      "local_modifications/core/java/androidx/core/view/accessibility/AccessibilityNodeInfoCompat.java",
+    ]
     deps = [
       ":androidx_annotation_annotation_experimental_java",
       ":androidx_annotation_annotation_jvm_java",
@@ -67,32 +71,6 @@ template("define_override_androidx_targets") {
       ":androidx_tracing_tracing_android_java",
       ":androidx_versionedparcelable_versionedparcelable_java",
       "//third_party/android_deps:org_jspecify_jspecify_java",
-      "//third_party/kotlin_stdlib:kotlin_stdlib_java",
-    ]
-  }
-
-  android_library("pdf_cherry_pick_crbug_394147799_java") {
-    resources_package = "androidx.pdf"
-    sources = [
-      "local_modifications/pdf/java/androidx/pdf/viewer/fragment/PdfViewerFragment.kt",
-
-      # Need to include this due to "internal" visibilty.
-      "local_modifications/pdf/java/androidx/pdf/viewer/fragment/insets/TranslateInsetsAnimationCallback.kt",
-    ]
-
-    jar_excluded_patterns = [ "*TranslateInsetsAnimationCallback*" ]
-
-    deps = [
-      ":androidx_annotation_annotation_jvm_java",
-      ":androidx_core_core_java",
-      ":androidx_fragment_fragment_ktx_java",
-      ":androidx_pdf_pdf_viewer_fragment_java",
-      ":androidx_pdf_pdf_viewer_java",
-      "//third_party/android_deps:material_design_java",
-      "//third_party/android_deps:org_jetbrains_kotlinx_kotlinx_coroutines_core_jvm_java",
-      "//third_party/androidx:androidx_fragment_fragment_java",
-      "//third_party/androidx:androidx_lifecycle_lifecycle_common_jvm_java",
-      "//third_party/androidx:androidx_lifecycle_lifecycle_viewmodel_android_java",
       "//third_party/kotlin_stdlib:kotlin_stdlib_java",
     ]
   }
@@ -110,6 +88,20 @@ template("define_override_androidx_targets") {
       "//third_party/androidx:androidx_annotation_annotation_java",
       "//third_party/androidx:androidx_core_core_java",
       "//third_party/androidx:androidx_recyclerview_recyclerview_java",
+    ]
+  }
+
+  android_library("chromium_espresso_overrides_java") {
+    testonly = true
+    sources = [ "local_modifications/espresso/java/androidx/test/espresso/base/ViewHierarchyExceptionHandler.java" ]
+    deps = [
+      "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/androidx:androidx_test_core_java",
+      "//third_party/androidx:androidx_test_espresso_espresso_core_java",
+      "//third_party/androidx:androidx_test_monitor_java",
+      "//third_party/androidx:androidx_test_services_storage_java",
+      "//third_party/hamcrest:hamcrest_java",
+      "//third_party/junit",
     ]
   }
 }

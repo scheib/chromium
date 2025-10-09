@@ -193,10 +193,21 @@ class CORE_EXPORT CSSSelector {
     kDirectAdjacent,
     // ~ combinator
     kIndirectAdjacent,
+
     // The relation types below are implicit combinators inserted at parse time
-    // before pseudo-elements which match another flat tree element than the
-    // rest of the compound.
+    // before pseudo-elements.
+
+    // The pseudo-child combinator (:>) is inserted before pseudo-elements
+    // that are not covered by kUAShadow, kShadowSlot, or kShadowPart.
     //
+    // For example, `div::before` effectively becomes `div :> ::before`.
+    //
+    // The CSSWG has resolved to add this combinator to CSS [1], but we
+    // do not (yet) expose this combinator; it exists solely to aid
+    // selector matching.
+    //
+    // [1] https://github.com/w3c/csswg-drafts/issues/7346
+    kPseudoChild,
     // Implicit combinator inserted before pseudo-elements matching an element
     // inside a UA shadow tree. This combinator allows the selector matching to
     // cross a shadow root.
@@ -257,13 +268,14 @@ class CORE_EXPORT CSSSelector {
     kPseudoFocusVisible,
     kPseudoFocusWithin,
     kPseudoFullPageMedia,
-    kPseudoHasInterest,
     kPseudoHasSlotted,
     kPseudoHorizontal,
     kPseudoHover,
     kPseudoIncrement,
     kPseudoIndeterminate,
     kPseudoInterestHint,
+    kPseudoInterestSource,
+    kPseudoInterestTarget,
     kPseudoInvalid,
     kPseudoIs,
     kPseudoLang,
@@ -312,7 +324,6 @@ class CORE_EXPORT CSSSelector {
     kPseudoStart,
     kPseudoState,
     kPseudoTarget,
-    kPseudoTargetOfInterest,
     kPseudoUnknown,
     // Something that was unparsable, but contained either a nesting
     // selector (&), or a :scope pseudo-class, and must therefore be kept
@@ -372,6 +383,8 @@ class CORE_EXPORT CSSSelector {
     kPseudoVideoPersistent,
     kPseudoVideoPersistentAncestor,
 
+    kPseudoTargetAfter,
+    kPseudoTargetBefore,
     // Active ::scroll-marker styling.
     // https://drafts.csswg.org/css-overflow-5/#active-scroll-marker
     kPseudoTargetCurrent,
@@ -402,6 +415,9 @@ class CORE_EXPORT CSSSelector {
 
   PseudoType GetPseudoType() const {
     return static_cast<PseudoType>(bits_.get<PseudoTypeField>());
+  }
+  PseudoType GetPseudoTypeForOilpan() const {
+    return static_cast<PseudoType>(bits_.get_concurrently<PseudoTypeField>());
   }
 
   void UpdatePseudoType(const AtomicString&,
@@ -562,6 +578,9 @@ class CORE_EXPORT CSSSelector {
   MatchType Match() const {
     return static_cast<MatchType>(bits_.get<MatchField>());
   }
+  MatchType MatchForOilpan() const {
+    return static_cast<MatchType>(bits_.get_concurrently<MatchField>());
+  }
   void SetMatch(MatchType match) {
     bits_.set<MatchField>(match);
     DCHECK_EQ(Match(), match);  // using a bitfield.
@@ -569,6 +588,9 @@ class CORE_EXPORT CSSSelector {
 
   bool IsLastInSelectorList() const {
     return bits_.get<IsLastInSelectorListField>();
+  }
+  bool IsLastInSelectorListForOilpan() const {
+    return bits_.get_concurrently<IsLastInSelectorListField>();
   }
   void SetLastInSelectorList(bool is_last) {
     bits_.set<IsLastInSelectorListField>(is_last);
@@ -597,6 +619,9 @@ class CORE_EXPORT CSSSelector {
   bool HasVisited() const;
 
   bool HasRareData() const { return bits_.get<HasRareDataField>(); }
+  bool HasRareDataForOilpan() const {
+    return bits_.get_concurrently<HasRareDataField>();
+  }
 
   bool IsForPage() const { return bits_.get<IsForPageField>(); }
   void SetForPage() { bits_.set<IsForPageField>(true); }
@@ -620,9 +645,6 @@ class CORE_EXPORT CSSSelector {
   static bool IsElementBackedPseudoElement(CSSSelector::PseudoType pseudo);
   bool IsAllowedAfterPart() const;
 
-  // Returns true if the immediately preceding simple selector is ::slotted.
-  bool FollowsSlotted() const;
-
   // Returns true if any preceding selectors have combinators that cross tree
   // scopes.
   bool CrossesTreeScopes() const;
@@ -635,6 +657,10 @@ class CORE_EXPORT CSSSelector {
   // position like :first-of-type and :nth-child().
   bool IsChildIndexedSelector() const;
 
+  bool IsPseudoParent() const {
+    return Match() == kPseudoClass && GetPseudoType() == kPseudoParent;
+  }
+
   void Trace(Visitor* visitor) const;
 
   static String FormatPseudoTypeForDebugging(PseudoType);
@@ -644,7 +670,7 @@ class CORE_EXPORT CSSSelector {
   // RuleData bucketing sets is_covered_by_bucketing,
   // and these could happen concurrently. This trips up TSan,
   // even though the race is benign, so use an atomic read
-  // instead of C++ bitfields.
+  // while in the Oilpan thread, instead of C++ bitfields.
   using BitField = ConcurrentlyReadBitField<uint32_t>;
   using RelationField =
       BitField::DefineFirstValue<uint32_t, 4>;  // RelationType
@@ -704,7 +730,7 @@ class CORE_EXPORT CSSSelector {
   unsigned SpecificityForPage() const;
 
   template <bool expand_pseudo_references>
-  bool SerializeSimpleSelector(StringBuilder& builder,
+  void SerializeSimpleSelector(StringBuilder& builder,
                                uintptr_t scope_id) const;
 
   template <bool expand_pseudo_references>
@@ -857,7 +883,7 @@ inline void CSSSelector::SetValue(const AtomicString& value,
                                   bool match_lower_case = false) {
   DCHECK_NE(Match(), static_cast<unsigned>(kTag));
   DCHECK_NE(Match(), static_cast<unsigned>(kUniversalTag));
-  DCHECK(!(Match() == kPseudoClass && GetPseudoType() == kPseudoParent));
+  DCHECK(!IsPseudoParent());
   if (match_lower_case && !HasRareData() && !IsASCIILower(value)) {
     CreateRareData();
   }
@@ -992,6 +1018,7 @@ inline const StyleRule* CSSSelector::ParentRule() const {
 inline const AtomicString& CSSSelector::Value() const {
   DCHECK_NE(Match(), static_cast<unsigned>(kTag));
   DCHECK_NE(Match(), static_cast<unsigned>(kUniversalTag));
+  DCHECK(!IsPseudoParent());
   if (HasRareData()) {
     return data_.rare_data_->matching_value_;
   }

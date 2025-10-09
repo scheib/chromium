@@ -89,6 +89,8 @@
   self = [super initWithBaseViewController:navigationController
                                    browser:browser];
   if (self) {
+    CHECK_EQ(browser->type(), Browser::Type::kRegular,
+             base::NotFatalUntil::M145);
     CHECK(changeProfileContinuationProvider);
     _baseNavigationController = navigationController;
     _delegate = delegate;
@@ -200,6 +202,7 @@
                                           browser:self.browser
                                      contextStyle:_contextStyle
                                       accessPoint:_accessPoint
+                                   prefilledEmail:nil
                              continuationProvider:
                                  _changeProfileContinuationProvider];
   __weak __typeof(self) weakSelf = self;
@@ -274,7 +277,7 @@
   [self finishPresentingWithSignIn:YES];
 }
 
-- (void)fullscreenSigninScreenMediatorSigninIsNotForced:
+- (void)fullscreenSigninScreenMediatorWantsToBeDismissed:
     (FullscreenSigninScreenMediator*)mediator {
   CHECK_EQ(mediator, self.mediator, base::NotFatalUntil::M141);
   [self finishPresentingWithSignIn:NO];

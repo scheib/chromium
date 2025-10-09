@@ -214,7 +214,7 @@ class IdentityDialogControllerTest : public ChromeRenderViewHostTestHarness {
         segmentation_platform::MockSegmentationPlatformService>();
     ON_CALL(*segmentation_platform_service_,
             GetClassificationResult(_, _, _, _))
-        .WillByDefault(testing::Invoke(
+        .WillByDefault(
             [&run_loop, result_label, delay_callback, this](
                 auto, auto,
                 scoped_refptr<segmentation_platform::InputContext>
@@ -226,7 +226,7 @@ class IdentityDialogControllerTest : public ChromeRenderViewHostTestHarness {
               result.ordered_labels = {result_label};
               if (this->optimization_guide_decider_) {
                 ASSERT_EQ(segmentation_platform::processing::ProcessedValue(
-                              web_contents()->GetLastCommittedURL().host()),
+                              web_contents()->GetLastCommittedURL().GetHost()),
                           input_context->GetMetadataArgument(
                               segmentation_platform::kFedCmHost));
                 ASSERT_EQ(segmentation_platform::processing::ProcessedValue(
@@ -267,7 +267,7 @@ class IdentityDialogControllerTest : public ChromeRenderViewHostTestHarness {
               base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(std::move(callback), result)
                                  .Then(run_loop.QuitClosure()));
-            }));
+            });
     return segmentation_platform_service_.get();
   }
 

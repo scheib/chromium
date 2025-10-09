@@ -51,6 +51,7 @@
 #include "components/optimization_guide/proto/features/model_prototyping.pb.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "components/tabs/public/tab_interface.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -60,6 +61,7 @@
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "third_party/blink/public/mojom/content_extraction/ai_page_content.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_tree_update.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/rect.h"
@@ -124,8 +126,8 @@ void GetAIPageContentForModelPrototyping(
     AiDataKeyedService::AiDataCallback continue_callback) {
   TRACE_EVENT("browser", "GetAIPageContentForModelPrototyping");
 
-  auto options = optimization_guide::DefaultAIPageContentOptions();
-  options->on_critical_path = true;
+  auto options = optimization_guide::DefaultAIPageContentOptions(
+      /*on_critical_path =*/true);
   optimization_guide::OnAIPageContentDone callback = base::BindOnce(
       &OnGotAIPageContentForModelPrototyping, std::move(continue_callback));
   optimization_guide::GetAIPageContent(web_contents, std::move(options),
@@ -138,8 +140,8 @@ void GetAIPageContentWithActionableElementsForModelPrototyping(
   TRACE_EVENT("browser",
               "GetAIPageContentWithActionableElementsForModelPrototyping");
 
-  auto options = optimization_guide::ActionableAIPageContentOptions();
-  options->on_critical_path = true;
+  auto options = optimization_guide::ActionableAIPageContentOptions(
+      /*on_critical_path =*/true);
   optimization_guide::OnAIPageContentDone callback = base::BindOnce(
       &OnGotAIPageContentWithActionableElementsForModelPrototyping,
       std::move(continue_callback));
@@ -524,13 +526,14 @@ void OnEncodePng(AiDataKeyedService::AiDataCallback continue_callback,
 
 void OnGetTabScreenshotForModelPrototyping(
     AiDataKeyedService::AiDataCallback continue_callback,
-    const SkBitmap& bitmap) {
+    const viz::CopyOutputBitmapWithMetadata& result) {
   TRACE_EVENT0("browser", "OnGetTabScreenshotForModelPrototyping");
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
        base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
-      base::BindOnce(&EncodePngOnBackgroundThread, base::OwnedRef(bitmap)),
+      base::BindOnce(&EncodePngOnBackgroundThread,
+                     base::OwnedRef(result.bitmap)),
       base::BindOnce(&OnEncodePng, std::move(continue_callback)));
 }
 
@@ -543,7 +546,7 @@ void GetTabScreenshotForModelPrototyping(
   if (!view) {
     return std::move(continue_callback).Run(std::nullopt);
   }
-  SkBitmap empty;
+  viz::CopyOutputBitmapWithMetadata empty;
   view->CopyFromSurface(
       gfx::Rect(),  // Copy entire surface area.
       gfx::Size(),  // Result contains device-level detail.
@@ -680,9 +683,7 @@ void GetModelPrototypingAiData(AiDataKeyedService::AiDataSpecifier specifiers,
 }
 
 // Feature to add allow listed extensions remotely for data collection.
-BASE_FEATURE(kAllowlistedAiDataExtensions,
-             "AllowlistedAiDataExtensions",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowlistedAiDataExtensions, base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string> kAllowlistedExtensionsForData{
     &kAllowlistedAiDataExtensions, "allowlisted_extension_ids",
@@ -693,9 +694,7 @@ const base::FeatureParam<std::string> kBlocklistedExtensionsForData{
     /*default_value=*/""};
 
 // Feature to add allow listed extensions remotely for actions.
-BASE_FEATURE(kAllowlistedActionsExtensions,
-             "AllowlistedActionsExtensions",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAllowlistedActionsExtensions, base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string> kAllowlistedExtensionsForActions{
     &kAllowlistedActionsExtensions, "allowlisted_extension_ids",

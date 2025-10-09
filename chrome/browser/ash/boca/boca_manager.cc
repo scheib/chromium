@@ -33,6 +33,7 @@
 #include "chromeos/ash/components/boca/boca_session_manager.h"
 #include "chromeos/ash/components/boca/invalidations/invalidation_service_impl.h"
 #include "chromeos/ash/components/boca/on_task/on_task_session_manager.h"
+#include "chromeos/ash/components/boca/receiver/screen_presenter_factory_impl.h"
 #include "chromeos/ash/components/boca/session_api/session_client_impl.h"
 #include "chromeos/ash/components/boca/spotlight/spotlight_crd_manager.h"
 #include "chromeos/ash/components/boca/spotlight/spotlight_remoting_client_manager.h"
@@ -154,7 +155,7 @@ BocaManager::BocaManager(Profile* profile,
   std::unique_ptr<boca::SpotlightRemotingClientManager> remoting_client_manager;
   if (ash::features::IsBocaSpotlightRobotRequesterEnabled() && !is_consumer) {
     remoting_client_manager =
-        std::make_unique<boca::SpotlightRemotingClientManager>(
+        std::make_unique<boca::SpotlightRemotingClientManagerImpl>(
             std::make_unique<boca::SpotlightOAuthTokenFetcherImpl>(
                 GetOAuthServiceForSpotlight()),
             profile->GetURLLoaderFactory());
@@ -162,6 +163,13 @@ BocaManager::BocaManager(Profile* profile,
   boca_session_manager_ = std::make_unique<boca::BocaSessionManager>(
       session_client_impl_.get(), user->GetProfilePrefs(), user->GetAccountId(),
       /*is_producer=*/!is_consumer, std::move(remoting_client_manager));
+  if (!is_consumer && (ash::features::IsBocaScreenSharingStudentEnabled() ||
+                       ash::features::IsBocaScreenSharingTeacherEnabled())) {
+    boca_session_manager_->SetScreenPresenterFactory(
+        std::make_unique<boca::ScreenPresenterFactoryImpl>(
+            profile->GetURLLoaderFactory(),
+            IdentityManagerFactory::GetForProfile(profile)));
+  }
   if (ash::features::IsBabelOrcaAvailable()) {
     const std::string caption_language = speech::GetDefaultLiveCaptionLanguage(
         application_locale, profile->GetPrefs());
@@ -193,9 +201,7 @@ BocaManager::BocaManager(Profile* profile,
       instance_id::InstanceIDProfileServiceFactory::GetForProfile(profile)
           ->driver();
   invalidation_service_impl_ = std::make_unique<boca::InvalidationServiceImpl>(
-      gcm_driver, instance_id_driver, user->GetAccountId(),
-      boca_session_manager_.get(), session_client_impl_.get(),
-      boca::BocaAppClient::Get()->GetSchoolToolsServerBaseUrl());
+      gcm_driver, instance_id_driver, boca_session_manager_.get());
   AddObservers(user);
 }
 

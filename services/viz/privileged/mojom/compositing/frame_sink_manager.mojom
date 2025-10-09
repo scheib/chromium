@@ -75,6 +75,7 @@ struct RootCompositorFrameSinkParams {
 // Thus, a client will typically simply request a CompositorFrameSink from the
 // frame sink manager host which will forward the request to the frame sink
 // manager.
+[DirectReceiver]
 interface FrameSinkManager {
   // Starts the scope of temporary references tied to this |frame_sink_id|.
   // Temporary references tied to this |frame_sink_id| will be dropped on
@@ -88,7 +89,7 @@ interface FrameSinkManager {
   // sequences or dangling temporary references assigned to it. If there is a
   // CompositorFrameSink for |frame_sink_id| then it will be destroyed and the
   // message pipe to the client will be closed.
-  InvalidateFrameSinkId(FrameSinkId frame_sink_id);
+  InvalidateFrameSinkId(FrameSinkId frame_sink_id) => ();
 
   // |debug_label| is used when printing out the surface hierarchy so we know
   // which clients are contributing which surfaces.
@@ -154,7 +155,8 @@ interface FrameSinkManager {
   AddVideoDetectorObserver(pending_remote<VideoDetectorObserver> observer);
 
   // Creates a FrameSinkVideoCapturer instance.
-  CreateVideoCapturer(pending_receiver<FrameSinkVideoCapturer> receiver);
+  CreateVideoCapturer(pending_receiver<FrameSinkVideoCapturer> receiver,
+                      uint32 capture_version_source);
 
   // Marks the given SurfaceIds for destruction. The client must supply a sorted
   // `surface_ids`.
@@ -282,6 +284,7 @@ interface FrameSinkManagerClient {
 // RenderInputRouterDelegate[Client] interface to use the same mojo pipe to
 // send/receive information for input handling between the CrBrowserMain and the
 // VizCompositorThread.
+[DirectReceiver]
 interface RendererInputRouterDelegateRegistry {
   // Setup the connection between the Browser (at RenderWidgetHost level) and
   // the VizCompositor thread (at InputManager level) in both directions to

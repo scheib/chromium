@@ -332,11 +332,11 @@ class MemorySaverChipInteractiveTest
                      ->GetBubble();
   }
 
-  using PageActionInteractiveTestMixin::WaitForPageActionButtonVisible;
+  using PageActionInteractiveTestMixin::WaitForPageActionChipVisible;
 
-  auto WaitForPageActionButtonVisible() {
+  auto WaitForPageActionChipVisible() {
     MultiStep steps;
-    steps += WaitForPageActionButtonVisible(kActionShowMemorySaverChip);
+    steps += WaitForPageActionChipVisible(kActionShowMemorySaverChip);
     return steps;
   }
 
@@ -344,7 +344,7 @@ class MemorySaverChipInteractiveTest
     MultiStep steps;
     if (IsPageActionMigrationEnabled()) {
       steps += Steps(
-          WaitForPageActionButtonVisible(),
+          WaitForPageActionChipVisible(),
           CheckViewProperty(kMemorySaverChipElementId,
                             &page_actions::PageActionView::ShouldShowLabel,
                             is_expanded));
@@ -377,7 +377,7 @@ class MemorySaverChipInteractiveTest
   auto PressPageActionButton() {
     MultiStep steps;
     if (IsPageActionMigrationEnabled()) {
-      steps += Steps(WaitForPageActionButtonVisible(),
+      steps += Steps(WaitForPageActionChipVisible(),
                      PressButton(kMemorySaverChipElementId));
     } else {
       steps += PressButton(kMemorySaverChipElementId);
@@ -393,7 +393,7 @@ class MemorySaverChipInteractiveTest
   auto MousePressPageActionButton() {
     MultiStep steps;
     if (IsPageActionMigrationEnabled()) {
-      steps += Steps(WaitForPageActionButtonVisible(),
+      steps += Steps(WaitForPageActionChipVisible(),
                      MoveMouseTo(kMemorySaverChipElementId), ClickMouse());
     } else {
       steps += PressButton(kMemorySaverChipElementId);
@@ -535,7 +535,7 @@ IN_PROC_BROWSER_TEST_P(MemorySaverChipInteractiveTest,
 
                   // Discards tab on non-chrome page
                   DiscardAndReloadTab(0, kFirstTabContents),
-                  WaitForPageActionButtonVisible(),
+                  WaitForPageActionChipVisible(),
 
                   // Discards tab on chrome:// page
                   TryDiscardTab(1), CheckTabIsDiscarded(1, true),
@@ -659,7 +659,7 @@ IN_PROC_BROWSER_TEST_P(MemorySaverChipInteractiveTest,
                                             ->tab_strip_model()
                                             ->GetActiveWebContents()
                                             ->GetURL()
-                                            .host();
+                                            .GetHost();
         EXPECT_TRUE(discard_exception.contains(current_site_host));
       })),
 
@@ -683,9 +683,8 @@ IN_PROC_BROWSER_TEST_P(MemorySaverChipInteractiveTest,
 
 // Memory Saver Dialog bubble's cancel button's state should be preserved
 // for that tab even when navigating to another tab.
-// TODO(crbug.com/438816892): Re-enable this test
 IN_PROC_BROWSER_TEST_P(MemorySaverChipInteractiveTest,
-                       DISABLED_CancelButtonStatePreservedWhenSwitchingTabs) {
+                       CancelButtonStatePreservedWhenSwitchingTabs) {
   RunTestSequence(
       InstrumentTab(kFirstTabContents, 0),
       NavigateWebContents(kFirstTabContents, GetURL("a.test", "/title1.html")),

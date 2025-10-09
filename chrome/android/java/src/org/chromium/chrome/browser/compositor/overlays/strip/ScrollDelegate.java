@@ -11,6 +11,7 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.MathUtils;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.compositor.layouts.phone.stack.StackScroller;
+import org.chromium.chrome.browser.compositor.overlays.strip.reorder.TabStripDragHandler;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.ui.base.LocalizationUtils;
 
@@ -204,7 +205,9 @@ public class ScrollDelegate {
                 // Need to use real width (which gets animated to effectively 0) to smoothly scroll
                 // when (collapsing) or (using updated animations) near the end of a full tab strip.
                 boolean useRealWidth =
-                        tab.isCollapsed() || ChromeFeatureList.sTabletTabStripAnimation.isEnabled();
+                        tab.isCollapsed()
+                                || ChromeFeatureList.sTabletTabStripAnimation.isEnabled()
+                                || tab.getIsPinned();
                 float tabWidth = useRealWidth ? tab.getWidth() : cachedTabWidth;
 
                 totalViewWidth += (tabWidth - tabOverlapWidth);
@@ -245,6 +248,9 @@ public class ScrollDelegate {
     public void setReorderStartMargin(float newStartMargin) {
         float delta = newStartMargin - mReorderStartMargin;
         mReorderStartMargin = newStartMargin;
+
+        // Do not update scroll for pinned tabs.
+        if (TabStripDragHandler.isDraggingPinnedItem()) return;
 
         // Adjusts the scrollOffSetLimit here, since the next update cycle (which accounts for the
         // new reorderStartMargin) will not yet have run.

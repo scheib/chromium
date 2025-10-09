@@ -12,6 +12,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/pattern.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_command_line.h"
@@ -34,11 +35,14 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api_test_utils.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_builder.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "third_party/zlib/google/compression_utils.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 using compression::GzipUncompress;
 using extensions::Extension;
@@ -81,9 +85,9 @@ constexpr char kTestUploadUrlPath[] = "/upload_webrtc_log";
 constexpr char kTestReportId[] = "report_id";
 
 std::string ParamsToString(const base::Value::List& parameters) {
-  std::string parameter_string;
-  EXPECT_TRUE(base::JSONWriter::Write(parameters, &parameter_string));
-  return parameter_string;
+  std::optional<std::string> parameters_string = base::WriteJson(parameters);
+  EXPECT_TRUE(parameters_string.has_value());
+  return parameters_string.value_or("");
 }
 
 void InitializeTestMetaData(base::Value::List& parameters) {
@@ -200,7 +204,9 @@ class WebrtcLoggingPrivateApiTest : public extensions::ExtensionApiTest {
     scoped_refptr<Function> function(CreateFunction<Function>());
     const std::string error_message = utils::RunFunctionAndReturnError(
         function.get(), ParamsToString(parameters), GetProfile());
-    EXPECT_EQ(error_message, expected_error);
+    // Use MatchPattern() for errors like "No tab with id: 415777923."
+    EXPECT_TRUE(base::MatchPattern(error_message, expected_error))
+        << error_message;
   }
 
   // This function implicitly expects the function to succeed (test failure

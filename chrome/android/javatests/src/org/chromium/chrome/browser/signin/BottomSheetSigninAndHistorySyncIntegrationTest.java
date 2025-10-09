@@ -46,7 +46,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.ApplicationTestUtils;
@@ -68,7 +68,6 @@ import org.chromium.chrome.browser.ui.signin.history_sync.HistorySyncConfig;
 import org.chromium.chrome.browser.ui.signin.history_sync.HistorySyncHelper;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.R;
-import org.chromium.chrome.test.util.browser.signin.AccountManagerTestRule;
 import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.chrome.test.util.browser.sync.SyncTestUtil;
 import org.chromium.components.signin.SigninFeatures;
@@ -360,7 +359,6 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures(SigninFeatures.USE_HOSTED_DOMAIN_FOR_MANAGEMENT_CHECK_ON_SIGNIN)
     public void testWithManagedAccount_signIn_showsManagementNotice() {
         mSigninTestRule.addAccount(TestAccounts.MANAGED_ACCOUNT);
 
@@ -382,7 +380,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
         onView(allOf(withText(R.string.continue_button), isCompletelyDisplayed())).perform(click());
 
         mSigninTestRule.waitForSignin(TestAccounts.MANAGED_ACCOUNT);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verify(mDeviceLockActivityLauncher)
                     .launchDeviceLockActivity(any(), any(), anyBoolean(), any(), any(), any());
         }
@@ -498,7 +496,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
 
         // Verify signed-in state.
         mSigninTestRule.waitForSignin(TestAccounts.ACCOUNT1);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verify(mDeviceLockActivityLauncher)
                     .launchDeviceLockActivity(any(), any(), anyBoolean(), any(), any(), any());
         }
@@ -532,7 +530,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
         onView(allOf(withText(R.string.signin_add_account_to_device), isCompletelyDisplayed()))
                 .perform(click());
         mSigninTestRule.setAddAccountFlowResult(TestAccounts.AADC_ADULT_ACCOUNT);
-        onViewWaiting(AccountManagerTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
         acceptHistorySyncAndVerifyFlowCompletion(/* checkDialogRoot= */ false);
         addAccountStateWatcher.assertExpected();
     }
@@ -664,7 +662,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
                                 withParent(withId(R.id.account_picker_state_no_account)),
                                 isCompletelyDisplayed()))
                 .perform(click());
-        onViewWaiting(AccountManagerTestRule.CANCEL_ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.CANCEL_ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
 
         onViewWaiting(
                 allOf(
@@ -697,7 +695,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
                 WithAccountSigninMode.DEFAULT_ACCOUNT_BOTTOM_SHEET,
                 HistorySyncConfig.OptInMode.REQUIRED);
         mSigninTestRule.setAddAccountFlowResult(TestAccounts.AADC_ADULT_ACCOUNT);
-        onViewWaiting(AccountManagerTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
 
         acceptHistorySyncAndVerifyFlowCompletion(/* checkDialogRoot= */ true);
         signinStartedWatcher.assertExpected();
@@ -720,7 +718,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
                 NoAccountSigninMode.ADD_ACCOUNT,
                 WithAccountSigninMode.DEFAULT_ACCOUNT_BOTTOM_SHEET,
                 HistorySyncConfig.OptInMode.REQUIRED);
-        onViewWaiting(AccountManagerTestRule.CANCEL_ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.CANCEL_ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
 
         ApplicationTestUtils.waitForActivityState(mActivity, Stage.DESTROYED);
         assertNull(mSigninTestRule.getPrimaryAccount(ConsentLevel.SIGNIN));
@@ -730,21 +728,19 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
 
     @Test
     @MediumTest
-    public void testHistorySyncStringsCustomization() {
+    public void testHistorySyncStrings() {
         mSigninTestRule.addAccount(TestAccounts.ACCOUNT1);
         AccountPickerBottomSheetStrings bottomSheetStrings =
-                new AccountPickerBottomSheetStrings.Builder(
-                                R.string.signin_account_picker_bottom_sheet_title)
-                        .build();
+                new AccountPickerBottomSheetStrings.Builder("Title").build();
         // Create a config using sign-in strings for the history sync screen to test customization.
         BottomSheetSigninAndHistorySyncConfig config =
                 new BottomSheetSigninAndHistorySyncConfig.Builder(
                                 bottomSheetStrings,
                                 NoAccountSigninMode.ADD_ACCOUNT,
                                 WithAccountSigninMode.DEFAULT_ACCOUNT_BOTTOM_SHEET,
-                                HistorySyncConfig.OptInMode.REQUIRED)
-                        .historySyncTitleId(R.string.signin_fre_title)
-                        .historySyncSubtitleId(R.string.signin_fre_subtitle)
+                                HistorySyncConfig.OptInMode.REQUIRED,
+                                "Title",
+                                "Subtitle")
                         .build();
         Intent intent =
                 SigninAndHistorySyncActivity.createIntent(
@@ -763,9 +759,9 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
         // Wait for the history opt-in dialog and verify the custom strings.
         onViewWaiting(withId(R.id.history_sync_illustration), /* checkRootDialog= */ true)
                 .check(matches(isDisplayed()));
-        onView(allOf(withId(R.id.history_sync_title), withText(R.string.signin_fre_title)))
+        onView(allOf(withId(R.id.history_sync_title), withText("Title")))
                 .check(matches(isDisplayed()));
-        onView(allOf(withId(R.id.history_sync_subtitle), withText(R.string.signin_fre_subtitle)))
+        onView(allOf(withId(R.id.history_sync_subtitle), withText("Subtitle")))
                 .check(matches(isDisplayed()));
     }
 
@@ -782,15 +778,15 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
                         .expectNoRecords("Signin.Timestamps.Android.Fullscreen.ActivityInflated")
                         .build();
         AccountPickerBottomSheetStrings bottomSheetStrings =
-                new AccountPickerBottomSheetStrings.Builder(
-                                R.string.signin_account_picker_bottom_sheet_title)
-                        .build();
+                new AccountPickerBottomSheetStrings.Builder("Title").build();
         BottomSheetSigninAndHistorySyncConfig config =
                 new BottomSheetSigninAndHistorySyncConfig.Builder(
                                 bottomSheetStrings,
                                 noAccountSigninMode,
                                 withAccountSigninMode,
-                                historyOptInMode)
+                                historyOptInMode,
+                                "Title",
+                                "Subtitle")
                         .build();
         Intent intent =
                 SigninAndHistorySyncActivity.createIntent(
@@ -820,7 +816,7 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
 
         // Verify signed-in state.
         mSigninTestRule.waitForSignin(accountInfo);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verify(mDeviceLockActivityLauncher)
                     .launchDeviceLockActivity(any(), any(), anyBoolean(), any(), any(), any());
         }
@@ -848,12 +844,12 @@ public class BottomSheetSigninAndHistorySyncIntegrationTest {
                                 isCompletelyDisplayed()))
                 .perform(click());
         mSigninTestRule.setAddAccountFlowResult(TestAccounts.AADC_ADULT_ACCOUNT);
-        onViewWaiting(AccountManagerTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
+        onViewWaiting(SigninTestRule.ADD_ACCOUNT_BUTTON_MATCHER).perform(click());
 
         signinHistogramWatcher.assertExpected();
 
         mSigninTestRule.waitForSignin(TestAccounts.AADC_ADULT_ACCOUNT);
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             verify(mDeviceLockActivityLauncher)
                     .launchDeviceLockActivity(any(), any(), anyBoolean(), any(), any(), any());
         }

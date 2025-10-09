@@ -121,9 +121,7 @@ namespace {
 constexpr const char kCategory[] = "media";
 // Controls if VideoEncoder will use timestamp from blink::VideoFrame
 // instead of media::VideoFrame.
-BASE_FEATURE(kUseBlinkTimestampForEncoding,
-             "UseBlinkTimestampForEncoding",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kUseBlinkTimestampForEncoding, base::FEATURE_ENABLED_BY_DEFAULT);
 
 // TODO(crbug.com/40215121): This is very similar to the method in
 // video_frame.cc. It should probably be a function in video_types.cc.
@@ -759,6 +757,19 @@ VideoEncoder::CreateMediaVideoEncoder(
   return CreateSoftwareVideoEncoder(this, /*fallback=*/false, config.codec);
 }
 
+void VideoEncoder::ContinueConfigureAfterFlush(Request* request) {
+  if (active_config_->hw_pref == HardwarePreference::kPreferSoftware &&
+      !media::MayHaveAndAllowSelectOSSoftwareEncoder(active_config_->codec)) {
+    ContinueConfigureWithGpuFactories(request, nullptr);
+    return;
+  }
+
+  RetrieveGpuFactoriesWithKnownEncoderSupport(
+      CrossThreadBindOnce(&VideoEncoder::ContinueConfigureWithGpuFactories,
+                          MakeUnwrappingCrossThreadWeakHandle(this),
+                          MakeUnwrappingCrossThreadHandle(request)));
+}
+
 void VideoEncoder::ContinueConfigureWithGpuFactories(
     Request* request,
     media::GpuVideoAcceleratorFactories* gpu_factories) {
@@ -833,6 +844,14 @@ void VideoEncoder::ContinueConfigureWithGpuFactories(
   };
   if (!encoder_metrics_provider_) {
     encoder_metrics_provider_ = CreateVideoEncoderMetricsProvider();
+  }
+  if (active_config_->codec == media::VideoCodec::kAV1 &&
+      active_config_->options.bitrate.value_or(media::Bitrate()).mode() ==
+          media::Bitrate::Mode::kExternal) {
+    // Count usages of Av1 encoding with per-frame QP, to estimate how many
+    // users would notice if we change Av1 QP range from 0-63 to 0-255.
+    UseCounter::Count(GetExecutionContext(),
+                      WebFeature::kWebCodecsAv1EncodingWithQP);
   }
   encoder_metrics_provider_->Initialize(
       active_config_->profile, active_config_->options.frame_size,
@@ -967,39 +986,18 @@ bool VideoEncoder::StartReadback(scoped_refptr<media::VideoFrame> frame,
                               CrossThreadBindOnce(metadata_fix_lambda, frame))
                               .Then(std::move(pool_result_cb));
 
-#if BUILDFLAG(IS_APPLE)
-    // The Apple hardware encoder properly sets output color spaces, so we can
-    // round trip through the encoder and decoder w/o downgrading to BT.601.
-    constexpr auto kDstColorSpace = gfx::ColorSpace::CreateREC709();
-#else
-    // When doing RGBA to YUVA conversion using `accelerated_frame_pool_`, use
-    // sRGB primaries and the 601 YUV matrix. Note that this is subtly
-    // different from the 601 gfx::ColorSpace because the 601 gfx::ColorSpace
-    // has different (non-sRGB) primaries.
-    //
-    // This is necessary for our tests to pass since encoders will default to
-    // BT.601 when the color space information isn't told to the encoder. When
-    // coming back through the decoder it pulls out the embedded color space
-    // information instead of what's provided in the config.
-    //
-    // https://crbug.com/1258245, https://crbug.com/1377842
-    constexpr gfx::ColorSpace kDstColorSpace(
-        gfx::ColorSpace::PrimaryID::BT709, gfx::ColorSpace::TransferID::SRGB,
-        gfx::ColorSpace::MatrixID::SMPTE170M,
-        gfx::ColorSpace::RangeID::LIMITED);
-#endif
-
-    TRACE_EVENT_NESTABLE_ASYNC_BEGIN1("media", "CopyRGBATextureToVideoFrame",
-                                      this, "timestamp", frame->timestamp());
+    TRACE_EVENT_BEGIN("media", "CopyRGBATextureToVideoFrame",
+                      perfetto::Track::FromPointer(this), "timestamp",
+                      frame->timestamp());
     if (accelerated_frame_pool_->CopyRGBATextureToVideoFrame(
             frame->coded_size(), frame->shared_image(),
-            frame->acquire_sync_token(), kDstColorSpace,
+            frame->acquire_sync_token(), gfx::ColorSpace::CreateREC709(),
             std::move(callback_chain))) {
       return true;
     }
 
-    TRACE_EVENT_NESTABLE_ASYNC_END0("media", "CopyRGBATextureToVideoFrame",
-                                    this);
+    TRACE_EVENT_END("media", /*CopyRGBATextureToVideoFrame*/
+                    perfetto::Track::FromPointer(this));
 
     // Error occurred, fall through to normal readback path below.
     disable_accelerated_frame_pool_ = true;
@@ -1107,7 +1105,7 @@ void VideoEncoder::ProcessEncode(Request* request) {
     // resolve synchronously.
     blocking_request_in_progress_ = request;
 
-    auto readback_done_callback = WTF::BindOnce(
+    auto readback_done_callback = blink::BindOnce(
         &VideoEncoder::OnReadbackDone, WrapWeakPersistent(this),
         WrapPersistent(request), frame, std::move(encode_done_callback));
 
@@ -1236,7 +1234,8 @@ void VideoEncoder::OnReadbackDone(
     scoped_refptr<media::VideoFrame> txt_frame,
     media::VideoEncoder::EncoderStatusCB done_callback,
     scoped_refptr<media::VideoFrame> result_frame) {
-  TRACE_EVENT_NESTABLE_ASYNC_END0("media", "CopyRGBATextureToVideoFrame", this);
+  TRACE_EVENT_END("media", /*CopyRGBATextureToVideoFrame*/
+                  perfetto::Track::FromPointer(this));
   if (reset_count_ != request->reset_count) {
     return;
   }
@@ -1299,7 +1298,12 @@ void VideoEncoder::ProcessConfigure(Request* request) {
   // getAllFrameBuffers() async and can asynchronously get the number of
   // encoder buffers.
   if (active_config_->options.manual_reference_buffer_control &&
-      active_config_->codec == media::VideoCodec::kAV1) {
+      (active_config_->codec == media::VideoCodec::kAV1 ||
+       active_config_->codec == media::VideoCodec::kH264
+#if BUILDFLAG(ENABLE_PLATFORM_HEVC)
+       || active_config_->codec == media::VideoCodec::kHEVC
+#endif  // BUILDFLAG(ENABLE_PLATFORM_HEVC)
+       )) {
     frame_reference_buffers_.clear();
     for (size_t i = 0; i < 3; ++i) {
       auto* buffer = MakeGarbageCollected<VideoEncoderBuffer>(this, i);
@@ -1307,16 +1311,33 @@ void VideoEncoder::ProcessConfigure(Request* request) {
     }
   }
 
-  if (active_config_->hw_pref == HardwarePreference::kPreferSoftware &&
-      !media::MayHaveAndAllowSelectOSSoftwareEncoder(active_config_->codec)) {
-    ContinueConfigureWithGpuFactories(request, nullptr);
+  if (!media_encoder_) {
+    ContinueConfigureAfterFlush(request);
     return;
   }
 
-  RetrieveGpuFactoriesWithKnownEncoderSupport(
-      CrossThreadBindOnce(&VideoEncoder::ContinueConfigureWithGpuFactories,
-                          MakeUnwrappingCrossThreadWeakHandle(this),
-                          MakeUnwrappingCrossThreadHandle(request)));
+  auto flush_done_callback = [](VideoEncoder* self, Request* req,
+                                media::EncoderStatus status) {
+    if (!self || self->reset_count_ != req->reset_count) {
+      req->EndTracing(/*aborted=*/true);
+      return;
+    }
+    DCHECK_CALLED_ON_VALID_SEQUENCE(self->sequence_checker_);
+    if (!status.is_ok()) {
+      self->ReportError(
+          "Encoder flush error.", std::move(status),
+          /*is_error_message_from_software_codec=*/!self->is_platform_encoder_);
+      self->blocking_request_in_progress_ = nullptr;
+      req->EndTracing();
+      return;
+    }
+
+    self->ContinueConfigureAfterFlush(req);
+  };
+
+  media_encoder_->Flush(BindOnce(flush_done_callback,
+                                 MakeUnwrappingCrossThreadWeakHandle(this),
+                                 MakeUnwrappingCrossThreadHandle(request)));
 }
 
 void VideoEncoder::ProcessReconfigure(Request* request) {
@@ -1404,10 +1425,10 @@ void VideoEncoder::ProcessReconfigure(Request* request) {
   };
 
   blocking_request_in_progress_ = request;
-  media_encoder_->Flush(WTF::BindOnce(
-      flush_done_callback, MakeUnwrappingCrossThreadWeakHandle(this),
-      MakeUnwrappingCrossThreadHandle(request), std::move(reconf_done_callback),
-      is_platform_encoder_));
+  media_encoder_->Flush(
+      BindOnce(flush_done_callback, MakeUnwrappingCrossThreadWeakHandle(this),
+               MakeUnwrappingCrossThreadHandle(request),
+               std::move(reconf_done_callback), is_platform_encoder_));
 }
 
 void VideoEncoder::OnMediaEncoderInfoChanged(
@@ -1512,8 +1533,12 @@ void VideoEncoder::CallOutputCallback(
         DCHECK(active_config->options.avc.produce_annexb ||
                codec_desc.has_value());
       }
-      DCHECK(output.key_frame) << "Encoders should generate a keyframe when "
-                               << "changing color space";
+      DCHECK(output.key_frame)
+          << "Encoders should generate a keyframe when "
+          << "changing color space."
+          << " output_color_space: " << output_color_space.ToString()
+          << " last_output_color_space: "
+          << last_output_color_space_.ToString();
 #endif
       last_output_color_space_ = output_color_space;
     } else if (active_config->codec == media::VideoCodec::kH264) {
@@ -1528,11 +1553,8 @@ void VideoEncoder::CallOutputCallback(
     decoder_config->setCodec(active_config->codec_string);
     decoder_config->setCodedHeight(encoded_size.height());
     decoder_config->setCodedWidth(encoded_size.width());
-
-    if (RuntimeEnabledFeatures::WebCodecsOrientationEnabled()) {
-      decoder_config->setRotation(output_transform.rotation);
-      decoder_config->setFlip(output_transform.mirrored);
-    }
+    decoder_config->setRotation(output_transform.rotation);
+    decoder_config->setFlip(output_transform.mirrored);
 
     if (active_config->display_size.has_value()) {
       decoder_config->setDisplayAspectHeight(
@@ -1567,15 +1589,11 @@ void VideoEncoder::CallOutputCallback(
 void VideoEncoder::ResetInternal(DOMException* ex) {
   Base::ResetInternal(ex);
   active_encodes_ = 0;
+  last_output_color_space_ = {};
 }
 
 void VideoEncoder::OnNewEncode(InputType* input,
                                ExceptionState& exception_state) {
-  // Ignore orientation information when the feature is disabled.
-  if (!RuntimeEnabledFeatures::WebCodecsOrientationEnabled()) {
-    return;
-  }
-
   auto frame = input->frame();
   if (!frame) {
     // Let the invalid frame path be taken by calling code.
@@ -1641,8 +1659,7 @@ static void isConfigSupportedWithSoftwareOnly(
 
   auto done_callback =
       [](std::unique_ptr<media::VideoEncoder> encoder,
-         WTF::CrossThreadOnceFunction<void(blink::VideoEncoderSupport*)>
-             callback,
+         CrossThreadOnceFunction<void(blink::VideoEncoderSupport*)> callback,
          scoped_refptr<base::SingleThreadTaskRunner> runner,
          VideoEncoderSupport* support, media::EncoderStatus status) {
         support->setSupported(status.is_ok());
@@ -1663,7 +1680,7 @@ static void isConfigSupportedWithSoftwareOnly(
 }
 
 static void isConfigSupportedWithHardwareOnly(
-    WTF::CrossThreadOnceFunction<void(blink::VideoEncoderSupport*)> callback,
+    CrossThreadOnceFunction<void(blink::VideoEncoderSupport*)> callback,
     VideoEncoderSupport* support,
     VideoEncoderTraits::ParsedConfig* config,
     media::GpuVideoAcceleratorFactories* gpu_factories) {
@@ -1713,8 +1730,7 @@ ScriptPromise<VideoEncoderSupport> VideoEncoder::isConfigSupported(
           script_state);
   auto promise = resolver->Promise();
   auto find_any_callback = HeapBarrierCallback<VideoEncoderSupport>(
-      num_callbacks,
-      WTF::BindOnce(&FindAnySupported, WrapPersistent(resolver)));
+      num_callbacks, BindOnce(&FindAnySupported, WrapPersistent(resolver)));
 
   if (parsed_config->hw_pref != HardwarePreference::kPreferSoftware ||
       media::MayHaveAndAllowSelectOSSoftwareEncoder(parsed_config->codec)) {

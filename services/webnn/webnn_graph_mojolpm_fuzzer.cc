@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "base/byte_count.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/raw_ref.h"
@@ -51,13 +52,8 @@ struct InitGlobals {
     TestTimeouts::Initialize();
 
     base::test::AllowCheckIsTestForTesting();
-
-    task_environment = std::make_unique<base::test::TaskEnvironment>(
-        base::test::TaskEnvironment::MainThreadType::DEFAULT,
-        base::test::TaskEnvironment::TimeSource::MOCK_TIME);
   }
 
-  std::unique_ptr<base::test::TaskEnvironment> task_environment;
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
@@ -70,7 +66,16 @@ class WebnnGraphLPMFuzzer {
       : testcase_(testcase) {
     input_generator_.ReseedForTesting(testcase_->seed_for_input_data());
 
-    webnn_test_environment_.BindWebNNContextProvider(
+    auto task_environment = std::make_unique<base::test::TaskEnvironment>(
+        base::test::TaskEnvironment::MainThreadType::DEFAULT,
+        base::test::TaskEnvironment::TimeSource::MOCK_TIME);
+
+    webnn_test_environment_ =
+        std::make_unique<webnn::test::WebNNTestEnvironment>(
+            webnn::WebNNContextProviderImpl::WebNNStatus::kWebNNEnabled,
+            base::DoNothing(), std::move(task_environment));
+
+    webnn_test_environment_->BindWebNNContextProvider(
         provider_remote_.BindNewPipeAndPassReceiver());
 
     base::test::TestFuture<webnn::mojom::CreateContextResultPtr>
@@ -99,6 +104,8 @@ class WebnnGraphLPMFuzzer {
     return action_index_ > 100 || action_index_ >= testcase_->actions_size();
   }
 
+  void RunUntilIdle() { webnn_test_environment_->RunUntilIdle(); }
+
  private:
   mojo_base::BigBuffer GenerateBytes(size_t byte_size) {
     mojo_base::BigBuffer buffer(byte_size);
@@ -119,12 +126,12 @@ class WebnnGraphLPMFuzzer {
   void BuildGraph(const mojolpm::webnn::mojom::GraphInfo& graph_info_proto,
                   webnn::mojom::Device device) {
     mojo::Remote<webnn::mojom::WebNNContextProvider> webnn_provider_remote;
-    mojo::AssociatedRemote<webnn::mojom::WebNNContext> webnn_context_remote;
+    mojo::Remote<webnn::mojom::WebNNContext> webnn_context_remote;
     mojo::AssociatedRemote<webnn::mojom::WebNNGraphBuilder>
         webnn_graph_builder_remote;
     mojo::AssociatedRemote<webnn::mojom::WebNNGraph> webnn_graph_remote;
 
-    webnn_test_environment_.BindWebNNContextProvider(
+    webnn_test_environment_->BindWebNNContextProvider(
         webnn_provider_remote.BindNewPipeAndPassReceiver());
 
     // Create the ContextImpl through context provider.
@@ -166,10 +173,24 @@ class WebnnGraphLPMFuzzer {
     for (uint32_t id = 0; id < graph_info->operands.size(); ++id) {
       const auto& operand = graph_info->operands[id];
       if (operand->kind == webnn::mojom::Operand::Kind::kConstant) {
+        size_t tensor_length = operand->descriptor.PackedByteLength();
+        if (tensor_length > base::GiB(3).InBytes()) {
+          // Serialization of this Mojo call will fail if the tensor data is
+          // too big. We intentionally don't use ValidateTensor to ensure that
+          // the checks in the implementation of CreatePendingConstant are
+          // still exercised. The value is chosen to be larger than most
+          // context implementations support.
+          //
+          // This check can be removed if streaming constant uploads are
+          // implemented as the value will no longer be sent in a single
+          // message.
+          return;
+        }
+
         const blink::WebNNPendingConstantToken token;
         webnn_graph_builder_remote->CreatePendingConstant(
             token, operand->descriptor.data_type(),
-            GenerateBytes(operand->descriptor.PackedByteLength()));
+            GenerateBytes(tensor_length));
         graph_info->constant_operand_ids_to_handles.emplace(
             webnn::OperandId(id), token);
       }
@@ -275,9 +296,9 @@ class WebnnGraphLPMFuzzer {
   int action_index_ = 0;
   base::test::InsecureRandomGenerator input_generator_;
 
-  webnn::test::WebNNTestEnvironment webnn_test_environment_;
+  std::unique_ptr<webnn::test::WebNNTestEnvironment> webnn_test_environment_;
   mojo::Remote<webnn::mojom::WebNNContextProvider> provider_remote_;
-  mojo::AssociatedRemote<webnn::mojom::WebNNContext> webnn_context_;
+  mojo::Remote<webnn::mojom::WebNNContext> webnn_context_;
 };
 
 DEFINE_BINARY_PROTO_FUZZER(
@@ -286,6 +307,9 @@ DEFINE_BINARY_PROTO_FUZZER(
   while (!webnn_graph_fuzzer_instance.IsFinished()) {
     webnn_graph_fuzzer_instance.NextAction();
   }
+  // Ensure that any tasks scheduled by `webnn_graph_fuzzer_instance` are
+  // executed before it is freed. See https://crbug.com/441020155.
+  webnn_graph_fuzzer_instance.RunUntilIdle();
 }
 
 }  // namespace

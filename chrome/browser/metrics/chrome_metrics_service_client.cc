@@ -60,6 +60,7 @@
 #include "chrome/browser/privacy_budget/privacy_budget_ukm_entry_filter.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profiles_state.h"
+#include "chrome/browser/regional_capabilities/regional_capabilities_metrics_provider.h"
 #include "chrome/browser/safe_browsing/metrics/safe_browsing_metrics_provider.h"
 #include "chrome/browser/sync/device_info_sync_service_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
@@ -112,6 +113,7 @@
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "components/regional_capabilities/regional_capabilities_switches.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/sync/service/passphrase_type_metrics_provider.h"
 #include "components/sync/service/sync_service.h"
@@ -164,7 +166,6 @@
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/personalization_app_theme_metrics_provider.h"
 #include "chrome/browser/ash/system_web_apps/apps/personalization_app/wallpaper_metrics_provider.h"
 #include "chrome/browser/metrics/ambient_mode_metrics_provider.h"
-#include "chrome/browser/metrics/assistant_service_metrics_provider.h"
 #include "chrome/browser/metrics/chromeos_family_link_user_metrics_provider.h"
 #include "chrome/browser/metrics/chromeos_metrics_provider.h"
 #include "chrome/browser/metrics/chromeos_system_profile_provider.h"
@@ -734,8 +735,8 @@ void ChromeMetricsServiceClient::Initialize() {
   }
 
   if (metrics::dwa::DwaRecorder::IsDwaOrPrivateMetricsFeatureEnabled()) {
-    dwa_service_ =
-        std::make_unique<metrics::dwa::DwaService>(this, local_state);
+    dwa_service_ = std::make_unique<metrics::dwa::DwaService>(
+        this, local_state, g_browser_process->shared_url_loader_factory());
   }
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
     BUILDFLAG(IS_CHROMEOS)
@@ -918,9 +919,6 @@ void ChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
       std::make_unique<ash::PrinterMetricsProvider>());
 
   metrics_service_->RegisterMetricsProvider(
-      std::make_unique<AssistantServiceMetricsProvider>());
-
-  metrics_service_->RegisterMetricsProvider(
       std::make_unique<AmbientModeMetricsProvider>());
 
   metrics_service_->RegisterMetricsProvider(
@@ -1009,6 +1007,15 @@ void ChromeMetricsServiceClient::RegisterMetricsServiceProviders() {
   metrics_service_->RegisterMetricsProvider(
       std::make_unique<glic::GlicMetricsProvider>());
 #endif
+
+  // Only register the RegionalCapabilitiesMetricsProvider if the dynamic
+  // profile country feature is enabled. This is because that feature
+  // significantly changes the cases under which the "Mixed" bucket is emitted.
+  if (base::FeatureList::IsEnabled(switches::kDynamicProfileCountry)) {
+    metrics_service_->RegisterMetricsProvider(
+        std::make_unique<
+            regional_capabilities::RegionalCapabilitiesMetricsProvider>());
+  }
 }
 
 void ChromeMetricsServiceClient::RegisterUKMProviders() {

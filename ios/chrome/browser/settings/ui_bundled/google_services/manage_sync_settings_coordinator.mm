@@ -19,9 +19,9 @@
 #import "components/sync/service/sync_user_settings.h"
 #import "components/trusted_vault/trusted_vault_server_constants.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_coordinator.h"
-#import "ios/chrome/browser/authentication/ui_bundled/account_menu/account_menu_coordinator_delegate.h"
+#import "ios/chrome/browser/authentication/account_menu/coordinator/account_menu_coordinator.h"
+#import "ios/chrome/browser/authentication/account_menu/coordinator/account_menu_coordinator_delegate.h"
+#import "ios/chrome/browser/authentication/account_menu/public/account_menu_constants.h"
 #import "ios/chrome/browser/authentication/ui_bundled/continuation.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_coordinator.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_utils.h"
@@ -59,7 +59,6 @@
 #import "ios/chrome/browser/shared/public/commands/settings_commands.h"
 #import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
-#import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
 #import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/signin/model/authentication_service_factory.h"
@@ -136,6 +135,8 @@ using DismissViewCallback = SystemIdentityManager::DismissViewCallback;
   if ((self = [super initWithBaseViewController:navigationController
                                         browser:browser])) {
     CHECK(navigationController, base::NotFatalUntil::M142);
+    CHECK_EQ(browser->type(), Browser::Type::kRegular,
+             base::NotFatalUntil::M145);
     _baseNavigationController = navigationController;
   }
   return self;

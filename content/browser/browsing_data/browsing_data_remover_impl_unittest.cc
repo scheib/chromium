@@ -80,7 +80,6 @@ using base::test::RunOnceClosure;
 using testing::_;
 using testing::ByRef;
 using testing::Eq;
-using testing::Invoke;
 using testing::IsEmpty;
 using testing::MakeMatcher;
 using testing::Matcher;
@@ -577,8 +576,8 @@ TEST_F(BrowsingDataRemoverImplTest, RemoveCookiesDomainPreserveList) {
           BrowsingDataFilterBuilder::Mode::kPreserve));
   const GURL kTestUrl1("http://host1.com");
   const GURL kTestUrl3("http://host3.com");
-  filter->AddRegisterableDomain(kTestUrl1.host());
-  filter->AddRegisterableDomain(kTestUrl3.host());
+  filter->AddRegisterableDomain(kTestUrl1.GetHost());
+  filter->AddRegisterableDomain(kTestUrl3.GetHost());
   BlockUntilOriginDataRemoved(AnHourAgo(), base::Time::Max(),
                               BrowsingDataRemover::DATA_TYPE_COOKIES,
                               std::move(filter));
@@ -949,7 +948,7 @@ TEST_F(BrowsingDataRemoverImplTest,
       BrowsingDataFilterBuilder::Create(
           BrowsingDataFilterBuilder::Mode::kDelete));
   const GURL kTestUrl("http://host1.com");
-  builder->AddRegisterableDomain(kTestUrl.host());
+  builder->AddRegisterableDomain(kTestUrl.GetHost());
   // Remove the test origin.
   BlockUntilOriginDataRemoved(base::Time(), base::Time::Max(),
                               BrowsingDataRemover::DATA_TYPE_SERVICE_WORKERS |
@@ -1109,7 +1108,7 @@ TEST_F(BrowsingDataRemoverImplTest, RemoveQuotaManagedProtectedSpecificOrigin) {
   std::unique_ptr<BrowsingDataFilterBuilder> builder(
       BrowsingDataFilterBuilder::Create(
           BrowsingDataFilterBuilder::Mode::kDelete));
-  builder->AddRegisterableDomain(kTestUrl.host());
+  builder->AddRegisterableDomain(kTestUrl.GetHost());
 
   // Try to remove the test origin. Expect failure.
   BlockUntilOriginDataRemoved(base::Time(), base::Time::Max(),
@@ -1885,7 +1884,7 @@ TEST_F(BrowsingDataRemoverImplTest, NonDefaultStoragePartitionInFilter) {
       BrowsingDataFilterBuilder::Create(
           BrowsingDataFilterBuilder::Mode::kDelete));
   const GURL kTestUrl("http://host1.com");
-  builder->AddRegisterableDomain(kTestUrl.host());
+  builder->AddRegisterableDomain(kTestUrl.GetHost());
   builder->SetStoragePartitionConfig(non_default_storage_partition_config);
 
   // Remove the test origin.
@@ -2103,11 +2102,11 @@ class RemoveBtmEventsTester {
   }
 
   void WriteEventTimes(GURL url,
-                       std::optional<base::Time> storage_time,
+                       std::optional<base::Time> bounce_time,
                        std::optional<base::Time> interaction_time) {
-    if (storage_time.has_value()) {
-      storage_->AsyncCall(&BtmStorage::RecordStorage)
-          .WithArgs(url, storage_time.value());
+    if (bounce_time.has_value()) {
+      storage_->AsyncCall(&BtmStorage::RecordBounce)
+          .WithArgs(url, bounce_time.value());
     }
     if (interaction_time.has_value()) {
       storage_->AsyncCall(&BtmStorage::RecordUserActivation)
@@ -2146,9 +2145,11 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsForLastHour) {
   GURL url2("https://example2.com");
   base::Time two_hours_ago = base::Time::Now() - base::Hours(2);
 
-  tester.WriteEventTimes(url1, /*storage_time=*/base::Time::Now(),
+  tester.WriteEventTimes(url1,
+                         /*bounce_time=*/base::Time::Now(),
                          /*interaction_time=*/std::nullopt);
-  tester.WriteEventTimes(url2, /*storage_time=*/std::nullopt,
+  tester.WriteEventTimes(url2,
+                         /*bounce_time=*/std::nullopt,
                          /*interaction_time=*/two_hours_ago);
 
   {
@@ -2156,7 +2157,7 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsForLastHour) {
     std::optional<StateValue> state_val2 = tester.ReadStateValue(url2);
 
     ASSERT_TRUE(state_val1.has_value());
-    EXPECT_TRUE(state_val1->site_storage_times.has_value());
+    EXPECT_TRUE(state_val1->bounce_times.has_value());
     ASSERT_TRUE(state_val2.has_value());
     EXPECT_TRUE(state_val2->user_activation_times.has_value());
   }
@@ -2195,11 +2196,11 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsByType) {
   GURL url3("https://example3.com");
   base::Time two_hours_ago = base::Time::Now() - base::Hours(2);
 
-  tester.WriteEventTimes(url1, /*storage_time=*/base::Time::Now(),
+  tester.WriteEventTimes(url1, /*bounce_time=*/base::Time::Now(),
                          /*interaction_time=*/std::nullopt);
-  tester.WriteEventTimes(url2, /*storage_time=*/std::nullopt,
+  tester.WriteEventTimes(url2, /*bounce_time=*/std::nullopt,
                          /*interaction_time=*/base::Time::Now());
-  tester.WriteEventTimes(url3, /*storage_time=*/base::Time::Now(),
+  tester.WriteEventTimes(url3, /*bounce_time=*/base::Time::Now(),
                          /*interaction_time=*/two_hours_ago);
 
   {
@@ -2208,14 +2209,14 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsByType) {
     std::optional<StateValue> state_val3 = tester.ReadStateValue(url3);
 
     ASSERT_TRUE(state_val1.has_value());
-    EXPECT_TRUE(state_val1->site_storage_times.has_value());
+    EXPECT_TRUE(state_val1->bounce_times.has_value());
 
     ASSERT_TRUE(state_val2.has_value());
     EXPECT_TRUE(state_val2->user_activation_times.has_value());
 
     ASSERT_TRUE(state_val3.has_value());
-    EXPECT_TRUE(state_val3->site_storage_times.has_value());
     EXPECT_TRUE(state_val3->user_activation_times.has_value());
+    EXPECT_TRUE(state_val3->bounce_times.has_value());
   }
 
   // Remove interaction events from DIPS Storage.
@@ -2230,12 +2231,12 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsByType) {
     std::optional<StateValue> state_val3 = tester.ReadStateValue(url3);
 
     ASSERT_TRUE(state_val1.has_value());
-    EXPECT_TRUE(state_val1->site_storage_times.has_value());
+    EXPECT_TRUE(state_val1->bounce_times.has_value());
 
     EXPECT_FALSE(state_val2.has_value());
 
     ASSERT_TRUE(state_val3.has_value());
-    EXPECT_TRUE(state_val3->site_storage_times.has_value());
+    EXPECT_TRUE(state_val3->user_activation_times.has_value());
     EXPECT_TRUE(state_val3->user_activation_times.has_value());
   }
 
@@ -2255,7 +2256,7 @@ TEST_F(BrowsingDataRemoverImplBtmTest, RemoveBtmEventsByType) {
     EXPECT_FALSE(state_val2.has_value());
 
     ASSERT_TRUE(state_val3.has_value());
-    EXPECT_FALSE(state_val3->site_storage_times.has_value());
+    EXPECT_FALSE(state_val3->bounce_times.has_value());
     EXPECT_TRUE(state_val3->user_activation_times.has_value());
   }
 }
@@ -2266,7 +2267,7 @@ TEST_F(BrowsingDataRemoverImplTest,
       fingerprinting_protection_interventions::features::kCanvasNoise);
 
   url::Origin origin = url::Origin::Create(GURL("https://example.test"));
-  uint64_t original_token =
+  blink::NoiseToken original_token =
       content::CanvasNoiseTokenData::GetToken(GetBrowserContext(), origin);
 
   BlockUntilBrowsingDataRemoved(base::Time(), base::Time::Max(),
@@ -2277,7 +2278,7 @@ TEST_F(BrowsingDataRemoverImplTest,
   EXPECT_EQ(content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB,
             GetOriginTypeMask());
 
-  uint64_t updated_token =
+  blink::NoiseToken updated_token =
       content::CanvasNoiseTokenData::GetToken(GetBrowserContext(), origin);
   EXPECT_NE(original_token, updated_token);
 }

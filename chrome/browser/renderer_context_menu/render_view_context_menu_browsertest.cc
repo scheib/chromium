@@ -35,6 +35,7 @@
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/lens/region_search/lens_region_search_controller.h"
 #include "chrome/browser/pdf/pdf_extension_test_base.h"
 #include "chrome/browser/pdf/pdf_extension_test_util.h"
 #include "chrome/browser/pdf/test_pdf_viewer_stream_manager.h"
@@ -1003,7 +1004,7 @@ IN_PROC_BROWSER_TEST_P(ContextMenuForLockedFullscreenBrowserTest,
   }
 
   // Set locked fullscreen state.
-  PinWindow(browser()->window()->GetNativeWindow(), /*trusted=*/true);
+  ash::PinWindow(browser()->window()->GetNativeWindow(), /*trusted=*/true);
 
   // Verify aforementioned commands are disabled in locked fullscreen.
   for (int command_id : kCommandsToTest) {
@@ -1039,7 +1040,7 @@ IN_PROC_BROWSER_TEST_P(ContextMenuForLockedFullscreenBrowserTest,
   browser()->SetLockedForOnTask(true);
 
   // Set locked fullscreen state.
-  PinWindow(browser()->window()->GetNativeWindow(), /*trusted=*/true);
+  ash::PinWindow(browser()->window()->GetNativeWindow(), /*trusted=*/true);
 
   // Verify page navigation commands and some contextual content commands remain
   // enabled.
@@ -2132,8 +2133,7 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenLinkInProfileEntryPresent) {
   }
 
   // Open new window for the additional profile. This profile becomes active.
-  ui_test_utils::BrowserChangeObserver new_browser_observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   profiles::FindOrCreateNewWindowForProfile(
       profile, chrome::startup::IsProcessStartup::kNo,
       chrome::startup::IsFirstRun::kNo, false);
@@ -2143,7 +2143,7 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenLinkInProfileEntryPresent) {
   // is observed if the active profile has not switched to `profile` yet.
   bool wait_for_set_last_active_observed =
       ProfileManager::GetLastUsedProfileIfLoaded() != profile;
-  ui_test_utils::WaitForBrowserSetLastActive(new_browser_observer.Wait(),
+  ui_test_utils::WaitForBrowserSetLastActive(browser_created_observer.Wait(),
                                              wait_for_set_last_active_observed);
 
   // On Lacros SessionStartupPref::ShouldRestoreLastSession() returns true for
@@ -2267,12 +2267,11 @@ IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, MAYBE_OpenLinkInProfile) {
       // In order for the profile to be counted as active, it needs to have a
       // created browser window. The profile isn't marked active until the
       // browser is actually open, which we need.
-      ui_test_utils::BrowserChangeObserver observer(
-          nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+      ui_test_utils::BrowserCreatedObserver browser_created_observer;
       profiles::FindOrCreateNewWindowForProfile(
           profile, chrome::startup::IsProcessStartup::kNo,
           chrome::startup::IsFirstRun::kNo, false);
-      observer.Wait();
+      browser_created_observer.Wait();
       profiles_in_menu.push_back(profile);
     }
   }
@@ -2471,9 +2470,10 @@ class LensBrowserBaseTest : public InProcessBrowserTest {
   void SimulateDragAndVerifyOverlayUI(RenderViewContextMenu* menu) {
     // Verify Lens Region Search Controller was created after using the menu
     // item.
-    lens::LensRegionSearchController* controller =
-        menu->GetLensRegionSearchControllerForTesting();
+    lens::LensRegionSearchController* const controller =
+        browser()->GetFeatures().lens_region_search_controller();
     ASSERT_NE(controller, nullptr);
+    ASSERT_TRUE(menu->lens_region_search_controller_started_for_testing());
     ASSERT_TRUE(controller->IsOverlayUIVisibleForTesting());
     SimulateDrag();
     // The UI should be closed after the drag.
@@ -2484,9 +2484,10 @@ class LensBrowserBaseTest : public InProcessBrowserTest {
   void AssertOverlayUIHidden(RenderViewContextMenu* menu) {
     // Verify Lens Region Search Controller was created after using the menu
     // item.
-    lens::LensRegionSearchController* controller =
-        menu->GetLensRegionSearchControllerForTesting();
+    lens::LensRegionSearchController* const controller =
+        browser()->GetFeatures().lens_region_search_controller();
     ASSERT_NE(controller, nullptr);
+    ASSERT_TRUE(menu->lens_region_search_controller_started_for_testing());
     ASSERT_FALSE(controller->IsOverlayUIVisibleForTesting());
   }
 
@@ -2741,12 +2742,12 @@ IN_PROC_BROWSER_TEST_F(LensOverlayBrowserTest,
                                              base::NullCallback());
       }));
 
-  // Clicking the search for text entrypoint should eventually result in CSB
-  // state.
-  ASSERT_TRUE(base::test::RunUntil([&]() {
-    return controller->state() ==
-           LensOverlayController::State::kLivePageAndResults;
-  }));
+  // Wait for the side panel to load.
+  ASSERT_TRUE(base::test::RunUntil(
+      [&]() { return controller->GetSidePanelWebContentsForTesting(); }));
+  EXPECT_TRUE(content::WaitForLoadStop(
+      controller->GetSidePanelWebContentsForTesting()));
+  ASSERT_EQ(controller->state(), LensOverlayController::State::kOff);
 }
 
 IN_PROC_BROWSER_TEST_F(LensOverlayBrowserTest,
@@ -2757,9 +2758,7 @@ IN_PROC_BROWSER_TEST_F(LensOverlayBrowserTest,
       // Callback that will be called after the context menu item is clicked.
       base::BindLambdaForTesting([&](RenderViewContextMenu* menu) {
         // Verify the normal region search flow does not activate
-        lens::LensRegionSearchController* controller =
-            menu->GetLensRegionSearchControllerForTesting();
-        ASSERT_EQ(controller, nullptr);
+        ASSERT_FALSE(menu->lens_region_search_controller_started_for_testing());
         run = true;
       }));
 
@@ -2776,9 +2775,7 @@ IN_PROC_BROWSER_TEST_F(LensOverlayBrowserTest,
       // Callback that will be called after the context menu item is clicked.
       base::BindLambdaForTesting([&](RenderViewContextMenu* menu) {
         // Verify the normal region search flow activates.
-        lens::LensRegionSearchController* controller =
-            menu->GetLensRegionSearchControllerForTesting();
-        ASSERT_NE(controller, nullptr);
+        ASSERT_TRUE(menu->lens_region_search_controller_started_for_testing());
         run = true;
       }));
 
@@ -2795,9 +2792,7 @@ IN_PROC_BROWSER_TEST_F(LensOverlayBrowserTest,
       // Callback that will be called after the context menu item is clicked.
       base::BindLambdaForTesting([&](RenderViewContextMenu* menu) {
         // Verify the normal image search flow does not activate.
-        lens::LensRegionSearchController* controller =
-            menu->GetLensRegionSearchControllerForTesting();
-        ASSERT_EQ(controller, nullptr);
+        ASSERT_FALSE(menu->lens_region_search_controller_started_for_testing());
         run = true;
       }));
 
@@ -3025,8 +3020,8 @@ class LoadImageRequestObserver : public content::WebContentsObserver {
       content::RenderFrameHost* render_frame_host,
       const content::GlobalRequestID& request_id,
       const blink::mojom::ResourceLoadInfo& resource_load_info) override {
-    if (resource_load_info.original_url.path() == path_) {
-      ASSERT_GT(resource_load_info.raw_body_bytes, 0);
+    if (resource_load_info.original_url.GetPath() == path_) {
+      ASSERT_TRUE(resource_load_info.raw_body_bytes.is_positive());
       ASSERT_EQ(resource_load_info.mime_type, "image/png");
       run_loop_.Quit();
     }
@@ -3075,7 +3070,7 @@ class LoadImageBrowserTest : public InProcessBrowserTest {
 
     ASSERT_EQ(menu_observer.params().media_type,
               blink::mojom::ContextMenuDataMediaType::kImage);
-    ASSERT_EQ(menu_observer.params().src_url.path(), image_path_);
+    ASSERT_EQ(menu_observer.params().src_url.GetPath(), image_path_);
     ASSERT_FALSE(menu_observer.params().has_image_contents);
 
     request_observer.WaitForRequest();
@@ -3559,6 +3554,18 @@ IN_PROC_BROWSER_TEST_P(SubframeContextMenuBrowserTest,
                       split_tabs::SplitTabCreatedSource::kLinkContextMenu);
   browser()->tab_strip_model()->ActivateTabAt(0);
   RunSubframeInitiatorTestForCommand(IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW);
+}
+
+IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest, OpenNonStandardLink) {
+  std::unique_ptr<TestRenderViewContextMenu> menu1 =
+      CreateContextMenuMediaTypeNone(
+          /*unfiltered_url=*/GURL("mailto:me@google.com"),
+          /*url=*/GURL("mailto:me@google.com"));
+
+  EXPECT_TRUE(menu1->IsItemEnabled(IDC_CONTENT_CONTEXT_OPENLINKNEWTAB));
+  EXPECT_TRUE(menu1->IsItemEnabled(IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW));
+  ASSERT_FALSE(menu1->IsItemEnabled(IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW));
+  EXPECT_TRUE(menu1->IsItemEnabled(IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD));
 }
 
 IN_PROC_BROWSER_TEST_P(ContextMenuBrowserTest,

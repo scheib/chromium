@@ -50,7 +50,7 @@
 #include "ui/events/blink/did_overscroll_params.h"
 #include "ui/events/event_constants.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/gfx/range/range.h"
 #include "ui/surface/transport_dib.h"
 #include "url/origin.h"
@@ -66,6 +66,10 @@ class Cursor;
 class LatencyInfo;
 enum class DomCode : uint32_t;
 }  // namespace ui
+
+namespace viz {
+struct CopyOutputBitmapWithMetadata;
+}
 
 namespace content {
 
@@ -129,7 +133,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   void CopyFromSurface(
       const gfx::Rect& src_rect,
       const gfx::Size& output_size,
-      base::OnceCallback<void(const SkBitmap&)> callback) override;
+      base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+          callback) override;
   std::unique_ptr<viz::ClientFrameSinkVideoCapturer> CreateVideoCapturer()
       override;
   display::ScreenInfo GetScreenInfo() const override;
@@ -169,13 +174,15 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   virtual void CopyFromExactSurface(
       const gfx::Rect& src_rect,
       const gfx::Size& output_size,
-      base::OnceCallback<void(const SkBitmap&)> callback);
+      base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+          callback);
 
 #if BUILDFLAG(IS_ANDROID)
   virtual void CopyFromExactSurfaceWithIpcDelay(
       const gfx::Rect& src_rect,
       const gfx::Size& output_size,
-      base::OnceCallback<void(const SkBitmap&)> callback,
+      base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+          callback,
       base::TimeDelta ipc_delay);
 
   // Returns whethere there's a touch sequence active on Viz.
@@ -216,6 +223,11 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   gfx::PointF TransformPointToRootCoordSpaceF(
       const gfx::PointF& point) const override;
 
+  // This only needs to be overridden by RenderWidgetHostViewBase subclasses
+  // that handle content embedded within other RenderWidgetHostViews.
+  gfx::PointF TransformRootPointToViewCoordSpace(
+      const gfx::PointF& point) override;
+
   // Returns the value for whether the auto-resize has been enabled or not.
   bool IsAutoResizeEnabled();
 
@@ -230,7 +242,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
       const gfx::Rect& src_subrect,
       const gfx::Size& dst_size,
       float scale_factor,
-      base::OnceCallback<void(const SkBitmap&)> callback);
+      base::OnceCallback<void(const viz::CopyOutputBitmapWithMetadata&)>
+          callback);
 
   void SetWidgetType(WidgetType widget_type);
 

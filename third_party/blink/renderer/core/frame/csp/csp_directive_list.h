@@ -37,6 +37,7 @@ CSPCheckResult CSPDirectiveListAllowFromSource(
     const KURL& url_before_redirects,
     ResourceRequest::RedirectStatus redirect_status,
     ReportingDisposition reporting_disposition,
+    bool csp_extended_script_src_hashes_enabled = false,
     const String& nonce = String(),
     const IntegrityMetadataSet& integrity_metadata = IntegrityMetadataSet(),
     ParserDisposition parser_disposition = kParserInserted);
@@ -92,7 +93,8 @@ bool CSPDirectiveListAllowEval(
     ReportingDisposition reporting_disposition,
     ContentSecurityPolicy::ExceptionStatus exception_status,
     const String& content,
-    const Vector<network::IntegrityMetadata>& script_hash_values);
+    const Vector<network::IntegrityMetadata>& script_hash_values,
+    bool csp_extended_script_src_hashes_enabled);
 
 CORE_EXPORT
 bool CSPDirectiveListAllowWasmCodeGeneration(
@@ -105,7 +107,8 @@ bool CSPDirectiveListAllowWasmCodeGeneration(
 CORE_EXPORT
 bool CSPDirectiveListShouldDisableEval(
     const network::mojom::blink::ContentSecurityPolicy& csp,
-    String& error_message);
+    String& error_message,
+    bool csp_extended_script_src_hashes_enabled);
 
 // We need to pass both `csp` and `policy` in because for now, we need to
 // ensure the policy supports `wasm-unsafe-eval`.
@@ -176,7 +179,7 @@ CSPOperativeDirective CSPDirectiveListOperativeDirective(
 
 void FillInCSPHashValues(
     const String& source,
-    const WTF::HashSet<IntegrityAlgorithm>& hash_algorithms_used,
+    const HashSet<IntegrityAlgorithm>& hash_algorithms_used,
     Vector<network::IntegrityMetadata>& csp_hash_values);
 
 // Given a document URL and a script URL, returns the relative path of the

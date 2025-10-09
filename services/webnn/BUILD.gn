@@ -19,19 +19,14 @@ buildflag_header("buildflags") {
 }
 
 source_set("webnn_switches") {
-  sources = [ "webnn_switches.h" ]
-  deps = [ ":buildflags" ]
-}
-
-# Public WebNN native headers so they can be visible for dependencies
-# of webnn native.
-source_set("webnn_headers") {
   sources = [
-    # Backend headers must be included here so that dependent targets can
-    # still include them, even if the backends are disabled.
-    "d3d12_backend.h",
+    "webnn_switches.cc",
+    "webnn_switches.h",
   ]
-  public_deps = [ "//base" ]
+  deps = [
+    ":buildflags",
+    "//base",
+  ]
 }
 
 component("webnn_service") {
@@ -39,6 +34,8 @@ component("webnn_service") {
 
   sources = [
     "error.h",
+    "scoped_sequence.cc",
+    "scoped_sequence.h",
     "webnn_constant_operand.cc",
     "webnn_constant_operand.h",
     "webnn_context_impl.cc",
@@ -60,7 +57,6 @@ component("webnn_service") {
 
   deps = [
     ":buildflags",
-    ":webnn_headers",
     ":webnn_switches",
     "//base",
     "//gpu/command_buffer/service",
@@ -68,6 +64,7 @@ component("webnn_service") {
     "//gpu/config",
     "//mojo/public/cpp/bindings",
     "//services/webnn/public/mojom",
+    "//third_party/tflite:buildflags",
   ]
 
   if (is_win) {
@@ -154,7 +151,6 @@ component("webnn_service") {
       "//third_party/flatbuffers",
       "//third_party/fp16",
       "//third_party/tflite",
-      "//third_party/tflite:buildflags",
       "//third_party/tflite:tflite_builtin_op_resolver",
       "//third_party/tflite:tflite_public_headers",
     ]
@@ -232,6 +228,7 @@ source_set("webnn_test_support") {
   deps = [
     ":webnn_service",
     "//base",
+    "//base/test:test_support",
     "//gpu/command_buffer/service",
     "//gpu/config",
     "//mojo/public/cpp/bindings",
@@ -282,7 +279,6 @@ source_set("tests") {
 
   deps = [
     ":buildflags",
-    ":webnn_headers",
     ":webnn_service",
     ":webnn_test_support",
     "//base",

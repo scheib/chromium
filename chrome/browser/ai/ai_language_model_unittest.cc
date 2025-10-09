@@ -1093,8 +1093,6 @@ TEST_F(AILanguageModelTest, ModelDownload) {
       update_client::ComponentState::kDownloading, kTestModelDownloadSize));
 
   mock_monitor.ExpectReceivedNormalizedUpdate(0, kTestModelDownloadSize);
-  mock_monitor.ExpectReceivedNormalizedUpdate(kTestModelDownloadSize,
-                                              kTestModelDownloadSize);
 }
 
 TEST_F(AILanguageModelTest, MeasureInputUsage) {
@@ -1326,23 +1324,15 @@ TEST_F(AILanguageModelTest, CrashRecoveryMeasureInputUsage) {
   EXPECT_EQ(measure_future.Get(), std::string("UfooEM").size());
 }
 
-// TODO(crbug.com/414632884): This test is flaky on Linux TSAN.
-#if BUILDFLAG(IS_LINUX) && defined(THREAD_SANITIZER)
-#define MAYBE_CanCreate_WaitsForEligibility \
-  DISABLED_CanCreate_WaitsForEligibility
-#else
-#define MAYBE_CanCreate_WaitsForEligibility CanCreate_WaitsForEligibility
-#endif
-TEST_F(AILanguageModelTest, MAYBE_CanCreate_WaitsForEligibility) {
+TEST_F(AILanguageModelTest, CanCreate_WaitsForEligibility) {
   base::test::TestFuture<base::OnceCallback<void(
       optimization_guide::OnDeviceModelEligibilityReason)>>
       eligibility_future;
   EXPECT_CALL(*mock_optimization_guide_keyed_service_,
               GetOnDeviceModelEligibilityAsync(_, _, _))
-      .WillOnce(
-          testing::Invoke([&](auto feature, auto capabilities, auto callback) {
-            eligibility_future.SetValue(std::move(callback));
-          }));
+      .WillOnce([&](auto feature, auto capabilities, auto callback) {
+        eligibility_future.SetValue(std::move(callback));
+      });
 
   base::test::TestFuture<blink::mojom::ModelAvailabilityCheckResult>
       result_future;

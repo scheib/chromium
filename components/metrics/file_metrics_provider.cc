@@ -34,7 +34,6 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
-#include "components/metrics/fre_source_trial.h"
 #include "components/metrics/metrics_features.h"
 #include "components/metrics/metrics_log.h"
 #include "components/metrics/metrics_pref_names.h"
@@ -141,18 +140,20 @@ bool IsPMAFile(const base::FilePath& file_path,
   return true;
 }
 
-// Clients should not delete the sources of type
+// On iOS, clients should not delete the sources of type
 // FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_DIR if it's FRE, since the user
 // may not have opted in to metrics reporting yet. If the client is not FRE, the
 // user has already opted in to metrics reporting, so it's safe to delete the
 // source.
-// For now, only clients with trial enabled may return true. The rest of the
-// clients will always return false.
 bool ShouldKeepSourceWhenMetricsDisabled(
     const FileMetricsProvider::Params& params,
     bool is_fre) {
+#if BUILDFLAG(IS_IOS)
   return params.type == FileMetricsProvider::SOURCE_HISTOGRAMS_ATOMIC_DIR &&
-         is_fre && fre_source_trial::IsEnabled();
+         is_fre;
+#else
+  return false;
+#endif
 }
 
 // Ensures that a given directory path has at most max_source_files amount
@@ -356,8 +357,9 @@ void FileMetricsProvider::RegisterSource(const Params& params,
 // static
 void FileMetricsProvider::RegisterSourcePrefs(PrefRegistrySimple* prefs,
                                               std::string_view prefs_key) {
-  prefs->RegisterInt64Pref(
-      metrics::prefs::kMetricsLastSeenPrefix + std::string(prefs_key), 0);
+  prefs->RegisterTimePref(
+      metrics::prefs::kMetricsLastSeenPrefix + std::string(prefs_key),
+      base::Time());
 }
 
 //  static

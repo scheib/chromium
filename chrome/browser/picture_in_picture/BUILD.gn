@@ -15,6 +15,7 @@ source_set("picture_in_picture") {
     "auto_picture_in_picture_safe_browsing_checker_client.h",
     "auto_picture_in_picture_tab_helper.h",
     "auto_picture_in_picture_tab_observer_helper_base.h",
+    "auto_pip_setting_helper.h",
   ]
   public_deps = [
     "//base",
@@ -27,10 +28,12 @@ source_set("picture_in_picture") {
     "//url",
   ]
 
+  if (is_mac || is_win || is_linux || is_chromeos) {
+    public_deps += [ "//components/webapps/isolated_web_apps:scheme" ]
+  }
   if (!is_android) {
     sources += [
       "auto_picture_in_picture_tab_strip_observer_helper.h",
-      "auto_pip_setting_helper.h",
       "auto_pip_setting_overlay_view.h",
       "auto_pip_setting_view.h",
       "picture_in_picture_input_protector.h",
@@ -66,6 +69,7 @@ source_set("impl") {
     "auto_picture_in_picture_safe_browsing_checker_client.cc",
     "auto_picture_in_picture_tab_helper.cc",
     "auto_picture_in_picture_tab_observer_helper_base.cc",
+    "auto_pip_setting_helper.cc",
   ]
 
   deps = [
@@ -85,6 +89,7 @@ source_set("impl") {
     "//content/public/common",
     "//extensions/buildflags",
     "//media",
+    "//services/metrics/public/cpp:ukm_builders",
     "//ui/display",
     "//ui/gfx/geometry",
   ]
@@ -98,7 +103,6 @@ source_set("impl") {
   } else {
     sources += [
       "auto_picture_in_picture_tab_strip_observer_helper.cc",
-      "auto_pip_setting_helper.cc",
       "auto_pip_setting_overlay_view.cc",
       "auto_pip_setting_view.cc",
       "picture_in_picture_input_protector.cc",
@@ -118,7 +122,6 @@ source_set("impl") {
       "//components/strings:components_strings",
       "//components/url_formatter",
       "//net",
-      "//services/metrics/public/cpp:ukm_builders",
       "//third_party/blink/public/common:headers",
       "//ui/views",
     ]
@@ -190,6 +193,7 @@ if (!is_android) {
       "//chrome/browser",
       "//chrome/browser/content_settings:content_settings_factory",
       "//chrome/browser/devtools:test_support",
+      "//chrome/browser/preloading:test_support",
       "//chrome/browser/profiles:profile",
       "//chrome/browser/ui",
       "//chrome/browser/ui/views/page_info",
@@ -203,6 +207,7 @@ if (!is_android) {
       "//components/viz/common",
       "//content/public/browser",
       "//content/public/common",
+      "//content/test:browsertest_support",
       "//content/test:test_support",
       "//media",
       "//net:test_support",

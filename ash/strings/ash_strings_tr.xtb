@@ -332,10 +332,12 @@ Başlamak için şunları deneyebilirsin.</translation>
 <translation id="2083190527011054446">İyi geceler <ph name="GIVEN_NAME" />,</translation>
 <translation id="2086334242442703436">Emoji Seçiciyi Aç</translation>
 <translation id="2088116547584365419">oyunlar</translation>
+<translation id="2093792000875799555">Chromebook Haberleri için Steam</translation>
 <translation id="209965399369889474">Ağa bağlı değilsiniz</translation>
 <translation id="2107581415810719320">Diğer Düğme <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">USB-C kablonuz Thunderbolt'u desteklemiyor. Cihaz performansı sınırlı olabilir.</translation>
 <translation id="2108303511227308752">Alt + Geri tuşu klavye kısayolu değişti. Delete tuşunu kullanmak için <ph name="LAUNCHER_KEY_NAME" /> + geri tuşlarına basın.</translation>
+<translation id="2115680839221566783">Pil %<ph name="PERCENTAGE" /> dolu. Şarj işlemi beklemede.</translation>
 <translation id="2126242104232412123">Yeni masa</translation>
 <translation id="2132302418721800944">Tam ekran kaydet</translation>
 <translation id="2135456203358955318">Yerleştirilmiş büyüteç</translation>
@@ -1588,6 +1590,7 @@ Bağlı cihaz yok.</translation>
 <translation id="612734058257491180">Google Asistan, misafir oturumunda kullanılamaz.</translation>
 <translation id="6127395413317891856">İnternete bağlı değilsiniz. Bağlantınızı kontrol edip tekrar deneyin.</translation>
 <translation id="6129953537138746214">Boşluk</translation>
+<translation id="6136872094979134163">Chromebook için Steam haberleri alınamıyor.</translation>
 <translation id="6137566720514957455"><ph name="USER_EMAIL_ADDRESS" /> için kaldırma iletişim kutusunu aç</translation>
 <translation id="6141205840878048728">Hangi göreve odaklanmak istersiniz?</translation>
 <translation id="6141988275892716286">İndirme işlemini onaylayın</translation>
@@ -1644,7 +1647,7 @@ Bağlı cihaz yok.</translation>
 <translation id="6315170314923504164">Ses</translation>
 <translation id="6319058840130157106">Sağ alt köşe, Başlatıcı, adres çubuğu, yer işareti çubuğu, açık web sitesi ve indirilenler arasında geriye doğru geçiş yapın</translation>
 <translation id="6319503618073410818">Ayrıntıları tarayıcıda göster</translation>
-<translation id="6324916366299863871">Kısayolu düzenleyin</translation>
+<translation id="6324916366299863871">Kısayolu düzenle</translation>
 <translation id="6325525973963619867">Başarısız</translation>
 <translation id="6330012934079202188">Tüm masalardaki pencereler gösteriliyor, mevcut masadaki pencerelerin gösterilmesi için Yukarı ok tuşuna basın</translation>
 <translation id="6337159624125741244">Tam ekran büyüteci açık</translation>
@@ -1677,6 +1680,7 @@ Bağlı cihaz yok.</translation>
 <translation id="6445835306623867477"><ph name="RECEIVER_NAME" /> adlı alıcıya <ph name="ROUTE_TITLE" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> etkinlik</translation>
+<translation id="6448529022565414427">Şarj işlemi beklemede</translation>
 <translation id="6449483711453944360">Linux uygulamaları ve gizli pencereler şu anda desteklenmiyor</translation>
 <translation id="6450245544201845082">Sağ tıklama kısayolu şu anda devre dışı</translation>
 <translation id="6452181791372256707">Reddet</translation>
@@ -1939,7 +1943,7 @@ Yeni yüklenmiş</translation>
 <translation id="7340731148882810149">Otomatik tıklamalar menüsü</translation>
 <translation id="7346909386216857016">Tamam, anladım</translation>
 <translation id="7348093485538360975">Dokunmatik klavye</translation>
-<translation id="7352651011704765696">Bir şeyler ters gitti</translation>
+<translation id="7352651011704765696">Bir hata oluştu</translation>
 <translation id="735745346212279324">VPN bağlantısı kesildi</translation>
 <translation id="7360036564632145207">Çevre birimleri için veri erişimi koruma ayarınızı değiştirmek performansı optimize edebilir</translation>
 <translation id="736045644501761622">Duvar kağıdı ve stil ayarlayın</translation>

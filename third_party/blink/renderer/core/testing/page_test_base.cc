@@ -25,6 +25,7 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_text_fragment.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/testing/mock_policy_container_host.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
@@ -92,9 +93,8 @@ void PageTestBase::MockClipboardHostProvider::Install(
   interface_broker_ = &interface_broker;
   interface_broker_->SetBinderForTesting(
       blink::mojom::blink::ClipboardHost::Name_,
-      WTF::BindRepeating(
-          &PageTestBase::MockClipboardHostProvider::BindClipboardHost,
-          WTF::Unretained(this)));
+      BindRepeating(&PageTestBase::MockClipboardHostProvider::BindClipboardHost,
+                    Unretained(this)));
 }
 
 void PageTestBase::MockClipboardHostProvider::BindClipboardHost(
@@ -199,6 +199,18 @@ void PageTestBase::SetupPageWithClients(
 void PageTestBase::TearDown() {
   dummy_page_holder_ = nullptr;
   MemoryCache::Get()->EvictResources();
+
+  // `SimpleFontData` is leaked because of
+  // `ComputedStyle::GetInitialStyleSingleton()`. i.e.
+  // `ComputedStyleBase::inherited_data_::font_` ->
+  // `Font::font_fallback_list_` -> `FontFallbackList::font_list_`. The leak
+  // may cause `Debug check failed: isolate == isolate_` while running
+  // `~SimpleFontData`. So we have to decouple FontFallbackList from the
+  // initial style. `FontFallbackList` will be recreated by
+  // `EnsureFallbackList()` if needed.
+  const_cast<ComputedStyle*>(ComputedStyle::GetInitialStyleSingleton())
+      ->GetFont()
+      ->NullifyForTesting();
 }
 
 Document& PageTestBase::GetDocument() const {
@@ -282,7 +294,7 @@ void PageTestBase::InsertStyleElement(const std::string& style_rules) {
 }
 
 void PageTestBase::NavigateTo(const KURL& url,
-                              const WTF::HashMap<String, String>& headers) {
+                              const HashMap<String, String>& headers) {
   auto params = WebNavigationParams::CreateWithEmptyHTMLForTesting(url);
 
   for (const auto& header : headers)

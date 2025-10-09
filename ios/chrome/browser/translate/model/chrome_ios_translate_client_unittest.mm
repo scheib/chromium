@@ -20,7 +20,6 @@
 #import "ios/chrome/browser/language/model/language_model_manager_factory.h"
 #import "ios/chrome/browser/language_detection/model/language_detection_model_loader_service_ios_factory.h"
 #import "ios/chrome/browser/language_detection/model/language_detection_model_service_factory.h"
-#import "ios/chrome/browser/optimization_guide/model/ios_chrome_prediction_model_store.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service.h"
 #import "ios/chrome/browser/optimization_guide/model/optimization_guide_service_factory.h"
 #import "ios/chrome/browser/shared/model/profile/test/test_profile_ios.h"
@@ -57,16 +56,9 @@ class ChromeIOSTranslateClientTest : public PlatformTest {
             ->GetSupportedContentWorld();
     web_state_.SetWebFramesManager(content_world,
                                    std::move(web_frames_manager));
-    ChromeIOSTranslateClient::CreateForWebState(&web_state_);
     InfoBarManagerImpl::CreateForWebState(&web_state_);
-  }
-
-  void TearDown() override {
-    // Reinitialize the store, so that tests do not use state from the
-    // previous test.
-    optimization_guide::IOSChromePredictionModelStore::GetInstance()
-        ->ResetForTesting();
-    PlatformTest::TearDown();
+    ChromeIOSTranslateClient::CreateForWebState(
+        &web_state_, InfoBarManagerImpl::FromWebState(&web_state_));
   }
 
  protected:

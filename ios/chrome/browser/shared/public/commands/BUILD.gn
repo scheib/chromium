@@ -24,11 +24,15 @@ source_set("commands") {
     "contextual_panel_entrypoint_iph_commands.h",
     "contextual_sheet_commands.h",
     "country_code_picker_commands.h",
+    "credential_exchange_commands.h",
     "credential_provider_promo_commands.h",
+    "data_controls_commands.h",
     "docking_promo_commands.h",
+    "download_list_commands.h",
+    "download_record_commands.h",
     "drive_file_picker_commands.h",
     "enhanced_calendar_commands.h",
-    "feed_commands.h",
+    "file_upload_panel_commands.h",
     "find_in_page_commands.h",
     "generate_qr_code_command.h",
     "generate_qr_code_command.mm",
@@ -101,6 +105,7 @@ source_set("commands") {
   ]
 
   deps = [
+    "//components/enterprise/data_controls/core/browser",
     "//components/lens",
     "//components/tab_groups",
     "//ios/chrome/browser/authentication/ui_bundled:continuation",
@@ -121,7 +126,7 @@ source_set("commands") {
     "//base",
     "//components/browsing_data/core",
     "//components/password_manager/core/browser",
-    "//components/plus_addresses",
+    "//components/plus_addresses/core/browser",
     "//components/supervised_user/core/common",
     "//ios/chrome/browser/browsing_data/model:model_remove_mask",
     "//ios/chrome/browser/bubble/public",

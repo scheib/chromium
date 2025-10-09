@@ -85,7 +85,8 @@ class AdaptPerfettoConfigForChromeTest : public ::testing::Test {
 
 base::trace_event::TraceConfig ParseTraceConfigFromJson(
     const std::string& json_config) {
-  auto dict = base::JSONReader::Read(json_config);
+  auto dict =
+      base::JSONReader::Read(json_config, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   return base::trace_event::TraceConfig(std::move(*dict).TakeDict());
 }
 
@@ -191,7 +192,7 @@ TEST_F(AdaptPerfettoConfigForChromeTest, PrivacyFiltering) {
 TEST_F(AdaptPerfettoConfigForChromeTest, DiscardBuffer) {
   auto perfetto_config = ParsePerfettoConfigFromText(R"pb(
     buffers: { fill_policy: DISCARD size_kb: 42 }
-    data_sources: { config: { name: "org.chromium.trace_metadata" } }
+    data_sources: { config: { name: "org.chromium.trace_metadata2" } }
   )pb");
   EXPECT_TRUE(AdaptPerfettoConfigForChrome(&perfetto_config));
 }
@@ -200,7 +201,7 @@ TEST_F(AdaptPerfettoConfigForChromeTest, MultipleBuffers) {
   auto perfetto_config = ParsePerfettoConfigFromText(R"pb(
     buffers: { fill_policy: RING_BUFFER size_kb: 42 }
     buffers: { fill_policy: DISCARD size_kb: 42 }
-    data_sources: { config: { name: "org.chromium.trace_metadata" } }
+    data_sources: { config: { name: "org.chromium.trace_metadata2" } }
   )pb");
   EXPECT_TRUE(AdaptPerfettoConfigForChrome(&perfetto_config));
 }

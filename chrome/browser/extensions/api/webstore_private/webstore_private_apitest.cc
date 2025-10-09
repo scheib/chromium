@@ -41,6 +41,7 @@
 #include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/extension_dialog_auto_confirm.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/switches.h"
@@ -50,7 +51,6 @@
 #include "ui/gl/gl_switches.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
 #include "chrome/browser/supervised_user/supervised_user_test_util.h"  // nogncheck
 #include "chrome/browser/ui/browser.h"
@@ -65,6 +65,8 @@
 #include "chrome/browser/supervised_user/chromeos/parent_access_extension_approvals_manager.h"
 #include "chrome/browser/ui/webui/ash/parent_access/fake_parent_access_dialog.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 

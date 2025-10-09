@@ -51,7 +51,8 @@ class ReaderModeMetricsHelperTest : public PlatformTest {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   base::HistogramTester histogram_tester_;
   ukm::TestAutoSetUkmRecorder test_ukm_recorder_;
-  raw_ptr<dom_distiller::DistilledPagePrefs> distilled_page_prefs_;
+  raw_ptr<dom_distiller::DistilledPagePrefs, DanglingUntriaged>
+      distilled_page_prefs_;
 
  private:
   // Starts and finishes a committed navigation in `web_state()`. This
@@ -129,7 +130,7 @@ TEST_F(ReaderModeMetricsHelperTest, OnFontFamilyChanged) {
 TEST_F(ReaderModeMetricsHelperTest, OnFontScaleChanged) {
   histogram_tester_.ExpectTotalCount(kReaderModeCustomizationHistogram, 0);
 
-  distilled_page_prefs_->SetFontScaling(2.0);
+  distilled_page_prefs_->SetUserPrefFontScaling(2.0);
 
   EXPECT_THAT(
       histogram_tester_.GetAllSamples(kReaderModeCustomizationHistogram),
@@ -145,6 +146,38 @@ TEST_F(ReaderModeMetricsHelperTest, OnThemeChanged) {
   histogram_tester_.ExpectTotalCount(kReaderModeCustomizationHistogram, 0);
 
   distilled_page_prefs_->SetUserPrefTheme(dom_distiller::mojom::Theme::kDark);
+  task_environment_.RunUntilIdle();
+
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kReaderModeCustomizationHistogram),
+      BucketsAre(Bucket(ReaderModeCustomizationType::kTheme, 1)));
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kReaderModeThemeCustomizationHistogram),
+      BucketsAre(Bucket(ReaderModeTheme::kDark, 1)));
+}
+
+// Tests that changing the default theme multiple times does not impact
+// user preference customization metrics.
+TEST_F(ReaderModeMetricsHelperTest, OnDefaultThemeChangedMultipleTimes) {
+  histogram_tester_.ExpectTotalCount(kReaderModeCustomizationHistogram, 0);
+
+  distilled_page_prefs_->SetDefaultTheme(dom_distiller::mojom::Theme::kLight);
+  distilled_page_prefs_->SetDefaultTheme(dom_distiller::mojom::Theme::kDark);
+  distilled_page_prefs_->SetDefaultTheme(dom_distiller::mojom::Theme::kDark);
+  task_environment_.RunUntilIdle();
+
+  histogram_tester_.ExpectTotalCount(kReaderModeCustomizationHistogram, 0);
+  histogram_tester_.ExpectTotalCount(kReaderModeThemeCustomizationHistogram, 0);
+}
+
+// Tests that setting the same user preference multiple times to the same value
+// only counts once.
+TEST_F(ReaderModeMetricsHelperTest, OnUserPrefThemeChangedMultipleTimes) {
+  histogram_tester_.ExpectTotalCount(kReaderModeCustomizationHistogram, 0);
+
+  distilled_page_prefs_->SetUserPrefTheme(dom_distiller::mojom::Theme::kDark);
+  distilled_page_prefs_->SetUserPrefTheme(dom_distiller::mojom::Theme::kDark);
+  task_environment_.RunUntilIdle();
 
   EXPECT_THAT(
       histogram_tester_.GetAllSamples(kReaderModeCustomizationHistogram),
@@ -167,7 +200,7 @@ TEST_F(ReaderModeMetricsHelperTest, DeleteMetricsHelper) {
 // mode state.
 TEST_F(ReaderModeMetricsHelperTest, ReaderDistillerTriggered) {
   metrics_helper()->RecordReaderDistillerTriggered(
-      ReaderModeAccessPoint::kContextualChip);
+      ReaderModeAccessPoint::kContextualChip, /*is_incognito=*/false);
   metrics_helper()->Flush();
 
   EXPECT_THAT(histogram_tester_.GetAllSamples(kReaderModeStateHistogram),
@@ -180,7 +213,7 @@ TEST_F(ReaderModeMetricsHelperTest, ReaderDistillerTriggered) {
 // mode state.
 TEST_F(ReaderModeMetricsHelperTest, ReaderDistillerCompleted) {
   metrics_helper()->RecordReaderDistillerTriggered(
-      ReaderModeAccessPoint::kContextualChip);
+      ReaderModeAccessPoint::kContextualChip, /*is_incognito=*/false);
   task_environment_.AdvanceClock(base::Seconds(1));
 
   metrics_helper()->RecordReaderDistillerCompleted(
@@ -257,7 +290,7 @@ TEST_F(ReaderModeMetricsHelperTest, FlushMultipleReaderModeStates) {
 // Tests that canceling distillation records latency and reader mode state.
 TEST_F(ReaderModeMetricsHelperTest, DistillationCanceledOnTimeout) {
   metrics_helper()->RecordReaderDistillerTriggered(
-      ReaderModeAccessPoint::kAIHub);
+      ReaderModeAccessPoint::kAIHub, /*is_incognito=*/false);
   task_environment_.AdvanceClock(base::Seconds(1));
 
   // Cancelation triggers a metrics flush.
@@ -272,13 +305,39 @@ TEST_F(ReaderModeMetricsHelperTest, DistillationCanceledOnTimeout) {
 // Tests that Reader Mode access point is recorded when a value is set.
 TEST_F(ReaderModeMetricsHelperTest, ReaderModeAccessPointRecorded) {
   metrics_helper()->RecordReaderDistillerTriggered(
-      ReaderModeAccessPoint::kAIHub);
+      ReaderModeAccessPoint::kAIHub, /*is_incognito=*/false);
   metrics_helper()->Flush();
 
   EXPECT_THAT(histogram_tester_.GetAllSamples(kReaderModeStateHistogram),
               BucketsAre(Bucket(ReaderModeState::kDistillationStarted, 1)));
   EXPECT_THAT(histogram_tester_.GetAllSamples(kReaderModeAccessPointHistogram),
               BucketsAre(Bucket(ReaderModeAccessPoint::kAIHub, 1)));
+}
+
+// Tests that Reader Mode access point with mode is recorded for regular mode.
+TEST_F(ReaderModeMetricsHelperTest, ReaderModeAccessPointWithModeForRegular) {
+  metrics_helper()->RecordReaderDistillerTriggered(
+      ReaderModeAccessPoint::kAIHub, /*is_incognito=*/false);
+  metrics_helper()->Flush();
+
+  EXPECT_THAT(histogram_tester_.GetAllSamples(kReaderModeStateHistogram),
+              BucketsAre(Bucket(ReaderModeState::kDistillationStarted, 1)));
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kReaderModeAccessPointWithModeHistogram),
+      BucketsAre(Bucket(ReaderModeAccessPointWithMode::kAIHubInRegular, 1)));
+}
+
+// Tests that Reader Mode access point with mode is recorded for incognito mode.
+TEST_F(ReaderModeMetricsHelperTest, ReaderModeAccessPointWithModeForIncognito) {
+  metrics_helper()->RecordReaderDistillerTriggered(
+      ReaderModeAccessPoint::kAIHub, /*is_incognito=*/true);
+  metrics_helper()->Flush();
+
+  EXPECT_THAT(histogram_tester_.GetAllSamples(kReaderModeStateHistogram),
+              BucketsAre(Bucket(ReaderModeState::kDistillationStarted, 1)));
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kReaderModeAccessPointWithModeHistogram),
+      BucketsAre(Bucket(ReaderModeAccessPointWithMode::kAIHubInIncognito, 1)));
 }
 
 // Tests metrics functionality based on the heuristic result.

@@ -23,7 +23,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/webui/resources/cr_components/app_management/app_management.mojom.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -89,8 +89,6 @@ class AppManagementPageHandlerTestBase
         page.InitWithNewPipeAndPassRemote(), profile(), *delegate_);
     auto features_and_params =
         apps::test::GetFeaturesToEnableLinkCapturingUX(GetParam());
-    features_and_params.push_back(
-        {blink::features::kWebAppEnableScopeExtensions, {}});
     scoped_feature_list_.InitWithFeaturesAndParameters(features_and_params, {});
 #endif  // !BUILDFLAG(IS_CHROMEOS)
   }
@@ -611,6 +609,56 @@ TEST_P(AppManagementPageHandlerTestBase, DifferentScopeNoOverlap) {
   std::vector<std::string> overlapping_apps =
       GetOverlappingPreferredApps(app_id1);
   EXPECT_TRUE(overlapping_apps.empty());
+}
+
+TEST_P(AppManagementPageHandlerTestBase, GetSupportedLinksWithScopeExtensions) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(
+      ::features::kPwaNavigationCapturingWithScopeExtensions);
+  auto web_app_info = web_app::WebAppInstallInfo::CreateWithStartUrlForTesting(
+      GURL("https://example.com/"));
+  web_app_info->title = u"app_name";
+  web_app_info->scope_extensions = {
+      web_app::ScopeExtensionInfo::CreateForScope(GURL("https://sitea.com")),
+      web_app::ScopeExtensionInfo::CreateForScope(
+          GURL("https://app.siteb.com")),
+      web_app::ScopeExtensionInfo::CreateForScope(GURL("https://sitec.com"),
+                                                  /*has_origin_wildcard=*/true),
+      web_app::ScopeExtensionInfo::CreateForScope(
+          GURL("https://sited.com/path")),
+      web_app::ScopeExtensionInfo::CreateForScope(
+          GURL("http://☃.net/")) /* Unicode */
+  };
+  web_app_info->validated_scope_extensions = web_app_info->scope_extensions;
+  web_app_info->scope_extensions.insert(
+      web_app::ScopeExtensionInfo::CreateForScope(
+          GURL("https://unvalidatedscope.com")));
+
+  web_app::WebAppInstallParams install_params;
+  // Skip origin association validation for testing.
+  install_params.skip_origin_association_validation = true;
+
+  base::test::TestFuture<const webapps::AppId&, webapps::InstallResultCode>
+      future;
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForTest(profile());
+  provider->scheduler().InstallFromInfoWithParams(
+      std::move(web_app_info), /*overwrite_existing_manifest_fields=*/false,
+      webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON, future.GetCallback(),
+      install_params);
+
+  EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
+            future.Get<webapps::InstallResultCode>());
+  const webapps::AppId& app_id = future.Get<webapps::AppId>();
+
+  base::test::TestFuture<app_management::mojom::AppPtr> result;
+  handler()->GetApp(app_id, result.GetCallback());
+
+  EXPECT_THAT(result.Get()->supported_links,
+              testing::UnorderedElementsAre("sitea.com/*", "app.siteb.com/*",
+                                            "*.sitec.com/*", "sitec.com/*",
+                                            "sited.com/path*", "example.com/*",
+                                            "xn--n3h.net/*"));
 }
 
 #if !BUILDFLAG(IS_CHROMEOS)

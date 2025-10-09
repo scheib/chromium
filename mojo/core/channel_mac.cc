@@ -11,6 +11,7 @@
 
 #include <mach/mach.h>
 #include <string.h>
+#include <sys/fileport.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -37,20 +38,12 @@
 #include "base/trace_event/typed_macros.h"
 #include "mojo/core/ipcz_driver/envelope.h"
 
-extern "C" {
-kern_return_t fileport_makeport(int fd, mach_port_t*);
-int fileport_makefd(mach_port_t);
-}  // extern "C"
-
-namespace mojo {
-namespace core {
+namespace mojo::core {
 
 namespace {
 
 // Kill switch.
-BASE_FEATURE(kUseMachVouchers,
-             "UseMachVouchers",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kUseMachVouchers, base::FEATURE_ENABLED_BY_DEFAULT);
 
 bool ShouldUseVouchers() {
   static bool enabled = base::FeatureList::IsEnabled(kUseMachVouchers);
@@ -132,8 +125,7 @@ class ChannelMac : public Channel,
                               size_t num_handles,
                               const void* extra_header,
                               size_t extra_header_size,
-                              std::vector<PlatformHandle>* handles,
-                              bool* deferred) override {
+                              std::vector<PlatformHandle>* handles) override {
     // Validate the incoming handles. If validation fails, ensure they are
     // destroyed.
     std::vector<PlatformHandle> incoming_handles;
@@ -806,5 +798,4 @@ scoped_refptr<Channel> Channel::Create(
                         io_task_runner);
 }
 
-}  // namespace core
-}  // namespace mojo
+}  // namespace mojo::core

@@ -6,10 +6,13 @@
 
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/actor/actor_keyed_service.h"
 #include "chrome/browser/actor/execution_engine.h"
 #include "chrome/browser/actor/ui/actor_ui_state_manager_prefs.h"
 #include "chrome/browser/actor/ui/actor_ui_tab_controller.h"
+#include "chrome/browser/actor/ui/actor_ui_tab_controller_interface.h"
+#include "chrome/browser/actor/ui/ui_event_debugstring.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -20,10 +23,6 @@
 #include "chrome/common/chrome_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/tabs/public/tab_interface.h"
-#if BUILDFLAG(ENABLE_GLIC)
-#include "chrome/browser/glic/public/glic_keyed_service.h"
-#include "chrome/browser/glic/public/glic_keyed_service_factory.h"
-#endif
 #include "third_party/abseil-cpp/absl/functional/overload.h"
 
 namespace actor::ui {
@@ -38,7 +37,7 @@ using enum HandoffButtonState::ControlOwnership;
 // to be shared with tab controller.
 const UiTabState& GetActorControlledUiTabState() {
   static const UiTabState kActorState = {
-      .actor_overlay = ActorOverlayState(/*is_active=*/true),
+      .actor_overlay = {.is_active = true, .border_glow_visible = true},
       .handoff_button = {.is_active = true, .controller = kActor},
       .tab_indicator_visible = true,
       .border_glow_visible = true,
@@ -48,7 +47,7 @@ const UiTabState& GetActorControlledUiTabState() {
 
 const UiTabState& GetPausedUiTabState() {
   static const UiTabState kPausedState = {
-      .actor_overlay = ActorOverlayState(/*is_active=*/false),
+      .actor_overlay = {.is_active = false, .border_glow_visible = false},
       .handoff_button = {.is_active = true, .controller = kClient},
       .tab_indicator_visible = false,
       .border_glow_visible = false,
@@ -58,7 +57,7 @@ const UiTabState& GetPausedUiTabState() {
 
 const UiTabState& GetCompletedUiTabState() {
   static const UiTabState kCompletedState = {
-      .actor_overlay = ActorOverlayState(/*is_active=*/false),
+      .actor_overlay = {.is_active = false, .border_glow_visible = false},
       .handoff_button = {.is_active = false, .controller = kClient},
       .tab_indicator_visible = false,
       .border_glow_visible = false,
@@ -71,14 +70,10 @@ struct TabUiUpdate {
   UiTabState ui_tab_state;
 };
 
-auto GetNewUiStateFn(ActorUiStateManager& manager) {
+auto GetNewUiStateFn() {
   return absl::Overload{
-      [&manager](const StartingToActOnTab& e) -> TabUiUpdate {
-        auto* tab = e.tab_handle.Get();
-        if (auto* tab_controller = manager.GetUiTabController(tab)) {
-          tab_controller->SetActiveTaskId(e.task_id);
-        }
-        return TabUiUpdate{tab, GetActorControlledUiTabState()};
+      [](const StartingToActOnTab& e) -> TabUiUpdate {
+        return TabUiUpdate{e.tab_handle.Get(), GetActorControlledUiTabState()};
       },
       [](const MouseClick& e) -> TabUiUpdate {
         UiTabState ui_tab_state = GetActorControlledUiTabState();
@@ -113,15 +108,6 @@ bool MaybeShowToastViaController(BrowserWindowInterface* bwi) {
   return false;
 }
 
-bool IsRecentlyCompletedTask(const ActorTask& task) {
-  bool is_finished = (task.GetState() == actor::ActorTask::State::kFinished);
-  bool is_not_expired =
-      (base::Time::Now() - task.GetEndTime() <
-       base::Seconds(
-           features::kGlicActorUiCompletedTaskExpiryDelaySeconds.Get()));
-  return is_finished && is_not_expired;
-}
-
 }  // namespace
 
 ActorUiStateManager::ActorUiStateManager(ActorKeyedService& actor_service)
@@ -134,6 +120,8 @@ ActorUiStateManager::~ActorUiStateManager() = default;
 void ActorUiStateManager::OnActorTaskStateChange(
     TaskId task_id,
     ActorTask::State new_task_state) {
+  TRACE_EVENT("actor", "UiStateManager::OnActorTaskStateChange", "new_state",
+              new_task_state);
   // TODO(crbug.com/424495020): Look into converting this switch into a
   // map/catalog.
   // Notify tab-scoped UI components.
@@ -159,35 +147,21 @@ void ActorUiStateManager::OnActorTaskStateChange(
           FROM_HERE,
           base::Seconds(
               features::kGlicActorUiCompletedTaskExpiryDelaySeconds.Get()),
-          base::BindOnce(
-              &ActorUiStateManager::MaybeNotifyProfileScopedUiComponents,
-              weak_factory_.GetWeakPtr()));
+          base::BindOnce(&ActorUiStateManager::NotifyActorTaskStateChange,
+                         weak_factory_.GetWeakPtr(), task_id));
       break;
   }
   for (const auto& tab : GetTabs(task_id)) {
-    if (auto* tab_controller = GetUiTabController(tab)) {
+    if (auto* tab_controller = ActorUiTabControllerInterface::From(tab)) {
       tab_controller->OnUiTabStateChange(ui_tab_state,
                                          base::BindOnce(&LogUiChangeError));
     }
   }
 
-  // Update profile scoped state change.
-  update_profile_scoped_ui_debounce_timer_.Start(
+  notify_actor_task_state_change_debounce_timer_.Start(
       FROM_HERE, kProfileScopedUiUpdateDebounceDelay,
-      base::BindOnce(&ActorUiStateManager::MaybeNotifyProfileScopedUiComponents,
-                     weak_factory_.GetWeakPtr()));
-}
-
-ActorUiTabControllerInterface* ActorUiStateManager::GetUiTabController(
-    tabs::TabInterface* tab) {
-  if (!tab) {
-    LOG(ERROR) << "Tab does not exist.";
-    return nullptr;
-  }
-  auto* tab_controller = tab->GetTabFeatures()->actor_ui_tab_controller();
-  DCHECK(tab_controller)
-      << "TabController should always exist for a valid tab.";
-  return tab_controller;
+      base::BindOnce(&ActorUiStateManager::NotifyActorTaskStateChange,
+                     weak_factory_.GetWeakPtr(), task_id));
 }
 
 std::vector<tabs::TabInterface*> ActorUiStateManager::GetTabs(TaskId id) {
@@ -207,9 +181,12 @@ std::vector<tabs::TabInterface*> ActorUiStateManager::GetTabs(TaskId id) {
 // scoped ui components, we can look into using BarrierClosure.
 void ActorUiStateManager::OnUiEvent(AsyncUiEvent event,
                                     UiCompleteCallback callback) {
+  TRACE_EVENT("actor", "UiStateManager::OnUiEvent_Async", "event",
+              DebugString(event));
   if (base::FeatureList::IsEnabled(features::kGlicActorUi)) {
-    const TabUiUpdate update = std::visit(GetNewUiStateFn(*this), event);
-    if (auto* tab_controller = GetUiTabController(update.tab)) {
+    const TabUiUpdate update = std::visit(GetNewUiStateFn(), event);
+    if (auto* tab_controller =
+            ActorUiTabControllerInterface::From(update.tab)) {
       base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
@@ -230,65 +207,32 @@ void ActorUiStateManager::OnUiEvent(AsyncUiEvent event,
 }
 
 void ActorUiStateManager::OnUiEvent(SyncUiEvent event) {
+  TRACE_EVENT("actor", "UiStateManager::OnUiEvent_Sync", "event",
+              DebugString(event));
   if (!base::FeatureList::IsEnabled(features::kGlicActorUi)) {
     return;
   }
   std::visit(
-      absl::Overload{[this](const StartTask& e) {
-                       this->MaybeNotifyProfileScopedUiComponents();
-                     },
-                     [this](const TaskStateChanged& e) {
-                       this->OnActorTaskStateChange(e.task_id, e.state);
-                     },
-                     [this](const StoppedActingOnTab& e) {
-                       auto* tab = e.tab_handle.Get();
-                       if (auto* tab_controller = GetUiTabController(tab)) {
-                         tab_controller->ClearActiveTaskId();
-                         tab_controller->OnUiTabStateChange(
-                             GetCompletedUiTabState(),
-                             base::BindOnce(&LogUiChangeError));
-                       }
-                     }},
+      absl::Overload{
+          [this](const StartTask& e) {
+            notify_actor_task_state_change_debounce_timer_.Start(
+                FROM_HERE, kProfileScopedUiUpdateDebounceDelay,
+                base::BindOnce(&ActorUiStateManager::NotifyActorTaskStateChange,
+                               weak_factory_.GetWeakPtr(), e.task_id));
+          },
+          [this](const TaskStateChanged& e) {
+            this->OnActorTaskStateChange(e.task_id, e.state);
+          },
+          [](const StoppedActingOnTab& e) {
+            auto* tab = e.tab_handle.Get();
+            if (auto* tab_controller =
+                    ActorUiTabControllerInterface::From(tab)) {
+              tab_controller->OnUiTabStateChange(
+                  GetCompletedUiTabState(), base::BindOnce(&LogUiChangeError));
+            }
+          }},
       event);
 }
-
-#if BUILDFLAG(ENABLE_GLIC)
-void ActorUiStateManager::OnGlicUpdateFloatyState(
-    glic::GlicWindowController::State floaty_state,
-    glic::mojom::CurrentView current_view) {
-  UpdateTaskIconSuppressionOnFloatyStateChange(floaty_state, current_view);
-
-  if (task_icon_state_ != TaskIconUiState::kHidden) {
-    if (suppress_task_icon_text_) {
-      task_icon_state_ = TaskIconUiState::kShown;
-    }
-
-    task_icon_change_callback_list_.Notify(task_icon_state_, floaty_state,
-                                           current_view);
-  }
-}
-
-void ActorUiStateManager::UpdateTaskIconSuppressionOnFloatyStateChange(
-    glic::GlicWindowController::State floaty_state,
-    glic::mojom::CurrentView current_view) {
-  if (!suppress_task_icon_text_ &&
-      ShouldSuppressTaskIconText(floaty_state, current_view)) {
-    suppress_task_icon_text_ = true;
-  }
-}
-
-bool ActorUiStateManager::ShouldSuppressTaskIconText(
-    glic::GlicWindowController::State floaty_state,
-    glic::mojom::CurrentView view) {
-  return floaty_state == glic::GlicWindowController::State::kOpen &&
-         view == glic::mojom::CurrentView::kActuation;
-}
-
-base::CallbackListSubscription ActorUiStateManager::RegisterTaskIconStateChange(
-    TaskIconStateChangeCallback callback) {
-  return task_icon_change_callback_list_.Add(std::move(callback));
-}
-#endif
 
 void ActorUiStateManager::MaybeShowToast(BrowserWindowInterface* bwi) {
   if (!features::kGlicActorUiToast.Get()) {
@@ -297,6 +241,11 @@ void ActorUiStateManager::MaybeShowToast(BrowserWindowInterface* bwi) {
 
   PrefService* pref_service = actor_service_->GetProfile()->GetPrefs();
   int toast_shown_count = pref_service->GetInteger(kToastShown);
+
+  DCHECK(toast_shown_count <= kToastShownMax)
+      << "Toast shown count (" << toast_shown_count
+      << ") is greater than the max allowed (" << kToastShownMax << ").";
+
   if (toast_shown_count >= kToastShownMax) {
     return;
   }
@@ -312,59 +261,14 @@ void ActorUiStateManager::MaybeShowToast(BrowserWindowInterface* bwi) {
   }
 }
 
-void ActorUiStateManager::MaybeNotifyProfileScopedUiComponents() {
-  auto paused_ids = actor_service_->FindTaskIdsInActive(
-      base::BindRepeating([](const ActorTask& task) {
-        return task.GetState() == ActorTask::State::kPausedByActor;
-      }));
-
-  auto completed_ids = actor_service_->FindTaskIdsInInactive(
-      base::BindRepeating(&IsRecentlyCompletedTask));
-
-  // TODO(crbug.com/437161973): Port this over to the dedicated TaskIcon keyed
-  // service class.
-  TaskIconUiState new_task_icon_state;
-  if (!paused_ids.empty()) {
-    new_task_icon_state = ActorUiStateManager::TaskIconUiState::kNeedsAttention;
-  } else if (!completed_ids.empty()) {
-    new_task_icon_state = ActorUiStateManager::TaskIconUiState::kCompleteTasks;
-  } else if (!actor_service_->GetActiveTasks().empty()) {
-    new_task_icon_state = ActorUiStateManager::TaskIconUiState::kShown;
-  } else {
-    new_task_icon_state = ActorUiStateManager::TaskIconUiState::kHidden;
-  }
-
-  if (task_icon_state_ != new_task_icon_state) {
-    task_icon_state_ = new_task_icon_state;
-
-// TODO(crbug.com/437161973): Refactor to remove this dependency post-m3 &
-// post-task icon refactor, improve unit tests by injecting window_controller +
-// host
-#if BUILDFLAG(ENABLE_GLIC)
-    if (auto* glic_keyed_service =
-            glic::GlicKeyedServiceFactory::GetGlicKeyedService(
-                actor_service_->GetProfile())) {
-      if (!ShouldSuppressTaskIconText(
-              glic_keyed_service->window_controller().state(),
-              glic_keyed_service->host().GetPrimaryCurrentView())) {
-        suppress_task_icon_text_ = false;
-      } else if (task_icon_state_ !=
-                 ActorUiStateManager::TaskIconUiState::kHidden) {
-        // If the task icon text should be suppressed and isn't already hidden,
-        // we should reset the task icon state.
-        task_icon_state_ = ActorUiStateManager::TaskIconUiState::kShown;
-      }
-      task_icon_change_callback_list_.Notify(
-          task_icon_state_, glic_keyed_service->window_controller().state(),
-          glic_keyed_service->host().GetPrimaryCurrentView());
-    }
-#endif
-  }
+void ActorUiStateManager::NotifyActorTaskStateChange(TaskId task_id) {
+  actor_task_state_change_callback_list_.Notify(task_id);
 }
 
-ActorUiStateManager::TaskIconUiState ActorUiStateManager::GetTaskIconUiState()
-    const {
-  return task_icon_state_;
+base::CallbackListSubscription
+ActorUiStateManager::RegisterActorTaskStateChange(
+    ActorTaskStateChangeCallback callback) {
+  return actor_task_state_change_callback_list_.Add(std::move(callback));
 }
 
 }  // namespace actor::ui

@@ -29,9 +29,7 @@
 
 namespace content {
 
-BASE_FEATURE(kCacheStorageTaskPriority,
-             "CacheStorageTaskPriority",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kCacheStorageTaskPriority, base::FEATURE_ENABLED_BY_DEFAULT);
 
 CacheStorageContextImpl::CacheStorageContextImpl(
     scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy)

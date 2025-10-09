@@ -311,10 +311,6 @@ class RuleMap {
       DCHECK_EQ(rule_map, other.rule_map);
       return sub_it == other.sub_it;
     }
-    bool operator!=(const ConstIterator& other) const {
-      DCHECK_EQ(rule_map, other.rule_map);
-      return sub_it != other.sub_it;
-    }
     ConstIterator& operator++() {
       ++sub_it;
       return *this;
@@ -368,13 +364,13 @@ class RuleMap {
   bool compacted = false;
 };
 
-// Holds RuleData objects. It partitions them into various indexed groups,
-// e.g. it stores separately rules that match against id, class, tag, shadow
-// host, etc. It indexes these by some key where possible, e.g. rules that match
-// against tag name are indexed by that tag. Rules that don't fall into a
-// specific group are appended to the "universal" rules. The grouping is done to
-// optimize finding what rules apply to an element under consideration by
-// ElementRuleCollector::CollectMatchingRules.
+// Holds RuleData objects. It partitions them into various indexed groups
+// ("buckets"), e.g. it stores separately rules that match against id, class,
+// tag, shadow host, etc. It indexes these by some key where possible,
+// e.g. rules that match against tag name are indexed by that tag. Rules that
+// don't fall into a specific group are appended to the "universal" rules.
+// The grouping is done to optimize finding what rules apply to an element
+// under consideration by ElementRuleCollector::CollectMatchingRules.
 class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
  public:
   RuleSet() = default;
@@ -394,13 +390,25 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
    public:
     Member<StyleRuleMixin> mixin;
     Member<StyleRuleApplyMixin> invoking_apply_rule;
+    Member<CustomEnvBindings> env_bindings;
 
     void Trace(Visitor* visitor) const {
       visitor->Trace(mixin);
       visitor->Trace(invoking_apply_rule);
+      visitor->Trace(env_bindings);
     }
   };
   using ApplyMixinsStack = HeapVector<ApplyingMixin, 4>;
+
+  void ApplyMixin(StyleRule* parent_rule,
+                  StyleRuleApplyMixin* apply_mixin_rule,
+                  const MediaQueryEvaluator& medium,
+                  const MixinMap& mixins,
+                  AddRuleFlags add_rule_flags,
+                  const ContainerQuery* container_query,
+                  CascadeLayer* cascade_layer,
+                  const StyleScope* style_scope,
+                  ApplyMixinsStack& apply_mixins_stack);
 
   // Nonempty “apply_mixins_stack” means that we are currently adding this rule
   // as part of @apply in a mixin, and all rules we add must be
@@ -497,8 +505,14 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
   base::span<const RuleData> SelectorFragmentAnchorRules() const {
     return selector_fragment_anchor_rules_;
   }
+  base::span<const RuleData> ActiveViewTransitionRules() const {
+    return active_view_transition_rules_;
+  }
   const HeapVector<Member<StyleRulePage>>& PageRules() const {
     return page_rules_;
+  }
+  const HeapVector<Member<StyleRuleRoute>>& RouteRules() const {
+    return route_rules_;
   }
   const HeapVector<Member<StyleRuleFontFace>>& FontFaceRules() const {
     return font_face_rules_;
@@ -585,6 +599,16 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
 
   bool DidMediaQueryResultsChange(const MediaQueryEvaluator& evaluator) const;
 
+  bool DependingOnMixins() const {
+    return based_on_mixin_generation_ != std::numeric_limits<uint64_t>::max();
+  }
+  bool DependingOnOutdatedMixins(uint64_t current_mixin_generation) const {
+    return based_on_mixin_generation_ != std::numeric_limits<uint64_t>::max() &&
+           based_on_mixin_generation_ != current_mixin_generation;
+  }
+
+  bool DidRoutesChange(const Document*) const;
+
   // We use a vector of Interval<T> to represent that rules with positions
   // between start_position (inclusive) and the next Interval<T>'s
   // start_position (exclusive) share some property:
@@ -641,9 +665,10 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
   using SubstringMatcherMap =
       HashMap<AtomicString, std::unique_ptr<base::SubstringSetMatcher>>;
 
-  void AddToRuleSet(const AtomicString& key, RuleMap&, const RuleData&);
-  void AddToRuleSet(HeapVector<RuleData>&, const RuleData&);
+  void AddToBucket(const AtomicString& key, RuleMap&, const RuleData&);
+  void AddToBucket(HeapVector<RuleData>&, const RuleData&);
   void AddPageRule(StyleRulePage*);
+  void AddRouteRule(StyleRuleRoute*);
   void AddFontFaceRule(StyleRuleFontFace*);
   void AddKeyframesRule(StyleRuleKeyframes*);
   void AddPropertyRule(StyleRuleProperty*);
@@ -667,14 +692,14 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
                      ApplyMixinsStack& apply_mixins_stack);
 
   // Determines whether or not CSSSelector::is_covered_by_bucketing_ should
-  // be computed during calls to FindBestRuleSetAndAdd.
+  // be computed during calls to FindBestBucketAndAdd.
   enum class BucketCoverage {
     kIgnore,
     kCompute,
   };
 
   template <BucketCoverage bucket_coverage>
-  void FindBestRuleSetAndAdd(CSSSelector&, const RuleData&, const StyleScope*);
+  void FindBestBucketAndAdd(CSSSelector&, const RuleData&, const StyleScope*);
 
   void AddRule(StyleRule*,
                unsigned selector_index,
@@ -765,9 +790,13 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
   HeapVector<RuleData> part_pseudo_rules_;
   HeapVector<RuleData> slotted_pseudo_element_rules_;
   HeapVector<RuleData> selector_fragment_anchor_rules_;
+  // Separate bucket for :active-view-transition rules, to support a default
+  // view-transition-name in user-agent style.
+  HeapVector<RuleData> active_view_transition_rules_;
   HeapVector<RuleData> root_element_rules_;
   RuleFeatureSet features_;
   HeapVector<Member<StyleRulePage>> page_rules_;
+  HeapVector<Member<StyleRuleRoute>> route_rules_;
   HeapVector<Member<StyleRuleFontFace>> font_face_rules_;
   HeapVector<Member<StyleRuleFontPaletteValues>> font_palette_values_rules_;
   HeapVector<Member<StyleRuleFontFeatureValues>> font_feature_values_rules_;
@@ -778,6 +807,15 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
   HeapVector<Member<StyleRulePositionTry>> position_try_rules_;
   HeapVector<MediaQuerySetResult> media_query_set_results_;
   HeapVector<Member<StyleRuleFunction>> function_rules_;
+
+  // Names of routes we're currently at.
+  HashSet<String> at_routes_;
+
+  // Names of routes we're navigating away from.
+  HashSet<String> from_routes_;
+
+  // Names of routes we're navigating to.
+  HashSet<String> to_routes_;
 
   // Whether there is a ruleset bucket for rules with a selector on
   // the style attribute (which is rare, but allowed). If so, the caller
@@ -819,6 +857,12 @@ class CORE_EXPORT RuleSet final : public GarbageCollected<RuleSet> {
   // It is stored here so that we can have a variable number of them
   // (without the overhead of a Vector in each RuleData).
   Vector<uint16_t> bloom_hash_backing_;
+
+  // When creating the RuleSet, which generation of mixins (see
+  // StyleSheetContents) we used. The special initial value means that we did
+  // not see any @apply rules and thus do not need invalidation when mixins
+  // change.
+  uint64_t based_on_mixin_generation_ = std::numeric_limits<uint64_t>::max();
 
 #if DCHECK_IS_ON()
   HeapVector<RuleData> all_rules_;

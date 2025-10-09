@@ -12,6 +12,7 @@
 #import "base/time/time.h"
 #import "components/page_info/core/page_info_history_data_source.h"
 #import "components/strings/grit/components_strings.h"
+#import "components/strings/grit/privacy_sandbox_strings.h"
 #import "ios/chrome/browser/keyboard/ui_bundled/UIKeyCommand+Chrome.h"
 #import "ios/chrome/browser/net/model/crurl.h"
 #import "ios/chrome/browser/page_info/ui_bundled/features.h"
@@ -25,14 +26,17 @@
 #import "ios/chrome/browser/shared/public/commands/page_info_commands.h"
 #import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_attributed_string_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_cell.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_detail_text_item.h"
-#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
 #import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_link_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/content_configuration/colorful_symbol_content_configuration.h"
+#import "ios/chrome/browser/shared/ui/table_view/content_configuration/switch_content_configuration.h"
+#import "ios/chrome/browser/shared/ui/table_view/content_configuration/table_view_cell_content_configuration.h"
 #import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
 #import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
@@ -48,7 +52,8 @@ typedef NS_ENUM(NSInteger, SectionIdentifier) {
   SectionIdentifierSecurityContent,
   SectionIdentifierPermissions,
   SectionIdentifierAboutThisSite,
-  SectionIdentifierLastVisited
+  SectionIdentifierLastVisited,
+  SectionIdentifierTrackingProtection,
 };
 
 typedef NS_ENUM(NSInteger, ItemIdentifier) {
@@ -56,7 +61,9 @@ typedef NS_ENUM(NSInteger, ItemIdentifier) {
   ItemIdentifierPermissionsCamera,
   ItemIdentifierPermissionsMicrophone,
   ItemIdentifierAboutThisSite,
-  ItemIdentifierLastVisited
+  ItemIdentifierLastVisited,
+  ItemIdentifierTrackingProtection,
+  ItemIdentifierTrackingProtectionButton,
 };
 
 // The minimum scale factor of the title label showing the URL.
@@ -65,6 +72,10 @@ const float kTitleLabelMinimumScaleFactor = 0.7f;
 // The maximum number of lines we should show for a page's description in the
 // AboutThisSite section.
 const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
+
+// Used as an identifier to open the tracking protection settings page.
+const char kTrackingProtectionSettingsURL[] =
+    "settings://open_tracking_protection_settings";
 
 }  // namespace
 
@@ -83,6 +94,7 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
 @implementation PageInfoViewController {
   UITableViewDiffableDataSource<NSNumber*, NSNumber*>* _dataSource;
   PageInfoAboutThisSiteInfo* _aboutThisSiteInfo;
+  PageInfoTrackingProtectionInfo* _trackingProtectionInfo;
   NSString* _lastVisitedTimestamp;
 }
 
@@ -142,36 +154,37 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
 - (void)viewWillAppear:(BOOL)animated {
   [super viewWillAppear:animated];
 
-  if (IsPageInfoLastVisitedIOSEnabled()) {
-    // The Last Visited timestamp needs to be updated when the view is first
-    // loaded and subsequencenly since there could have been deletions performed
-    // on the Last Visited or History UI.
-    [self.pageInfoHistoryMutator lastVisitedTimestampNeedsUpdate];
-  }
+  // The Last Visited timestamp needs to be updated when the view is first
+  // loaded and subsequencenly since there could have been deletions performed
+  // on the Last Visited or History UI.
+  [self.pageInfoHistoryMutator lastVisitedTimestampNeedsUpdate];
 }
 
 #pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
+  UITableView* tableView = self.tableView;
+
   __weak __typeof(self) weakSelf = self;
   _dataSource = [[UITableViewDiffableDataSource alloc]
-      initWithTableView:self.tableView
-           cellProvider:^UITableViewCell*(UITableView* tableView,
+      initWithTableView:tableView
+           cellProvider:^UITableViewCell*(UITableView* innerTableView,
                                           NSIndexPath* indexPath,
                                           NSNumber* itemIdentifier) {
              return
-                 [weakSelf cellForTableView:tableView
+                 [weakSelf cellForTableView:innerTableView
                                   indexPath:indexPath
                              itemIdentifier:static_cast<ItemIdentifier>(
                                                 itemIdentifier.integerValue)];
            }];
 
-  RegisterTableViewCell<TableViewDetailIconCell>(self.tableView);
-  RegisterTableViewCell<TableViewSwitchCell>(self.tableView);
-  RegisterTableViewHeaderFooter<TableViewTextHeaderFooterView>(self.tableView);
-  RegisterTableViewHeaderFooter<TableViewLinkHeaderFooterView>(self.tableView);
+  [TableViewCellContentConfiguration registerCellForTableView:tableView];
+  RegisterTableViewCell<TableViewDetailIconCell>(tableView);
+  RegisterTableViewCell<TableViewTextCell>(tableView);
+  RegisterTableViewHeaderFooter<TableViewTextHeaderFooterView>(tableView);
+  RegisterTableViewHeaderFooter<TableViewLinkHeaderFooterView>(tableView);
   RegisterTableViewHeaderFooter<TableViewAttributedStringHeaderFooterView>(
-      self.tableView);
+      tableView);
 
   NSDiffableDataSourceSnapshot* snapshot =
       [[NSDiffableDataSourceSnapshot alloc] init];
@@ -189,13 +202,25 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
     [self updateSnapshotForAboutThisSite:snapshot];
   }
 
-  // Append cell for the Last Visited row only if the `kPageInfoLastVisitedIOS`
-  // flag is enabled and the Last Visited timestamp is available.
-  if (IsPageInfoLastVisitedIOSEnabled() && _lastVisitedTimestamp) {
+  // Append cell for the Last Visited row only if the flag is enabled and the
+  // Last Visited timestamp is available.
+  if (_lastVisitedTimestamp) {
     [snapshot
         appendSectionsWithIdentifiers:@[ @(SectionIdentifierLastVisited) ]];
     [snapshot appendItemsWithIdentifiers:@[ @(ItemIdentifierLastVisited) ]
                intoSectionWithIdentifier:@(SectionIdentifierLastVisited)];
+  }
+
+  if (_trackingProtectionInfo.shouldShowTrackingProtectionUI) {
+    [snapshot appendSectionsWithIdentifiers:@[
+      @(SectionIdentifierTrackingProtection)
+    ]];
+    [snapshot
+        appendItemsWithIdentifiers:@[
+          @(ItemIdentifierTrackingProtection),
+          @(ItemIdentifierTrackingProtectionButton),
+        ]
+         intoSectionWithIdentifier:@(SectionIdentifierTrackingProtection)];
   }
 
   [_dataSource applySnapshot:snapshot animatingDifferences:NO];
@@ -217,9 +242,20 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
           showAboutThisSitePage:_aboutThisSiteInfo.moreAboutURL];
       break;
     case ItemIdentifierLastVisited:
-      CHECK(IsPageInfoLastVisitedIOSEnabled());
       [self.pageInfoPresentationHandler showLastVisitedPage];
       break;
+    case ItemIdentifierTrackingProtection: {
+      if (_trackingProtectionInfo.hasTrackingProtectionException) {
+        [self.pageInfoPresentationHandler
+            showSendFeedbackPageForSender:UserFeedbackSender::
+                                              TrackingProtections];
+      }
+      break;
+    }
+    case ItemIdentifierTrackingProtectionButton: {
+      [self.trackingProtectionMutator toggleTrackingProtectionState];
+      break;
+    }
     case ItemIdentifierPermissionsCamera:
     case ItemIdentifierPermissionsMicrophone:
       break;
@@ -248,6 +284,18 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
     case SectionIdentifierAboutThisSite:
     case SectionIdentifierLastVisited:
       return nil;
+    case SectionIdentifierTrackingProtection: {
+      TableViewLinkHeaderFooterView* footer =
+          DequeueTableViewHeaderFooter<TableViewLinkHeaderFooterView>(
+              self.tableView);
+      footer.delegate = self;
+      footer.urls = @[ [[CrURL alloc]
+          initWithGURL:GURL(kTrackingProtectionSettingsURL)] ];
+      [footer setText:l10n_util::GetNSString(
+                          IDS_IOS_PAGE_INFO_TRACKING_PROTECTIONS_SECTION_FOOTER)
+            withColor:[UIColor colorNamed:kTextSecondaryColor]];
+      return footer;
+    }
     case SectionIdentifierPermissions: {
       TableViewAttributedStringHeaderFooterView* footer =
           DequeueTableViewHeaderFooter<
@@ -263,8 +311,11 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
 #pragma mark - TableViewLinkHeaderFooterItemDelegate
 
 - (void)view:(TableViewLinkHeaderFooterView*)view didTapLinkURL:(CrURL*)URL {
-  DCHECK(URL.gurl == GURL(kPageInfoHelpCenterURL));
-  [self.pageInfoPresentationHandler showSecurityHelpPage];
+  if (URL.gurl == GURL(kPageInfoHelpCenterURL)) {
+    [self.pageInfoPresentationHandler showSecurityHelpPage];
+  } else if (URL.gurl == GURL(kTrackingProtectionSettingsURL)) {
+    [self.pageInfoPresentationHandler showTrackingProtectionSettingsPage];
+  }
 }
 
 #pragma mark - UIAdaptivePresentationControllerDelegate
@@ -299,80 +350,119 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
                       itemIdentifier:(ItemIdentifier)itemIdentifier {
   switch (itemIdentifier) {
     case ItemIdentifierSecurity: {
-      TableViewDetailIconCell* cell =
-          DequeueTableViewCell<TableViewDetailIconCell>(tableView);
-      cell.textLabel.text =
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      configuration.title =
           l10n_util::GetNSString(IDS_IOS_PAGE_INFO_CONNECTION);
-      cell.detailText = self.pageInfoSecurityDescription.status;
-      [cell setIconImage:self.pageInfoSecurityDescription.iconImage
-                tintColor:UIColor.whiteColor
-          backgroundColor:self.pageInfoSecurityDescription.iconBackgroundColor
-             cornerRadius:kColorfulBackgroundSymbolCornerRadius];
+      configuration.trailingText = self.pageInfoSecurityDescription.status;
+      configuration.subtitleNumberOfLines =
+          kAboutThisSiteDetailTextNumberOfLines;
+
+      ColorfulSymbolContentConfiguration* iconConfiguration =
+          [[ColorfulSymbolContentConfiguration alloc] init];
+      iconConfiguration.symbolImage =
+          self.pageInfoSecurityDescription.iconImage;
+      iconConfiguration.symbolBackgroundColor =
+          self.pageInfoSecurityDescription.iconBackgroundColor;
+      iconConfiguration.symbolTintColor = UIColor.whiteColor;
+
+      configuration.leadingConfiguration = iconConfiguration;
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
       cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
       return cell;
     }
     case ItemIdentifierPermissionsCamera: {
-      TableViewSwitchCell* cell =
-          DequeueTableViewCell<TableViewSwitchCell>(tableView);
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      configuration.title = l10n_util::GetNSString(IDS_IOS_PERMISSIONS_CAMERA);
+
+      ColorfulSymbolContentConfiguration* symbolConfiguration =
+          [[ColorfulSymbolContentConfiguration alloc] init];
+      symbolConfiguration.symbolImage =
+          CustomSymbolWithPointSize(kCameraSymbol, kPageInfoSymbolPointSize);
+      symbolConfiguration.symbolTintColor = UIColor.whiteColor;
+      symbolConfiguration.symbolBackgroundColor =
+          [UIColor colorNamed:kOrange500Color];
+
+      configuration.leadingConfiguration = symbolConfiguration;
+
       BOOL permissionOn =
           self.permissionsInfo[@(web::PermissionCamera)].unsignedIntValue ==
           web::PermissionStateAllowed;
-      NSString* title = l10n_util::GetNSString(IDS_IOS_PERMISSIONS_CAMERA);
-      [cell configureCellWithTitle:title
-                          subtitle:nil
-                     switchEnabled:YES
-                                on:permissionOn];
+
+      SwitchContentConfiguration* switchConfiguration =
+          [[SwitchContentConfiguration alloc] init];
+      switchConfiguration.target = self;
+      switchConfiguration.selector = @selector(permissionSwitchToggled:);
+      switchConfiguration.tag = itemIdentifier;
+      switchConfiguration.on = permissionOn;
+
+      configuration.trailingConfiguration = switchConfiguration;
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
+      cell.selectionStyle = UITableViewCellSelectionStyleNone;
+
       cell.accessibilityIdentifier =
           kPageInfoCameraSwitchAccessibilityIdentifier;
-      cell.switchView.tag = itemIdentifier;
-      [cell.switchView addTarget:self
-                          action:@selector(permissionSwitchToggled:)
-                forControlEvents:UIControlEventValueChanged];
-      [cell setIconImage:CustomSymbolWithPointSize(kCameraSymbol,
-                                                   kPageInfoSymbolPointSize)
-                tintColor:UIColor.whiteColor
-          backgroundColor:[UIColor colorNamed:kOrange500Color]
-             cornerRadius:kColorfulBackgroundSymbolCornerRadius
-              borderWidth:0];
 
       return cell;
     }
     case ItemIdentifierPermissionsMicrophone: {
-      TableViewSwitchCell* cell =
-          DequeueTableViewCell<TableViewSwitchCell>(tableView);
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      configuration.title =
+          l10n_util::GetNSString(IDS_IOS_PERMISSIONS_MICROPHONE);
+
+      ColorfulSymbolContentConfiguration* symbolConfiguration =
+          [[ColorfulSymbolContentConfiguration alloc] init];
+      symbolConfiguration.symbolImage = DefaultSymbolWithPointSize(
+          kMicrophoneSymbol, kPageInfoSymbolPointSize);
+      symbolConfiguration.symbolTintColor = UIColor.whiteColor;
+      symbolConfiguration.symbolBackgroundColor =
+          [UIColor colorNamed:kOrange500Color];
+
+      configuration.leadingConfiguration = symbolConfiguration;
+
       BOOL permissionOn =
           self.permissionsInfo[@(web::PermissionMicrophone)].unsignedIntValue ==
           web::PermissionStateAllowed;
-      NSString* title = l10n_util::GetNSString(IDS_IOS_PERMISSIONS_MICROPHONE);
-      [cell configureCellWithTitle:title
-                          subtitle:nil
-                     switchEnabled:YES
-                                on:permissionOn];
+
+      SwitchContentConfiguration* switchConfiguration =
+          [[SwitchContentConfiguration alloc] init];
+      switchConfiguration.target = self;
+      switchConfiguration.selector = @selector(permissionSwitchToggled:);
+      switchConfiguration.tag = itemIdentifier;
+      switchConfiguration.on = permissionOn;
+
+      configuration.trailingConfiguration = switchConfiguration;
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
+      cell.selectionStyle = UITableViewCellSelectionStyleNone;
+
       cell.accessibilityIdentifier =
           kPageInfoMicrophoneSwitchAccessibilityIdentifier;
-      cell.switchView.tag = itemIdentifier;
-      [cell.switchView addTarget:self
-                          action:@selector(permissionSwitchToggled:)
-                forControlEvents:UIControlEventValueChanged];
-      [cell setIconImage:DefaultSymbolWithPointSize(kMicrophoneSymbol,
-                                                    kPageInfoSymbolPointSize)
-                tintColor:UIColor.whiteColor
-          backgroundColor:[UIColor colorNamed:kOrange500Color]
-             cornerRadius:kColorfulBackgroundSymbolCornerRadius
-              borderWidth:0];
 
       return cell;
     }
     case ItemIdentifierAboutThisSite: {
-      TableViewDetailIconCell* cell =
-          DequeueTableViewCell<TableViewDetailIconCell>(tableView);
-      cell.textLabel.text =
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      configuration.title =
           l10n_util::GetNSString(IDS_IOS_PAGE_INFO_ABOUT_THIS_PAGE);
-      cell.detailText = _aboutThisSiteInfo.summary;
-      cell.detailTextNumberOfLines = kAboutThisSiteDetailTextNumberOfLines;
-      cell.textLayoutConstraintAxis = UILayoutConstraintAxisVertical;
+      configuration.subtitle = _aboutThisSiteInfo.summary;
+      configuration.subtitleNumberOfLines =
+          kAboutThisSiteDetailTextNumberOfLines;
 
+      ColorfulSymbolContentConfiguration* iconConfiguration =
+          [[ColorfulSymbolContentConfiguration alloc] init];
       UIImage* icon =
 #if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
           CustomSymbolTemplateWithPointSize(kPageInsightsSymbol,
@@ -381,11 +471,16 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
           DefaultSymbolTemplateWithPointSize(kInfoCircleSymbol,
                                              kPageInfoSymbolPointSize);
 #endif  // BUILDFLAG(IOS_USE_BRANDED_SYMBOLS),
+      iconConfiguration.symbolImage = icon;
+      iconConfiguration.symbolBackgroundColor =
+          [UIColor colorNamed:kPurple500Color];
+      iconConfiguration.symbolTintColor = UIColor.whiteColor;
 
-      [cell setIconImage:icon
-                tintColor:UIColor.whiteColor
-          backgroundColor:[UIColor colorNamed:kPurple500Color]
-             cornerRadius:kColorfulBackgroundSymbolCornerRadius];
+      configuration.leadingConfiguration = iconConfiguration;
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
 
       cell.accessoryView = [[UIImageView alloc]
           initWithImage:DefaultAccessorySymbolConfigurationWithRegularWeight(
@@ -394,19 +489,91 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
       return cell;
     }
     case ItemIdentifierLastVisited: {
-      TableViewDetailIconCell* cell =
-          DequeueTableViewCell<TableViewDetailIconCell>(tableView);
-      cell.textLabel.text = l10n_util::GetNSString(IDS_PAGE_INFO_HISTORY);
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      configuration.title = l10n_util::GetNSString(IDS_PAGE_INFO_HISTORY);
+      configuration.subtitle = _lastVisitedTimestamp;
+      configuration.subtitleNumberOfLines =
+          kAboutThisSiteDetailTextNumberOfLines;
 
-      cell.detailText = _lastVisitedTimestamp;
-      cell.textLayoutConstraintAxis = UILayoutConstraintAxisVertical;
-      [cell setIconImage:DefaultSymbolTemplateWithPointSize(
-                             kClockSymbol, kPageInfoSymbolPointSize)
-                tintColor:UIColor.whiteColor
-          backgroundColor:[UIColor colorNamed:kBlue500Color]
-             cornerRadius:kColorfulBackgroundSymbolCornerRadius];
+      ColorfulSymbolContentConfiguration* iconConfiguration =
+          [[ColorfulSymbolContentConfiguration alloc] init];
+      iconConfiguration.symbolImage = DefaultSymbolTemplateWithPointSize(
+          kClockSymbol, kPageInfoSymbolPointSize);
+      iconConfiguration.symbolBackgroundColor =
+          [UIColor colorNamed:kBlue500Color];
+      iconConfiguration.symbolTintColor = UIColor.whiteColor;
+
+      configuration.leadingConfiguration = iconConfiguration;
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
       cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
+      return cell;
+    }
+    case ItemIdentifierTrackingProtection: {
+      TableViewDetailIconCell* cell =
+          DequeueTableViewCell<TableViewDetailIconCell>(tableView);
+      cell.accessoryType = UITableViewCellAccessoryNone;
+      cell.selectionStyle = UITableViewCellSelectionStyleNone;
+      [cell createDetailTextLabel];
+      [cell setDetailTextNumberOfLines:0];
+      cell.textLayoutConstraintAxis = UILayoutConstraintAxisVertical;
+      cell.separatorInset =
+          UIEdgeInsetsMake(0, kPageInfoTableViewSeparatorInset, 0, 0);
+
+      if (_trackingProtectionInfo.hasTrackingProtectionException) {
+        cell.textLabel.text = l10n_util::GetNSString(
+            IDS_TRACKING_PROTECTIONS_PAUSED_PROTECTIONS_TITLE);
+        StringWithTags parsedDetailText =
+            ParseStringWithLinks(l10n_util::GetNSString(
+                IDS_IOS_PAGE_INFO_TRACKING_PROTECTIONS_PAUSED_DETAIL_TEXT));
+        NSMutableAttributedString* detailText =
+            [[NSMutableAttributedString alloc]
+                initWithString:parsedDetailText.string];
+        CHECK_EQ(parsedDetailText.ranges.size(), 1UL);
+        [detailText addAttribute:NSForegroundColorAttributeName
+                           value:[UIColor colorNamed:kBlueColor]
+                           range:parsedDetailText.ranges[0]];
+        cell.detailTextLabel.attributedText = detailText;
+        [cell setIconImage:DefaultSymbolWithPointSize(kShowActionSymbol,
+                                                      kPageInfoSymbolPointSize)
+                  tintColor:UIColor.whiteColor
+            backgroundColor:[UIColor colorNamed:kBlue500Color]
+               cornerRadius:kColorfulBackgroundSymbolCornerRadius];
+      } else {
+        cell.textLabel.text = l10n_util::GetNSString(
+            IDS_IOS_PAGE_INFO_TRACKING_PROTECTIONS_RESUMED);
+        cell.detailTextLabel.attributedText = [[NSMutableAttributedString alloc]
+            initWithString:
+                l10n_util::GetNSString(
+                    IDS_TRACKING_PROTECTIONS_ACTIVE_PROTECTIONS_DESCRIPTION)];
+        [cell setIconImage:DefaultSymbolWithPointSize(kHideActionSymbol,
+                                                      kPageInfoSymbolPointSize)
+                  tintColor:UIColor.whiteColor
+            backgroundColor:[UIColor colorNamed:kBlue500Color]
+               cornerRadius:kColorfulBackgroundSymbolCornerRadius];
+      }
+
+      return cell;
+    }
+    case ItemIdentifierTrackingProtectionButton: {
+      TableViewCellContentConfiguration* configuration =
+          [[TableViewCellContentConfiguration alloc] init];
+      if (_trackingProtectionInfo.hasTrackingProtectionException) {
+        configuration.title = l10n_util::GetNSString(
+            IDS_TRACKING_PROTECTIONS_BUTTON_RESUME_PROTECTIONS_LABEL);
+      } else {
+        configuration.title = l10n_util::GetNSString(
+            IDS_TRACKING_PROTECTIONS_BUTTON_PAUSE_PROTECTIONS_LABEL);
+      }
+      configuration.titleColor = [UIColor colorNamed:kBlueColor];
+
+      UITableViewCell* cell =
+          [TableViewCellContentConfiguration dequeueTableViewCell:tableView];
+      cell.contentConfiguration = configuration;
       return cell;
     }
   }
@@ -563,8 +730,6 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
 #pragma mark - PageInfoHistoryConsumer
 
 - (void)setLastVisitedTimestamp:(std::optional<base::Time>)lastVisited {
-  CHECK(IsPageInfoLastVisitedIOSEnabled());
-
   if (lastVisited.has_value()) {
     _lastVisitedTimestamp = base::SysUTF16ToNSString(
         page_info::PageInfoHistoryDataSource::FormatLastVisitedTimestamp(
@@ -602,6 +767,21 @@ const NSInteger kAboutThisSiteDetailTextNumberOfLines = 2;
   }
 
   // Update the UI.
+  [_dataSource applySnapshot:snapshot animatingDifferences:NO];
+}
+
+#pragma mark - PageInfoTrackingProtectionConsumer
+
+// Sets PageInfoTrackingProtectionInfo and updates the UI.
+- (void)setTrackingProtectionInfo:
+    (PageInfoTrackingProtectionInfo*)trackingProtectionInfo {
+  _trackingProtectionInfo = trackingProtectionInfo;
+  NSDiffableDataSourceSnapshot<NSNumber*, NSNumber*>* snapshot =
+      [_dataSource snapshot];
+  [snapshot reconfigureItemsWithIdentifiers:@[
+    @(ItemIdentifierTrackingProtection),
+    @(ItemIdentifierTrackingProtectionButton),
+  ]];
   [_dataSource applySnapshot:snapshot animatingDifferences:NO];
 }
 

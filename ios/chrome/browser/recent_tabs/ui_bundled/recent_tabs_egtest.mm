@@ -15,12 +15,12 @@
 #import "components/sync/base/user_selectable_type.h"
 #import "components/sync/service/sync_prefs.h"
 #import "components/unified_consent/pref_names.h"
+#import "ios/chrome/browser/authentication/test/expected_signin_histograms.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/authentication/ui_bundled/cells/signin_promo_view_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/expected_signin_histograms.h"
 #import "ios/chrome/browser/authentication/ui_bundled/signin/signin_constants.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
 #import "ios/chrome/browser/history/ui_bundled/history_ui_constants.h"
 #import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/policy/model/policy_app_interface.h"
@@ -334,13 +334,14 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [[EarlGrey selectElementWithMatcher:PrimarySignInButton()]
       performAction:grey_tap()];
   // Confirm sign in.
-  [[EarlGrey selectElementWithMatcher:
-                 grey_allOf(grey_accessibilityID(
-                                kWebSigninPrimaryButtonAccessibilityIdentifier),
-                            grey_sufficientlyVisible(), nil)]
-      performAction:grey_tap()];
-  [SigninEarlGreyUI
-      maybeDismissIdentityConfirmationSnackbarOnSignin:fakeIdentity];
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(
+              grey_accessibilityID(
+                  kConsistencySigninPrimaryButtonAccessibilityIdentifier),
+              grey_sufficientlyVisible(), nil)] performAction:grey_tap()];
+  [SigninEarlGreyUI dismissSigninConfirmationSnackbarForIdentity:fakeIdentity
+                                                   assertVisible:NO];
   // Verify that the History Sync Opt-In screen is shown.
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
@@ -398,11 +399,12 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [[EarlGrey selectElementWithMatcher:PrimarySignInButton()]
       performAction:grey_tap()];
   // Confirm sign in.
-  [[EarlGrey selectElementWithMatcher:
-                 grey_allOf(grey_accessibilityID(
-                                kWebSigninPrimaryButtonAccessibilityIdentifier),
-                            grey_sufficientlyVisible(), nil)]
-      performAction:grey_tap()];
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(
+              grey_accessibilityID(
+                  kConsistencySigninPrimaryButtonAccessibilityIdentifier),
+              grey_sufficientlyVisible(), nil)] performAction:grey_tap()];
   // Verify that the History Sync Opt-In screen is shown.
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
@@ -882,7 +884,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                                           nil)] performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::DefocusedLocationView()]
       assertWithMatcher:chrome_test_util::LocationViewContainingText(
-                            self.testServer->base_url().host())];
+                            self.testServer->base_url().GetHost())];
 
   SignOut();
 }

@@ -245,9 +245,9 @@ class AutofillControllerTest : public PlatformTest {
     TestProfileIOS::Builder builder;
     builder.AddTestingFactory(
         IOSChromeProfilePasswordStoreFactory::GetInstance(),
-        base::BindRepeating(&password_manager::BuildPasswordStoreInterface<
-                            web::BrowserState,
-                            password_manager::MockPasswordStoreInterface>));
+        base::BindOnce(
+            &password_manager::BuildPasswordStoreInterface<
+                ProfileIOS, password_manager::MockPasswordStoreInterface>));
     // Profile import requires a PersonalDataManager which itself needs the
     // WebDataService; this is not initialized on a TestProfileIOS by
     // default.
@@ -344,7 +344,8 @@ class AutofillControllerTest : public PlatformTest {
   bool processed_a_task_ = false;
   // Histogram tester for these tests.
   std::unique_ptr<base::HistogramTester> histogram_tester_;
-  raw_ptr<AutofillBottomSheetTabHelper> bottomsheet_tab_helper_;
+  raw_ptr<AutofillBottomSheetTabHelper, DanglingUntriaged>
+      bottomsheet_tab_helper_;
   id<AutofillCommands> autofill_commands_handler_;
   ScopedFeatureList scoped_feature_list_{
       features::kAutofillLocalSaveCardBottomSheet};

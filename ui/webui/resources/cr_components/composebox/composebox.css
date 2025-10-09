@@ -10,10 +10,11 @@
  * #css_wrapper_metadata_end */
 
 :host {
-  --input-bottom-spacing: 16px;
-  --text-input-top-spacing: 24px;
-  --text-input-right-spacing: 80px;
-  --input-left-spacing: 24px;
+  --input-bottom-spacing: 10px;
+  --text-input-top-spacing: 10px;
+  --text-input-inline-end-spacing: 80px;
+  --text-input-inline-start-spacing: 16px;
+  --expanded-border-radius: 26px;
   --brand-gradient: conic-gradient(
     rgba(52, 168, 82, 0) 0deg,
     rgba(52, 168, 82, 1) 38.9738deg,
@@ -98,56 +99,26 @@
     var(--emphasized-accelerate);
 
   --height-expand-duration: 600ms;
-  --submit-enabled-transition: opactiy 255ms;
+  --submit-enabled-transition: opacity 255ms;
 
   --border-radius-transition: border-radius var(--collapse-duration)
     var(--emphasized-curve);
 
+  --lens-icon-animation-duration: 1100ms;
+
   border-radius: 30px;
+  box-shadow: var(--cr-searchbox-shadow);
   font-size: var(--cr-composebox-font-size, 18px);
   transition: var(--border-radius-transition);
   width: var(--ntp-composebox-width, 337px);
 }
 
 :host([expanded_]) {
-  border-radius: 24px;
+  border-radius: var(--expanded-border-radius);
 }
 
 #errorScrim {
-  align-items: center;
-  background-color: var(--color-new-tab-page-composebox-error-scrim-background);
   border-radius: inherit;
-  color: var(--color-new-tab-page-composebox-error-scrim-foreground);
-  display: flex;
-  font-size: 16px;
-  flex-direction: column;
-  gap: 12px;
-  justify-content: center;
-  height: 100%;
-  position: absolute;
-  opacity: 0.90;
-  width: 100%;
-  z-index: 1;
-}
-
-#errorScrim > p {
-  margin: 0;
-}
-
-#dismissErrorButton {
-  --cr-button-background-color:
-      var(--color-new-tab-page-composebox-error-scrim-button-background);
-  --cr-button-border-color:
-      var(--color-new-tab-page-composebox-error-scrim-foreground);
-  --cr-button-text-color:
-      var(--color-new-tab-page-composebox-error-scrim-button-text);
-  --cr-icon-button-hover-background-color:
-      var(--color-new-tab-page-composebox-error-scrim-button-background-hover);
-  border: none;
-  font-size: 14px;
-  gap: 4px;
-  height: 44px;
-  width: 122px;
 }
 
 #composebox {
@@ -170,66 +141,134 @@
   /* If the composebox is not expandable, meaning expanded_ is always true,
    * then the above transition will never be triggered. Instead, manually
    * start the animation so it expands as soon as it is rendered */
-  animation: var(--height-expand-duration) slide-down var(--standard-curve);
+  height: 60px;
 }
 
 :host([expanded_]) #composebox {
-  min-height: 136px;
-  max-height: 254px;
+  height: calc-size(auto, size);
+  max-height: 422px;
   transition-duration: var(--expand-duration);
 }
 
-@keyframes slide-down {
-  from {
-    min-height: 60px;
-    max-height: 60px;
-  }
-
-  to {
-    min-height: 136px;
-    max-height: 136px;
-  }
+:host([is-collapsible][expanded_]) #composebox {
+  min-height: 136px;
+  max-height: 254px;
 }
 
 #inputContainer {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 0 var(--text-input-right-spacing) var(--input-bottom-spacing) var(--input-left-spacing);
+  padding-bottom: var(--input-bottom-spacing);
   overflow: hidden;
   width: 100%;
 }
 
-:host-context([dir='rtl']) #inputContainer {
-  padding: 0 var(--input-left-spacing) var(--input-bottom-spacing) var(--text-input-right-spacing);
+#textContainer {
+  display: flex;
+  flex-direction: row;
+  padding-block: 8px 0;
+  padding-inline: var(--text-input-inline-start-spacing) 0;
+}
+
+#iconContainer {
+  --text-input-top-spacing: 8px;
+  align-items: center;
+  display: flex;
+  height: 48px;
+  justify-content: center;
+}
+
+#aimIcon {
+  -webkit-mask-image: url(//resources/cr_components/searchbox/icons/search_spark.svg);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: cover;
+  background-color: var(--color-new-tab-page-composebox-input-icon);
+  height: 24px;
+  width: 24px;
+}
+
+#inputWrapper {
+  position: relative;
+  width: 100%;
+}
+
+#input,
+#smartCompose {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 24px;
+  min-height: 48px;
+  max-height: 190px;
+  padding-block: var(--text-input-top-spacing) 0;
+  padding-inline: 12px var(--text-input-inline-end-spacing);
+  scrollbar-width: none;
+  width: 100%;
 }
 
 #input {
   animation: color-change 5s infinite;
   background-color: inherit;
   border: none;
-  box-sizing: border-box;
   caret-color: var(--google-blue-500);
-  color: var(--color-new-tab-page-composebox-font);
-  display: block;
+  color: var(--color-new-tab-page-composebox-font-light);
   field-sizing: content;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: 24px;
   mask-image: linear-gradient(transparent 7px, black calc(var(--text-input-top-spacing) + 7px));
-  max-height: calc-size(fit-content, min(size - 24px, 190px));
-  min-height: 72px;
+  height: calc-size(fit-content, min(size + 4px, 190px));
   outline: none;
-  padding: 20px 0 0;
   position: relative;
   resize: none;
-  scrollbar-width: none;
   transition: padding var(--height-expand-duration) var(--standard-curve);
-  width: 100%;
 }
 
-:host([expanded_]) #input {
-  padding: 24px 0 0;
+#input::placeholder {
+  color: var(--color-new-tab-page-composebox-type-ahead);
+}
+
+#smartCompose {
+  pointer-events: none;
+  position: absolute;
+  overflow: scroll;
+  top: 0;
+  left: 0;
+}
+
+:host(:not([smart-compose-enabled_])) #smartCompose {
+  display: none;
+}
+
+#invisibleText {
+  color: transparent;
+  white-space: pre-wrap;
+}
+
+#ghostText {
+  color: var(--color-new-tab-page-composebox-type-ahead);
+  white-space: pre-wrap;
+}
+
+#tabChip {
+  align-items: center;
+  border: 1px solid var(--color-new-tab-page-composebox-type-ahead-chip);
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: var(--color-new-tab-page-composebox-type-ahead-chip);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 28px;
+  margin-left: 4px;
+  padding: 6px 8px;
+}
+
+:host([expanded_]) #input,
+:host([expanded_]) #smartCompose {
+  --text-input-top-spacing: 12px;
+}
+
+:host([expanded_][is-collapsible]) #input {
+  --text-input-top-spacing: 24px;
 }
 
 @keyframes color-change {
@@ -246,39 +285,17 @@
   display: none;
 }
 
-#uploadContainer {
-  display: flex;
-}
-
-:host([hide-file-inputs]) #uploadContainer {
-  display: none;
-}
-
-.upload-icon {
-  --cr-icon-button-focus-outline-color:
-      var(--color-searchbox-results-icon-focused-outline);
-  --cr-icon-button-icon-size: 24px;
-  --cr-icon-button-hover-background-color:
-      var(--color-new-tab-page-composebox-hover);
-  --cr-icon-button-size: 48px;
-  color: var(--color-new-tab-page-composebox-upload-button);
-}
-
-:host([inputs-disabled_]) .upload-icon {
-  color: var(--color-new-tab-page-composebox-upload-button-disabled);
-}
-
-#imageUploadButton {
-  --cr-icon-button-margin-start: -12px;
+:host([expanded_][show-dropdown_]) ntp-composebox-dropdown {
+  padding-bottom: 8px;
 }
 
 .action-icon {
   --cr-icon-button-focus-outline-color:
       var(--color-searchbox-results-icon-focused-outline);
   --cr-icon-button-hover-background-color:
-      var(--color-new-tab-page-composebox-hover);
+      var(--color-searchbox-results-background-hovered);
   --cr-icon-button-margin-end: 0;
-  --cr-icon-button-size: 48px;
+  --cr-icon-button-size: 40px;
   position: absolute;
   right: 16px;
 }
@@ -290,10 +307,69 @@
 
 #cancelIcon {
   --cr-icon-button-fill-color:
-      var(--color-new-tab-page-composebox-cancel-button);
-  /* SVG is size 24 with 5px of padding so actual size is 14px */
-  --cr-icon-button-icon-size: 24px;
+      var(--color-new-tab-page-composebox-cancel-button-light);
+  /* SVG is size 20 with 5px of padding so actual size is 10px */
+  --cr-icon-button-icon-size: 20px;
+  position: absolute;
+  top: 8px;
+  /* Uses the same transitions as the submit button so they are in sync. */
+  transition: var(--submit-enabled-transition);
+}
+
+:host([expanded_][is-collapsible]) #cancelIcon {
   top: 16px;
+}
+
+/* Hide the cancel icon when the composebox is expanded and no text is present. */
+:host([is-collapsible]:not([submit-enabled_])) #cancelIcon {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes fade-out-in {
+  0% {
+    opacity: 0;
+  }
+
+  73% {
+    opacity: 0;
+  }
+}
+
+#lensIcon {
+  --cr-icon-button-icon-size: 20px;
+  --cr-icon-image: url(//resources/cr_components/searchbox/icons/camera.svg);
+  bottom: var(--input-bottom-spacing);
+  display: none;
+  opacity: 1;
+  position: absolute;
+  right: 16px;
+  top: 6px;
+}
+
+#lensIcon:focus-visible:focus {
+  box-shadow: none;
+  outline: 2px solid var(--color-searchbox-results-icon-focused-outline);
+  outline-offset: 2px;
+}
+
+:host([expanded_]) #lensIcon {
+  animation: fade-out-in var(--lens-icon-animation-duration) linear;
+  right: 68px;
+  top: auto;
+}
+
+:host([lens-button-disabled_]) #lensIcon {
+  opacity: 0.3;
+}
+
+:host-context([dir='rtl']) #lensIcon {
+  left: 68px;
+  right: unset;
+}
+
+#submitContainer {
+  display: none;
 }
 
 #submitIcon {
@@ -355,19 +431,21 @@
 }
 
 .gradient:before {
+  aspect-ratio: 1 / 1;
   background: var(--brand-gradient);
   border-radius: 50%;
   contain: paint;
   content: '';
-  height: 900px;
+  height: auto; /* Controlled by aspect-ratio */
   left: 50%;
   position: absolute;
   rotate: 0deg;
-  scale: 1 0.4;
+  scale: 1 0.6;
   top: 50%;
   translate: -50% -50%;
   opacity: 0;
-  width: 900px;
+  /* The gradient is 120% wide to ensure it fills passed the entire container. */
+  width: 120%;
 }
 
 :host([expanded_]) .gradient:before {
@@ -453,10 +531,13 @@
   filter: blur(0);
 }
 
-:host([expanded_]) .background:before{
-animation: plate-background-blur-on-expand var(--glif-rotation-duration)
-      var(--standard-curve),
-    color-pulse-on-expand var(--expand-duration) var(--standard-curve);
+:host([expanded_]) .background:before {
+  animation: plate-background-blur-on-expand var(--glif-rotation-duration)
+      var(--standard-curve);
+}
+
+:host([expanded_][is-collapsible]) .background:before {
+  animation: color-pulse-on-expand var(--expand-duration) var(--standard-curve);
 }
 
 @keyframes plate-background-blur-on-expand {
@@ -496,4 +577,25 @@ animation: plate-background-blur-on-expand var(--glif-rotation-duration)
   100% {
     border-width: 0;
   }
+}
+
+#suggestionActivity {
+  color: var(--color-new-tab-page-composebox-suggestion-activity);
+  font-size: 12px;
+  font-weight: 400;
+  left: 50%;
+  line-height: 18px;
+  margin-top: 20px;
+  position: absolute;
+  transform: translate(-50%);
+}
+
+.carousel-divider {
+  border-radius: 100px;
+  border-top: 1px solid
+    var(--color-new-tab-page-composebox-file-carousel-divider);
+  margin-inline-end: 16px;
+  margin-inline-start: var(--text-input-inline-start-spacing);
+  margin-top: 8px;
+  margin-bottom: 10px;
 }

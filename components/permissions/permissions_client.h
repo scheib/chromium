@@ -15,7 +15,6 @@
 #include "components/favicon/core/favicon_service.h"
 #include "components/permissions/features.h"
 #include "components/permissions/origin_keyed_permission_action_service.h"
-#include "components/permissions/permission_hats_trigger_helper.h"
 #include "components/permissions/permission_prompt.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/permission_util.h"
@@ -172,8 +171,7 @@ class PermissionsClient {
           pepc_prompt_position,
       ContentSetting initial_permission_status,
       base::OnceCallback<void()> hats_shown_callback_,
-      std::optional<PermissionHatsTriggerHelper::PreviewParametersForHats>
-          preview_parameters);
+      PromptOptions prompt_options);
 
   // Called for each request type when a permission prompt is resolved.
   virtual void OnPromptResolved(
@@ -318,6 +316,10 @@ class PermissionsClient {
   // Returns `true` if Chrome can request system-level permission. Returns
   // `false` otherwise.
   virtual bool CanPromptSystemPermission(ContentSettingsType type) const;
+
+  // Returns true if an actor is currently operating on a tab.
+  virtual bool IsActorOperatingOnWebContents(
+      content::WebContents* web_contents) const;
 
   virtual favicon::FaviconService* GetFaviconService(
       content::BrowserContext* browser_context);

@@ -35,6 +35,20 @@ chromium-metrics-reviews@google.com.
 
 <!-- LINT.ThenChange(//chrome/browser/ui/views/tabs/tab_strip_combo_button.cc:AccidentalClickType) -->
 
+<!-- LINT.IfChange(AnimationFreezeCheckerState) -->
+
+<enum name="AnimationFreezeCheckerState">
+  <int value="0" label="Started"/>
+  <int value="1" label="Ended"/>
+  <int value="2" label="Cancelled"/>
+  <int value="3" label="Timed out"/>
+  <int value="4" label="Cancelled or ended after timeout"/>
+  <int value="5" label="Ended looped"/>
+  <int value="6" label="Cancelled looped"/>
+</enum>
+
+<!-- LINT.ThenChange(//chrome/android/java/src/org/chromium/chrome/browser/compositor/layouts/phone/AnimationFreezeChecker.java:AnimationState) -->
+
 <!-- LINT.IfChange(AttemptFastKillForDiscardResult) -->
 
 <enum name="AttemptFastKillForDiscardResult">
@@ -43,7 +57,7 @@ chromium-metrics-reviews@google.com.
   <int value="2" label="Killed without unload handlers"/>
 </enum>
 
-<!-- LINT.ThenChange(//chrome/browser/resource_coordinator/tab_lifecycle_unit.cc:AttemptFastKillForDiscardResult) -->
+<!-- LINT.ThenChange(//chrome/browser/resource_coordinator/utils.cc:AttemptFastKillForDiscardResult) -->
 
 <enum name="BooleanFocusedTab">
   <int value="0" label="Not Focused"/>
@@ -272,6 +286,8 @@ chromium-metrics-reviews@google.com.
   <int value="5" label="Tab context menu"/>
   <int value="6" label="Duplicate split"/>
   <int value="7" label="Extensions API"/>
+  <int value="8" label="What's new"/>
+  <int value="9" label="Keyboard shortcut"/>
 </enum>
 
 <!-- LINT.ThenChange(//chrome/browser/ui/tabs/split_tab_metrics.h:SplitTabCreatedSource) -->
@@ -304,13 +320,13 @@ chromium-metrics-reviews@google.com.
 <!-- LINT.IfChange(TabGroupingTransitionType) -->
 
 <enum name="TabGroupingTransitionType">
-  <int value="-1" label="Invalid type"/>
-  <int value="0" label="Tab started ungrouped and ended ungrouped"/>
-  <int value="1" label="Tab started ungrouped and ended grouped"/>
-  <int value="2" label="Tab started grouped and ended ungrouped"/>
-  <int value="3" label="Tab started grouped and ended in the same group"/>
-  <int value="4"
-      label="Tab started grouped and ended outside of the same group"/>
+  <int value="0" label="Invalid type"/>
+  <int value="1" label="Active tab was ungrouped, new tab was left ungrouped"/>
+  <int value="2" label="Active tab was ungrouped, new tab later grouped"/>
+  <int value="3" label="Active tab was grouped, new tab left ungrouped"/>
+  <int value="4" label="Active tab was grouped, new tab left in that group"/>
+  <int value="5"
+      label="Active tab was grouped, new tab put in different group"/>
 </enum>
 
 <!-- LINT.ThenChange(//chrome/browser/ui/tabs/tab_creation_metrics_controller.h:TabGroupingTransitionType) -->

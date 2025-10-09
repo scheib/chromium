@@ -16,8 +16,7 @@
 #import "ios/chrome/browser/orchestrator/ui_bundled/omnibox_focus_orchestrator.h"
 #import "ios/chrome/browser/orchestrator/ui_bundled/omnibox_focus_orchestrator_parity.h"
 #import "ios/chrome/browser/overlays/model/public/overlay_presentation_context.h"
-#import "ios/chrome/browser/prerender/model/prerender_service.h"
-#import "ios/chrome/browser/prerender/model/prerender_service_factory.h"
+#import "ios/chrome/browser/prerender/model/prerender_browser_agent.h"
 #import "ios/chrome/browser/segmentation_platform/model/segmentation_platform_service_factory.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
@@ -36,6 +35,7 @@
 #import "ios/chrome/browser/toolbar/ui_bundled/adaptive_toolbar_view_controller.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/primary_toolbar_coordinator.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/primary_toolbar_view_controller_delegate.h"
+#import "ios/chrome/browser/toolbar/ui_bundled/public/omnibox_position_util.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_constants.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_omnibox_consumer.h"
 #import "ios/chrome/browser/toolbar/ui_bundled/public/toolbar_type.h"
@@ -50,9 +50,7 @@
 @interface ToolbarCoordinator () <GuidedTourCommands,
                                   PrimaryToolbarViewControllerDelegate,
                                   ToolbarCommands,
-                                  ToolbarMediatorDelegate> {
-  raw_ptr<PrerenderService> _prerenderService;
-}
+                                  ToolbarMediatorDelegate>
 
 /// Whether this coordinator has been started.
 @property(nonatomic, assign) BOOL started;
@@ -180,12 +178,7 @@
     self.orchestrator = [[OmniboxFocusOrchestrator alloc] init];
   }
 
-  self.orchestrator.toolbarAnimatee =
-      self.primaryToolbarCoordinator.toolbarAnimatee;
-  self.orchestrator.locationBarAnimatee =
-      [self.locationBarCoordinator locationBarAnimatee];
-  self.orchestrator.editViewAnimatee =
-      [self.locationBarCoordinator editViewAnimatee];
+  [self updateOrchestratorAnimatee];
 
   if (IsBottomOmniboxAvailable()) {
     [self.toolbarMediator setInitialOmniboxPosition];
@@ -200,7 +193,6 @@
   }
 
   [self updateToolbarsLayout];
-  _prerenderService = PrerenderServiceFactory::GetForProfile(self.profile);
 
   [super start];
   self.started = YES;
@@ -211,7 +203,6 @@
     return;
   }
   [super stop];
-  _prerenderService = nullptr;
   self.orchestrator.editViewAnimatee = nil;
   self.orchestrator.locationBarAnimatee = nil;
   self.orchestrator = nil;
@@ -234,7 +225,6 @@
   self.toolbarMediator = nil;
 
   [self.browser->GetCommandDispatcher() stopDispatchingToTarget:self];
-  _prerenderService = nullptr;
   self.started = NO;
 }
 
@@ -304,7 +294,13 @@
 }
 
 - (BOOL)isLoadingPrerenderer {
-  return _prerenderService && _prerenderService->IsLoadingPrerender();
+  if (!_started) {
+    return NO;
+  }
+
+  PrerenderBrowserAgent* prerenderBrowserAgent =
+      PrerenderBrowserAgent::FromBrowser(self.browser);
+  return prerenderBrowserAgent && prerenderBrowserAgent->IsInsertingPrerender();
 }
 
 #pragma mark Omnibox and LocationBar
@@ -326,11 +322,14 @@
   }
   [self.toolbarMediator locationBarFocusChangedTo:focused];
 
+  BOOL followSteadyState =
+      omnibox::ShouldFocusedOmniboxFollowSteadyStatePosition();
   // Disable toolbar animations when focusing the omnibox on secondary toolbar.
   // TODO(crbug.com/40275116): Add animation in OmniboxFocusOrchestrator if
   // needed.
   BOOL animateTransition = _enableAnimationsForOmniboxFocus &&
-                           _steadyStateOmniboxPosition == ToolbarType::kPrimary;
+                           (followSteadyState || _steadyStateOmniboxPosition ==
+                                                     ToolbarType::kPrimary);
 
   __weak __typeof(self) weakSelf = self;
   BOOL toolbarExpanded = focused && !CanShowTabStrip(self.traitEnvironment);
@@ -361,6 +360,10 @@
 
 - (BOOL)showingOmniboxPopup {
   return [self.locationBarCoordinator showingOmniboxPopup];
+}
+
+- (void)setBottomOmniboxOffsetForPopup:(CGFloat)bottomOffset {
+  [self.toolbarMediator setBottomOmniboxOffsetForPopup:bottomOffset];
 }
 
 #pragma mark ToolbarHeightProviding
@@ -629,6 +632,9 @@
 
 - (void)transitionOmniboxToToolbarType:(ToolbarType)toolbarType {
   _omniboxPosition = toolbarType;
+
+  [self updateOrchestratorAnimatee];
+
   OmniboxPositionBrowserAgent* positionBrowserAgent =
       OmniboxPositionBrowserAgent::FromBrowser(self.browser);
   switch (toolbarType) {
@@ -665,6 +671,20 @@
 
 - (void)transitionSteadyStateOmniboxToToolbarType:(ToolbarType)toolbarType {
   _steadyStateOmniboxPosition = toolbarType;
+}
+
+- (CGFloat)keyboardAttachedBottomOmniboxHeight {
+  BOOL followSteadyState =
+      omnibox::ShouldFocusedOmniboxFollowSteadyStatePosition();
+  if (_omniboxPosition == ToolbarType::kPrimary || !followSteadyState) {
+    return 0;
+  }
+
+  // The height of the location bar including symmetrical top and bottom
+  // margins.
+  return self.locationBarCoordinator.locationBarViewController.view.frame.size
+             .height +
+         2 * kBottomAdaptiveLocationBarTopMargin;
 }
 
 #pragma mark - Private
@@ -744,6 +764,32 @@
     completion();
     completion = nil;
   }
+}
+
+- (void)updateOrchestratorAnimatee {
+  id<ToolbarAnimatee> updatedToolbarAnimatee =
+      _omniboxPosition == ToolbarType::kPrimary
+          ? self.primaryToolbarCoordinator.toolbarAnimatee
+          : self.secondaryToolbarCoordinator.toolbarAnimatee;
+  BOOL willChangeToolbarAnimatee =
+      updatedToolbarAnimatee != self.orchestrator.toolbarAnimatee;
+
+  // If a change occurs, clear any previous animation effects to prevent the
+  // toolbar from remaining expanded
+  if (willChangeToolbarAnimatee) {
+    [self.orchestrator
+        transitionToStateOmniboxFocused:NO
+                        toolbarExpanded:NO
+                                trigger:OmniboxFocusTrigger::kOther
+                               animated:NO
+                             completion:nil];
+  }
+
+  self.orchestrator.toolbarAnimatee = updatedToolbarAnimatee;
+  self.orchestrator.locationBarAnimatee =
+      [self.locationBarCoordinator locationBarAnimatee];
+  self.orchestrator.editViewAnimatee =
+      [self.locationBarCoordinator editViewAnimatee];
 }
 
 @end

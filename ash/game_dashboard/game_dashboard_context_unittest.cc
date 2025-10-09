@@ -16,7 +16,7 @@
 #include "ash/capture_mode/capture_mode_types.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/frame/non_client_frame_view_ash.h"
+#include "ash/frame/frame_view_ash.h"
 #include "ash/game_dashboard/game_dashboard_battery_view.h"
 #include "ash/game_dashboard/game_dashboard_button.h"
 #include "ash/game_dashboard/game_dashboard_constants.h"
@@ -799,7 +799,7 @@ class GameDashboardContextTest : public GameDashboardTestBase {
     if (caption_button_model) {
       // Override the caption button model and ensure the values referencing the
       // model are updated.
-      auto* frame_view = NonClientFrameViewAsh::Get(game_window_.get());
+      auto* frame_view = FrameViewAsh::Get(game_window_.get());
       ASSERT_TRUE(frame_view);
       frame_view->SetCaptionButtonModel(std::move(caption_button_model));
     }
@@ -809,7 +809,7 @@ class GameDashboardContextTest : public GameDashboardTestBase {
     // not visible.
     ASSERT_FALSE(test_api_->GetGameDashboardButtonRevealController());
     ToggleFullScreen(window_state, /*delegate=*/nullptr);
-    auto* frame_view = NonClientFrameViewAsh::Get(game_window_.get());
+    auto* frame_view = FrameViewAsh::Get(game_window_.get());
     chromeos::FrameCaptionButtonContainerView::TestApi test_api(
         frame_view->GetHeaderView()->caption_button_container());
     test_api.EndAnimations();
@@ -3053,13 +3053,13 @@ TEST_P(GameTypeGameDashboardContextTest, TabletMode) {
 
   // App is launched in desktop mode in Setup and switch to the tablet mode.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   VerifyFeaturesEnabled(/*expect_enabled=*/false);
   EXPECT_TRUE(
       ToastManager::Get()->IsToastShown(game_dashboard::kTabletToastId));
   // Switch back to the desktop mode and this feature is resumed.
   ash::TabletModeControllerTestApi().LeaveTabletMode();
-  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_FALSE(display::Screen::Get()->InTabletMode());
   VerifyFeaturesEnabled(/*expect_enabled=*/true, /*toolbar_visible=*/true);
   EXPECT_FALSE(
       ToastManager::Get()->IsToastShown(game_dashboard::kTabletToastId));
@@ -3067,7 +3067,7 @@ TEST_P(GameTypeGameDashboardContextTest, TabletMode) {
 
   // No toast shown when there is no game window.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   EXPECT_FALSE(
       ToastManager::Get()->IsToastShown(game_dashboard::kTabletToastId));
 
@@ -3078,7 +3078,7 @@ TEST_P(GameTypeGameDashboardContextTest, TabletMode) {
       ToastManager::Get()->IsToastShown(game_dashboard::kTabletToastId));
   // Switch back to the desktop mode and this feature is resumed.
   ash::TabletModeControllerTestApi().LeaveTabletMode();
-  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_FALSE(display::Screen::Get()->InTabletMode());
   VerifyFeaturesEnabled(/*expect_enabled=*/true);
   EXPECT_FALSE(
       ToastManager::Get()->IsToastShown(game_dashboard::kTabletToastId));
@@ -3192,7 +3192,7 @@ TEST_P(GameTypeGameDashboardContextTest, OverviewModeWithTabletMode) {
   const auto* overview_controller = OverviewController::Get();
 
   // 1. Clamshell -> overview -> tablet-> exit overview.
-  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_FALSE(display::Screen::Get()->InTabletMode());
   EnterOverview();
   ASSERT_TRUE(overview_controller->InOverviewSession());
   VerifyFeaturesEnabled(/*expect_enabled=*/false, /*toolbar_visible=*/false);
@@ -3203,25 +3203,25 @@ TEST_P(GameTypeGameDashboardContextTest, OverviewModeWithTabletMode) {
   VerifyFeaturesEnabled(/*expect_enabled=*/false);
 
   // 2. Tablet -> overview -> exit overview -> clamshell.
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   EnterOverview();
   ASSERT_TRUE(overview_controller->InOverviewSession());
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   VerifyFeaturesEnabled(/*expect_enabled=*/false);
   ExitOverview();
   ASSERT_FALSE(overview_controller->InOverviewSession());
   VerifyFeaturesEnabled(/*expect_enabled=*/false);
   ash::TabletModeControllerTestApi().LeaveTabletMode();
-  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_FALSE(display::Screen::Get()->InTabletMode());
   VerifyFeaturesEnabled(/*expect_enabled=*/true, /*toolbar_visible=*/true);
 
   // 3. Tablet -> overview -> clamshell -> exit overview.
   ash::TabletModeControllerTestApi().EnterTabletMode();
-  ASSERT_TRUE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_TRUE(display::Screen::Get()->InTabletMode());
   EnterOverview();
   ASSERT_TRUE(overview_controller->InOverviewSession());
   ash::TabletModeControllerTestApi().LeaveTabletMode();
-  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
+  ASSERT_FALSE(display::Screen::Get()->InTabletMode());
   ASSERT_TRUE(overview_controller->InOverviewSession());
   VerifyFeaturesEnabled(/*expect_enabled=*/false, /*toolbar_visible=*/false);
   ExitOverview();

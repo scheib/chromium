@@ -27,6 +27,7 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/extensions/test_extension_system.h"
@@ -43,6 +44,7 @@
 #include "chrome/common/extensions/extension_test_util.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/features.h"
@@ -56,6 +58,7 @@
 #include "components/sync/test/test_sync_service.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
+#include "components/themes/pref_names.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/browser/disable_reason.h"
 #include "extensions/browser/extension_prefs.h"
@@ -211,6 +214,9 @@ class FakeThemeService : public ThemeService {
     return ThemeService::BrowserColorScheme::kSystem;
   }
 
+  void SetBrowserColorScheme(
+      ThemeService::BrowserColorScheme color_scheme) override {}
+
   const extensions::Extension* theme_extension() const {
     return theme_extension_.get();
   }
@@ -249,6 +255,12 @@ class ThemeSyncableServiceTest : public testing::Test,
     extension_test_util::SetGalleryUpdateURL(GURL(kCustomThemeUrl));
 
     TestingProfile::Builder builder;
+    // Use SimpleProtocolHandlerRegistryFactory to prevent OS integration during
+    // the protocol registration process.
+    builder.AddTestingFactory(
+        ProtocolHandlerRegistryFactory::GetInstance(),
+        custom_handlers::SimpleProtocolHandlerRegistryFactory::
+            GetDefaultFactory());
     builder.AddTestingFactory(
         ThemeServiceFactory::GetInstance(),
         base::BindRepeating([](content::BrowserContext* context)
@@ -1040,7 +1052,7 @@ TEST_F(RealThemeSyncableServiceTest, UpdateThemeSpecifics_CurrentTheme_Policy) {
   fake_change_processor()->changes().clear();
   // Set up theme service to use policy theme.
   profile_->GetTestingPrefService()->SetManagedPref(
-      prefs::kPolicyThemeColor, std::make_unique<base::Value>(100));
+      themes::prefs::kPolicyThemeColor, std::make_unique<base::Value>(100));
 
   ASSERT_TRUE(theme_service()->UsingPolicyTheme());
   // Applying policy theme doesn't trigger sync changes.
@@ -3376,6 +3388,38 @@ TEST_F(ThemeSyncableServiceTestWithAccountThemesSeparation,
   }
   EXPECT_FALSE(theme_service()->UsingExtensionTheme());
   EXPECT_TRUE(theme_service()->UsingDefaultTheme());
+  histogram_tester.ExpectUniqueSample("Theme.RestoredLocalThemeUponSignout",
+                                      false, 1);
+}
+
+TEST_F(ThemeSyncableServiceTestWithAccountThemesSeparation,
+       LoadsDefaultBrowserColorSchemeUponSyncStopIfNoLocalThemeExistedInPref) {
+  // Set remote browser color scheme.
+  sync_pb::ThemeSpecifics theme_specifics;
+  theme_specifics.set_browser_color_scheme(
+      sync_pb::ThemeSpecifics_BrowserColorScheme_LIGHT);
+
+  // Start syncing.
+  std::optional<syncer::ModelError> error =
+      theme_sync_service()->MergeDataAndStartSyncing(
+          syncer::THEMES, MakeThemeDataList(theme_specifics),
+          std::unique_ptr<syncer::SyncChangeProcessor>(
+              new syncer::SyncChangeProcessorWrapperForTest(
+                  fake_change_processor())));
+  ASSERT_FALSE(error.has_value()) << error->ToString();
+
+  ASSERT_EQ(theme_service()->GetBrowserColorScheme(),
+            ThemeService::BrowserColorScheme::kLight);
+
+  base::HistogramTester histogram_tester;
+  // No local theme pref is set.
+  ASSERT_FALSE(
+      profile()->GetPrefs()->GetUserPrefValue(prefs::kSavedLocalTheme));
+  // Stop syncing.
+  theme_sync_service()->StopSyncing(syncer::THEMES);
+  // Browser color scheme is reset to default.
+  EXPECT_EQ(theme_service()->GetBrowserColorScheme(),
+            ThemeService::BrowserColorScheme::kSystem);
   histogram_tester.ExpectUniqueSample("Theme.RestoredLocalThemeUponSignout",
                                       false, 1);
 }

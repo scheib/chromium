@@ -35,6 +35,7 @@
 <translation id="1249250836236328755">शैली</translation>
 <translation id="1254593899333212300">प्रत्यक्ष इंटरनेट कनेक्‍शन</translation>
 <translation id="1272293450992660632">पिन के मान मेल नहीं खाते.</translation>
+<translation id="1279040297980392566">स्कैन होने की प्रोसेस पूरी होने तक इंतज़ार करें. इसके बाद, फिर से कोशिश करें</translation>
 <translation id="1280820357415527819">मोबाइल नेटवर्क खोजे जा रहे हैं</translation>
 <translation id="1293556467332435079">फ़ाइल</translation>
 <translation id="1297922636971898492">Google डिस्क इस समय उपलब्ध नहीं है. Google डिस्क के वापस आ जाने पर अपलोडिंग अपने आप फिर से प्रारंभ हो जाएगी.</translation>
@@ -787,7 +788,7 @@
 <translation id="7075931588889865715">टीआईएस 820-2531 कीबोर्ड के साथ थाई</translation>
 <translation id="708278670402572152">स्कैन करना चालू करने के लिए डिसकनेक्ट करें</translation>
 <translation id="7086590977277044826">इनस्क्रिप्ट कीबोर्ड के साथ तमिल</translation>
-<translation id="7088615885725309056">इससे पुराने</translation>
+<translation id="7088615885725309056">पुराना</translation>
 <translation id="7103992300314999525">मेसिडोनियन</translation>
 <translation id="7104338189998813914">आपके OneDrive खाते को ऐक्सेस करने में कोई समस्या हुई</translation>
 <translation id="7106346894903675391">ज़्यादा स्टोरेज खरीदें...</translation>
@@ -1076,6 +1077,7 @@
 <translation id="9213073329713032541">ठीक से इंस्टॉल होना शुरू हो गया है.</translation>
 <translation id="9219103736887031265">इमेज</translation>
 <translation id="9219908252191632183">लूनर</translation>
+<translation id="931652069802536959">नीति के तहत नेटवर्क को ब्लॉक किया गया है</translation>
 <translation id="938470336146445890">कृपया कोई 'उपयोगकर्ता प्रमाणपत्र' इंस्टॉल करें.</translation>
 <translation id="939736085109172342">नया फ़ोल्डर</translation>
 <translation id="943972244133411984">बदलाव करने वाले</translation>

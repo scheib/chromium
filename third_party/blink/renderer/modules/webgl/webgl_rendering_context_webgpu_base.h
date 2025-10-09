@@ -80,11 +80,13 @@ class MODULES_EXPORT WebGLRenderingContextWebGPUBase
   int drawingBufferWidth() const;
   int drawingBufferHeight() const;
   GLenum drawingBufferFormat() const;
-  V8PredefinedColorSpace drawingBufferColorSpace() const;
-  void setDrawingBufferColorSpace(const V8PredefinedColorSpace& color_space,
+  V8PredefinedColorSpace drawingBufferColorSpace(ScriptState*) const;
+  void setDrawingBufferColorSpace(ScriptState*,
+                                  const V8PredefinedColorSpace& color_space,
                                   ExceptionState&);
-  V8PredefinedColorSpace unpackColorSpace() const;
-  void setUnpackColorSpace(const V8PredefinedColorSpace& color_space,
+  V8PredefinedColorSpace unpackColorSpace(ScriptState*) const;
+  void setUnpackColorSpace(ScriptState*,
+                           const V8PredefinedColorSpace& color_space,
                            ExceptionState&);
 
   void activeTexture(GLenum texture);
@@ -596,6 +598,14 @@ class MODULES_EXPORT WebGLRenderingContextWebGPUBase
                   GLenum type,
                   MaybeShared<DOMArrayBufferView> data,
                   int64_t src_offset);
+
+  void texElementImage2D(GLenum target,
+                         GLint level,
+                         GLint internalformat,
+                         GLenum format,
+                         GLenum type,
+                         Element* element,
+                         ExceptionState& exception_state);
 
   void texElement2D(GLenum target,
                     GLint level,
@@ -1270,7 +1280,7 @@ class MODULES_EXPORT WebGLRenderingContextWebGPUBase
   SkAlphaType GetAlphaType() const override;
   viz::SharedImageFormat GetSharedImageFormat() const override;
   gfx::ColorSpace GetColorSpace() const override;
-  int AllocatedBufferCountPerPixel() override;
+  int AllocatedBufferCountPerPixel() const override;
   bool isContextLost() const override;
   scoped_refptr<StaticBitmapImage> GetImage(FlushReason) override;
   void SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata) override;

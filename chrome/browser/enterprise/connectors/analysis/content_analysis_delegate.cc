@@ -27,14 +27,12 @@
 #include "chrome/browser/enterprise/connectors/analysis/clipboard_analysis_request.h"
 #include "chrome/browser/enterprise/connectors/analysis/clipboard_request_handler.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_dialog_controller.h"
-#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/enterprise/connectors/analysis/files_request_handler.h"
 #include "chrome/browser/enterprise/connectors/analysis/page_print_analysis_request.h"
 #include "chrome/browser/enterprise/connectors/analysis/page_print_request_handler.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "chrome/browser/enterprise/connectors/referrer_cache_utils.h"
-#include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router.h"
 #include "chrome/browser/file_util_service.h"
 #include "chrome/browser/policy/dm_token_utils.h"
 #include "chrome/browser/profiles/profile.h"
@@ -506,9 +504,7 @@ ContentAnalysisDelegate::ContentAnalysisDelegate(
   CHECK(web_contents);
   profile_ = Profile::FromBrowserContext(web_contents->GetBrowserContext());
   url_ = web_contents->GetLastCommittedURL();
-  if (base::FeatureList::IsEnabled(kEnterpriseIframeDlpRulesSupport)) {
-    frame_url_chain_ = CollectFrameUrls(web_contents, access_point_);
-  }
+  frame_url_chain_ = CollectFrameUrls(web_contents, access_point_);
   title_ = base::UTF16ToUTF8(web_contents->GetTitle());
   user_action_id_ = base::HexEncode(base::RandBytesAsVector(128));
   page_content_type_ = web_contents->GetContentsMimeType();
@@ -963,10 +959,15 @@ bool ContentAnalysisDelegate::text_request_required() const {
 }
 
 bool ContentAnalysisDelegate::image_request_required() const {
-  return !data_.image.empty() &&
-         data_.image.size() <=
-             data_.settings.cloud_or_local_settings.max_file_size() &&
-         data_.settings.cloud_or_local_settings.is_local_analysis();
+  if (data_.settings.cloud_or_local_settings.is_local_analysis() ||
+      base::FeatureList::IsEnabled(
+          enterprise_connectors::kDlpScanPastedImages)) {
+    return !data_.image.empty() &&
+           data_.image.size() <=
+               data_.settings.cloud_or_local_settings.max_file_size();
+  }
+
+  return false;
 }
 
 const AnalysisSettings& ContentAnalysisDelegate::settings() const {

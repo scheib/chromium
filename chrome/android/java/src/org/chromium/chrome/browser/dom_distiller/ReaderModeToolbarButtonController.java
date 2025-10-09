@@ -6,14 +6,14 @@ package org.chromium.chrome.browser.dom_distiller;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
-import android.graphics.drawable.Drawable;
 import android.view.View;
 
 import androidx.appcompat.content.res.AppCompatResources;
 
+import org.chromium.base.CallbackController;
 import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -27,7 +27,6 @@ import org.chromium.chrome.browser.toolbar.optional_button.BaseButtonDataProvide
 import org.chromium.chrome.browser.toolbar.optional_button.ButtonData;
 import org.chromium.chrome.browser.toolbar.optional_button.ButtonData.ButtonSpec;
 import org.chromium.chrome.browser.user_education.IphCommandBuilder;
-import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.dom_distiller.core.DomDistillerFeatures;
 import org.chromium.components.dom_distiller.core.DomDistillerUrlUtils;
 import org.chromium.components.feature_engagement.FeatureConstants;
@@ -35,19 +34,26 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.url.GURL;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Responsible for providing UI resources for showing a reader mode button on toolbar. */
 @NullMarked
-public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
+public class ReaderModeToolbarButtonController extends BaseButtonDataProvider
+        implements ReaderModeActionRateLimiter.Observer {
     private final Context mContext;
     private final ActivityTabProvider mActivityTabProvider;
+    private final Supplier<@Nullable ReaderModeIphController> mReaderModeIphControllerSupplier;
     private final TabSupplierObserver mActivityTabObserver;
     private final ButtonSpec mEntryPointSpec;
     private final ButtonSpec mExitPointSpec;
-    // Created as needed.
-    private @Nullable ReaderModeBottomSheetCoordinator mReaderModeBottomSheetCoordinator;
+
+
+    private CallbackController mCallbackController = new CallbackController();
     // Only populated when the TabSupplierObserver events fire.
     private @Nullable GURL mTabLastUrlSeen;
+    private boolean mShouldShowButtonForCurrentPage;
+    // Null until native is initialized.
+    private @Nullable ReaderModeActionRateLimiter mReaderModeActionRateLimiter;
 
     /**
      * Creates a new instance of {@code ReaderModeToolbarButtonController}.
@@ -59,12 +65,15 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
      *     visible. Can be null to disable this behavior.
      * @param bottomSheetController The bottom sheet controller, used to show the reader mode bottom
      *     sheet.
+     * @param readerModeIphControllerSupplier Supplies the reader mode IPH controller, null for
+     *     CCTs.
      */
     public ReaderModeToolbarButtonController(
             Context context,
             ObservableSupplier<Profile> profileSupplier,
             ActivityTabProvider activityTabProvider,
-            ModalDialogManager modalDialogManager) {
+            ModalDialogManager modalDialogManager,
+            Supplier<@Nullable ReaderModeIphController> readerModeIphControllerSupplier) {
         super(
                 activityTabProvider,
                 modalDialogManager,
@@ -74,20 +83,20 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
                 /* supportsTinting= */ true,
                 /* iphCommandBuilder= */ null,
                 AdaptiveToolbarButtonVariant.READER_MODE,
-                /* tooltipTextResId= */ Resources.ID_NULL);
+                /* tooltipTextResId= */ R.string.show_reading_mode_text);
 
         mContext = context;
         mActivityTabProvider = activityTabProvider;
+        mReaderModeIphControllerSupplier = readerModeIphControllerSupplier;
         mActivityTabObserver =
                 new TabSupplierObserver(mActivityTabProvider) {
                     @Override
                     public void onUrlUpdated(@Nullable Tab tab) {
-                        maybeRefreshButton(tab);
-
                         GURL currentUrl = tab == null ? null : tab.getUrl();
                         if (Objects.equals(currentUrl, mTabLastUrlSeen)) return;
                         mTabLastUrlSeen = currentUrl;
-                        maybeShowBottomSheet(tab);
+
+                        maybeRefreshButton(tab);
                     }
 
                     @Override
@@ -97,15 +106,10 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
                 };
 
         mEntryPointSpec = mButtonData.getButtonSpec();
-        Drawable exitPointDrawable =
-                AppCompatResources.getDrawable(mContext, R.drawable.ic_mobile_friendly_24dp);
-        exitPointDrawable.setColorFilter(
-                new PorterDuffColorFilter(
-                        SemanticColorUtils.getDefaultIconColorAccent1(mContext),
-                        PorterDuff.Mode.SRC_ATOP));
         mExitPointSpec =
                 new ButtonSpec(
-                        exitPointDrawable,
+                        AppCompatResources.getDrawable(
+                                mContext, R.drawable.ic_mobile_friendly_24dp),
                         /* onClickListener= */ this,
                         /* onLongClickListener= */ null,
                         /* contentDescription= */ context.getString(
@@ -114,17 +118,23 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
                         /* iphCommandBuilder= */ null,
                         AdaptiveToolbarButtonVariant.READER_MODE,
                         /* actionChipLabelResId= */ Resources.ID_NULL,
-                        /* tooltipTextResId= */ Resources.ID_NULL,
-                        /* hasErrorBadge= */ false);
+                        /* tooltipTextResId= */ R.string.hide_reading_mode_text,
+                        /* hasErrorBadge= */ false,
+                        /* isChecked= */ true);
     }
 
     @Override
     public void destroy() {
-        mActivityTabObserver.destroy();
-        if (mReaderModeBottomSheetCoordinator != null) {
-            mReaderModeBottomSheetCoordinator.destroy();
-        }
         super.destroy();
+        if (mReaderModeActionRateLimiter != null) {
+            mReaderModeActionRateLimiter.removeObserver(this);
+        }
+    }
+
+    @Override
+    public void onFinishNativeInitialization() {
+        mReaderModeActionRateLimiter = ReaderModeActionRateLimiter.getInstance();
+        mReaderModeActionRateLimiter.addObserver(this);
     }
 
     @Override
@@ -144,6 +154,8 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
             return;
         }
 
+        ReaderModeMetrics.recordReaderModeContextualPageActionEvent(
+                ReaderModeMetrics.ReaderModeContextualPageActionEvent.CLICKED);
         readerModeManager.activateReaderMode(EntryPoint.TOOLBAR_BUTTON);
     }
 
@@ -158,8 +170,52 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
         return iphCommandBuilder;
     }
 
+    @Override
+    protected boolean shouldShowButton(@Nullable Tab tab) {
+        if (!DomDistillerFeatures.sReaderModeDistillInApp.isEnabled()) {
+            return super.shouldShowButton(tab);
+        }
+        return mShouldShowButtonForCurrentPage;
+    }
+
+    // ReaderModeActionRateLimiter.Observer implementation.
+
+    @Override
+    public void onActionShown() {
+        Runnable task =
+                mCallbackController.makeCancelable(
+                        () -> {
+                            ReaderModeMetrics.recordReaderModeContextualPageActionEvent(
+                                    ReaderModeMetrics.ReaderModeContextualPageActionEvent.TIME_OUT);
+                            ReaderModeIphController readerModeIphController =
+                                    mReaderModeIphControllerSupplier.get();
+                            if (readerModeIphController != null) {
+                                readerModeIphController.showIph();
+                            }
+                            setCanShowButton(false);
+                        });
+        PostTask.postDelayedTask(
+                TaskTraits.UI_DEFAULT,
+                task,
+                DomDistillerFeatures.sReaderModeDistillInAppHideCpaDelayMs.getValue());
+    }
+
+    // Private methods
+
+    private void setCanShowButton(boolean canShow) {
+        mShouldShowButtonForCurrentPage = canShow;
+        notifyObservers(mShouldShowButtonForCurrentPage);
+    }
+
     private void maybeRefreshButton(@Nullable Tab tab) {
-        if (!DomDistillerFeatures.sReaderModeDistillInApp.isEnabled()) return;
+        if (!DomDistillerFeatures.sReaderModeDistillInApp.isEnabled()) {
+            return;
+        }
+
+        // The callback controller may still have a pending task to hide the button. Destroy it and
+        // create a new one to ensure that the button can be shown again.
+        mCallbackController.destroy();
+        mCallbackController = new CallbackController();
 
         if (tab != null && DomDistillerUrlUtils.isDistilledPage(tab.getUrl())) {
             mButtonData.setButtonSpec(mExitPointSpec);
@@ -167,14 +223,7 @@ public class ReaderModeToolbarButtonController extends BaseButtonDataProvider {
             mButtonData.setButtonSpec(mEntryPointSpec);
         }
 
-        notifyObservers(mButtonData.canShow());
-    }
-
-    private void maybeShowBottomSheet(@Nullable Tab tab) {
-        if (!DomDistillerFeatures.sReaderModeDistillInApp.isEnabled()) return;
-        if (tab == null || !DomDistillerUrlUtils.isDistilledPage(tab.getUrl())) return;
-
-        DomDistillerUiUtils.openSettingsInBottomSheet(tab, /* showFullSheet= */ false);
+        setCanShowButton(true);
     }
 
     // Testing-specific functions

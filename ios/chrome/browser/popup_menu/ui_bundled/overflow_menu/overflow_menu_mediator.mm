@@ -37,11 +37,7 @@
 #import "ios/chrome/browser/bubble/model/tab_based_iph_browser_agent.h"
 #import "ios/chrome/browser/commerce/model/push_notification/push_notification_feature.h"
 #import "ios/chrome/browser/default_browser/model/default_browser_interest_signals.h"
-#import "ios/chrome/browser/find_in_page/model/abstract_find_tab_helper.h"
-#import "ios/chrome/browser/follow/model/follow_browser_agent.h"
-#import "ios/chrome/browser/follow/model/follow_menu_updater.h"
-#import "ios/chrome/browser/follow/model/follow_tab_helper.h"
-#import "ios/chrome/browser/follow/model/follow_util.h"
+#import "ios/chrome/browser/find_in_page/model/find_tab_helper.h"
 #import "ios/chrome/browser/intelligence/bwg/model/bwg_service.h"
 #import "ios/chrome/browser/intelligence/bwg/model/bwg_service_factory.h"
 #import "ios/chrome/browser/intelligence/bwg/utils/bwg_constants.h"
@@ -72,10 +68,10 @@
 #import "ios/chrome/browser/search_engines/model/search_engine_observer_bridge.h"
 #import "ios/chrome/browser/search_engines/model/search_engines_util.h"
 #import "ios/chrome/browser/settings/model/sync/utils/identity_error_util.h"
-#import "ios/chrome/browser/settings/ui_bundled/clear_browsing_data/features.h"
 #import "ios/chrome/browser/settings/ui_bundled/password/password_manager_ui_features.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/tab_group_utils.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
 #import "ios/chrome/browser/shared/public/commands/activity_service_commands.h"
@@ -97,6 +93,7 @@
 #import "ios/chrome/browser/shared/public/commands/reading_list_add_command.h"
 #import "ios/chrome/browser/shared/public/commands/reminder_notifications_commands.h"
 #import "ios/chrome/browser/shared/public/commands/settings_commands.h"
+#import "ios/chrome/browser/shared/public/commands/tab_groups_commands.h"
 #import "ios/chrome/browser/shared/public/commands/text_zoom_commands.h"
 #import "ios/chrome/browser/shared/public/commands/whats_new_commands.h"
 #import "ios/chrome/browser/shared/public/features/features.h"
@@ -166,7 +163,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
 @interface OverflowMenuMediator () <BookmarkModelBridgeObserver,
                                     CRWWebStateObserver,
-                                    FollowMenuUpdater,
                                     IOSLanguageDetectionTabHelperObserving,
                                     OverflowMenuDestinationProvider,
                                     OverlayPresenterObserving,
@@ -239,7 +235,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
 @property(nonatomic, strong) OverflowMenuAction* clearBrowsingDataAction;
 @property(nonatomic, strong) OverflowMenuAction* readerModeAction;
-@property(nonatomic, strong) OverflowMenuAction* followAction;
+@property(nonatomic, strong) OverflowMenuAction* tabGroupAction;
 @property(nonatomic, strong) OverflowMenuAction* addBookmarkAction;
 @property(nonatomic, strong) OverflowMenuAction* editBookmarkAction;
 @property(nonatomic, strong) OverflowMenuAction* readLaterAction;
@@ -261,6 +257,8 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 @property(nonatomic, strong) OverflowMenuAction* setTabReminderAction;
 
 @property(nonatomic, strong) OverflowMenuAction* askBWGAction;
+
+@property(nonatomic, strong) OverflowMenuAction* hideToolbarsAction;
 
 @end
 
@@ -312,8 +310,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
     self.engagementTracker = nullptr;
   }
 
-  self.followBrowserAgent = nullptr;
-
   self.webState = nullptr;
   self.webStateList = nullptr;
 
@@ -363,14 +359,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 - (void)setWebState:(web::WebState*)webState {
   if (_webState) {
     _webState->RemoveObserver(_webStateObserver.get());
-
-    if (self.followAction) {
-      FollowTabHelper* followTabHelper =
-          FollowTabHelper::FromWebState(_webState);
-      if (followTabHelper) {
-        followTabHelper->RemoveFollowMenuUpdater();
-      }
-    }
   }
 
   _webState = webState;
@@ -384,11 +372,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
         std::make_unique<language::IOSLanguageDetectionTabHelperObserverBridge>(
             language::IOSLanguageDetectionTabHelper::FromWebState(_webState),
             self);
-
-    FollowTabHelper* followTabHelper = FollowTabHelper::FromWebState(_webState);
-    if (followTabHelper) {
-      followTabHelper->SetFollowMenuUpdater(self);
-    }
   }
 }
 
@@ -608,11 +591,8 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
   self.clearBrowsingDataAction = [self newClearBrowsingDataAction];
 
-  if (GetFollowActionState(self.webState) != FollowActionStateHidden) {
-    OverflowMenuAction* action = [self newFollowAction];
-
-    action.enabled = NO;
-    self.followAction = action;
+  if (base::FeatureList::IsEnabled(kTabGroupInOverflowMenu)) {
+    self.tabGroupAction = [self dynamicTabGroupAction];
   }
 
   self.addBookmarkAction = [self newAddBookmarkAction];
@@ -711,6 +691,10 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
     self.AIPrototypeAction = [self openAIPrototypeAction];
   }
 
+  if (base::FeatureList::IsEnabled(kHideToolbarsInOverflowMenu)) {
+    self.hideToolbarsAction = [self collapseToolbars];
+  }
+
   if ([self isGeminiAvailable]) {
     self.askBWGAction = [self openAskBWGAction];
   }
@@ -760,11 +744,13 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 }
 
 - (OverflowMenuAction*)toggleReaderModeAction {
+  base::RecordAction(UserMetricsAction("MobileMenuReaderMode"));
+
   BOOL isReaderModeActive = [self isReaderModeActive];
   int nameID = isReaderModeActive ? IDS_IOS_TOOLS_MENU_HIDE_READER_MODE
                                   : IDS_IOS_TOOLS_MENU_READER_MODE;
   __weak __typeof(self) weakSelf = self;
-  return [self
+  OverflowMenuAction* action = [self
       createOverflowMenuActionWithNameID:nameID
                               actionType:overflow_menu::ActionType::ReaderMode
                               symbolName:GetReaderModeSymbolName()
@@ -776,22 +762,45 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
                                    [weakSelf setReaderModeVisibility:
                                                  !isReaderModeActive];
                                  }];
+
+  // Show "New" label icon if Reader mode is eligible for triggering and
+  // currently available for the page.
+  if (self.engagementTracker &&
+      self.engagementTracker->ShouldTriggerHelpUI(
+          feature_engagement::kIPHBadgedReaderModeFeature) &&
+      self.isReaderModeEnabled) {
+    action.displayNewLabelIcon = YES;
+
+    self.engagementTracker->Dismissed(
+        feature_engagement::kIPHBadgedReaderModeFeature);
+  }
+
+  return action;
 }
 
-- (OverflowMenuAction*)newFollowAction {
-  return [self
-      createOverflowMenuActionWithName:l10n_util::GetNSString(
-                                           IDS_IOS_TOOLS_MENU_CUSTOMIZE_FOLLOW)
-                            actionType:overflow_menu::ActionType::Follow
-                            symbolName:kPlusSymbol
-                          systemSymbol:YES
-                      monochromeSymbol:NO
-                       accessibilityID:kToolsMenuFollow
-                          hideItemText:
-                              l10n_util::GetNSStringF(
-                                  IDS_IOS_OVERFLOW_MENU_HIDE_ACTION_FOLLOW, u"")
-                               handler:^{
-                               }];
+- (OverflowMenuAction*)dynamicTabGroupAction {
+  __weak __typeof(self) weakSelf = self;
+
+  std::set<const TabGroup*> groups = self.webStateList->GetGroups();
+  if (groups.empty()) {
+    return [self
+        createOverflowMenuActionWithName:
+            l10n_util::GetPluralNSStringF(
+                IDS_IOS_CONTENT_CONTEXT_ADDTABTONEWTABGROUP, 1)
+                              actionType:overflow_menu::ActionType::TabGroup
+                              symbolName:kNewTabGroupActionSymbol
+                            systemSymbol:YES
+                        monochromeSymbol:YES
+                         accessibilityID:kToolsMenuNewTabGroupId
+                            hideItemText:nil
+                                 handler:^{
+                                   [weakSelf createNewTabGroup];
+                                 }];
+  } else {
+    // TODO(crbug.com/448101935): Implement the Add Tab to Group and Move Tab To
+    // Group variations.
+    return nil;
+  }
 }
 
 - (OverflowMenuAction*)newAddBookmarkAction {
@@ -864,6 +873,22 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
                                      handler:^{
                                        [weakSelf startAskBWG];
                                      }];
+}
+
+- (OverflowMenuAction*)collapseToolbars {
+  __weak __typeof(self) weakSelf = self;
+  return [self
+      createOverflowMenuActionWithName:l10n_util::GetNSString(
+                                           IDS_IOS_OVERFLOW_MENU_HIDE_TOOLBARS)
+                            actionType:overflow_menu::ActionType::HideToolbars
+                            symbolName:kExpandSymbol
+                          systemSymbol:YES
+                      monochromeSymbol:NO
+                       accessibilityID:kToolsMenuHideToolbars
+                          hideItemText:nil
+                               handler:^{
+                                 [weakSelf startCollapseToolbars];
+                               }];
 }
 
 - (OverflowMenuAction*)newReadLaterAction {
@@ -1477,6 +1502,9 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
   self.readLaterAction.enabled =
       !self.webContentAreaShowingOverlay && [self isCurrentURLWebURL];
 
+  if (base::FeatureList::IsEnabled(kTabGroupInOverflowMenu)) {
+    self.tabGroupAction.enabled = YES;
+  }
   BOOL bookmarkEnabled =
       [self isCurrentURLWebURL] && [self isEditBookmarksEnabled];
   self.addBookmarkAction.enabled = bookmarkEnabled;
@@ -1501,6 +1529,14 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
   if (IsReaderModeAvailable()) {
     self.readerModeAction.enabled = [self isReaderModeEnabled];
+  }
+
+  if ([self isGeminiAvailable]) {
+    self.askBWGAction.enabled = !_webState->IsLoading();
+  }
+
+  if (base::FeatureList::IsEnabled(kHideToolbarsInOverflowMenu)) {
+    self.hideToolbarsAction.enabled = YES;
   }
 }
 
@@ -1570,9 +1606,10 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
 // Returns whether translate is enabled on the current page.
 - (BOOL)isTranslateEnabled {
-  return [self canManuallyTranslate:NO] && ![self isLensOverlayVisible] &&
-         (![self isReaderModeActive] ||
-          base::FeatureList::IsEnabled(kEnableReaderModeTranslation));
+  return
+      [self canManuallyTranslate:NO] && ![self isLensOverlayVisible] &&
+      (![self isReaderModeActive] ||
+       base::FeatureList::IsEnabled(kEnableReaderModeTranslationWithInfobar));
 }
 
 - (BOOL)isLensOverlayEnabled {
@@ -1609,7 +1646,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
     return NO;
   }
 
-  auto* helper = GetConcreteFindTabHelperFromWebState(self.webState);
+  FindTabHelper* helper = FindTabHelper::FromWebState(self.webState);
   return (helper && helper->CurrentPageSupportsFindInPage() &&
           !helper->IsFindUIActive());
 }
@@ -1725,19 +1762,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
   return visibleItem->GetUserAgentType();
 }
 
-// Creates a follow action if needed, when the follow action state is not
-// hidden.
-- (OverflowMenuAction*)createFollowActionIfNeeded {
-  // Returns nil if the follow action state is hidden.
-  if (GetFollowActionState(self.webState) == FollowActionStateHidden) {
-    return nil;
-  }
-
-  OverflowMenuAction* action = [self newFollowAction];
-  action.enabled = NO;
-  return action;
-}
-
 - (void)dismissMenu {
   self.menuHasBeenDismissed = YES;
   [self.popupMenuHandler dismissPopupMenuAnimated:YES];
@@ -1843,15 +1867,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
   if (!status.active_web_state_change()) {
     return;
   }
-
   self.webState = status.new_active_web_state;
-  if (self.webState && self.followAction) {
-    FollowTabHelper* followTabHelper =
-        FollowTabHelper::FromWebState(self.webState);
-    if (followTabHelper) {
-      followTabHelper->SetFollowMenuUpdater(self);
-    }
-  }
 }
 
 #pragma mark - BookmarkModelBridgeObserver
@@ -1914,53 +1930,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 
 - (void)templateURLServiceShuttingDown:(TemplateURLService*)urlService {
   _templateURLService = nullptr;
-}
-
-#pragma mark - FollowMenuUpdater
-
-- (void)updateFollowMenuItemWithWebPage:(WebPageURLs*)webPageURLs
-                               followed:(BOOL)followed
-                             domainName:(NSString*)domainName
-                                enabled:(BOOL)enable {
-  DCHECK(IsWebChannelsEnabled());
-  self.followAction.enabled = enable;
-  if (followed) {
-    __weak __typeof(self) weakSelf = self;
-    self.followAction.name = l10n_util::GetNSStringF(
-        IDS_IOS_TOOLS_MENU_UNFOLLOW, base::SysNSStringToUTF16(domainName));
-    self.followAction.symbolName = kXMarkSymbol;
-    self.followAction.handler = [self
-        fullOverflowMenuActionHandlerForActionType:overflow_menu::ActionType::
-                                                       Follow
-                                           handler:^{
-                                             [weakSelf
-                                                 unfollowWebPage:webPageURLs];
-                                           }];
-    NSString* hideItemText =
-        l10n_util::GetNSStringF(IDS_IOS_OVERFLOW_MENU_HIDE_ACTION_UNFOLLOW,
-                                base::SysNSStringToUTF16(domainName));
-    self.followAction.longPressItems = [self
-        actionLongPressItemsForActionType:overflow_menu::ActionType::Follow
-                             hideItemText:hideItemText];
-  } else {
-    __weak __typeof(self) weakSelf = self;
-    self.followAction.name = l10n_util::GetNSStringF(
-        IDS_IOS_TOOLS_MENU_FOLLOW, base::SysNSStringToUTF16(domainName));
-    self.followAction.symbolName = kPlusSymbol;
-    self.followAction.handler = [self
-        fullOverflowMenuActionHandlerForActionType:overflow_menu::ActionType::
-                                                       Follow
-                                           handler:^{
-                                             [weakSelf
-                                                 followWebPage:webPageURLs];
-                                           }];
-    NSString* hideItemText =
-        l10n_util::GetNSStringF(IDS_IOS_OVERFLOW_MENU_HIDE_ACTION_FOLLOW,
-                                base::SysNSStringToUTF16(domainName));
-    self.followAction.longPressItems = [self
-        actionLongPressItemsForActionType:overflow_menu::ActionType::Follow
-                             hideItemText:hideItemText];
-  }
 }
 
 #pragma mark - BrowserContainerConsumer
@@ -2127,6 +2096,9 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
     actions.push_back(overflow_menu::ActionType::SetTabReminder);
   }
 
+  if (base::FeatureList::IsEnabled(kTabGroupInOverflowMenu)) {
+    actions.push_back(overflow_menu::ActionType::TabGroup);
+  }
   actions.push_back(overflow_menu::ActionType::Bookmark);
   actions.push_back(overflow_menu::ActionType::ReadingList);
   actions.push_back(overflow_menu::ActionType::ClearBrowsingData);
@@ -2150,6 +2122,9 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
   if (IsReaderModeAvailable()) {
     actions.push_back(overflow_menu::ActionType::ReaderMode);
   }
+  if (base::FeatureList::IsEnabled(kHideToolbarsInOverflowMenu)) {
+    actions.push_back(overflow_menu::ActionType::HideToolbars);
+  }
 
   return actions;
 }
@@ -2165,25 +2140,8 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
       return self.openIncognitoTabAction;
     case overflow_menu::ActionType::NewWindow:
       return self.openNewWindowAction;
-    case overflow_menu::ActionType::Follow: {
-      // Try to create the followAction if there isn't one. It's possible that
-      // sometimes when creating the model the followActionState is hidden so
-      // the followAction hasn't been created but at the time when updating the
-      // model, the followAction should be valid.
-      if (!self.followAction) {
-        self.followAction = [self createFollowActionIfNeeded];
-        DCHECK(!self.followAction || self.webState != nullptr);
-      }
-
-      if (self.followAction) {
-        FollowTabHelper* followTabHelper =
-            FollowTabHelper::FromWebState(self.webState);
-        if (followTabHelper) {
-          followTabHelper->UpdateFollowMenuItem();
-        }
-      }
-      return self.followAction;
-    }
+    case overflow_menu::ActionType::TabGroup:
+      return self.tabGroupAction;
     case overflow_menu::ActionType::Bookmark: {
       BOOL pageIsBookmarked =
           self.webState && self.bookmarkModel &&
@@ -2227,6 +2185,8 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
       return self.readerModeAction;
     case overflow_menu::ActionType::AskBWG:
       return self.askBWGAction;
+    case overflow_menu::ActionType::HideToolbars:
+      return self.hideToolbarsAction;
   }
 }
 
@@ -2247,8 +2207,6 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
     case overflow_menu::ActionType::ShareChrome:
     case overflow_menu::ActionType::EditActions:
       NOTREACHED();
-    case overflow_menu::ActionType::Follow:
-      return [self newFollowAction];
     case overflow_menu::ActionType::Bookmark:
       return [self newAddBookmarkAction];
     case overflow_menu::ActionType::ReadingList:
@@ -2273,6 +2231,10 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
       return [self toggleReaderModeAction];
     case overflow_menu::ActionType::AskBWG:
       return [self openAskBWGAction];
+    case overflow_menu::ActionType::HideToolbars:
+      return [self hideToolbarsAction];
+    case overflow_menu::ActionType::TabGroup:
+      return [self dynamicTabGroupAction];
   }
 }
 
@@ -2329,32 +2291,22 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
           kMenuItemEntryPointSelected);
 
   [self dismissMenu];
-  if (IsIosQuickDeleteEnabled()) {
-    [self.quickDeleteHandler
-        showQuickDeleteAndCanPerformTabsClosureAnimation:YES];
-  } else {
-    [self.settingsHandler showClearBrowsingDataSettings];
-  }
+  [self.quickDeleteHandler
+      showQuickDeleteAndCanPerformTabsClosureAnimation:YES];
 }
 
-// Follows the website corresponding to `webPage` and dismisses the menu.
-- (void)followWebPage:(WebPageURLs*)webPage {
-  // FollowBrowserAgent may be null after -disconnect has been called.
-  FollowBrowserAgent* followBrowserAgent = self.followBrowserAgent;
-  if (followBrowserAgent) {
-    followBrowserAgent->FollowWebSite(webPage, FollowSource::OverflowMenu);
-  }
+// Creates a new tab group with the current tab.
+- (void)createNewTabGroup {
+  web::WebState* currentWebState = self.webState;
   [self dismissMenu];
-}
+  if (!currentWebState) {
+    return;
+  }
 
-// Unfollows the website corresponding to `webPage` and dismisses the menu.
-- (void)unfollowWebPage:(WebPageURLs*)webPage {
-  // FollowBrowserAgent may be null after -disconnect has been called.
-  FollowBrowserAgent* followBrowserAgent = self.followBrowserAgent;
-  if (followBrowserAgent) {
-    followBrowserAgent->UnfollowWebSite(webPage, FollowSource::OverflowMenu);
-  }
-  [self dismissMenu];
+  std::set<web::WebStateID> identifiers;
+  identifiers.insert(currentWebState->GetUniqueIdentifier());
+
+  [self.tabGroupsHandler showTabGroupCreationForTabs:identifiers];
 }
 
 // Dismisses the menu and adds the current page as a bookmark or opens the
@@ -2497,6 +2449,11 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(
 - (void)startAskBWG {
   [self dismissMenu];
   [self.BWGHandler startBWGFlowWithEntryPoint:bwg::EntryPoint::OverflowMenu];
+}
+
+- (void)startCollapseToolbars {
+  [self dismissMenu];
+  [self.browserCoordinatorHandler forceFullscreenMode];
 }
 
 // Opens the "Set a reminder" screen for the user's current tab.

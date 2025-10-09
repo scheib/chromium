@@ -21,7 +21,7 @@
 #include "components/autofill/core/browser/filling/filling_product.h"
 #include "components/autofill/core/browser/filling/form_autofill_history.h"
 #include "components/autofill/core/browser/form_structure.h"
-#include "components/autofill/core/browser/integrators/password_manager/otp_delegate.h"
+#include "components/autofill/core/browser/integrators/one_time_tokens/otp_suggestion.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/autofill/core/common/autofill_constants.h"
 
@@ -178,6 +178,10 @@ class FormFiller {
       AutofillTriggerSource trigger_source,
       base::optional_ref<const FormFieldData> field = std::nullopt,
       base::optional_ref<const std::u16string> old_value = std::nullopt);
+
+  base::WeakPtr<FormFiller> GetWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
  private:
   friend class FormFillerTestApi;

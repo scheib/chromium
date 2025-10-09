@@ -26,6 +26,8 @@ namespace {
 
 constexpr int kTestLayerId = 101;
 constexpr int kTestLayerMemberId = 201;
+constexpr int kLowEntropyLayerId = 301;
+constexpr int kLimitedEntropyLayerId = 401;
 
 // The entropy limits, in bits, to use for various tests.
 constexpr double kEntropyLimit_10bits = 10.0;
@@ -53,6 +55,10 @@ constexpr int kDanglingLayerReferenceBucket = 7;
 constexpr int kDanglingLayerMemberReferenceBucket = 8;
 // LimitedEntropySeedRejectionReason::kEmptyLayerReference
 constexpr int kEmptyLayerReferenceBucket = 9;
+// LimitedEntropySeedRejectionReason::kInvalidLayerConfiguration
+[[maybe_unused]] constexpr int kInvalidLayerConfigurationBucket = 10;
+// LimitedEntropySeedRejectionReason::kActiveLowAndLimitedLayers
+constexpr int kActiveLowAndLimitedLayersBucket = 11;
 
 Study::Experiment CreateExperiment(int weight) {
   Study::Experiment experiment;
@@ -222,7 +228,7 @@ TEST_F(LimitedEntropyRandomizationTest,
 
   auto test_seed = CreateTestSeed(
       {test_layer}, {CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
-                                      layer_member_reference)});
+                                     layer_member_reference)});
   EXPECT_FALSE(SeedHasMisconfiguredEntropy(client_state_, test_seed,
                                            kEntropyLimit_10bits)
                    .is_misconfigured);
@@ -259,9 +265,9 @@ TEST_F(LimitedEntropyRandomizationTest, SessionConsistency) {
       /*layer_id=*/kTestLayerId, /*num_slots=*/100,
       /*entropy_mode=*/Layer::LIMITED,
       /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})});
-  auto test_study = CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
-                                     CreateLayerMemberReference(
-                                         kTestLayerId, {kTestLayerMemberId}));
+  auto test_study = CreateTestStudy(
+      CreateExperimentsWithTwoBitsOfEntropy(),
+      CreateLayerMemberReference(kTestLayerId, {kTestLayerMemberId}));
   test_study.set_consistency(Study::SESSION);
   auto test_seed = CreateTestSeed({test_layer}, {test_study});
   // Seed should not be rejected since the study is session consistency, which
@@ -511,6 +517,253 @@ TEST_F(LimitedEntropyRandomizationTest, SeedRejection_NoSlots) {
                   .is_misconfigured);
   histogram_tester_.ExpectUniqueSample(kSeedRejectionReasonHistogram,
                                        kLayerDoesNotContainSlotsBucket, 1);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SeedRejection_SimultaneousLowAndLimitedLayers) {
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create an entropy consuming study that refers to the LOW entropy layer.
+  test_studies.push_back(CreateTestStudy(
+      CreateExperimentsWithTwoBitsOfEntropy(),
+      CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId})));
+
+  // Create an entropy consuming study that refers to the LIMITED entropy layer.
+  test_studies.push_back(
+      CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
+                      CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                                 {kTestLayerMemberId})));
+
+  // The seed is rejected because both layers would be active and simultaneously
+  // active LOW and LIMITED layers are not allowed.
+  auto test_seed = CreateTestSeed(test_layers, test_studies);
+  auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                            kEntropyLimit_10bits);
+  EXPECT_TRUE(result.is_misconfigured);
+  EXPECT_FALSE(result.seed_has_active_low_layer.has_value());
+  EXPECT_FALSE(result.seed_has_active_limited_layer.has_value());
+  histogram_tester_.ExpectUniqueSample(kSeedRejectionReasonHistogram,
+                                       kActiveLowAndLimitedLayersBucket, 1);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SeedRejection_AllowNonActiveSimultaneousLowAndLimitedLayers_LOW) {
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create multiple entropy consuming studies only referencing the LOW
+  // entropy layer.
+  test_studies.push_back(CreateTestStudy(
+      CreateExperimentsWithTwoBitsOfEntropy(),
+      CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId})));
+  test_studies.push_back(CreateTestStudy(
+      CreateExperimentsWithTwoBitsOfEntropy(),
+      CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId})));
+
+  // The seed is not rejected, only the LOW layer is active.
+  auto test_seed = CreateTestSeed(test_layers, test_studies);
+  auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                            kEntropyLimit_10bits);
+  EXPECT_FALSE(result.is_misconfigured);
+  ASSERT_TRUE(result.seed_has_active_low_layer.has_value());
+  EXPECT_TRUE(result.seed_has_active_low_layer.value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.has_value());
+  EXPECT_FALSE(result.seed_has_active_limited_layer.value());
+  histogram_tester_.ExpectTotalCount(kSeedRejectionReasonHistogram, 0);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SeedRejection_AllowNonActiveSimultaneousLowAndLimitedLayers_LIMITED) {
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create multiple entropy consuming studies only referencing the LIMITED
+  // entropy layer.
+  test_studies.push_back(
+      CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
+                      CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                                 {kTestLayerMemberId})));
+  test_studies.push_back(
+      CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
+                      CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                                 {kTestLayerMemberId})));
+
+  // The seed is not rejected, only the LIMITED layer is active.
+  auto test_seed = CreateTestSeed(test_layers, test_studies);
+  auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                            kEntropyLimit_10bits);
+  EXPECT_FALSE(result.is_misconfigured);
+  ASSERT_TRUE(result.seed_has_active_low_layer.has_value());
+  EXPECT_FALSE(result.seed_has_active_low_layer.value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.has_value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.value());
+  histogram_tester_.ExpectTotalCount(kSeedRejectionReasonHistogram, 0);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SimultaneousLowAndLimitedLayers_LowLayerExperimentIsNotWebVisible) {
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create a non-web-visible study that refers to the LOW entropy layer.
+  test_studies.push_back(CreateTestStudy(
+      {CreateExperiment(50), CreateExperiment(50)},
+      CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId})));
+
+  // Create an entropy-consuming study that refers to the LIMITED entropy layer.
+  test_studies.push_back(
+      CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
+                      CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                                 {kTestLayerMemberId})));
+
+  // Verify that the seed is not rejected. The study in the LOW entropy layer
+  // is not entropy-consuming. Only the limited layer is active.
+  auto test_seed = CreateTestSeed(test_layers, test_studies);
+  auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                            kEntropyLimit_10bits);
+  EXPECT_FALSE(result.is_misconfigured);
+  ASSERT_TRUE(result.seed_has_active_low_layer.has_value());
+  EXPECT_FALSE(result.seed_has_active_low_layer.value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.has_value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.value());
+  histogram_tester_.ExpectTotalCount(kSeedRejectionReasonHistogram, 0);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SimultaneousLowAndLimitedLayers_LowLayerExperimentIsNotPermanent) {
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create a session-randomized study that refers to the LOW entropy layer.
+  {
+    auto study = CreateTestStudy(
+        CreateExperimentsWithTwoBitsOfEntropy(),
+        CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId}));
+    study.set_consistency(Study::SESSION);
+    test_studies.push_back(std::move(study));
+  }
+
+  // Create an entropy-consuming study that refers to the LIMITED entropy layer.
+  test_studies.push_back(
+      CreateTestStudy(CreateExperimentsWithTwoBitsOfEntropy(),
+                      CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                                 {kTestLayerMemberId})));
+
+  // Verify that the seed is not rejected. The study in the LOW entropy layer
+  // is not entropy-consuming. Only the limited layer is active.
+  auto test_seed = CreateTestSeed(test_layers, test_studies);
+  auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                            kEntropyLimit_10bits);
+  EXPECT_FALSE(result.is_misconfigured);
+  ASSERT_TRUE(result.seed_has_active_low_layer.has_value());
+  EXPECT_FALSE(result.seed_has_active_low_layer.value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.has_value());
+  EXPECT_TRUE(result.seed_has_active_limited_layer.value());
+  histogram_tester_.ExpectTotalCount(kSeedRejectionReasonHistogram, 0);
+}
+
+TEST_F(LimitedEntropyRandomizationTest,
+       SimultaneousLowAndLimitedLayers_DifferentFormFactors) {
+  client_state_.form_factor = Study_FormFactor_DESKTOP;
+
+  std::vector<Layer> test_layers;
+  std::vector<Study> test_studies;
+  // Create LOW and LIMITED entropy layers.
+  test_layers.push_back(CreateLayer(
+      kLowEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LOW,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+  test_layers.push_back(CreateLayer(
+      kLimitedEntropyLayerId, /*num_slots=*/100,
+      /*entropy_mode=*/Layer::LIMITED,
+      /*layer_members=*/{CreateLayerMember(kTestLayerMemberId, {{0, 49}})}));
+
+  // Create a DESKTOP-only entropy-consuming study that refers to the LOW
+  // entropy layer.
+  {
+    auto study = CreateTestStudy(
+        CreateExperimentsWithTwoBitsOfEntropy(),
+        CreateLayerMemberReference(kLowEntropyLayerId, {kTestLayerMemberId}));
+    study.mutable_filter()->add_form_factor(Study_FormFactor_DESKTOP);
+    test_studies.push_back(std::move(study));
+  }
+
+  // Create a PHONE-only entropy-consuming study that refers to the LIMITED
+  // entropy layer.
+  {
+    auto study = CreateTestStudy(
+        CreateExperimentsWithTwoBitsOfEntropy(),
+        CreateLayerMemberReference(kLimitedEntropyLayerId,
+                                   {kTestLayerMemberId}));
+    study.mutable_filter()->add_form_factor(Study_FormFactor_PHONE);
+    test_studies.push_back(std::move(study));
+  }
+
+  // Verify that the seed is not rejected for a client with either form factor,
+  // since the study targeting the other form factor does not apply. Similarly,
+  // a client with neither form factor has no active layers and should not
+  // reject the seed.
+  for (auto form_factor : {Study_FormFactor_DESKTOP, Study_FormFactor_PHONE,
+                           Study_FormFactor_TABLET}) {
+    client_state_.form_factor = form_factor;
+    auto test_seed = CreateTestSeed(test_layers, test_studies);
+    auto result = SeedHasMisconfiguredEntropy(client_state_, test_seed,
+                                              kEntropyLimit_10bits);
+    EXPECT_FALSE(result.is_misconfigured);
+    ASSERT_TRUE(result.seed_has_active_low_layer.has_value());
+    EXPECT_EQ(result.seed_has_active_low_layer.value(),
+              form_factor == Study_FormFactor_DESKTOP);
+    EXPECT_TRUE(result.seed_has_active_limited_layer.has_value());
+    EXPECT_EQ(result.seed_has_active_limited_layer.value(),
+             form_factor == Study_FormFactor_PHONE);
+    histogram_tester_.ExpectTotalCount(kSeedRejectionReasonHistogram, 0);
+  }
 }
 
 }  // namespace variations

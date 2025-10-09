@@ -58,13 +58,23 @@ class MandatoryReauthBubbleControllerImpl
       content::WebContents* web_contents);
 
   // AutofillBubbleControllerBase:
-  PageActionIconType GetPageActionIconType() override;
+  std::optional<PageActionIconType> GetPageActionIconType() override;
   void DoShowBubble() override;
   void UpdatePageActionIcon() override;
 
  private:
   friend class content::WebContentsUserData<
       MandatoryReauthBubbleControllerImpl>;
+
+  // Sets up the controller to show the mandatory re-authentication bubble. It
+  // configures the callbacks for user actions (accept, cancel, close) and sets
+  // the initial bubble type.
+  void SetupBubble(base::OnceClosure accept_mandatory_reauth_callback,
+                   base::OnceClosure cancel_mandatory_reauth_callback,
+                   base::RepeatingClosure close_mandatory_reauth_callback);
+
+  // Logs opt in metrics when the bubble is closed.
+  void LogBubbleCloseOptInMetrics(PaymentsUiClosedReason reason);
 
   base::OnceClosure accept_mandatory_reauth_callback_;
   base::OnceClosure cancel_mandatory_reauth_callback_;

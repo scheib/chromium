@@ -25,16 +25,17 @@ import android.widget.LinearLayout.LayoutParams;
 
 import androidx.annotation.AnimRes;
 import androidx.annotation.ChecksSdkIntAtLeast;
+import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.browser.customtabs.TrustedWebUtils;
 
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.R;
@@ -131,6 +132,10 @@ import org.chromium.components.browser_ui.util.motion.MotionEventInfo;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.embedder_support.delegate.WebContentsDelegateAndroid;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.function.Supplier;
+
 /**
  * Contains functionality which is shared between {@link WebappActivity} and {@link
  * CustomTabActivity}. Purpose of the class is to simplify merging {@link WebappActivity} and {@link
@@ -183,6 +188,8 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
 
     private ActivityLifecycleDispatcher mLifecycleDispatcherForTesting;
 
+    @IntDef({PictureInPictureMode.NONE, PictureInPictureMode.MINIMIZED_CUSTOM_TAB})
+    @Retention(RetentionPolicy.SOURCE)
     protected @interface PictureInPictureMode {
         int NONE = 0;
         int MINIMIZED_CUSTOM_TAB = 1;
@@ -298,13 +305,13 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
 
     @Override
     public void setContentView(int layoutResID) {
-        if (WebAppHeaderUtils.isMinimalUiEnabled(mIntentDataProvider)) {
+        if (WebAppHeaderUtils.isWebAppHeaderEnabled(mIntentDataProvider)) {
+            final View rootLayout =
+                    getLayoutInflater().inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
             final LinearLayout linearLayout =
-                    (LinearLayout)
-                            getLayoutInflater()
-                                    .inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
+                    rootLayout.findViewById(WebAppHeaderUtils.getWebAppHeaderContentId());
             getLayoutInflater().inflate(layoutResID, linearLayout, true);
-            super.setContentView(linearLayout);
+            super.setContentView(rootLayout);
         } else {
             super.setContentView(layoutResID);
         }
@@ -312,13 +319,13 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
 
     @Override
     public void setContentView(View view) {
-        if (WebAppHeaderUtils.isMinimalUiEnabled(mIntentDataProvider)) {
+        if (WebAppHeaderUtils.isWebAppHeaderEnabled(mIntentDataProvider)) {
+            final View rootLayout =
+                    getLayoutInflater().inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
             final LinearLayout linearLayout =
-                    (LinearLayout)
-                            getLayoutInflater()
-                                    .inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
+                    rootLayout.findViewById(WebAppHeaderUtils.getWebAppHeaderContentId());
             linearLayout.addView(view, LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
-            super.setContentView(linearLayout);
+            super.setContentView(rootLayout);
         } else {
             super.setContentView(view);
         }
@@ -326,13 +333,15 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
 
     @Override
     public void setContentView(View view, ViewGroup.LayoutParams params) {
-        if (WebAppHeaderUtils.isMinimalUiEnabled(mIntentDataProvider)) {
+        if (WebAppHeaderUtils.isWebAppHeaderEnabled(mIntentDataProvider)) {
+            final View rootLayout =
+                    getLayoutInflater().inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
+            rootLayout.setLayoutParams(params);
+
             final LinearLayout linearLayout =
-                    (LinearLayout)
-                            getLayoutInflater()
-                                    .inflate(WebAppHeaderUtils.getWebAppHeaderLayoutId(), null);
-            linearLayout.setLayoutParams(params);
+                    rootLayout.findViewById(WebAppHeaderUtils.getWebAppHeaderContentId());
             linearLayout.addView(view, LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+
             super.setContentView(linearLayout);
         } else {
             super.setContentView(view, params);
@@ -998,6 +1007,11 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
     @Override
     public void finish() {
         super.finish();
+
+        // Calling #overridePendingTransition() is known to cause the device to freeze on
+        // automotive. See crbug.com/445873259.
+        if (DeviceInfo.isAutomotive()) return;
+
         BrowserServicesIntentDataProvider intentDataProvider = getIntentDataProvider();
         if (intentDataProvider != null && intentDataProvider.shouldAnimateOnFinish()) {
             mShouldOverridePackage = true;
@@ -1383,6 +1397,7 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
                             getAuthTabVerifier(),
                             getBrowserControlsManager(),
                             this::isShowingWebAppHeaderButtons,
+                            this::isShowingHeaderAsOverlay,
                             mRootUiCoordinator.getExclusiveAccessManager());
         }
         return mDelegateFactory;
@@ -1508,7 +1523,7 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
 
     @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.VANILLA_ICE_CREAM)
     private AppHeaderCoordinator getAppHeaderCoordinator() {
-        if (!WebAppHeaderUtils.isMinimalUiEnabled(getIntentDataProvider())) return null;
+        if (!WebAppHeaderUtils.isWebAppHeaderEnabled(getIntentDataProvider())) return null;
         if (mAppHeaderCoordinator != null) return mAppHeaderCoordinator;
 
         mAppHeaderCoordinator =
@@ -1557,5 +1572,17 @@ public abstract class BaseCustomTabActivity extends ChromeActivity {
             return false;
         }
         return webAppHeaderLayoutCoordinator.isShowingButtons();
+    }
+
+    private boolean isShowingHeaderAsOverlay() {
+        if (!WebAppHeaderUtils.isWindowControlsOverlayEnabled(getIntentDataProvider())) {
+            return false;
+        }
+
+        if (mBaseCustomTabRootUiCoordinator.getWebAppHeaderLayoutCoordinator() == null) {
+            return false;
+        }
+
+        return mBaseCustomTabRootUiCoordinator.isShowingHeaderAsOverlay();
     }
 }

@@ -25,6 +25,7 @@
 #include "third_party/blink/renderer/core/css/css_numeric_literal_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_revert_layer_value.h"
+#include "third_party/blink/renderer/core/css/css_revert_rule_value.h"
 #include "third_party/blink/renderer/core/css/css_revert_value.h"
 #include "third_party/blink/renderer/core/css/css_unset_value.h"
 #include "third_party/blink/renderer/core/css/css_value.h"
@@ -1598,6 +1599,8 @@ bool CSSParserFastPaths::IsValidKeywordPropertyAndValue(
              value_id == CSSValueID::kStart ||
              value_id == CSSValueID::kCenter ||
              value_id == CSSValueID::kSpaceBetween;
+    case CSSPropertyID::kRubyOverhang:
+      return value_id == CSSValueID::kAuto || value_id == CSSValueID::kNone;
     case CSSPropertyID::kWebkitRubyPosition:
       return value_id == CSSValueID::kBefore || value_id == CSSValueID::kAfter;
     case CSSPropertyID::kRubyPosition:
@@ -1689,12 +1692,14 @@ bool CSSParserFastPaths::IsValidKeywordPropertyAndValue(
              value_id == CSSValueID::kTrimEnd ||
              value_id == CSSValueID::kTrimBoth;
     case CSSPropertyID::kInteractivity:
-      DCHECK(RuntimeEnabledFeatures::CSSInertEnabled());
       return value_id == CSSValueID::kAuto || value_id == CSSValueID::kInert;
     case CSSPropertyID::kContinue:
       return value_id == CSSValueID::kAuto ||
              value_id == CSSValueID::kCollapse ||
              value_id == CSSValueID::kWebkitLegacy;
+    case CSSPropertyID::kBlockEllipsis:
+      return value_id == CSSValueID::kAuto ||
+             value_id == CSSValueID::kNoEllipsis;
     default:
       NOTREACHED();
   }
@@ -1709,6 +1714,7 @@ CSSBitset CSSParserFastPaths::handled_by_keyword_fast_paths_properties_{{
     CSSPropertyID::kMixBlendMode,
     CSSPropertyID::kIsolation,
     CSSPropertyID::kBaselineSource,
+    CSSPropertyID::kBlockEllipsis,
     CSSPropertyID::kBorderBottomStyle,
     CSSPropertyID::kBorderCollapse,
     CSSPropertyID::kBorderLeftStyle,
@@ -1769,6 +1775,7 @@ CSSBitset CSSParserFastPaths::handled_by_keyword_fast_paths_properties_{{
     CSSPropertyID::kOverscrollBehaviorX,
     CSSPropertyID::kOverscrollBehaviorY,
     CSSPropertyID::kRubyAlign,
+    CSSPropertyID::kRubyOverhang,
     CSSPropertyID::kShapeRendering,
     CSSPropertyID::kSpeak,
     CSSPropertyID::kStrokeLinecap,
@@ -1867,6 +1874,14 @@ static inline CSSValue* ParseCSSWideKeywordValue(
       MatchesCaseInsensitiveLiteral4(UNSAFE_TODO(ptr + 8), "ayer")) {
     return cssvalue::CSSRevertLayerValue::Create();
   }
+  if (length == 11 && MatchesCaseInsensitiveLiteral4(ptr, "reve") &&
+      MatchesCaseInsensitiveLiteral4(UNSAFE_BUFFERS(ptr + 4), "rt-r") &&
+      MatchesCaseInsensitiveLiteral2(UNSAFE_BUFFERS(ptr + 8), "ul") &&
+      IsASCIIAlphaCaselessEqual(UNSAFE_BUFFERS(ptr[10]), 'e')) {
+    if (RuntimeEnabledFeatures::CSSRevertRuleEnabled()) {
+      return cssvalue::CSSRevertRuleValue::Create();
+    }
+  }
   return nullptr;
 }
 
@@ -1910,12 +1925,17 @@ static CSSValue* ParseKeywordValue(CSSPropertyID property_id,
   if (!IsValidCSSValueID(value_id)) {
     return nullptr;
   }
+  if (value_id == CSSValueID::kRevertRule &&
+      !RuntimeEnabledFeatures::CSSRevertRuleEnabled()) {
+    return nullptr;
+  }
 
   DCHECK_NE(value_id, CSSValueID::kInherit);
   DCHECK_NE(value_id, CSSValueID::kInitial);
   DCHECK_NE(value_id, CSSValueID::kUnset);
   DCHECK_NE(value_id, CSSValueID::kRevert);
   DCHECK_NE(value_id, CSSValueID::kRevertLayer);
+  DCHECK_NE(value_id, CSSValueID::kRevertRule);
 
   if (CSSParserFastPaths::IsValidKeywordPropertyAndValue(property_id, value_id,
                                                          context->Mode())) {

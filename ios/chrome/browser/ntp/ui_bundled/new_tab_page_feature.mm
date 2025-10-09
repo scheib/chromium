@@ -29,45 +29,19 @@ const char kDeprecateFeedHeaderParameterHeaderBottomPadding[] =
 
 #pragma mark - Feature declarations
 
-BASE_FEATURE(kEnableDiscoverFeedStaticResourceServing,
-             "EnableDiscoverFeedStaticResourceServing",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kEnableDiscoverFeedDiscoFeedEndpoint,
-             "EnableDiscoFeedEndpoint",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 BASE_FEATURE(kEnableNTPViewHierarchyRepair,
              "NTPViewHierarchyRepair",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kOverrideFeedSettings,
-             "OverrideFeedSettings",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kOverrideFeedSettings, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kWebFeedFeedbackReroute,
-             "WebFeedFeedbackReroute",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kWebFeedFeedbackReroute, base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableSignedOutViewDemotion,
-             "EnableSignedOutViewDemotion",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableiPadFeedGhostCards, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableiPadFeedGhostCards,
-             "EnableiPadFeedGhostCards",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kFeedSwipeInProductHelp, base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kIdentityDiscAccountMenu,
-             "IdentityDiscAccountMenu",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kFeedSwipeInProductHelp,
-             "FeedSwipeInProductHelp",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kUseFeedEligibilityService,
-             "UseFeedEligibilityService",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kUseFeedEligibilityService, base::FEATURE_DISABLED_BY_DEFAULT);
 
 #pragma mark - Feature parameters
 
@@ -113,10 +87,6 @@ bool IsContentSuggestionsForSupervisedUserEnabled(PrefService* pref_service) {
 
 bool IsWebFeedFeedbackRerouteEnabled() {
   return base::FeatureList::IsEnabled(kWebFeedFeedbackReroute);
-}
-
-bool IsSignedOutViewDemotionEnabled() {
-  return base::FeatureList::IsEnabled(kEnableSignedOutViewDemotion);
 }
 
 bool IsiPadFeedGhostCardsEnabled() {
@@ -187,6 +157,8 @@ NTPMIAEntrypointVariation GetNTPMIAEntrypointVariation() {
   } else if (feature_param ==
              kNTPMIAEntrypointParamEnlargedFakeboxNoIncognito) {
     return NTPMIAEntrypointVariation::kEnlargedFakeboxNoIncognito;
+  } else if (feature_param == kNTPMIAEntrypointParamAIMInQuickActions) {
+    return NTPMIAEntrypointVariation::kAIMInQuickAction;
   } else {
     return NTPMIAEntrypointVariation::kDisabled;
   }
@@ -202,12 +174,15 @@ bool ShowOnlyMIAEntrypointInNTPFakebox() {
 }
 
 bool ShouldShowQuickActionsRow() {
-  return ShowOnlyMIAEntrypointInNTPFakebox();
+  NTPMIAEntrypointVariation variation = GetNTPMIAEntrypointVariation();
+  return ShowOnlyMIAEntrypointInNTPFakebox() ||
+         variation == NTPMIAEntrypointVariation::kAIMInQuickAction;
 }
 
 bool ShouldEnlargeNTPFakeboxForMIA() {
   NTPMIAEntrypointVariation variation = GetNTPMIAEntrypointVariation();
   return variation ==
              NTPMIAEntrypointVariation::kOmniboxContainedEnlargedFakebox ||
-         variation == NTPMIAEntrypointVariation::kEnlargedFakeboxNoIncognito;
+         variation == NTPMIAEntrypointVariation::kEnlargedFakeboxNoIncognito ||
+         variation == NTPMIAEntrypointVariation::kAIMInQuickAction;
 }

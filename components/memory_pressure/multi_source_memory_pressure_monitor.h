@@ -26,7 +26,6 @@ class MultiSourceMemoryPressureMonitor
     : public base::MemoryPressureMonitor,
       public MemoryPressureVoteAggregator::Delegate {
  public:
-  using MemoryPressureLevel = base::MemoryPressureMonitor::MemoryPressureLevel;
   using DispatchCallback = base::MemoryPressureMonitor::DispatchCallback;
 
   MultiSourceMemoryPressureMonitor();
@@ -43,7 +42,8 @@ class MultiSourceMemoryPressureMonitor
   void MaybeStartPlatformVoter();
 
   // MemoryPressureMonitor implementation.
-  MemoryPressureLevel GetCurrentPressureLevel() const override;
+  base::MemoryPressureLevel GetCurrentPressureLevel(
+      base::MemoryPressureMonitorTag tag) const override;
 
   // Creates a MemoryPressureVoter to be owned/used by a source that wishes to
   // have input on the overall memory pressure level.
@@ -69,10 +69,10 @@ class MultiSourceMemoryPressureMonitor
 
  private:
   // Delegate implementation.
-  void OnMemoryPressureLevelChanged(MemoryPressureLevel level) override;
+  void OnMemoryPressureLevelChanged(base::MemoryPressureLevel level) override;
   void OnNotifyListenersRequested() override;
 
-  MemoryPressureLevel current_pressure_level_;
+  base::MemoryPressureLevel current_pressure_level_;
 
   DispatchCallback dispatch_callback_;
 

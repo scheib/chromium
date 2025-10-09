@@ -91,6 +91,8 @@ gn_args.config(
     name = "android_fastbuild",
     args = {
         "android_static_analysis": "off",
+        # Still want TraceReferences checks, which impact targets that enable R8.
+        "enable_r8_tracerefs": True,
     },
 )
 
@@ -401,10 +403,22 @@ gn_args.config(
     },
 )
 
+# The gn suffix distinguishes this from the "clang_tot" gclient config
 gn_args.config(
-    name = "clang_tot",
+    name = "clang_tot_gn",
     args = {
         "llvm_force_head_revision": True,
+    },
+    configs = [
+        "clang",
+    ],
+)
+
+# The gn suffix distinguishes this from the "rust_tot" gclient config
+gn_args.config(
+    name = "rust_tot_gn",
+    args = {
+        "rust_force_head_revision": True,
     },
     configs = [
         "clang",
@@ -436,25 +450,13 @@ gn_args.config(
     ],
 )
 
-# Keep in sync with //infra/build/recipes/recipe_modules/chromium_android/chromium_config.py
 gn_args.config(
     name = "cronet_android",
     args = {
-        # PLEASE TRY TO AVOID ADDING NEW GN ARGS HERE. Special snowflake gn args
-        # are a pain to maintain; see https://crbug.com/40287068. Instead, try
-        # to change the GN build rules so that the default value for the arg
-        # is derived from the `is_cronet_build` gn arg.
-        # TODO: https://crbug.com/40287068 - clean up this list. Ideally it
-        # should be empty.
-        # LINT.IfChange(cronet_android)
-        "use_partition_alloc": False,
-        "use_hashed_jni_names": True,
-        "default_min_sdk_version": 23,
-        "clang_use_default_sample_profile": False,
-        # https://crbug.com/1136963
-        "use_thin_lto": False,
-        "enable_resource_allowlist_generation": False,
-        # LINT.ThenChange(//tools/mb/mb_config.pyl:cronet_android)
+        # DO NOT ADD GN ARGS HERE. Special snowflake gn args are a pain to
+        # maintain; see https://crbug.com/40287068. Instead, change the GN arg
+        # declaration so that the default value for the arg is derived from the
+        # `is_cronet_build` GN arg.
     },
     configs = [
         "android",
@@ -463,33 +465,13 @@ gn_args.config(
 )
 
 gn_args.config(
-    name = "cronet_android_mainline_clang",
-    args = {
-        "clang_base_path": "//third_party/cronet_android_mainline_clang/linux-amd64",
-        "clang_use_chrome_plugins": False,
-        "default_min_sdk_version": 29,
-        # https://crbug.com/1481060
-        "llvm_android_mainline": True,
-    },
-)
-
-# Keep in sync with //infra/build/recipes/recipe_modules/chromium_android/chromium_config.py
-gn_args.config(
     name = "cronet_common",
     args = {
-        # PLEASE TRY TO AVOID ADDING NEW GN ARGS HERE. Special snowflake gn args
-        # are a pain to maintain; see https://crbug.com/40287068. Instead, try
-        # to change the GN build rules so that the default value for the arg
-        # is derived from the `is_cronet_build` gn arg.
-        # TODO: https://crbug.com/40287068 - clean up this list. Ideally it
-        # should contain `is_cronet_build` and nothing else.
-        # LINT.IfChange(cronet_common)
-        "disable_file_support": True,
-        "enable_websockets": False,
-        "include_transport_security_state_preload_list": False,
+        # DO NOT ADD GN ARGS HERE. Special snowflake gn args are a pain to
+        # maintain; see https://crbug.com/40287068. Instead, change the GN arg
+        # declaration so that the default value for the arg is derived from the
+        # `is_cronet_build` GN arg.
         "is_cronet_build": True,
-        "use_platform_icu_alternatives": True,
-        # LINT.ThenChange(//tools/mb/mb_config.pyl:cronet_common)
     },
 )
 
@@ -554,6 +536,13 @@ gn_args.config(
 )
 
 gn_args.config(
+    name = "dev_channel",
+    args = {
+        "android_channel": "dev",
+    },
+)
+
+gn_args.config(
     name = "developer",
     configs = [
         "debug",
@@ -573,20 +562,6 @@ gn_args.config(
     name = "disable_seed_corpus",
     args = {
         "archive_seed_corpus": False,
-    },
-)
-
-gn_args.config(
-    name = "enable_rust_mojo",
-    args = {
-        "enable_rust_mojo": True,
-    },
-)
-
-gn_args.config(
-    name = "enable_rust_mojom_bindings",
-    args = {
-        "enable_rust_mojom_bindings": True,
     },
 )
 
@@ -647,6 +622,16 @@ gn_args.config(
     name = "enable_dangling_raw_ptr_checks",
     args = {
         "enable_dangling_raw_ptr_checks": True,
+    },
+)
+
+# iOS can't use enable_dangling_raw_ptr_checks, since there are some configurations
+# that do not build with backup ref ptr. Instead, enable dangling_raw_ptr via
+# ios_enable_dangling_raw_ptr_checks
+gn_args.config(
+    name = "ios_enable_dangling_raw_ptr_checks",
+    args = {
+        "ios_enable_dangling_raw_ptr_checks": True,
     },
 )
 
@@ -885,11 +870,10 @@ gn_args.config(
     ],
 )
 
-# Do not use this for non-FYI builders.
 gn_args.config(
-    name = "clang_modules",
+    name = "no_clang_modules",
     args = {
-        "use_clang_modules": True,
+        "use_clang_modules": False,
     },
 )
 

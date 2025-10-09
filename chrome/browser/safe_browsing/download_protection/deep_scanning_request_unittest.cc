@@ -29,10 +29,9 @@
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
+#include "chrome/browser/enterprise/connectors/reporting/realtime_reporting_client.h"
 #include "chrome/browser/enterprise/connectors/reporting/realtime_reporting_client_factory.h"
 #include "chrome/browser/enterprise/connectors/test/deep_scanning_test_utils.h"
-#include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router.h"
-#include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router_factory.h"
 #include "chrome/browser/policy/dm_token_utils.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/cloud_binary_upload_service.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/deep_scanning_utils.h"
@@ -313,7 +312,8 @@ class DeepScanningRequestTest : public testing::Test {
   }
 
   void AddUrlToProfilePrefList(const char* pref_name, const GURL& url) {
-    ScopedListPrefUpdate(profile_->GetPrefs(), pref_name)->Append(url.host());
+    ScopedListPrefUpdate(profile_->GetPrefs(), pref_name)
+        ->Append(url.GetHost());
   }
 
   void SetFeatures(const std::vector<base::test::FeatureRef>& enabled,
@@ -730,10 +730,6 @@ class DeepScanningReportingTest : public DeepScanningRequestTest {
 
     client_ = std::make_unique<policy::MockCloudPolicyClient>();
 
-    extensions::SafeBrowsingPrivateEventRouterFactory::GetInstance()
-        ->SetTestingFactory(
-            profile_,
-            base::BindRepeating(&BuildSafeBrowsingPrivateEventRouter));
     enterprise_connectors::RealtimeReportingClientFactory::GetInstance()
         ->SetTestingFactory(profile_,
                             base::BindRepeating(&BuildRealtimeReportingClient));
@@ -788,13 +784,9 @@ class DeepScanningReportingSourceTypeTest
   MetadataSourceType GetMetadataSourceType() { return GetParam(); }
 };
 
-// TODO(crbug.com/433865922): Disable this test on Windows because of flakiness.
-#if BUILDFLAG(IS_WIN)
-  #define MAYBE_ProcessesResponseCorrectly DISABLED_ProcessesResponseCorrectly
-#else
-  #define MAYBE_ProcessesResponseCorrectly ProcessesResponseCorrectly
-#endif
-TEST_P(DeepScanningReportingSourceTypeTest, MAYBE_ProcessesResponseCorrectly) {
+// TODO(crbug.com/433865922): Disable this test because of flakiness.
+TEST_P(DeepScanningReportingSourceTypeTest,
+       DISABLED_ProcessesResponseCorrectly) {
   {
     base::RunLoop run_loop;
     DeepScanningRequest request(
@@ -2288,7 +2280,7 @@ TEST_F(DeepScanningRequestConnectorsFeatureTest,
                             ],
                             "block_until_verdict": 1
                           })",
-          download_url_.host().c_str()));
+          download_url_.GetHost().c_str()));
   EXPECT_FALSE(settings().has_value());
 }
 
@@ -2372,5 +2364,23 @@ INSTANTIATE_TEST_SUITE_P(
     DeepScanningRequestAllFeaturesEnabledTest,
     testing::Values(MetadataSourceType::kDownloadItem,
                     MetadataSourceType::kFileSystemAccessWriteItem));
+
+TEST(ForceDownloadToDriveTest, ReturnsBlockByDefault) {
+  enterprise_connectors::ContentAnalysisResponse response;
+  response.set_request_token(kScanId);
+
+  auto* dlp_result = response.add_results();
+  dlp_result->set_tag("dlp");
+  dlp_result->set_status(
+      enterprise_connectors::ContentAnalysisResponse::Result::SUCCESS);
+  auto* dlp_rule = dlp_result->add_triggered_rules();
+  dlp_rule->set_action(
+      enterprise_connectors::TriggeredRule::FORCE_SAVE_TO_CLOUD);
+  dlp_rule->set_rule_name("dlp_rule");
+  dlp_rule->set_rule_id("0");
+
+  DownloadCheckResult result = ResponseToDownloadCheckResult(response);
+  ASSERT_EQ(result, DownloadCheckResult::SENSITIVE_CONTENT_BLOCK);
+}
 
 }  // namespace safe_browsing

@@ -322,10 +322,10 @@ class TestAutofillManager : public BrowserAutofillManager {
     BrowserAutofillManager::OnFormsSeen(updated_forms, removed_forms);
   }
 
-  void OnDidFillAutofillFormData(const FormData& form,
-                                 base::TimeTicks timestamp) override {
+  void OnDidAutofillForm(const FormData& form,
+                         base::TimeTicks timestamp) override {
     filled_forms_.push_back(form);
-    BrowserAutofillManager::OnDidFillAutofillFormData(form, timestamp);
+    BrowserAutofillManager::OnDidAutofillForm(form, timestamp);
   }
 
   void OnFormSubmitted(const FormData& form,
@@ -387,7 +387,7 @@ class TestAutofillManager : public BrowserAutofillManager {
 
   TestAutofillManagerWaiter did_fill_forms_waiter_{
       *this,
-      {AutofillManagerEvent::kDidFillAutofillFormData}};
+      {AutofillManagerEvent::kDidAutofillForm}};
 
   TestAutofillManagerWaiter did_submit_forms_waiter_{
       *this,
@@ -1835,7 +1835,7 @@ TEST_F(AutofillAcrossIframesTest, FrameAndFormIdsDontMatch) {
     web::WebFrame* main_frame = WaitForMainFrame();
     std::string new_frame_id = main_frame->GetFrameId();
     // Reverse the main frame id to make it a brand new id.
-    std::reverse(new_frame_id.begin(), new_frame_id.end());
+    std::ranges::reverse(new_frame_id);
 
     // Change the frame ID provided by getFrameId() to simulate a different
     // frame receiving the forms extraction request.

@@ -14,7 +14,6 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.LazyOneshotSupplier;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.back_press.BackPressManager;
@@ -26,6 +25,8 @@ import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityClient;
 import org.chromium.components.browser_ui.widget.MenuOrKeyboardActionController;
+
+import java.util.function.Supplier;
 
 /**
  * Main entrypoint for providing core Hub objects to Chrome.
@@ -57,6 +58,7 @@ public class HubProvider {
      * @param searchActivityClient A client for the search activity, used to launch search.
      * @param xrSpaceModeObservableSupplier Supplies current XR space mode status. True for XR full
      *     space mode, false otherwise.
+     * @param defaultPaneId The default pane's Id.
      */
     public HubProvider(
             Activity activity,
@@ -69,17 +71,18 @@ public class HubProvider {
             Supplier<MenuButtonCoordinator> menuButtonCoordinatorSupplier,
             ObservableSupplier<EdgeToEdgeController> edgeToEdgeSupplier,
             SearchActivityClient searchActivityClient,
-            @Nullable ObservableSupplier<Boolean> xrSpaceModeObservableSupplier) {
+            @Nullable ObservableSupplier<Boolean> xrSpaceModeObservableSupplier,
+            @PaneId int defaultPaneId) {
         mPaneListBuilder = new PaneListBuilder(orderController);
         mTabModelSelectorSupplier = tabModelSelectorSupplier;
-        mHubShowPaneHelper = new HubShowPaneHelper();
+        mHubShowPaneHelper = new HubShowPaneHelper(defaultPaneId);
         mHubManagerSupplier =
                 LazyOneshotSupplier.fromSupplier(
                         () -> {
-                            assert tabModelSelectorSupplier.hasValue();
+                            assert tabModelSelectorSupplier.get() != null;
                             ObservableSupplier<@Nullable Tab> tabSupplier =
                                     tabModelSelectorSupplier.get().getCurrentTabSupplier();
-                            assert menuButtonCoordinatorSupplier.hasValue();
+                            assert menuButtonCoordinatorSupplier.get() != null;
 
                             SnackbarManager snackbarManager = snackbarManagerSupplier.get();
                             assert snackbarManager != null;
@@ -95,7 +98,8 @@ public class HubProvider {
                                     mHubShowPaneHelper,
                                     edgeToEdgeSupplier,
                                     searchActivityClient,
-                                    xrSpaceModeObservableSupplier);
+                                    xrSpaceModeObservableSupplier,
+                                    defaultPaneId);
                         });
 
         mOnPaneFocused =

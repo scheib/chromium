@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.settings;
 
+import static com.google.common.truth.Truth.assertWithMessage;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -84,6 +86,17 @@ public class SettingsActivityUnitTest {
             mActivityScenario.close();
             mActivityScenario = null;
         }
+    }
+
+    @Test
+    @Config(qualifiers = "w720dp-h1024dp")
+    public void testApplyOverrides() {
+        startSettings(TestEmbeddableFragment.class.getName());
+        mActivityScenario.moveToState(State.CREATED);
+        assertEquals(
+                "SmallestScreenWidthDp should be overridden.",
+                720,
+                mSettingsActivity.getResources().getConfiguration().smallestScreenWidthDp);
     }
 
     @Test
@@ -324,7 +337,7 @@ public class SettingsActivityUnitTest {
     }
 
     private void startSettings(String fragmentName) {
-        assert mActivityScenario == null : "Should be called once per test.";
+        assertWithMessage("Should be called once per test.").that(mActivityScenario).isNull();
         Intent intent =
                 SettingsIntentUtil.createIntent(
                         ContextUtils.getApplicationContext(), fragmentName, null);

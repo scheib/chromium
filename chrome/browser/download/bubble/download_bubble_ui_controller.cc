@@ -92,19 +92,22 @@ bool IsForDownload(BrowserWindowInterface* browser,
 // static
 DownloadBubbleUIController* DownloadBubbleUIController::GetForDownload(
     download::DownloadItem* item) {
-  for (BrowserWindowInterface* browser :
-       GetBrowserWindowInterfacesOrderedByActivation()) {
-    if (IsForDownload(browser, item) &&
-        browser->GetFeatures().download_toolbar_ui_controller() &&
-        browser->GetFeatures()
-            .download_toolbar_ui_controller()
-            ->bubble_controller()) {
-      return browser->GetFeatures()
-          .download_toolbar_ui_controller()
-          ->bubble_controller();
-    }
-  }
-  return nullptr;
+  DownloadBubbleUIController* controller = nullptr;
+  ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+      [&](BrowserWindowInterface* browser) {
+        if (IsForDownload(browser, item) &&
+            browser->GetFeatures().download_toolbar_ui_controller() &&
+            browser->GetFeatures()
+                .download_toolbar_ui_controller()
+                ->bubble_controller()) {
+          controller = browser->GetFeatures()
+                           .download_toolbar_ui_controller()
+                           ->bubble_controller();
+          return false;  // stop iterating
+        }
+        return true;  // continue iterating
+      });
+  return controller;
 }
 
 DownloadBubbleUIController::DownloadBubbleUIController(Browser* browser)
@@ -360,9 +363,6 @@ void DownloadBubbleUIController::RetryDownload(
   if (!download_manager) {
     return;
   }
-  RecordDownloadRetry(
-      OfflineItemUtils::ConvertFailStateToDownloadInterruptReason(
-          model->GetLastFailState()));
 
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("download_bubble_retry_download", R"(

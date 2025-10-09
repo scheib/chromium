@@ -546,6 +546,34 @@ TEST_F(ValuableSuggestionGeneratorTest,
                                    HasNoIphFeature(), HasNoIphFeature()));
 }
 
+TEST_F(ValuableSuggestionGeneratorTest,
+       GetSuggestionsForLoyaltyCards_SuggestionsUpdatedIPH) {
+  base::test::ScopedFeatureList scoped_feature_list_;
+  scoped_feature_list_.InitWithFeatures(
+      /*enabled_features=*/{features::kAutofillAiWalletVehicleRegistration,
+                            features::kAutofillAiWalletFlightReservation},
+      /*disabled_features=*/{});
+  test_api(valuables_data_manager()).ClearLoyaltyCards();
+  test_api(valuables_data_manager())
+      .AddLoyaltyCard(LoyaltyCard(
+          /*loyalty_card_id=*/ValuableId("loyalty_card_id_1"),
+          /*merchant_name=*/"CVS Pharmacy",
+          /*program_name=*/"CVS Extra",
+          /*program_logo=*/GURL("https://empty.url.com"),
+          /*loyalty_card_number=*/"987654321987654321",
+          {GURL("https://domain1.example")}));
+
+  raw_ptr<const base::Feature> kIphFeature =
+      &feature_engagement::kIPHAutofillAiValuablesFeature;
+  test_autofill_client().set_last_committed_primary_main_frame_url(
+      GURL("https://common-domain.example/test"));
+  field().set_is_autofilled(false);
+  EXPECT_THAT(GetSuggestionsForLoyaltyCards(form().ToFormData(), &form(),
+                                            field(), &field(), client()),
+              testing::ElementsAre(HasIphFeature(kIphFeature),
+                                   HasNoIphFeature(), HasNoIphFeature()));
+}
+
 // Checks that all loyalty cards are returned as suggestion data, and
 // used for generating suggestions.
 TEST_F(ValuableSuggestionGeneratorTest, GeneratesLoyaltyCardSuggestions) {
@@ -554,7 +582,7 @@ TEST_F(ValuableSuggestionGeneratorTest, GeneratesLoyaltyCardSuggestions) {
   field().set_is_autofilled(false);
 
   base::MockCallback<base::OnceCallback<void(
-      std::pair<FillingProduct,
+      std::pair<SuggestionGenerator::SuggestionDataSource,
                 std::vector<SuggestionGenerator::SuggestionData>>)>>
       suggestion_data_callback;
   base::MockCallback<
@@ -564,12 +592,14 @@ TEST_F(ValuableSuggestionGeneratorTest, GeneratesLoyaltyCardSuggestions) {
   LoyaltyCardSuggestionGenerator generator(
       client().GetValuablesDataManager()->GetWeakPtr(),
       client().GetLastCommittedPrimaryMainFrameURL());
-  std::pair<FillingProduct, std::vector<SuggestionGenerator::SuggestionData>>
+  std::pair<SuggestionGenerator::SuggestionDataSource,
+            std::vector<SuggestionGenerator::SuggestionData>>
       savedCallbackArgument;
 
   EXPECT_CALL(
       suggestion_data_callback,
-      Run(testing::Pair(FillingProduct::kLoyaltyCard, testing::SizeIs(3))))
+      Run(testing::Pair(SuggestionGenerator::SuggestionDataSource::kLoyaltyCard,
+                        testing::SizeIs(3))))
       .WillOnce(testing::SaveArg<0>(&savedCallbackArgument));
   generator.FetchSuggestionData(form().ToFormData(), field(), &form(), &field(),
                                 client(), suggestion_data_callback.Get());

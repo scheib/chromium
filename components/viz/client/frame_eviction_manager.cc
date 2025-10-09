@@ -108,14 +108,15 @@ size_t FrameEvictionManager::GetMaxNumberOfSavedFrames() const {
 
   // Until we have a global OnMemoryPressureChanged event we need to query the
   // value from our specific pressure monitor.
-  switch (monitor->GetCurrentPressureLevel()) {
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+  switch (monitor->GetCurrentPressureLevel(
+      base::MemoryPressureMonitorTag::kFrameEvictionManager)) {
+    case base::MEMORY_PRESSURE_LEVEL_NONE:
       percentage = 100;
       break;
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+    case base::MEMORY_PRESSURE_LEVEL_MODERATE:
       percentage = kModeratePressurePercentage;
       break;
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+    case base::MEMORY_PRESSURE_LEVEL_CRITICAL:
       percentage = kCriticalPressurePercentage;
       break;
   }
@@ -124,10 +125,11 @@ size_t FrameEvictionManager::GetMaxNumberOfSavedFrames() const {
 }
 
 FrameEvictionManager::FrameEvictionManager()
-    : memory_pressure_listener_(new base::MemoryPressureListener(
+    : memory_pressure_listener_registration_(
           FROM_HERE,
+          base::MemoryPressureListenerTag::kFrameEvictionManager,
           base::BindRepeating(&FrameEvictionManager::OnMemoryPressure,
-                              base::Unretained(this)))) {
+                              base::Unretained(this))) {
   max_number_of_saved_frames_ =
 #if BUILDFLAG(IS_ANDROID)
       // If the amount of memory on the device is >= 3.5 GB, save up to 5
@@ -204,15 +206,15 @@ void FrameEvictionManager::CullOldUnlockedFrames() {
 }
 
 void FrameEvictionManager::OnMemoryPressure(
-    base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+    base::MemoryPressureLevel memory_pressure_level) {
   switch (memory_pressure_level) {
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+    case base::MEMORY_PRESSURE_LEVEL_MODERATE:
       PurgeMemory(kModeratePressurePercentage);
       break;
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+    case base::MEMORY_PRESSURE_LEVEL_CRITICAL:
       PurgeAllUnlockedFrames();
       break;
-    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MEMORY_PRESSURE_LEVEL_NONE:
       // No need to change anything when there is no pressure.
       return;
   }

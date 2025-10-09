@@ -164,7 +164,7 @@ scoped_refptr<StaticBitmapImage> CreateImageFromVideoFrame(
         frame, SharedGpuContext::ContextProviderWrapper());
 
     return AcceleratedStaticBitmapImage::CreateFromCanvasSharedImage(
-        frame->shared_image(), frame->acquire_sync_token(), 0u,
+        frame->shared_image(), frame->acquire_sync_token(),
         frame->shared_image()->alpha_type(),
         // Pass nullptr for |context_provider_wrapper|, because we don't
         // know which context the mailbox came from. It is used only to
@@ -258,11 +258,10 @@ bool DrawVideoFrameIntoResourceProvider(
                      "RasterContextProvider.";
       return false;  // Unable to get/create a shared main thread context.
     }
-    if (!raster_context_provider->GrContext() &&
-        !raster_context_provider->ContextCapabilities().gpu_rasterization) {
-      DLOG(ERROR) << "Unable to process a texture backed VideoFrame w/o a "
-                     "GrContext or OOP raster support.";
-      return false;  // The context has been lost.
+    if (!raster_context_provider->ContextCapabilities().gpu_rasterization) {
+      DLOG(ERROR) << "Unable to process a texture backed VideoFrame w/o OOP "
+                     "raster support.";
+      return false;
     }
   }
 
@@ -295,9 +294,11 @@ bool DrawVideoFrameIntoResourceProvider(
           ? media::kNoTransformation
           : frame->metadata().transformation.value_or(media::kNoTransformation);
   params.reinterpret_as_srgb = reinterpret_video_as_srgb;
-  video_renderer->Paint(frame.get(),
-                        &resource_provider->Canvas(/*needs_will_draw*/ true),
-                        media_flags, params, raster_context_provider);
+  resource_provider->ExternalCanvasDrawHelper(
+      [&](MemoryManagedPaintCanvas& canvas) {
+        video_renderer->Paint(frame.get(), &canvas, media_flags, params,
+                              raster_context_provider);
+      });
   return true;
 }
 

@@ -2,6 +2,7 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="cs">
 <translation id="1001534784610492198">Archiv instalačního programu je poškozený nebo neplatný. Stáhněte prosím Google Chrome ještě jednou.</translation>
+<translation id="1006034097353797313">Pokračujte od stavu, ve kterém jste skončili: Chrome při restartech obnovuje karty. Tuto funkci můžete vypnout v</translation>
 <translation id="1018937009655463387">Pokud chcete sdílet okno, v Nastavení systému povolte pro Chrome nahrávání obrazovky.</translation>
 <translation id="1026101648481255140">Pokračovat v instalaci</translation>
 <translation id="102763973188675173">Přizpůsobte si Google Chrome a ovládejte jej. Je k dispozici aktualizace.</translation>
@@ -12,6 +13,9 @@
 <translation id="1065672644894730302">Nelze číst vaše nastavení.
 
 Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</translation>
+<translation id="1070377999570795893">Jiný program ve vašem počítači nainstaloval rozšíření, které může měnit funkce Chromu.
+
+<ph name="EXTENSION_NAME" /></translation>
 <translation id="1086486568852410168">Vyhledat pomocí Google Lens</translation>
 <translation id="1088300314857992706">Před vámi prohlížeč Chrome používal uživatel <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="110877069173485804">Toto je váš Chrome</translation>
@@ -20,6 +24,7 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="1152920704813762236">O systému ChromeOS</translation>
 <translation id="1154147086299354128">&amp;Otevřít v Chromu</translation>
 <translation id="1157985233335035034">Poslední jazyky</translation>
+<translation id="1158134713295836892">Gemini v Chromu</translation>
 <translation id="1184145431117212167">Instalace se nezdařila, protože vaše verze systému Windows není podporována.</translation>
 <translation id="1194807384646768652">Chrome toto stahování zablokoval, protože tento typ souboru se běžně nestahuje a může být nebezpečný</translation>
 <translation id="1203500561924088507">Děkujeme za instalaci aplikace <ph name="BUNDLE_NAME" />. Před jejím použitím je potřeba restartovat prohlížeč.</translation>
@@ -39,6 +44,7 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="1434626383986940139">Aplikace Chrome Canary</translation>
 <translation id="1439793550875056299">Připnout Chrome</translation>
 <translation id="146866447420868597">Přihlásit se do Chromu?</translation>
+<translation id="1476347941828409626">&amp;Spravovat profily Chrome</translation>
 <translation id="1492280395845991349">Aktualizaci Chromu dokončíte opětovným spuštěním</translation>
 <translation id="1497802159252041924">Chyba instalace: <ph name="INSTALL_ERROR" /></translation>
 <translation id="1507198376417198979">Přizpůsobte si svůj nový profil Chrome</translation>
@@ -46,6 +52,9 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="1547295885616600893">Systém ChromeOS by nemohl existovat bez dalšího <ph name="BEGIN_LINK_CROS_OSS" />open source softwaru<ph name="END_LINK_CROS_OSS" />.</translation>
 <translation id="1547469039832541117">Ukončí zvýrazněnou úlohu</translation>
 <translation id="1553358976309200471">Aktualizovat Chrome</translation>
+<translation id="1585717515139318619">Jiný program ve vašem počítači nainstaloval motiv, který může měnit funkce Chromu.
+
+<ph name="EXTENSION_NAME" /></translation>
 <translation id="1587223624401073077">Google Chrome používá vaši kameru.</translation>
 <translation id="1587325591171447154">Soubor <ph name="FILE_NAME" /> je nebezpečný, proto jej Chrome zablokoval.</translation>
 <translation id="1597911401261118146">Chcete-li zkontrolovat, zda jsou hesla v bezpečí před porušením zabezpečení údajů a ostatními bezpečnostními hrozbami, <ph name="BEGIN_LINK" />přihlaste se do Chromu<ph name="END_LINK" />.</translation>
@@ -77,13 +86,14 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="1880677175115548835">Vybrat text</translation>
 <translation id="1919130412786645364">Povolit přihlášení do Chromu</translation>
 <translation id="1953553007165777902">Stahování… Počet zbývajících minut: <ph name="MINUTE" /></translation>
+<translation id="1979600810166324878">Buďte na cestách v bezpečí s Vylepšeným Bezpečným prohlížením v Chromu pro iOS</translation>
 <translation id="2001586581944147178">Zajistěte, aby pro lidi s přístupem k vašemu internetovému provozu bylo obtížnější zjistit, které weby navštěvujete. Chrome používá zabezpečené připojení k vyhledání IP adresy webu v DNS (Domain Name System).</translation>
 <translation id="2008942457798486387">{NUM_EXTENSIONS,plural, =1{Toto rozšíření už není podporováno. Chrome vám doporučuje odstranit ho.}few{Tato rozšíření už nejsou podporována. Chrome vám doporučuje odstranit je.}many{Tato rozšíření už nejsou podporována. Chrome vám doporučuje odstranit je.}other{Tato rozšíření už nejsou podporována. Chrome vám doporučuje odstranit je.}}</translation>
 <translation id="2018528049276128029">V každém profilu jsou uloženy soukromé údaje z Chromu, například záložky, historie, hesla a další</translation>
 <translation id="2018879682492276940">Instalace se nezdařila. Zkuste to znovu.</translation>
 <translation id="2024959665595762054">Pokud chcete používat a ukládat data prohlížeče Chrome ve svém účtu Google, ověřte svou totožnost</translation>
 <translation id="2034233344106846793">Pokud je to možné, Chrome nezabezpečená připojení automaticky upgraduje na HTTPS</translation>
-<translation id="207902854391093810">Když jsou zapnuté zkušební verze, měření reklam umožňuje navštíveným webům žádat Chrome o informace, na základě kterých mohou měřit výkonnost svých reklam. Měření reklam zabraňuje sledování mezi weby, protože se při něm mezi weby přenáší co možná nejméně informací.</translation>
+<translation id="2039417478970545937">Nastavení.</translation>
 <translation id="2091012649849228750">Pokud chcete v budoucnu dostávat aktualizace prohlížeče Google Chrome, budete potřebovat systém Windows 10 nebo novější. Tento počítač používá Windows 8.</translation>
 <translation id="2094648590148273905">Smluvní podmínky systému ChromeOS Flex</translation>
 <translation id="2094919256425865063">Přesto Chrome ukončit?</translation>
@@ -95,7 +105,6 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="2123055963409958220">Pomozte s vylepšováním prohlížeče Chrome tím, že nahlásíte <ph name="BEGIN_LINK" />aktuální nastavení<ph name="END_LINK" /></translation>
 <translation id="2126108037660393668">Stažený soubor nelze ověřit.</translation>
 <translation id="2128411189117340671">Spravovat profily Chrome</translation>
-<translation id="2131230230468101642">Abychom chránili vaše soukromí, vaše zájmy starší než 4 měsíce automaticky mažeme. Jak budete pracovat s internetem, zájmy se mohou na seznamu znovu objevit. Pokud se zájmy nemají zohledňovat, můžete je z Chromu odstranit.</translation>
 <translation id="2137162749895930932">Zavřít překladač obrazovky</translation>
 <translation id="2139300032719313227">Restartujte systém ChromeOS</translation>
 <translation id="2151406531797534936">Restartujte Chrome</translation>
@@ -106,6 +115,7 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="2199691482078155239">Chrome vám dává větší kontrolu nad reklamami, které se vám zobrazují, a omezuje, co se o vás weby mohou dozvědět, když vám zobrazují personalizované reklamy</translation>
 <translation id="2216543877350048334">Pokud z Chromu chcete odebrat svůj účet Google, odhlaste se</translation>
 <translation id="2236949375853147973">Moje aktivita</translation>
+<translation id="22791603784558743">Zavřít Gemini v Chromu Dev</translation>
 <translation id="2290014774651636340">Chybí klíče rozhraní Google API. Některé funkce Google Chrome nebudou k dispozici.</translation>
 <translation id="2290095356545025170">Opravdu chcete odinstalovat Google Chrome?</translation>
 <translation id="2301513536169703857">Pokud svá hesla, záložky a další položky chcete mít na všech svých zařízeních, přihlaste se do Chromu</translation>
@@ -124,7 +134,6 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="2513154137948333830">Je vyžadován restart: <ph name="INSTALL_SUCCESS" /></translation>
 <translation id="2534365042754120737">Chraňte svá data tím, že prohlížeči Chrome povolíte odebírat oprávnění webům, které jste v poslední době nenavštívili. Nevypne oznámení.</translation>
 <translation id="2556847002339236023">Když prohlížeč Chrome <ph name="TIMEOUT_DURATION" /> není používán, vaše organizace ho zavře. Údaje o prohlížení byly smazány. To může zahrnovat historii, automatické vyplňování a stažené soubory.</translation>
-<translation id="2559253115192232574">Později může navštívený web požádat Chrome o sdělení vašich zájmů, aby vám mohl přizpůsobit zobrazované reklamy. Chrome může sdílet až 3 zájmy.</translation>
 <translation id="2563121210305478421">Restartovat Chrome?</translation>
 <translation id="2569974318947988067">Chrome se při navigaci bude pokoušet použít protokol HTTPS</translation>
 <translation id="2571392474191184472">Chrome spravuje vaše organizace</translation>
@@ -139,6 +148,7 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="2665296953892887393">Pomozte aplikaci Google Chrome zlepšovat tím, že budete společnosti Google zasílat zprávy o selhání a <ph name="UMA_LINK" />.</translation>
 <translation id="2668094785979141847">Kliknutím ukončíte Google Lens</translation>
 <translation id="2681444469812712297">Otevřít adresu <ph name="URL" /> na nové kartě prohlížeče Google Chrome.</translation>
+<translation id="2699790011615497488">Otevřít Gemini v Chromu Beta</translation>
 <translation id="2712141162840347885">Vyberte cokoli, co chcete vyhledat pomocí Google Lens, nebo Google Lens stisknutím klávesy Escape ukončete</translation>
 <translation id="2738871930057338499">Nelze se připojit k internetu. HTTP 403 (Zakázáno). Zkontrolujte konfiguraci proxy.</translation>
 <translation id="2742320827292110288">Upozornění: Google Chrome nemůže rozšířením zabránit v zaznamenávání vaší historie prohlížení. Chcete-li toto rozšíření v anonymním režimu deaktivovat, zrušte výběr této možnosti.</translation>
@@ -242,6 +252,9 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="3809772425479558446">Google Chrome vyžaduje systém Windows 10 nebo vyšší.</translation>
 <translation id="3810973564298564668">Spravovat</translation>
 <translation id="383928141529488001">K prozkoumání zařízení Bluetooth potřebuje Google Chrome přístup k rozhraní Bluetooth. <ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="3846683726093018685">**Shrň obsah:** V jedné větě do 30 slov popiš hlavní téma a účel obsahu na snímku obrazovky.
+
+          **Navrhni otázky:** Vygeneruj seznam 3–5 otázek, které by uživatelé mohli položit s cílem lépe snímku obrazovky porozumět. Alespoň jedna z otázek by se měla týkat konkrétního vizuálního objektu, jeho designu nebo umístění.</translation>
 <translation id="386202838227397562">Zavřete prosím všechna okna prohlížeče Google Chrome a zkuste to znovu.</translation>
 <translation id="3873044882194371212">Otevřít odkaz v &amp;anonymním okně Chrome</translation>
 <translation id="3885770153807205175">Výběr jazyka</translation>
@@ -314,7 +327,6 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 <translation id="4728575227883772061">Došlo k nespecifikované chybě, instalace se nezdařila. Pokud je Google Chrome právě spuštěný, zavřete jej prosím a zkuste to znovu.</translation>
 <translation id="4737281654364167024">Pokud chcete pokračovat, přihlaste se do Chromu jako <ph name="EMAIL" />. Použijí se tak zásady vaší organizace.</translation>
 <translation id="4741235124132242877">Připnuto! Příště použijte Google Lens z lišty</translation>
-<translation id="4747730611090640388">Chrome dokáže odhadovat vaše zájmy.  Později může navštívený web požádat Chrome o sdělení vašich zájmů, aby vám mohl přizpůsobit zobrazované reklamy.</translation>
 <translation id="475321580758063259">Pokud chcete i nadále používat data Chromu ve svém účtu Google <ph name="ACCOUNT_EMAIL" />, aktualizujte Chrome</translation>
 <translation id="4754614261631455953">Google Chrome Canary (mDNS-In)</translation>
 <translation id="4756182432527369254">Zrychluje weby pomocí modulu V8 prohlížeče Chrome, ale trochu snižuje odolnost Chromu vůči útokům</translation>
@@ -351,6 +363,7 @@ Některé funkce možná nebudou k dispozici a změny nastavení se neuloží.</
 
 Některé funkce mohou být nedostupné. Zadejte prosím jiný adresář profilu, nebo používejte novější verzi aplikace Chrome.</translation>
 <translation id="5174969993834422967">Obvykle oznámení blokujete. Pokud tomuto webu chcete zobrazování oznámení povolit, klikněte na ikonu oznámení v pravém rohu adresního řádku.</translation>
+<translation id="5174983315706567306">Na disku není dost místa.</translation>
 <translation id="5201744974236816379">Aktualizace Chromu</translation>
 <translation id="521447420733633466">Pokud zařízení sdílíte s přáteli a členy rodiny, každý může procházet internet nezávisle a nastavit si Chrome tak, jak potřebuje</translation>
 <translation id="5234764350956374838">Zavřít</translation>
@@ -362,15 +375,15 @@ Některé funkce mohou být nedostupné. Zadejte prosím jiný adresář profilu
 <translation id="5334309298019785904">ChromeOS nemohl synchronizovat vaše data, protože Synchronizace ve vaší doméně není k dispozici.</translation>
 <translation id="5334487786912937552">Ke stahování souborů potřebuje Chrome přístup k úložišti</translation>
 <translation id="5337648990166757586">Volitelné: Pomozte se zlepšováním funkcí a výkonu systému ChromeOS tím, že budete do Googlu automaticky odesílat diagnostické údaje a údaje o využití.</translation>
+<translation id="5353252989841766347">Export hesel z Chromu</translation>
 <translation id="5368118228313795342">Extra kód: <ph name="EXTRA_CODE" />.</translation>
 <translation id="5386244825306882791">Také řídí, která stránka se zobrazí, když spustíte Chrome nebo budete vyhledávat v omniboxu.</translation>
 <translation id="5394833366792865639">Sdílet kartu prohlížeče Chrome</translation>
-<translation id="5412485296464121825">Weby mohou v prohlížeči Chrome ukládat informace o vašich zájmech. Např. když navštívíte web, kde se prodávají boty na maraton, web může definovat váš zájem jako běhání maratonů. Když později navštívíte jiný web s registrací na závod, může se vám na něm na základě vašich zájmů zobrazit reklama na boty na běhání.</translation>
 <translation id="5430073640787465221">Soubor nastavení je poškozený nebo neplatný.
 
 Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="5468572406162360320">Za účelem zlepšení těchto funkcí odesílá Chrome vaše interakce do Googlu. Tato data mohou číst, zpracovávat a opatřovat poznámkami kontroloři.</translation>
-<translation id="5524761631371622910">Když jsou zapnuté zkušební verze a Chrome vás do nějaké náhodně umístí, vaše historie prohlížení bude mít vliv na zobrazované reklamy a zájmy, jak je odhadnuto níže. Aby Chrome chránil vaše soukromí, vaše zájmy každý měsíc pravidelně maže.</translation>
+<translation id="5510398294750420479">Stáhněte si Chrome do telefonu, ať máte na cestách další vrstvu ochrany</translation>
 <translation id="5524890928877629608">levý horní roh oblasti hledání: vlevo <ph name="LEFT" /> %, nahoře <ph name="TOP" /> %</translation>
 <translation id="5530733413481476019">Zrychlete si Chrome</translation>
 <translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
@@ -378,8 +391,10 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="5596627076506792578">Další možnosti</translation>
 <translation id="5600352656975192682">Připněte si Chrome na hlavní panel, abyste ho měli kdykoli rychle k dispozici</translation>
 <translation id="5602351063754773347">Chrome vám doporučuje odstranit ho. <ph name="BEGIN_LINK" />Další informace o podporovaných rozšířeních<ph name="END_LINK" /></translation>
+<translation id="5610759359710387751">Chrome podle vašich představ</translation>
 <translation id="5649156266046089790">Pomocí profilů Chrome můžete všechny své údaje v Chromu uchovávat odděleně. Vytvořte profily pro přátele a rodinu nebo rozdělte činnosti mezi práci a zábavu.</translation>
 <translation id="565744775970812598">Soubor <ph name="FILE_NAME" /> může být nebezpečný, proto jej Chrome zablokoval.</translation>
+<translation id="566040795510471729">&amp;Přizpůsobit Chrome</translation>
 <translation id="566568153320186256">Chrome šetří baterii tím, že omezuje aktivitu na pozadí a vizuální efekty, jako jsou plynulé posouvání a snímková frekvence videí. <ph name="BEGIN_LINK" />Další informace o Spořiči energie<ph name="END_LINK" /></translation>
 <translation id="567202749201779594">Vymazat data Chromu v účtu</translation>
 <translation id="5678190148303298925">{COUNT,plural, =0{Váš administrátor vás žádá, abyste kvůli použití této aktualizace Chrome restartovali}=1{Váš administrátor vás žádá, abyste kvůli použití této aktualizace Chrome restartovali. Anonymní okno se neotevře znovu.}few{Váš administrátor vás žádá, abyste kvůli použití této aktualizace Chrome restartovali. # anonymní okna se neotevřou znovu.}many{Váš administrátor vás žádá, abyste kvůli použití této aktualizace Chrome restartovali. # anonymního okna se neotevře znovu.}other{Váš administrátor vás žádá, abyste kvůli použití této aktualizace Chrome restartovali. # anonymních oken se neotevře znovu.}}</translation>
@@ -387,7 +402,15 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="569897634095159764">Nelze se připojit k internetu. Proxy server vyžaduje ověření.</translation>
 <translation id="5709557627224531708">Nastavte si Chrome jako výchozí prohlížeč</translation>
-<translation id="5727531838415286053">Pokud vás Chrome náhodně umístí do zkušební verze, vaše historie prohlížení bude mít vliv na zobrazované reklamy a zájmy, jak je odhadnuto níže. Aby Chrome chránil vaše soukromí, vaše zájmy každý měsíc pravidelně maže. Zájmy se budou obnovovat, dokud je neodstraníte.</translation>
+<translation id="5719324992913248873">Provedou se tyto akce:
+        <ph name="LINE_BREAKS" />
+          • Resetují se některá nastavení a zkratky Chromu.
+          <ph name="LINE_BREAK" />
+          • Deaktivují se rozšíření.
+          <ph name="LINE_BREAK" />
+          • Smažou se soubory cookie a jiná dočasná data webů.
+          <ph name="LINE_BREAKS" />
+          Záložky, historie ani uložená hesla nebudou dotčeny.</translation>
 <translation id="5736850870166430177">Pokud se web pokusí odcizit vám heslo nebo když stáhnete škodlivý soubor, může Chrome Bezpečnému prohlížení odeslat také adresy URL, včetně částí obsahu stránky</translation>
 <translation id="5756509061973259733">Profil Chrome s tímto účtem už v tomto zařízení existuje</translation>
 <translation id="5759947850379142561">Vyberte libovolný text nebo obrázek, který chcete vyhledat pomocí funkce Google Lens, nebo stisknutím klávesy Escape funkci Google Lens ukončete</translation>
@@ -396,9 +419,9 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="5809516625706423866">Nelze se připojit k internetu. HTTP 401 (Neautorizováno). Zkontrolujte konfiguraci proxy.</translation>
 <translation id="5824893331272123205">Tenhle panel se nepodařilo načíst, zkuste to znovu</translation>
 <translation id="5825922397106002626">Odstranit z Chromu rozšíření <ph name="EXTENSION_NAME" /></translation>
-<translation id="58431560289969279">Když jste přihlášeni, můžete v Chromu používat hesla a další položky ze svého účtu Google. V nastavení to můžete kdykoli změnit.</translation>
 <translation id="5858486459377137936">Po zavření všech oken Chromu budete odhlášeni z většiny webů (s výjimkou účtu Google, pokud jste do Chromu přihlášeni). Pokud webům chcete umožnit pamatovat si vás, <ph name="SETTINGS_LINK" />.</translation>
 <translation id="586971344380992563"><ph name="BEGIN_LINK" />Chrome vás varuje<ph name="END_LINK" /> před nebezpečnými weby a soubory ke stažení</translation>
+<translation id="5894164573378901688">Pokud chcete používat Gemini v Chromu, přihlaste se pomocí jiného účtu Google</translation>
 <translation id="5895138241574237353">Restartovat</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> – přihlášení k síti</translation>
 <translation id="5924017743176219022">Připojování k internetu…</translation>
@@ -429,10 +452,15 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="6150706324143004339">Pokud chcete používat data Chromu ve svém účtu Google a ukládat je do něj, aktualizujte Chrome</translation>
 <translation id="6157638032135951407">Když prohlížeč Chrome <ph name="TIMEOUT_DURATION" /> není používán, vaše organizace smaže jeho data. To může zahrnovat historii, automatické vyplňování a stažené soubory.</translation>
 <translation id="6165508094623778733">Další informace</translation>
+<translation id="6166185671393271715">Import hesel do Chromu</translation>
 <translation id="6169866489629082767"><ph name="PAGE_TITLE" /> - Google Chrome</translation>
 <translation id="6173637689840186878"><ph name="PAGE_TITLE" /> – Google Chrome Beta</translation>
 <translation id="6180522807229584611">Tato karta využívá další zdroje. Ke zlepšení výkonu ji Chrome nechte deaktivovat.</translation>
 <translation id="6182736845697986886">Instalace se nezdařila kvůli interní chybě serveru s aktualizací.</translation>
+<translation id="6192058120268468905">Váš účet v Chromu</translation>
+<translation id="6220551899604141979">Partner <ph name="PARTNER_NAME" /> přidal rozšíření, které může změnit fungování Chromu.
+
+<ph name="EXTENSION_NAME" /></translation>
 <translation id="6235018212288296708">Pravidlo příchozího provozu pro aplikaci Google Chrome, které povolí provoz mDNS.</translation>
 <translation id="624230925347970731">Chrome se brzy zavře</translation>
 <translation id="6247557882553405851">Správce hesel Google</translation>
@@ -446,6 +474,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="6321592572353357376">Rozšíření <ph name="EXTENSION_NAME" /> chce, abyste se do Chromu přihlásili</translation>
 <translation id="6326175484149238433">Odstranit z Chromu</translation>
 <translation id="6327105987658262776">Nejsou k dispozici žádné aktualizace.</translation>
+<translation id="6334815226785304306">Nastavit Google Chrome jako výchozí prohlížeč a připnout ho na hlavní panel</translation>
 <translation id="6360449101159168105">Když tato karta nebyla aktivní, byla uvolněna paměť, aby byl prohlížeč Chrome rychlý. Můžete zvolit, že tento web nikdy nemá být považován za neaktivní.</translation>
 <translation id="6388799252195623474">pomoz mi s tímhle</translation>
 <translation id="6412673304250309937">Kontroluje adresy URL oproti seznamu nebezpečných webů uloženému v Chromu. Pokud se web pokusí odcizit vám heslo nebo když stáhnete škodlivý soubor, může Chrome Bezpečnému prohlížení odeslat také adresy URL, včetně částí obsahu stránky.</translation>
@@ -460,7 +489,11 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="6506909944137591434">K vytvoření 3D mapy vašeho okolí potřebuje Chrome přístup k fotoaparátu</translation>
 <translation id="6515495397637126556"><ph name="PAGE_TITLE" /> – Google Chrome Dev</translation>
 <translation id="6520670145826811516">Pokud chcete používat polohu, udělte Chromu přístup v <ph name="BEGIN_LINK" />nastavení systému<ph name="END_LINK" /></translation>
+<translation id="652948702951888897">Historie Chromu</translation>
+<translation id="6532945796722480006">Otevřít Gemini v Chromu Canary</translation>
+<translation id="6585124893636629274">Zavřít Gemini v Chromu</translation>
 <translation id="659498884637196217">Ve Správci hesel Google na tomto zařízení</translation>
+<translation id="6631524303639368205">Pokračujte od stavu, ve kterém jste skončili: Chrome obnovil karty z poslední relace. Tuto funkci můžete vypnout v</translation>
 <translation id="6632473616050862500">Systém ChromeOS Flex by nemohl existovat bez dalšího <ph name="BEGIN_LINK_CROS_OSS" />open source softwaru<ph name="END_LINK_CROS_OSS" />.</translation>
 <translation id="6634299872736643004">Změny tohohle nastavení se projeví po restartování Chromu.</translation>
 <translation id="6660596345553328257">Přihlásit se do Chromu?</translation>
@@ -476,6 +509,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="6760235774835597023">Zrychluje weby pomocí modulu V8 prohlížeče Chrome, ale trochu snižuje odolnost Chromu vůči útokům. Toto nastavení je zapnuté.</translation>
 <translation id="677276454032249905">Přesto Chrome ukončit?</translation>
 <translation id="6794858689789885890">Při zavření prohlížeče Chrome ze zařízení vždy vymazat data webů</translation>
+<translation id="6800285125190089494">Přihlašujte se na weby rychleji pomocí uložených hesel pro Chrome v systému iOS</translation>
 <translation id="6831043979455480757">Přeložit</translation>
 <translation id="683440813066116847">Pravidlo příchozího provozu pro aplikaci Google Chrome Canary, které povolí provoz mDNS.</translation>
 <translation id="684888714667046800">Nelze se připojit k internetu. Pokud používáte firewall, přidejte program <ph name="PRODUCT_EXE_NAME" /> na seznam povolených.</translation>
@@ -484,6 +518,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="6885412569789873916">Chrome Beta – aplikace</translation>
 <translation id="6893363893008038481">Odstranit účet z Chromu</translation>
 <translation id="6896758677409633944">Kopírovat</translation>
+<translation id="6927941417289800361">Když jste přihlášeni, můžete v Chromu používat hesla a další položky ze svého účtu Google. V nastavení to můžete kdykoli změnit.</translation>
 <translation id="6930294499209825">Udržuje software Google aktualizovaný. V případě zakázání nebo zastavení té služby se software Google nebude aktualizovat, což znamená, že nebude možné opravit případné chyby zabezpečení a funkce nemusí fungovat. Pokud tuto službu žádný software Google nepoužívá, sama se odinstaluje.</translation>
 <translation id="6933858244219479645">Systém ChromeOS</translation>
 <translation id="6938166777909186039">Pokud chcete v budoucnu dostávat aktualizace prohlížeče Google Chrome, budete potřebovat systém Windows 10 nebo novější. Tento počítač používá Windows 8.1.</translation>
@@ -496,6 +531,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="7024536598735240744">Chyba rozbalení: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Instalace byla zastavena.</translation>
 <translation id="7025800014283535195">Zde můžete přepínat mezi profily Chrome</translation>
+<translation id="7047386856539490735">Jsou tyto výsledky užitečné?</translation>
 <translation id="7051685429025310665">V poslední době jste nenavštívili. Chrome odebral tato oprávnění: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a <ph name="PERMISSION_3" />.</translation>
 <translation id="7059914902409643750">Přizpůsobte si Chrome</translation>
 <translation id="7060643578009939353">Vyhledat toto video pomocí Google Lens</translation>
@@ -541,6 +577,9 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="7572537927358445944">Vypnuto • Chrome nedokáže ověřit, odkud toto rozšíření pochází</translation>
 <translation id="7583399374488819119">instalační program prohlížeče <ph name="COMPANY_NAME" /></translation>
 <translation id="7602868996817972616">Zeptat se Googlu ohledně této stránky</translation>
+<translation id="760353356052806707">Jiný program ve vašem počítači nainstaloval aplikaci, která může měnit funkce Chromu.
+
+<ph name="EXTENSION_NAME" /></translation>
 <translation id="7606334485649076285">Google ChromeOS Flex</translation>
 <translation id="7626072681686626474">Doména <ph name="MANAGER" /> vyžaduje, abyste si před použitím tohoto zařízení přečetli následující smluvní podmínky a odsouhlasili je. Tyto smluvní podmínky nerozšiřují, neupravují ani neomezují smluvní podmínky systému Google ChromeOS.</translation>
 <translation id="7627609214560473136">Chraňte svá data tím, že prohlížeči Chrome povolíte odebírat oprávnění webům, které jste v poslední době nenavštívili.</translation>
@@ -549,11 +588,11 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="7649070708921625228">Nápověda</translation>
 <translation id="7651907282515937834">Logo Chrome Enterprise</translation>
 <translation id="76531479118467370">Chrome toto stahování zablokoval, protože jste vypnuli Bezpečné prohlížení a soubor nelze ověřit</translation>
-<translation id="7655455401911432608">Vaši historii prohlížení, což je seznam webů, které jste navštívili v Chromu na tomto zařízení.</translation>
 <translation id="7655472416356262023">Odstranit účet z prohlížeče Chrome</translation>
 <translation id="7658239707568436148">Zrušit</translation>
 <translation id="7670287553302121848">Účet v Chromu vyžaduje opětovné ověření</translation>
 <translation id="769538538642757151">Pokud něco bude vyžadovat vaši pozornost, Chrome vám dá vědět</translation>
+<translation id="769906121737764913">Zavřít Gemini Chromu Beta</translation>
 <translation id="7716950018788545737">Úlohy byly ukončeny.</translation>
 <translation id="77283119132245232">Poskytuje služby trasování systému pro <ph name="BROWSER_NAME" />. Pokud je tato služba zakázána, trasování výkonu vytvořené prohlížečem nebude zahrnovat celosystémové události, jako jsou přepnutí kontextu a přípravy vláken.</translation>
 <translation id="7736869414036750079">Vaše organizace vyžaduje, abyste se do Chromu přihlásili</translation>
@@ -563,15 +602,18 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="7777080907402804672">Pokud obrázek nemá užitečný popis, Chrome se vám jej pokusí poskytnout. Za účelem vytváření popisů jsou obrázky odesílány do Googlu. Tuto funkci můžete kdykoliv vypnout v nastavení.</translation>
 <translation id="778331955594035129">Chrome pro tento web potřebuje přístup k poloze</translation>
 <translation id="7787950393032327779">Profil je zřejmě využíván jiným procesem prohlížeče Google Chrome (<ph name="PROCESS_ID" />) nebo v jiném počítač (<ph name="HOST_NAME" />). Chrome profil uzamkl, aby nedošlo k jeho poškození. Pokud jste si jisti, že žádný jiný proces tento profil nevyužívá, můžete jej odemknout a Chrome znovu spustit.</translation>
+<translation id="7792336732117553384">&amp;Spravovat profily Chrome</translation>
 <translation id="7801699035218095297">Google Chrome se pokouší zkopírovat hesla. Tato akce vyžaduje zadání hesla systému Windows.</translation>
+<translation id="7804364787702057554">Váš účet v Chromu</translation>
 <translation id="7808348361785373670">Odstranit z Chromu...</translation>
-<translation id="7825851276765848807">Instalace se z neznámého důvodu nezdařila. Stáhněte prosím aplikaci Google Chrome znovu.</translation>
 <translation id="7827099906024714326">Před uložením některých dat do vašeho účtu Google k použití na všech vašich zařízeních potřebuje Chrome ověřit, že jste to vy. Pokud se teď odhlásíte, tato data budou smazána.</translation>
 <translation id="7845233973568007926">Děkujeme za instalaci aplikace <ph name="BUNDLE_NAME" />. Před jejím použitím je třeba restartovat počítač.</translation>
+<translation id="7849037457735762883">Pokračujte od stavu, ve kterém jste skončili: Chrome může při každém restartu obnovit karty. Tuto funkci můžete zapnout v</translation>
 <translation id="7872446069773932638">Stahování… Zbývající čas: <ph name="SECONDS" /> s</translation>
 <translation id="7886087451482920026">Vyberte text pomocí Google Lens</translation>
 <translation id="7890208801193284374">Pokud počítač sdílíte s kamarády a členy rodiny, každý může web procházet samostatně a nastavit si Chrome podle svých požadavků.</translation>
 <translation id="7896673875602241923">Prohlížeč Chrome v tomto počítači je již přihlášen k účtu <ph name="ACCOUNT_EMAIL_LAST" />. Chcete-li své informace uchovat odděleně, vytvořte nového uživatele Chromu.</translation>
+<translation id="7904985524660297937">Vyzkoušejte Gemini v Google Chrome</translation>
 <translation id="7917876797003313048">Můžete spravovat účty Google, ke kterým jste přihlášeni. Účty Google jsou používány v prohlížeči Chrome, Obchodu Play, Gmailu a dalších službách. Pokud chcete přidat účet někoho jiného, například člena rodiny, přidejte nového uživatele do zařízení <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />Další informace<ph name="LINK_END" /></translation>
 <translation id="7936702483636872823">Chrome toto stahování zablokoval, protože soubor je klamavý a může ve vašem zařízení provést neočekávané změny</translation>
 <translation id="7951272445806340501">Aktualizace se použije po restartování systému ChromeOS Flex.</translation>
@@ -590,6 +632,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="8077579734294125741">Další profily Chrome</translation>
 <translation id="8086881907087796310">Instalace se nezdařila, protože váš počítač nesplňuje minimální požadavky na hardware.</translation>
 <translation id="8113883687556086139">Pokud chcete používat a ukládat data Chromu ve svém účtu <ph name="ACCOUNT_EMAIL" />, ověřte svou totožnost</translation>
+<translation id="8115695070094288807">Přizpůsobení Chromu…</translation>
 <translation id="8118331347066725040">Zpětná vazba k vyhledávání s funkcí Lens</translation>
 <translation id="8129812357326543296">O aplikaci &amp;Google Chrome</translation>
 <translation id="813913629614996137">Probíhá inicializace...</translation>
@@ -605,6 +648,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="8336463659890584292">Když web požádá o soukromé předběžné načtení odkazů na stránce, použije Chrome servery Google. To před předběžně načítaným webem skryje vaši identitu, ale Google se dozví, které weby se předběžně načítají.</translation>
 <translation id="8342675569599923794">Tento soubor je nebezpečný, proto jej Chrome zablokoval.</translation>
 <translation id="8349094670477064572">Když se do Chromu přihlásíte, budete moct ukládat a používat hesla a další data ve svém účtu Google. <ph name="LEARN_MORE" /></translation>
+<translation id="835927394551949760">Informace z Googlu</translation>
 <translation id="8362914115861174987">Přeložit do jazyka</translation>
 <translation id="8366770919198174997">Snižuje výkon, ale zvyšuje odolnost Chromu proti útokům</translation>
 <translation id="8370517070665726704">Copyright <ph name="YEAR" /> Google LLC. Všechna práva vyhrazena.</translation>
@@ -630,7 +674,7 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="8625237574518804553">{0,plural, =1{Chrome se za 1 minutu restartuje}few{Chrome se za # minut restartuje}many{Chrome se za # minuty restartuje}other{Chrome se za # minut restartuje}}</translation>
 <translation id="8637932705841171563">Pokud chcete sdílet okno, v Nastavení systému povolte pro Chrome nahrávání obrazovky</translation>
 <translation id="8641606876632989680">Pokud se přihlásíte pomocí prolomeného hesla, Chrome vám to oznámí</translation>
-<translation id="8649026945479135076">Je běžné, že si navštívené weby pamatují, co vás zajímá, aby pro vás personalizovaly svůj obsah. Weby mohou v prohlížeči Chrome ukládat také informace o vašich zájmech.</translation>
+<translation id="8656634243791296665">Otevřít Gemini v Chromu Dev</translation>
 <translation id="8669527147644353129">Google Chrome Helper</translation>
 <translation id="8679801911857917785">Také řídí, která stránka se zobrazí při spuštění Chromu.</translation>
 <translation id="8712637175834984815">Hotovo</translation>
@@ -640,14 +684,13 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="873133009373065397">Google Chrome nemůže určit ani nastavit výchozí prohlížeč</translation>
 <translation id="8747073452963259673">levý dolní roh oblasti hledání: vlevo <ph name="LEFT" /> %, dole <ph name="BOTTOM" /> %</translation>
 <translation id="8748735421235723888">Chrome uvolňuje paměť obsazenou neaktivními kartami. Aktivní karty a jiné aplikace tak mají k dispozici více výpočetních zdrojů a prohlížeč Chrome zůstává rychlý. Když se k neaktivním kartám vrátíte, automaticky se aktivují. <ph name="BEGIN_LINK" />Další informace o Spořiči paměti<ph name="END_LINK" /></translation>
-<translation id="8753189155654018347">Odstranit z Chromu data těchto aplikací</translation>
 <translation id="8765470054473112089">Při psaní do adresního řádku nebo vyhledávacího pole odesílá Chrome zadaný text do výchozího vyhledávače, aby vám mohl nabízet lepší návrhy. V anonymním režimu je tato funkce vypnutá.</translation>
 <translation id="8781673607513845160">Pokud chcete používat kameru, udělte Chromu přístup v <ph name="BEGIN_LINK" />nastavení systému<ph name="END_LINK" /></translation>
 <translation id="878572486461146056">Chyba instalace: Správce sítě použil zásady skupiny, které brání instalaci: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8796919761992612392">&amp;Přizpůsobit Chrome</translation>
 <translation id="8798550110818026746">Vaše organizace může zobrazit a spravovat údaje o prohlížení (například vaše záložky, historii a hesla). Údaje o prohlížení v ostatních profilech Chrome nevidí</translation>
 <translation id="8821043148920470810">Pokud chcete v budoucnu dostávat aktualizace prohlížeče Google Chrome, budete potřebovat systém Windows 10 nebo novější. Tento počítač používá Windows 7.</translation>
 <translation id="8823341990149967727">Chrome je zastaralý</translation>
-<translation id="8825634023950448068">Abychom chránili vaše soukromí, vaše zájmy starší než 4 měsíce automaticky mažeme. Jak budete pracovat s internetem, zájmy se mohou na seznamu znovu objevit. Pokud Chrome zájem neodhadne správně nebo pokud některé reklamy nechcete vídat, můžete zájem odstranit.</translation>
 <translation id="8834965163890861871">Google Chrome se pokouší upravit hesla. Tato akce vyžaduje zadání hesla systému Windows.</translation>
 <translation id="8843516219908676469">Chrome lépe rozumí formulářům a může je automaticky vyplňovat rychleji</translation>
 <translation id="8851180723659088381">{NUM_EXTENSIONS,plural, =1{Chrome vám doporučuje odstranit ho}few{Chrome vám doporučuje odstranit je}many{Chrome vám doporučuje odstranit je}other{Chrome vám doporučuje odstranit je}}</translation>
@@ -656,21 +699,22 @@ Aplikace Google Chrome nemůže vaše nastavení obnovit.</translation>
 <translation id="8883862939660515976">Zeptat se Google Lens na tento obrázek</translation>
 <translation id="8914504000324227558">Znovu spustit Chrome</translation>
 <translation id="8922193594870374009">Chcete-li poslat číslo z webu <ph name="ORIGIN" /> na svůj telefon Android, v obou zařízeních se přihlaste do Chromu.</translation>
+<translation id="8922998289262614701">Odstranit z Chromu data této aplikace</translation>
 <translation id="8948460679427074738">Pro toto rozšíření nebyly publikovány postupy v oblasti ochrany soukromí, například informace o tom, jak shromažďuje a používá data. Chrome vám doporučuje odstranit ho.</translation>
 <translation id="8958307504142971576">V Chromu teď máte k dispozici víc funkcí</translation>
-<translation id="8989968390305463310">Vaše historie prohlížení ovlivňuje zobrazované reklamy a odhadované zájmy uvedené níže. Aby Chrome chránil vaše soukromí, vaše zájmy každý měsíc pravidelně maže. Zájmy se mohou obnovovat, dokud je neodstraníte.</translation>
+<translation id="8991530961471831170">Otevřít Gemini v Chromu</translation>
 <translation id="8992769679401294069">Vaše data jsou šifrována pomocí heslové fráze. Pokud chcete používat a ukládat data prohlížeče Chrome ve svém účtu Google, zadejte ji.</translation>
 <translation id="8999117580775242387">Když není k dispozici protokol HTTPS, použije Chrome nezabezpečené připojení, aniž by vás upozornil</translation>
 <translation id="8999208279178790196">{0,plural, =0{Je k dispozici aktualizace Chromu}=1{Je k dispozici aktualizace Chromu}few{Již # dny je k dispozici aktualizace Chromu}many{Již # dne je k dispozici aktualizace Chromu}other{Již # dní je k dispozici aktualizace Chromu}}</translation>
 <translation id="9014771989710951291">Chrome spravuje několik organizací</translation>
 <translation id="9024318700713112071">Nastavte si Chrome jako výchozí prohlížeč</translation>
+<translation id="9066987883552592250">Zavřít Gemini v Chromu Canary</translation>
 <translation id="9090566250983691233">Přečtěte si, proč Chrome některé soubory blokuje</translation>
 <translation id="9106236359747881194">Vyberte text, který chcete vyhledat</translation>
 <translation id="911206726377975832">Vymazat také všechna data procházení?</translation>
 <translation id="9134482777260927479">Pomoc s domácími úkoly</translation>
 <translation id="9138603949443464873">Chcete-li změny použít, restartujte Chrome</translation>
 <translation id="9148058034647219655">Ukončit</translation>
-<translation id="9195993889682885387">Chrome dokáže odhadovat vaše zájmy podle historie prohlížení za posledních několik týdnů. Tyto údaje zůstávají v zařízení.</translation>
 <translation id="919706545465235479">Chcete-li zahájit synchronizaci, aktualizujte Chrome</translation>
 <translation id="922152298093051471">Přizpůsobit Chrome</translation>
 <translation id="93760716455950538">Restartovat systém ChromeOS Flex</translation>

@@ -26,6 +26,7 @@
 #include "chromeos/ash/components/geolocation/simple_geolocation_request_test_monitor.h"
 #include "google_apis/google_api_keys.h"
 #include "net/base/load_flags.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "services/device/public/cpp/geolocation/network_location_request_source.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -163,7 +164,7 @@ GURL GeolocationRequestURL(const GURL& url) {
   if (api_key.empty())
     return url;
 
-  std::string query(url.query());
+  std::string query(url.GetQuery());
   if (!query.empty())
     query += "&";
   query += "key=" + base::EscapeQueryParamValue(api_key, true);
@@ -202,8 +203,8 @@ bool ParseServerResponse(const GURL& server_url,
           << response_body << "'";
 
   // Parse the response, ignoring comments.
-  auto response_result =
-      base::JSONReader::ReadAndReturnValueWithError(response_body);
+  auto response_result = base::JSONReader::ReadAndReturnValueWithError(
+      response_body, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!response_result.has_value()) {
     PrintGeolocationError(
         server_url, "JSONReader failed: " + response_result.error().message,

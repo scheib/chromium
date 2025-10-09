@@ -4,7 +4,6 @@
 
 #import "ios/chrome/browser/policy/ui_bundled/idle/idle_timeout_policy_scene_agent.h"
 
-#import <MaterialComponents/MaterialSnackbar.h>
 #import <UIKit/UIKit.h>
 
 #import "base/time/time.h"
@@ -33,7 +32,7 @@
 #import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/shared/public/commands/snackbar_commands.h"
-#import "ios/chrome/browser/shared/ui/util/snackbar_util.h"
+#import "ios/chrome/browser/shared/public/snackbar/snackbar_message.h"
 #import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -67,7 +66,7 @@
 
   // Service handling IdleTimeout and IdleTimeoutActions policies.
   // IdleTimeoutPolicySceneAgents observe this service.
-  raw_ptr<enterprise_idle::IdleService> _idleService;
+  raw_ptr<enterprise_idle::IdleService, DanglingUntriaged> _idleService;
 
   // Flag indicating whether this dialog is allowed to display the snackbar.
   // This is used to show the snackbar on the same scene that shows the timeout
@@ -284,8 +283,9 @@
 }
 
 - (void)showSnackbar:(NSString*)messageText {
-  MDCSnackbarMessage* message = CreateSnackbarMessage(messageText);
-  message.duration = kIdleTimeoutSnackbarDuration;
+  SnackbarMessage* message =
+      [[SnackbarMessage alloc] initWithTitle:messageText];
+  message.duration = kIdleTimeoutSnackbarDuration.InSeconds();
   message.accessibilityLabel = messageText;
   [_snackbarHandler showSnackbarMessage:message];
 }

@@ -133,7 +133,7 @@
 <translation id="1394698770495054737">အပြည့် မှုန်ဝါးခြင်း</translation>
 <translation id="1395878931462960119">{DAYS,plural, =1{ပြီးခဲ့သော ၁ ရက်}other{ပြီးခဲ့သော # ရက်}}</translation>
 <translation id="1404963891829069586">အထူးပြသည့် အသံများ</translation>
-<translation id="1407069428457324124">အမှောင်နောက်ခံ</translation>
+<translation id="1407069428457324124">အမှောင်အပြင်အဆင်</translation>
 <translation id="1410568680128842168"><ph name="DATE_CELL_TOOL_TIP" />။ ရက်စွဲများအကြား ရွှေ့ပြောင်းရန် မြားကီးများ အသုံးပြုပါ။</translation>
 <translation id="141170878022560212">အလယ်ခလုတ်</translation>
 <translation id="1414271762428216854"><ph name="APP_NAME" />၊ ထည့်သွင်းထားသည့် အက်ပ်</translation>
@@ -332,10 +332,12 @@
 <translation id="2083190527011054446">မင်္ဂလာ ညချမ်းပါ <ph name="GIVEN_NAME" /></translation>
 <translation id="2086334242442703436">‘အီမိုဂျီရွေးချယ်စနစ်’ ဖွင့်ရန်</translation>
 <translation id="2088116547584365419">ဂိမ်းများ</translation>
+<translation id="2093792000875799555">Chromebook အတွက် Steam သတင်း</translation>
 <translation id="209965399369889474">ကွန်ရက်ချိတ်ဆက်မထားပါ</translation>
 <translation id="2107581415810719320">အခြားခလုတ် <ph name="BUTTON_NUMBER" /> ခု</translation>
 <translation id="2107914222138020205">သင့် USB-C ကေဘယ်သည် Thunderbolt ကို မပံ့ပိုးပါ။ စက်၏စွမ်းဆောင်ရည်သည် အကန့်အသတ်ရှိနိုင်သည်။</translation>
 <translation id="2108303511227308752">‘Alt + နောက်ပြန်ခလုတ်’ လက်ကွက်ဖြတ်လမ်းကို ပြောင်းထားသည်။ ‘ဖျက်ရန်’ ကီး သုံးလိုပါက <ph name="LAUNCHER_KEY_NAME" /> ကီး + နောက်ပြန်ခလုတ် နှိပ်ပါ။</translation>
+<translation id="2115680839221566783">ဘက်ထရီ <ph name="PERCENTAGE" />% ဖြစ်သည်။ အားသွင်းခြင်းကို ခဏရပ်ထားသည်။</translation>
 <translation id="2126242104232412123">မျက်နှာပြင်နေရာ အသစ်</translation>
 <translation id="2132302418721800944">ဖန်သားပြင်အပြည့် ရိုက်ကူးရန်</translation>
 <translation id="2135456203358955318">နေရာချထားသည့် မှန်ဘီလူး</translation>
@@ -483,7 +485,7 @@
 <translation id="2619326010008283367">လမ်းညွှန်အဆင့် <ph name="TOTAL_STEPS" /> ဆင့်အနက် <ph name="STEP" />။ သင့်စက်ဆက်တင်များကို Launcher တွင် ရှာတွေ့နိုင်သည်။ နောက်ခံပြောင်းခြင်း (သို့) စခရင်နားချိန်ပုံ သတ်မှတ်ခြင်းကဲ့သို့ ဆက်တင်များတွင် သင့် <ph name="PRODUCT_NAME" /> ကို စိတ်ကြိုက်လုပ်ကြည့်ပါ။</translation>
 <translation id="2620016719323068571">သင်၏ <ph name="CATEGORY" />၊ ဖိုင်၊ အက်ပ်များနှင့် အခြားအရာများကို ရှာပါ...</translation>
 <translation id="2620436844016719705">စနစ်</translation>
-<translation id="2620900772667816510">ဘလူးတုသ် စူပါကြည်လင်ပြတ်သားမှု</translation>
+<translation id="2620900772667816510">ဘလူးတုသ် စူပါပုံရိပ်ပြတ်သားမှု</translation>
 <translation id="2621713457727696555">လုံခြုံပြီ</translation>
 <translation id="2624588537172718173">စက်ပစ္စည်းအသံနှင့် မိုက်ခရိုဖုန်း</translation>
 <translation id="263399434338050016">"အားလုံးရွေးရန်"</translation>
@@ -649,7 +651,7 @@
 <translation id="316798519864381606">Google Slide</translation>
 <translation id="3171170659304083361">လက်ကွက် ဆက်တင်များ</translation>
 <translation id="3174897399179348329">‘Page Up’ ကီးကို သုံးရန်ကြိုးပမ်းနေသလား။ အစားသုံးရန်ကီး</translation>
-<translation id="3176221688814061633">သင့် Chromebook (သို့) ဘလူးတုသ်သုံးစက်သည် ဘလူးတုသ် ဗားရှင်းဟောင်းကို သုံးနေသည်။ ပိုကောင်းသောအရည်အသွေးအတွက် ‘ဘလူးတုသ် စူပါကြည်လင်ပြတ်သားမှု’ ဖွင့်ပါ (သို့) စက်တွင်းပါမိုက်ခရိုဖုန်း သုံးပါ။</translation>
+<translation id="3176221688814061633">သင့် Chromebook (သို့) ဘလူးတုသ်သုံးစက်သည် ဘလူးတုသ် ဗားရှင်းဟောင်းကို သုံးနေသည်။ ပိုကောင်းသောအရည်အသွေးအတွက် ‘ဘလူးတုသ် စူပါပုံရိပ်ပြတ်သားမှု’ ဖွင့်ပါ (သို့) စက်တွင်းပါမိုက်ခရိုဖုန်း သုံးပါ။</translation>
 <translation id="3181441307743005334">ပြန်စရန် အချိန်အနည်းငယ် ကြာနိုင်သည်</translation>
 <translation id="3202010236269062730">{NUM_DEVICES,plural, =1{စက်ပစ္စည်းတစ်ခုသို့ ချိတ်ထားသည်}other{စက်ပစ္စည်း # ခုသို့ ချိတ်ထားသည်}}</translation>
 <translation id="320207200541803018">အချိန်မှတ်ပါ</translation>
@@ -1588,6 +1590,7 @@
 <translation id="612734058257491180">ဧည့်သည်စက်ရှင်တွင် Google Assistant ကို အသုံးပြု၍ မရပါ။</translation>
 <translation id="6127395413317891856">သင် အော့ဖ်လိုင်းဖြစ်နေသည်။ ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်စမ်းကြည့်ပါ။</translation>
 <translation id="6129953537138746214">နေရာခြား</translation>
+<translation id="6136872094979134163">Chromebook အတွက် Steam သတင်းကို ပြန်ယူ၍ မရလိုက်ပါ။</translation>
 <translation id="6137566720514957455"><ph name="USER_EMAIL_ADDRESS" /> အတွက် ဖယ်ရှားမှုဒိုင်ယာလော့ခ် ဖွင့်မည်</translation>
 <translation id="6141205840878048728">သင်ဘာကို ပြလိုပါသလဲ။</translation>
 <translation id="6141988275892716286">ဒေါင်းလုဒ်လုပ်ရန် အတည်ပြုခြင်း</translation>
@@ -1677,6 +1680,7 @@
 <translation id="6445835306623867477"><ph name="RECEIVER_NAME" /> တွင် <ph name="ROUTE_TITLE" /></translation>
 <translation id="6445915701151710649">CPU</translation>
 <translation id="6447111710783417522"><ph name="DATE" />၊ အစီအစဉ် <ph name="NUMBER" /> ခု</translation>
+<translation id="6448529022565414427">အားသွင်းခြင်းကို ခဏရပ်ထားသည်</translation>
 <translation id="6449483711453944360">Linux အက်ပ်နှင့် ‘ရုပ်ဖျက်’ ဝင်ဒိုးများကို လောလောဆယ် ပံ့ပိုးမထားပါ</translation>
 <translation id="6450245544201845082">ညာဘက်ခလုတ်နှိပ်သည့် ဖြတ်လမ်းလင့်ခ်ကို လောလောဆယ် ပိတ်ထားသည်</translation>
 <translation id="6452181791372256707">ပယ်ချရန်</translation>

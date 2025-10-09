@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "base/containers/circular_deque.h"
+#include "base/containers/lru_cache.h"
 #include "base/containers/queue.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/ipc/service/command_buffer_stub.h"
@@ -30,6 +31,8 @@
 namespace media {
 
 class CommandBufferHelper;
+class VEAEncodingLatencyMetricsHelper;
+
 typedef base::OnceCallback<void(scoped_refptr<VideoFrame> frame,
                                 Microsoft::WRL::ComPtr<ID3D12Resource> resource,
                                 HRESULT hr)>
@@ -90,9 +93,10 @@ class MEDIA_GPU_EXPORT D3D12VideoEncodeAccelerator
   base::SingleThreadTaskRunner* GetEncoderTaskRunnerForTesting() const;
   size_t GetInputFramesQueueSizeForTesting() const;
   size_t GetBitstreamBuffersSizeForTesting() const;
+  size_t GetSharedHandleCacheSizeForTesting() const;
 
  private:
-  void InitializeTask(const Config& config);
+  void InitializeTask(const Config& config, const SupportedProfiles& profile);
 
   void UseOutputBitstreamBufferTask(BitstreamBuffer buffer);
 
@@ -113,6 +117,7 @@ class MEDIA_GPU_EXPORT D3D12VideoEncodeAccelerator
   void DoEncodeTask(scoped_refptr<VideoFrame> frame,
                     Microsoft::WRL::ComPtr<ID3D12Resource> resolved_texture,
                     const VideoEncoder::EncodeOptions& options,
+                    base::TimeTicks start_time,
                     const BitstreamBuffer& bitstream_buffer);
 
   void TryEncodeFrames();
@@ -156,6 +161,9 @@ class MEDIA_GPU_EXPORT D3D12VideoEncodeAccelerator
   scoped_refptr<CommandBufferHelper> command_buffer_helper_;
 
   VideoEncoderInfo encoder_info_;
+
+  std::unique_ptr<VEAEncodingLatencyMetricsHelper> metrics_helper_;
+  bool encoded_at_least_one_frame_ = false;
 
   Config config_;
   size_t bitstream_buffer_size_ = 0;
@@ -201,6 +209,11 @@ class MEDIA_GPU_EXPORT D3D12VideoEncodeAccelerator
 
   base::queue<BitstreamBuffer> bitstream_buffers_
       GUARDED_BY_CONTEXT(encoder_sequence_checker_);
+
+  // Cache for shared handle to D3D12Resource mapping when caching is enabled.
+  // LRU cache that maps DXGIHandleToken to the corresponding ID3D12Resource.
+  base::LRUCache<gfx::DXGIHandleToken, Microsoft::WRL::ComPtr<ID3D12Resource>>
+      shared_handle_cache_ GUARDED_BY_CONTEXT(encoder_sequence_checker_);
 
   // WeakPtr of this, bound to |child_task_runner_|.
   base::WeakPtr<D3D12VideoEncodeAccelerator> child_weak_this_;

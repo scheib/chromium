@@ -39,8 +39,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.AfterStartupTaskDelayedUntilTime" units="ms"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>michaeln@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from the process creation until deferred after-startup tasks began
     running. The histogram was expired and extended in M119 again.
@@ -48,7 +49,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.BrowserProcessCreationReason"
-    enum="ProcessCreationReason" expires_after="2025-12-14">
+    enum="ProcessCreationReason" expires_after="2026-02-22">
   <owner>mthiesse@chromium.org</owner>
   <owner>pasko@chromium.org</owner>
   <summary>
@@ -63,7 +64,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.FirstPaintOccurredPreForeground"
-    enum="Boolean" expires_after="2026-01-18">
+    enum="Boolean" expires_after="2026-03-22">
   <owner>blundell@chromium.org</owner>
   <owner>yfriedman@chromium.org</owner>
   <summary>
@@ -78,6 +79,7 @@ chromium-metrics-reviews@google.com.
   <owner>xinghuilu@chromium.org</owner>
   <owner>nafisabedin@google.com</owner>
   <owner>chrome-counter-abuse-alerts@google.com</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time it took GmsCore SafeBrowsing API to respond to the first
     SafeBrowsing request for the Tabbed Activity during a cold start. Cold start
@@ -112,9 +114,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Startup.Android.Cold.TimeToFirstContentfulPaint.{StartActivityType}"
-    units="ms" expires_after="2026-02-01">
+    units="ms" expires_after="2026-04-05">
   <owner>pasko@chromium.org</owner>
   <owner>alexilin@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Android: The time from the activity creation point to the first contentful
     paint of the first loaded page. It's not recorded when the first loaded page
@@ -126,9 +129,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Startup.Android.Cold.TimeToFirstContentfulPaint3.{StartActivityType}"
-    units="ms" expires_after="2026-02-01">
+    units="ms" expires_after="2026-04-05">
   <owner>pasko@chromium.org</owner>
   <owner>nafisabedin@google.com</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from activity creation on a cold start to FirstContentfulPaint
     happening in this activity. Cold start is determined by whether the process
@@ -166,9 +170,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Startup.Android.Cold.TimeToFirstNavigationCommit.{StartActivityType}"
-    units="ms" expires_after="2026-02-01">
+    units="ms" expires_after="2026-04-05">
   <owner>pasko@chromium.org</owner>
   <owner>alexilin@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Android: The time from the activity creation point to the moment the first
     navigation is committed, i.e. when renderer gets the first byte of the
@@ -180,9 +185,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToFirstNavigationCommit2.Tabbed"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>pasko@chromium.org</owner>
   <owner>agrieve@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Same as Startup.Android.Cold.TimeToFirstNavigationCommit.Tabbed with two
     modifications. Aims to replace the original metric.
@@ -210,6 +216,7 @@ chromium-metrics-reviews@google.com.
   <owner>pasko@chromium.org</owner>
   <owner>agrieve@chromium.org</owner>
   <owner>nafisabedin@google.com</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from activity creation on a cold start to the FirstNavigationCommit
     happening for a particular {StartActivityType}. Cold start is determined by
@@ -239,10 +246,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToFirstVisibleContent" units="ms"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>yfriedman@chromium.org</owner>
   <owner>pasko@chromium.org</owner>
   <owner>fredmello@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     This histogram (the v1) will soon stop being recorded. It was replaced by
     the v2 (Startup.Android.Cold.TimeToFirstVisibleContent2), which was then
@@ -256,10 +264,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToFirstVisibleContent2" units="ms"
-    expires_after="2026-01-04">
+    expires_after="2026-03-08">
   <owner>yfriedman@chromium.org</owner>
   <owner>pasko@chromium.org</owner>
   <owner>fredmello@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     This histogram (the v2) will soon stop being recorded. It is superceded by
     the v4: Startup.Android.Cold.TimeToFirstVisibleContent4. Compared to v2 the
@@ -283,6 +292,7 @@ chromium-metrics-reviews@google.com.
   <owner>fredmello@chromium.org</owner>
   <owner>nafisabedin@google.com</owner>
   <owner>chrome-ds@google.com</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from the first Chrome tabbed activity creation to the moment Chrome
     first appears ready to the user.
@@ -339,9 +349,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToForegroundSessionStart" units="ms"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>pasko@chromium.org</owner>
   <owner>mthiesse@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from activity creation till the point when UMA foreground session
     starts.
@@ -349,8 +360,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToVisibleContent" units="ms"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>ckitagawa@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Android: The time from the activity creation point to the moment the content
     may first appear ready to a user. The intent is to capture readiness of
@@ -367,9 +379,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.{FirstDrawSurface}.TimeToFirstDraw"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>nafisabedin@google.com</owner>
   <owner>yfriedman@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from the start of the activity on a cold start until the first draw
     pass on the root view containing the search provider logo (if available),
@@ -392,7 +405,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.{StartupType}.TimeSpentInBinder"
-    units="ms" expires_after="2025-12-14">
+    units="ms" expires_after="2026-02-22">
   <owner>nafisabedin@google.com</owner>
   <owner>yfriedman@chromium.org</owner>
   <improvement direction="LOWER_IS_BETTER"/>
@@ -413,7 +426,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.DurationSinceLastBackgroundTime" units="ms"
-    expires_after="2025-11-17">
+    expires_after="2026-03-22">
   <owner>hanxi@chromium.org</owner>
   <owner>xinyiji@chromium.org</owner>
   <summary>
@@ -424,10 +437,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Experimental.{name}.Tabbed.ColdStartTracker"
-    units="ms" expires_after="2025-12-14">
+    units="ms" expires_after="2026-02-22">
   <owner>pasko@chromium.org</owner>
   <owner>mthiesse@chromium.org</owner>
   <owner>yfriedman@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The time from activity creation on a cold start to the {name} happening in
     this activity. Cold start is determined by whether the process creation
@@ -469,9 +483,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.GURLEnsureMainDexInitialized" units="ms"
-    expires_after="2025-12-28">
+    expires_after="2026-03-01">
   <owner>mthiesse@chromium.org</owner>
   <owner>yfriedman@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Measures the amount of time startup has likely been delayed due to GURL
     waiting on the native library to be initialized.
@@ -479,7 +494,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.IsLastBackgroundTimeLogged" enum="Boolean"
-    expires_after="2025-11-17">
+    expires_after="2026-03-22">
   <owner>hanxi@chromium.org</owner>
   <owner>xinyiji@chromium.org</owner>
   <summary>
@@ -500,7 +515,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.MainIconLaunchTotalWaitTime" units="ms"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>nafisabedin@google.com</owner>
   <owner>yfriedman@chromium.org</owner>
   <summary>
@@ -516,7 +531,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.MainIntentIsColdStart" enum="Boolean"
-    expires_after="2025-12-28">
+    expires_after="2026-03-01">
   <owner>nafisabedin@google.com</owner>
   <owner>yfriedman@chromium.org</owner>
   <summary>
@@ -536,7 +551,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.PrivacySandbox.AdsNoticeCCTAppIDCheck"
-    enum="Boolean" expires_after="2025-12-28">
+    enum="Boolean" expires_after="2026-03-01">
   <owner>jacobstanley@google.com</owner>
   <owner>koilos@google.com</owner>
   <summary>
@@ -558,7 +573,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.PrivacySandbox.ShouldShowAdsNoticeCCT"
-    enum="Boolean" expires_after="2025-12-14">
+    enum="Boolean" expires_after="2026-02-22">
   <owner>jacobstanley@google.com</owner>
   <owner>koilos@google.com</owner>
   <summary>
@@ -568,9 +583,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Warm.MainIntentTimeToFirstDraw" units="ms"
-    expires_after="2025-12-14">
+    expires_after="2026-02-22">
   <owner>nafisabedin@google.com</owner>
   <owner>mthiesse@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Records the time duration from a warm, main intent launch until the first
     draw completes.
@@ -578,7 +594,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.BringToForegroundReason"
-    enum="BooleanBringToForegroundReason" expires_after="2026-01-18">
+    enum="BooleanBringToForegroundReason" expires_after="2026-03-22">
   <owner>peter@chromium.org</owner>
   <summary>
     Records the cause, each time Chrome is brought to the foreground. Currently
@@ -588,17 +604,19 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.BrowserMainRunnerImplInitializeLongTime" units="ms"
-    expires_after="2025-12-28">
+    expires_after="2026-03-01">
   <owner>robliao@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The amount of time that elapsed during BrowserMainRunnerImpl::Initialize.
   </summary>
 </histogram>
 
 <histogram name="Startup.BrowserMessageLoopFirstIdle" units="ms"
-    expires_after="2025-12-21">
+    expires_after="2026-02-22">
   <owner>gab@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to the first time MainMessageLoopRun() reaches
     idle. This is a new (Feb'2021) metric intended to capture UI jank caused by
@@ -620,6 +638,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>etienneb@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time between Startup.BrowserMessageLoopStartTime and
     Startup.FirstWebContents.NonEmptyPaint2. Recorded explicitly to allow easy
@@ -659,6 +678,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to the start of the main thread's message loop.
     Not recorded for first run.
@@ -678,6 +698,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to the start of the main thread's message loop.
     Recorded for a first run of the browser.
@@ -692,9 +713,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.BrowserWindow.FirstPaint" units="ms"
-    expires_after="2025-12-28">
+    expires_after="2026-03-01">
   <owner>gab@chromium.org</owner>
   <owner>mblsha@yandex-team.ru</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to the time the first Browser window has
     finished painting its children.
@@ -723,6 +745,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to the time the browser window initially becomes
     visible.
@@ -734,9 +757,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.ColdStartFromMain" units="ms"
-    expires_after="2026-02-01">
+    expires_after="2026-04-05">
   <owner>justincohen@chromium.org</owner>
   <owner>olivierrobin@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The duration of all initializations from the call to main to UI ready to
     receive input. iOS specific, from M125+
@@ -785,6 +809,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     How long it takes to load the original profile synchronously on the UI
     thread.
@@ -835,6 +860,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     [Desktop] Measure the elapsed time from application start to the moment when
     the navigation is committed (first bytes received) in the first web
@@ -865,6 +891,7 @@ chromium-metrics-reviews@google.com.
 
   <owner>fdoray@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     [Desktop] Measure the elapsed time from application start to the beginning
     of navigation in the first web contents' main frame.
@@ -927,9 +954,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.GPU.LoadTime.ApplicationStartToGpuInitialized"
-    units="ms" expires_after="2026-02-01">
+    units="ms" expires_after="2026-04-05">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from when the application started to when the GPU finishes its
     initialization.
@@ -950,9 +978,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.GPU.LoadTime.ChromeMainToGpuInitialized" units="ms"
-    expires_after="2026-02-01">
+    expires_after="2026-04-05">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from when ChromeMain was entered in the GPU process to when the GPU
     finishes its initialization.
@@ -964,9 +993,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.GPU.LoadTime.ProcessCreationToGpuInitialized"
-    units="ms" expires_after="2025-12-21">
+    units="ms" expires_after="2026-02-22">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from when the GPU process was created according to the OS, to when the
     GPU finishes its initialization.
@@ -991,16 +1021,6 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Startup.InitializeFontConfigDuration" units="ms"
-    expires_after="2025-10-26">
-  <owner>thestig@chromium.org</owner>
-  <owner>thomasanderson@chromium.org</owner>
-  <summary>
-    The time taken to initialize FontConfig. Recorded once on startup on Linux
-    and ChromeOS.
-  </summary>
-</histogram>
-
 <histogram name="Startup.IOSColdStartType" enum="IOSColdStartType"
     expires_after="2026-04-01">
   <owner>jlebel@chromium.org</owner>
@@ -1018,6 +1038,7 @@ chromium-metrics-reviews@google.com.
   <owner>fdoray@chromium.org</owner>
   <owner>etiennep@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from the application start to the C++ ChromeMain() function being
     invoked.
@@ -1034,6 +1055,7 @@ chromium-metrics-reviews@google.com.
   <owner>fdoray@chromium.org</owner>
   <owner>etiennep@chromium.org</owner>
   <owner>gab@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from the process creation to application start, i.e. time recorded as
     early as possible in the startup process.
@@ -1054,7 +1076,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.MobileSessionStartAction"
-    enum="MobileSessionStartAction" expires_after="2026-01-18">
+    enum="MobileSessionStartAction" expires_after="2026-03-22">
   <owner>thegreenfrog@chromium.org</owner>
   <owner>olivierrobin@chromium.org</owner>
   <summary>
@@ -1064,7 +1086,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.MobileSessionStartFromApps"
-    enum="MobileSessionCallerApp" expires_after="2026-01-18">
+    enum="MobileSessionCallerApp" expires_after="2026-03-22">
   <owner>thegreenfrog@chromium.org</owner>
   <owner>olivierrobin@chromium.org</owner>
   <summary>The calling application (if any).</summary>
@@ -1088,6 +1110,7 @@ chromium-metrics-reviews@google.com.
 <histogram name="Startup.PreMainMessageLoopRunImplLongTime" units="ms"
     expires_after="2025-09-14">
   <owner>rkaplow@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The amount of time that elapsed during
     ChromeBrowserMainParts::PreMainMessageLoopRunImpl.
@@ -1096,9 +1119,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Startup.Renderer.LoadTime.ApplicationStartToRendererStartRunLoop"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from application start to renderer run loop start.
 
@@ -1113,9 +1137,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Renderer.LoadTime.ChromeMainToRendererStartRunLoop"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from when ChromeMain in the renderer process was entered to when the
     renderer run loop was started.
@@ -1128,9 +1153,10 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Startup.Renderer.LoadTime.ProcessCreationToRendererStartRunLoop"
-    units="ms" expires_after="2026-01-18">
+    units="ms" expires_after="2026-03-22">
   <owner>spvm@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time from when the renderer process was created (CreateProcess call) to when
     the renderer run loop is started.
@@ -1153,10 +1179,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.StartupBrowserCreator.LaunchBrowser" units="ms"
-    expires_after="2026-02-01">
-  <owner>alemate@chromium.org</owner>
-  <owner>xiyuan@chromium.org</owner>
+    expires_after="2026-04-05">
+  <owner>hidehiko@chromium.org</owner>
+  <owner>junis@google.com</owner>
   <owner>cros-sw-perf+metrics@google.com</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     The amount of time that elapsed during
     StartupBrowserCreator::LaunchBrowser().
@@ -1193,9 +1220,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.TimeFromMainToDidFinishLaunchingCall" units="ms"
-    expires_after="2026-02-01">
+    expires_after="2026-04-05">
   <owner>olivierrobin@chromium.org</owner>
   <owner>justincohen@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     [IOS] The duration between the call to main and the call to
     [UIApplicationDelegate didFinishLaunching:]. Recorded when first scene is
@@ -1204,9 +1232,10 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.TimeFromMainToSceneConnection" units="ms"
-    expires_after="2026-02-01">
+    expires_after="2026-04-05">
   <owner>olivierrobin@chromium.org</owner>
   <owner>justincohen@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     [IOS] The duration between the call to main and the call to the first scene
     connection. Recorded when first scene is becomes active.
@@ -1214,10 +1243,11 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.{Process}.LoadTime.PreReadFile" units="ms"
-    expires_after="2026-01-18">
+    expires_after="2026-03-22">
   <owner>spvm@chromium.org</owner>
   <owner>fdoray@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
+  <improvement direction="LOWER_IS_BETTER"/>
   <summary>
     Time that it took to call base::PreReadFile() during main DLL
     initialization. Only recorded on Windows. Recorded once on {Process} process

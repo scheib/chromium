@@ -968,11 +968,37 @@ void ViewAccessibility::OnTooltipTextChanged(
 }
 
 void ViewAccessibility::OnViewAddedToWidget() {
-  // Ideally, we would like to set the class name when the object is created,
-  // this would be done in the ctor, but due to inheritance and the
-  // implementation of `GetClassName`, it would not work. As such, we set it
-  // here, since at this point the view object is fully initialized.
-  SetClassName(std::string(view_->GetClassName()));
+  if (ViewAccessibility* parent = GetUnignoredParent()) {
+    AXUpdateNotifier::Get()->NotifyChildAdded(this, parent);
+  }
+
+  // The accessibility class name is set after the view has been attached
+  // to a widget, ensuring the object is fully constructed and its class
+  // name is stable.
+  std::string effective_class = std::string(view_->GetClassName());
+
+#if BUILDFLAG(IS_WIN)
+  // On Windows, Narrator restricts focus to web content in Scan Mode only when
+  // the root web area’s parent has class name "Chrome_WidgetWin_1". This is a
+  // hardcoded behavior. It worked before Chromium enabled UIA by default, since
+  // the MSAA Proxy added the root web area under a window with that class name.
+  // We’re collaborating with the Narrator team to update their tab detection
+  // logic, but rollout will take time. This is a temporary mitigation. See
+  // https://crbug.com/443225250 for details.
+  if (::ui::AXPlatform::GetInstance().IsUiaProviderEnabled() &&
+      features::IsFixNarratorWebContentContainmentEnabled() &&
+      effective_class == "ContentsContainerView") {
+    effective_class = "Chrome_WidgetWin_1";
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
+  SetClassName(effective_class);
+}
+
+void ViewAccessibility::OnViewRemovedFromWidget() {
+  if (ViewAccessibility* parent = GetUnignoredParent()) {
+    AXUpdateNotifier::Get()->NotifyChildRemoved(this, parent);
+  }
 }
 
 void ViewAccessibility::SetPlaceholder(const std::string& placeholder) {
@@ -1379,7 +1405,7 @@ void ViewAccessibility::SetChildTreeID(ui::AXTreeID tree_id) {
     data_.AddChildTreeId(tree_id);
 
     const views::Widget* widget = view_->GetWidget();
-    if (widget && widget->GetNativeView() && display::Screen::GetScreen()) {
+    if (widget && widget->GetNativeView() && display::Screen::Get()) {
       // TODO(accessibility): There potentially could be an issue where the
       // device scale factor changes from the time the tree ID is set to the
       // time `GetAccessibleNodeData` is queried. If this ever pops up, a
@@ -1388,7 +1414,7 @@ void ViewAccessibility::SetChildTreeID(ui::AXTreeID tree_id) {
       // display changes, we can update the scale factor in the cache, probably
       // by implementing `OnDisplayMetricsChanged`.
       const float scale_factor =
-          display::Screen::GetScreen()
+          display::Screen::Get()
               ->GetDisplayNearestView(widget->GetNativeView())
               .device_scale_factor();
       SetChildTreeScaleFactor(scale_factor);

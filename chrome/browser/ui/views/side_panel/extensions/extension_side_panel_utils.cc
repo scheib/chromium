@@ -5,8 +5,8 @@
 #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
 
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/side_panel/extensions/extension_side_panel_manager.h"
@@ -23,16 +23,20 @@ namespace {
 // the provided `key`.
 bool IsKeyActiveInRegistry(SidePanelRegistry* registry,
                            const SidePanelEntry::Key& key) {
-  return registry && registry->active_entry().has_value() &&
-         registry->active_entry().value()->key() == key;
+  if (registry) {
+    auto entry =
+        registry->GetActiveEntryFor(SidePanelEntry::PanelType::kContent);
+    return entry.has_value() && entry.value()->key() == key;
+  }
+  return false;
 }
 
 }  // namespace
 
 // Defined in extension_side_panel_utils.h
-void ToggleExtensionSidePanel(Browser* browser,
+void ToggleExtensionSidePanel(BrowserWindowInterface* browser_window,
                               const ExtensionId& extension_id) {
-  SidePanelUI* side_panel_ui = browser->GetFeatures().side_panel_ui();
+  SidePanelUI* side_panel_ui = browser_window->GetFeatures().side_panel_ui();
 
   SidePanelEntry::Key extension_key =
       SidePanelEntry::Key(SidePanelEntry::Id::kExtension, extension_id);
@@ -40,15 +44,15 @@ void ToggleExtensionSidePanel(Browser* browser,
 }
 
 // Declared in extension_side_panel_utils.h
-void OpenGlobalExtensionSidePanel(Browser& browser,
+void OpenGlobalExtensionSidePanel(BrowserWindowInterface& browser_window,
                                   content::WebContents* web_contents,
                                   const ExtensionId& extension_id) {
-  SidePanelUI* side_panel_ui = browser.GetFeatures().side_panel_ui();
+  SidePanelUI* side_panel_ui = browser_window.GetFeatures().side_panel_ui();
 
   SidePanelEntry::Key extension_key =
       SidePanelEntry::Key(SidePanelEntry::Id::kExtension, extension_id);
   content::WebContents* active_web_contents =
-      browser.tab_strip_model()->GetActiveWebContents();
+      browser_window.GetActiveTabInterface()->GetContents();
   // If we're opening the side panel for the active tab, we can just call
   // `Show()` and be done with it.
   if (web_contents && active_web_contents == web_contents) {
@@ -67,8 +71,10 @@ void OpenGlobalExtensionSidePanel(Browser& browser,
     SidePanelRegistry* contextual_registry =
         SidePanelRegistry::GetDeprecated(web_contents);
     CHECK(contextual_registry);
-    if (contextual_registry && contextual_registry->active_entry()) {
-      contextual_registry->ResetActiveEntry();
+    if (contextual_registry && contextual_registry->GetActiveEntryFor(
+                                   SidePanelEntry::PanelType::kContent)) {
+      contextual_registry->ResetActiveEntryFor(
+          SidePanelEntry::PanelType::kContent);
     }
   }
 
@@ -88,7 +94,9 @@ void OpenGlobalExtensionSidePanel(Browser& browser,
       SidePanelRegistry::GetDeprecated(active_web_contents);
   CHECK(active_tab_contextual_registry);
   bool has_active_contextual_entry =
-      active_tab_contextual_registry->active_entry().has_value();
+      active_tab_contextual_registry
+          ->GetActiveEntryFor(SidePanelEntry::PanelType::kContent)
+          .has_value();
 
   if (!has_active_contextual_entry) {
     // It must be an active global side panel. Call `Show()` to override it.
@@ -99,8 +107,9 @@ void OpenGlobalExtensionSidePanel(Browser& browser,
   // There's an open contextual entry in the active tab. In this case, we set
   // the active global entry in the global registry, which will take effect
   // when a different tab activates.
-  SidePanelRegistry* global_registry =
-      browser.GetFeatures().side_panel_coordinator()->GetWindowRegistry();
+  SidePanelRegistry* global_registry = browser_window.GetFeatures()
+                                           .side_panel_coordinator()
+                                           ->GetWindowRegistry();
   CHECK(global_registry);
   SidePanelEntry* entry = global_registry->GetEntryForKey(extension_key);
   CHECK(entry);
@@ -108,14 +117,14 @@ void OpenGlobalExtensionSidePanel(Browser& browser,
 }
 
 // Declared in extension_side_panel_utils.h
-void OpenContextualExtensionSidePanel(Browser& browser,
+void OpenContextualExtensionSidePanel(BrowserWindowInterface& browser_window,
                                       content::WebContents& web_contents,
                                       const ExtensionId& extension_id) {
   SidePanelEntry::Key extension_key =
       SidePanelEntry::Key(SidePanelEntry::Id::kExtension, extension_id);
 
-  if (browser.tab_strip_model()->GetActiveWebContents() == &web_contents) {
-    browser.GetFeatures().side_panel_ui()->Show(extension_key);
+  if (browser_window.GetActiveTabInterface()->GetContents() == &web_contents) {
+    browser_window.GetFeatures().side_panel_ui()->Show(extension_key);
     return;
   }
 
@@ -128,28 +137,30 @@ void OpenContextualExtensionSidePanel(Browser& browser,
 }
 
 // Declared in extension_side_panel_utils.h
-void CloseGlobalExtensionSidePanel(Browser* browser,
+void CloseGlobalExtensionSidePanel(BrowserWindowInterface* browser_window,
                                    const ExtensionId& extension_id) {
-  SidePanelUI* side_panel_ui = browser->GetFeatures().side_panel_ui();
+  SidePanelUI* side_panel_ui = browser_window->GetFeatures().side_panel_ui();
   SidePanelEntry::Key extension_key =
       SidePanelEntry::Key(SidePanelEntry::Id::kExtension, extension_id);
 
-  tabs::TabInterface* active_tab = browser->GetActiveTabInterface();
+  tabs::TabInterface* active_tab = browser_window->GetActiveTabInterface();
   SidePanelRegistry* active_contextual_registry =
       active_tab->GetTabFeatures()->side_panel_registry();
 
   // If the global side panel entry for this extension is active, close it.
   if (active_contextual_registry &&
-      active_contextual_registry->active_entry().has_value()) {
+      active_contextual_registry
+          ->GetActiveEntryFor(SidePanelEntry::PanelType::kContent)
+          .has_value()) {
     // If the active web content contains a contextual panel and there is an
     // active global panel for this extension, reset the global side panel so it
     // doesn’t open when switching to any tab that doesn’t contain a contextual
     // panel (for example, a new tab).
     SidePanelCoordinator* coordinator =
-        browser->GetFeatures().side_panel_coordinator();
+        browser_window->GetFeatures().side_panel_coordinator();
     SidePanelRegistry* global_registry = coordinator->GetWindowRegistry();
     if (IsKeyActiveInRegistry(global_registry, extension_key)) {
-      global_registry->ResetActiveEntry();
+      global_registry->ResetActiveEntryFor(SidePanelEntry::PanelType::kContent);
     }
   } else {
     // Otherwise, if this extension's global side panel is visible,
@@ -161,7 +172,7 @@ void CloseGlobalExtensionSidePanel(Browser* browser,
 }
 
 // Declared in extension_side_panel_utils.h
-void CloseContextualExtensionSidePanel(Browser* browser,
+void CloseContextualExtensionSidePanel(BrowserWindowInterface* browser_window,
                                        content::WebContents* web_contents,
                                        const ExtensionId& extension_id,
                                        std::optional<int> window_id) {
@@ -170,9 +181,9 @@ void CloseContextualExtensionSidePanel(Browser* browser,
 
   // Determine the active web contents in the window.
   content::WebContents* active_web_contents =
-      browser->tab_strip_model()->GetActiveWebContents();
+      browser_window->GetActiveTabInterface()->GetContents();
 
-  SidePanelUI* side_panel_ui = browser->GetFeatures().side_panel_ui();
+  SidePanelUI* side_panel_ui = browser_window->GetFeatures().side_panel_ui();
 
   // If the provided web_contents refers to the active tab’s WebContents, and
   // the side panel in it was opened by this extension, then simply close the
@@ -192,7 +203,8 @@ void CloseContextualExtensionSidePanel(Browser* browser,
     SidePanelRegistry* contextual_registry =
         tab->GetTabFeatures()->side_panel_registry();
     if (IsKeyActiveInRegistry(contextual_registry, extension_key)) {
-      contextual_registry->ResetActiveEntry();
+      contextual_registry->ResetActiveEntryFor(
+          SidePanelEntry::PanelType::kContent);
       return;
     }
   }
@@ -200,7 +212,7 @@ void CloseContextualExtensionSidePanel(Browser* browser,
   // No contextual panel for this extension is open, close/reset global panel if
   // `window_id` is provided.
   if (window_id.has_value()) {
-    CloseGlobalExtensionSidePanel(browser, extension_id);
+    CloseGlobalExtensionSidePanel(browser_window, extension_id);
   }
 }
 

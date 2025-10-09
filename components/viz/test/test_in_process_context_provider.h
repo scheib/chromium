@@ -18,8 +18,6 @@
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "gpu/config/gpu_feature_info.h"
 
-class GrDirectContext;
-
 namespace gpu {
 class GLInProcessContext;
 class GpuProcessShmCount;
@@ -29,10 +27,6 @@ namespace raster {
 class GrShaderCache;
 }
 }  // namespace gpu
-
-namespace skia_bindings {
-class GrContextForGLES2Interface;
-}
 
 namespace viz {
 class GpuServiceImpl;
@@ -61,7 +55,6 @@ class TestInProcessContextProvider
   gpu::gles2::GLES2Interface* ContextGL() override;
   gpu::raster::RasterInterface* RasterInterface() override;
   gpu::ContextSupport* ContextSupport() override;
-  class GrDirectContext* GrContext() override;
   gpu::SharedImageInterface* SharedImageInterface() override;
   ContextCacheController* CacheController() override;
   base::Lock* GetLock() override;
@@ -96,7 +89,6 @@ class TestInProcessContextProvider
 
   // Used for GLES2 contexts only.
   std::unique_ptr<gpu::GLInProcessContext> gles2_context_;
-  std::unique_ptr<skia_bindings::GrContextForGLES2Interface> gr_context_;
 
   // Used for raster contexts only.
   std::unique_ptr<gpu::RasterInProcessContext> raster_context_;

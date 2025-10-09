@@ -22,10 +22,12 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/platform_thread.h"
+#include "base/time/time.h"
 #include "base/types/optional_util.h"
 #include "build/build_config.h"
 #include "components/affiliations/core/browser/affiliation_utils.h"
 #include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/autofill_server_prediction.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
@@ -69,7 +71,6 @@
 #include "components/password_manager/core/browser/first_cct_page_load_passwords_ukm_recorder.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/password_manager/core/browser/password_sync_util.h"
-#include "components/password_manager/core/browser/split_stores_and_local_upm.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_WIN)
@@ -117,12 +118,33 @@ bool DidLoginWithBackupChangedPassword(
          change_password_login.GetPasswordBackup();
 }
 
+// Returns true if the form's date_last_used is close-enough to the backup
+// password creation timestamp.
+// date_last_used is updated at the end of the password change flow and the
+// backup password is created slightly earlier - when we fill the password
+// change form. This diff should be very small since we have a timeout for the
+// flow to finish after we start filling the change password form.
+bool IsLikelyFirstLoginAttempAfterPasswordChange(
+    const PasswordForm& change_password_login) {
+  CHECK(change_password_login.GetPasswordBackupDateCreated().has_value());
+
+  // Allow way more time than needed to catch potential edge cases. At the same
+  // time, we don't want to accidentally record multiple successful log-ins.
+  // It's quite unlikely that a user logs in successfully twice within this
+  // delta.
+  const base::TimeDelta first_login_attempt_time_delta = base::Minutes(2);
+  return (change_password_login.date_last_used -
+          change_password_login.GetPasswordBackupDateCreated().value()) <
+         first_login_attempt_time_delta;
+}
+
 void RecordMetricsForLoginWithChangedPassword(
     password_manager::PasswordManagerClient* client,
     const PasswordFormManager& submitted_manager,
     bool login_successful) {
   const PasswordForm* change_password_login =
-      password_manager_util::FindLoginWithChangedPassword(submitted_manager);
+      password_manager_util::FindChangedPasswordLoginWithBackup(
+          submitted_manager);
   if (!change_password_login) {
     return;
   }
@@ -144,7 +166,9 @@ void RecordMetricsForLoginWithChangedPassword(
                   : LogInWithChangedPasswordOutcome::kUnknownPasswordFailed;
   }
 
-  if (auto* password_change_service = client->GetPasswordChangeService()) {
+  if (auto* password_change_service = client->GetPasswordChangeService();
+      password_change_service &&
+      IsLikelyFirstLoginAttempAfterPasswordChange(*change_password_login)) {
     password_change_service->RecordLoginAttemptQuality(
         outcome, client->GetLastCommittedURL());
   }
@@ -404,18 +428,6 @@ base::flat_map<FieldRendererId, FieldType> KeyPredictionsByRendererIds(
 }
 
 #if BUILDFLAG(IS_ANDROID)
-// Shows an error message that nudges the user to update GMSCore if necessary.
-void MaybeNudgeToUpdateGMSCoreWhenSavingDisabled(
-    PasswordManagerClient* client) {
-  CHECK(client);
-  if (client->GetPasswordFeatureManager()->ShouldUpdateGmsCore()) {
-    client->ShowPasswordManagerErrorMessage(
-        ErrorMessageFlowType::kSaveFlow,
-        password_manager::PasswordStoreBackendErrorType::
-            kGMSCoreOutdatedSavingDisabled);
-  }
-}
-
 // Records the form submission if the user has saving enabled and
 // the password is eligible for saving.
 void SignalFormSubmissionIfEligibleForSaving(PasswordFormManager* manager,
@@ -494,6 +506,16 @@ void HandleFailedLoginDetectionForPasswordChange(
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 }
 
+bool HasManuallyFilledPassword(const PasswordForm& form) {
+  return std::ranges::any_of(
+      form.form_data.fields(),
+      [&](const autofill::FormFieldData& field_data) -> bool {
+        return field_data.IsPasswordInputElement() &&
+               (field_data.properties_mask() &
+                (autofill::FieldPropertiesFlags::kAutofilledOnUserTrigger));
+      });
+}
+
 }  // namespace
 
 // static
@@ -502,11 +524,6 @@ void PasswordManager::RegisterProfilePrefs(
   registry->RegisterBooleanPref(
       prefs::kCredentialsEnableService, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PRIORITY_PREF);
-#if BUILDFLAG(IS_IOS)
-  // Deprecated pref in profile prefs.
-  registry->RegisterBooleanPref(prefs::kCredentialProviderEnabledOnStartup,
-                                false);
-#endif  // BUILDFLAG(IS_IOS)
   registry->RegisterBooleanPref(
       prefs::kCredentialsEnableAutosignin, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PRIORITY_PREF);
@@ -547,18 +564,9 @@ void PasswordManager::RegisterProfilePrefs(
 #if BUILDFLAG(IS_ANDROID)
   registry->RegisterBooleanPref(prefs::kOfferToSavePasswordsEnabledGMS, true);
   registry->RegisterBooleanPref(prefs::kAutoSignInEnabledGMS, true);
-  RegisterLegacySplitStoresPref(registry);
   registry->RegisterStringPref(prefs::kUPMErrorUIShownTimestamp, "0");
   registry->RegisterIntegerPref(
       prefs::kPasswordGenerationBottomSheetDismissCount, 0);
-  // This pref is used to decide whether the PasswordStore can be connected to
-  // the new Android backend without migrating existing entries in the
-  // LoginDatabase. In doubt, it's best to assume that's not the case, otherwise
-  // passwords might be left behind. In practice, the default value should make
-  // little difference, the pref is always written on startup.
-  registry->RegisterBooleanPref(prefs::kEmptyProfileStoreLoginDatabase, false);
-  registry->RegisterBooleanPref(prefs::kUpmAutoExportCsvNeedsDeletion, false);
-  registry->RegisterBooleanPref(prefs::kUpmUnmigratedPasswordsExported, false);
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
@@ -575,10 +583,6 @@ void PasswordManager::RegisterProfilePrefs(
         // BUILDFLAG(IS_CHROMEOS)
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)  // Desktop
   registry->RegisterListPref(prefs::kPasswordManagerPromoCardsList);
-  registry->RegisterBooleanPref(
-      prefs::kAutofillableCredentialsProfileStoreLoginDatabase, false);
-  registry->RegisterBooleanPref(
-      prefs::kAutofillableCredentialsAccountStoreLoginDatabase, false);
 #endif  // BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   registry->RegisterBooleanPref(prefs::kPasswordSharingEnabled, true);
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
@@ -966,6 +970,13 @@ void PasswordManager::OnUserModifiedNonPasswordField(
 void PasswordManager::OnInformAboutUserInput(PasswordManagerDriver* driver,
                                              const FormData& form_data) {
   PasswordFormManager* manager = ProvisionallySaveForm(form_data, driver, true);
+
+  if (manager) {
+    if (const PasswordForm* form = manager->GetSubmittedForm();
+        form && HasManuallyFilledPassword(*form)) {
+      manager->OnPasswordFilledManually();
+    }
+  }
 
   auto availability =
       manager ? PasswordManagerMetricsRecorder::FormManagerAvailable::kSuccess
@@ -1425,7 +1436,7 @@ bool PasswordManager::IsAutomaticSavePromptAvailable(
 
 bool PasswordManager::ShouldBlockPasswordForSameOriginButDifferentScheme(
     const GURL& url) const {
-  return submitted_form_url_.host_piece() == url.host_piece() &&
+  return submitted_form_url_.host() == url.host() &&
          submitted_form_url_.SchemeIsCryptographic() &&
          !url.SchemeIsCryptographic();
 }
@@ -1575,9 +1586,6 @@ void PasswordManager::OnLoginSuccessful() {
   UMA_HISTOGRAM_BOOLEAN("PasswordManager.AbleToSavePasswordsOnSuccessfulLogin",
                         able_to_save_passwords);
   if (!submitted_manager->IsPasswordUpdate() && !able_to_save_passwords) {
-#if BUILDFLAG(IS_ANDROID)
-    MaybeNudgeToUpdateGMSCoreWhenSavingDisabled(client_);
-#endif
     return;
   }
 
@@ -1685,8 +1693,7 @@ void PasswordManager::OnLoginPotentiallyFailed(
 void PasswordManager::ProcessAutofillPredictions(
     PasswordManagerDriver* driver,
     const autofill::FormData& form,
-    const base::flat_map<FieldGlobalId,
-                         autofill::AutofillType::ServerPrediction>&
+    const base::flat_map<FieldGlobalId, autofill::AutofillServerPrediction>&
         predictions) {
   // Don't do anything if Password store is not available.
   if (!client_->GetProfilePasswordStore()) {

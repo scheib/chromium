@@ -10,9 +10,9 @@
 #import "components/signin/public/base/signin_pref_names.h"
 #import "components/signin/public/base/signin_switches.h"
 #import "components/supervised_user/core/common/features.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_earl_grey_ui_test_util.h"
-#import "ios/chrome/browser/authentication/ui_bundled/signin_matchers.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey.h"
+#import "ios/chrome/browser/authentication/test/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/authentication/test/signin_matchers.h"
 #import "ios/chrome/browser/bookmarks/model/bookmark_storage_type.h"
 #import "ios/chrome/browser/bookmarks/ui_bundled/bookmark_earl_grey.h"
 #import "ios/chrome/browser/bookmarks/ui_bundled/bookmark_earl_grey_ui.h"
@@ -129,12 +129,6 @@ void SetSigninEnterprisePolicyValue(BrowserSigninMode signinMode) {
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
   config.relaunch_policy = ForceRelaunchByCleanShutdown;
-  if ([self
-          isRunningTest:@selector(testToggleAllowChromeSigninForManagedUser)]) {
-    // Enable the feature because the dialog uses a slightly different string if
-    // the feature is not enabled.
-    config.features_enabled.push_back(kIdentityDiscAccountMenu);
-  }
   return config;
 }
 

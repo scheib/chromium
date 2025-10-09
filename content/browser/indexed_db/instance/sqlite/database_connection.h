@@ -11,7 +11,9 @@
 #include <string>
 #include <string_view>
 
+#include "base/byte_count.h"
 #include "base/files/file_path.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/expected.h"
 #include "base/types/pass_key.h"
@@ -21,6 +23,7 @@
 #include "content/browser/indexed_db/instance/sqlite/backing_store_impl.h"
 #include "content/browser/indexed_db/instance/sqlite/blob_writer.h"
 #include "content/browser/indexed_db/status.h"
+#include "content/common/content_export.h"
 #include "sql/streaming_blob_handle.h"
 #include "third_party/blink/public/common/indexeddb/indexeddb_key_path.h"
 #include "third_party/blink/public/common/indexeddb/indexeddb_key_range.h"
@@ -42,6 +45,7 @@ namespace content::indexed_db {
 struct IndexedDBValue;
 
 namespace sqlite {
+class BackingStoreCursorImpl;
 class BackingStoreDatabaseImpl;
 class BackingStoreTransactionImpl;
 
@@ -49,7 +53,7 @@ class BackingStoreTransactionImpl;
 // IndexedDB database. Also owns the schema, operations and in-memory metadata
 // for this database. BackingStore interface methods call into this class to
 // perform the actual database operations.
-class DatabaseConnection {
+class CONTENT_EXPORT DatabaseConnection {
  public:
   // Opens a connection to the specified database. When `name` is present, it
   // will create a new DB if one does not exist. When `name` is null and a DB
@@ -70,8 +74,6 @@ class DatabaseConnection {
 
   const blink::IndexedDBDatabaseMetadata& metadata() const { return metadata_; }
 
-  base::WeakPtr<DatabaseConnection> GetWeakPtr();
-
   // Gets the version of the database that is actually committed. This can be
   // different from the version in `metadata_` during a version change
   // transaction.
@@ -87,14 +89,16 @@ class DatabaseConnection {
   // Get the size of the database opened in-memory.
   uint64_t GetInMemorySize() const;
 
+  std::unique_ptr<BackingStoreDatabaseImpl> CreateDatabaseWrapper();
+
   // Exposed to `BackingStoreDatabaseImpl`.
-  std::unique_ptr<BackingStoreTransactionImpl> CreateTransaction(
+  std::unique_ptr<BackingStoreTransactionImpl> CreateTransactionWrapper(
       base::PassKey<BackingStoreDatabaseImpl>,
       blink::mojom::IDBTransactionDurability durability,
       blink::mojom::IDBTransactionMode mode);
 
-  void BeginTransaction(base::PassKey<BackingStoreTransactionImpl>,
-                        const BackingStoreTransactionImpl& transaction);
+  Status BeginTransaction(base::PassKey<BackingStoreTransactionImpl>,
+                          const BackingStoreTransactionImpl& transaction);
   // In this phase, blobs, if any, are asynchronously written.
   Status CommitTransactionPhaseOne(
       base::PassKey<BackingStoreTransactionImpl>,
@@ -210,33 +214,59 @@ class DatabaseConnection {
   // keep `this` alive.
   void DeleteIdbDatabase(base::PassKey<BackingStoreDatabaseImpl>);
 
-  // These are exposed for `RecordIterator`s to access `Statement` resources
-  // associated with `db_`.
+  // These are exposed for cursors to access `Statement` resources associated
+  // with `db_`.
+  //
   // Returns a unique ID and a pointer to a `Statement` whose lifetime is
   // managed by `this`.
-  std::tuple<uint64_t, sql::Statement*> CreateLongLivedStatement(
-      std::string query);
-  // Called when a statement is no longer needed by a `RecordIterator`.
-  void ReleaseLongLivedStatement(uint64_t id);
+  std::tuple<uint64_t, sql::Statement*> CreateCursorStatement(
+      base::PassKey<BackingStoreCursorImpl>,
+      std::string query,
+      int64_t object_store_id);
+  // Called when a statement is no longer needed by the cursor that created it.
+  void ReleaseCursorStatement(base::PassKey<BackingStoreCursorImpl>,
+                              uint64_t id);
   // May return `nullptr` if the statement has been destroyed.
-  sql::Statement* GetLongLivedStatement(uint64_t id);
+  sql::Statement* GetCursorStatement(base::PassKey<BackingStoreCursorImpl>,
+                                     uint64_t id);
 
-  // Also for internal use only; exposed for RecordIterator implementations.
+  // Returns a `Status` for the last operation on `db_`.
+  // This is exposed for cursor implementations which `Step()` statements
+  // outside of this class.
+  Status GetStatusOfLastOperation(base::PassKey<BackingStoreCursorImpl>);
+
+  // Also for internal use only; exposed for cursor implementations.
   // This adds external objects to `value` which should later be further hooked
   // up via `CreateAllExternalObjects()`.
-  IndexedDBValue AddExternalObjectMetadataToValue(IndexedDBValue value,
-                                                  int64_t record_row_id);
+  StatusOr<IndexedDBValue> AddExternalObjectMetadataToValue(
+      IndexedDBValue value,
+      int64_t record_row_id);
+
+  // Changes the size at which blobs are chunked.
+  static void OverrideMaxBlobSizeForTesting(base::ByteCount size);
 
  private:
-  DatabaseConnection(base::FilePath path,
-                     std::unique_ptr<sql::Database> db,
-                     std::unique_ptr<sql::MetaTable> meta_table,
-                     blink::IndexedDBDatabaseMetadata metadata,
-                     BackingStoreImpl& backing_store);
+  FRIEND_TEST_ALL_PREFIXES(DatabaseConnectionTest, TooNew);
+
+  DatabaseConnection(base::FilePath path, BackingStoreImpl& backing_store);
+
+  // All startup/initialization tasks that can error are performed here. Will
+  // return Status::OK() on success. `name` must be provided if the database is
+  // new. If the database is pre-existing, `name` may not be provided, but if it
+  // is, it must match the database's stored name.
+  Status Init(std::optional<std::u16string_view> name);
 
   bool HasActiveVersionChangeTransaction() const {
     return metadata_snapshot_.has_value();
   }
+
+  // Gets a handle to a blob in either the `blobs` table (when `chunk_index` is
+  // 0) or the `overflow_blob_chunks` table, used for writing bytes that
+  // overflow a single SQLite BLOB.
+  std::optional<sql::StreamingBlobHandle> OpenBlobChunkForStreaming(
+      int64_t blob_row_id,
+      bool readonly,
+      size_t chunk_index);
 
   // Invoked by an owned `BlobWriter` when it's done writing, or has encountered
   // an error.
@@ -255,18 +285,73 @@ class DatabaseConnection {
   // when `ActiveBlobStreamer` in `active_blobs_` no longer has connections.
   void OnBlobBecameInactive(int64_t blob_number);
 
-  // These methods add or remove rows to the `blob_references` table. The rows
-  // correspond to active blobs, i.e. the `record_row_id` will be null. These
-  // updates are made right away when `active_blobs_` is updated (an element is
-  // added or removed), and also after a transaction is rolled back which may
-  // have caused the loss of a `blob_references` update.
-  void AddActiveBlobReference(int64_t blob_number);
-  void RemoveActiveBlobReference(int64_t blob_number);
+  // This method adds a row to the `blob_references` table. The row corresponds
+  // to an active blob, i.e. the `record_row_id` will be null. These updates are
+  // made right away when `active_blobs_` is updated (an element is added or
+  // removed), and also after a transaction is rolled back which may have caused
+  // the loss of a `blob_references` update.
+  bool AddActiveBlobReference(int64_t blob_number);
 
   // The connection needs to be held open when there are active blobs or an
   // active BackingStore::Database referencing it. This will return false if
   // that's the case.
   bool CanBeDestroyed() const;
+
+  // Attempts to read metadata from the SQLite DB for storing in memory (in
+  // `metadata_`).
+  StatusOr<blink::IndexedDBDatabaseMetadata> GenerateIndexedDbMetadata();
+
+  // This enum is used to track various events of interest, mostly errors.
+  //
+  // LINT.IfChange(SpecificEvent)
+  enum class SpecificEvent : uint8_t {
+    // Logged once per database connection, when initializing.
+    kDatabaseOpenAttempt = 0,
+    // Logged at most once per database connection, at shutdown time.
+    kDatabaseHadSqlError = 1,
+
+    // These errors correlate to points in the code where a SQLite error may
+    // occur, but cannot easily be reported to the frontend because they are not
+    // directly associated with an ongoing request. Most of them correlate with
+    // blob bookkeeping, and the worst thing that can happen is that reading
+    // from a blob may throw errors or that blob data may persist on disk until
+    // the next time the DB is opened.
+    kSyncActiveBlobsFailed = 2,
+    kOpenBlobForStreamingFailed = 3,
+    kAddActiveBlobReferenceFailed = 4,
+    kRemoveActiveBlobReferenceFailed = 5,
+    kPragmaPageCountFailed = 6,
+    kPragmaPageSizeFailed = 7,
+
+    // Events associated with various callers of `Fatal()`.
+    kMissingMetadataTable = 8,
+    kDatabaseTooNew = 9,
+    kDatabaseSchemaUnknown = 10,
+    kDatabaseNameMismatch = 11,
+    kBlobChunkMissing = 12,
+    kObjectStoreNotFound = 13,
+    kBlobTypeUnknown = 14,
+
+    kMaxValue = kBlobTypeUnknown,
+  };
+  // LINT.ThenChange(//tools/metrics/histograms/metadata/storage/enums.xml:IndexedDbSqliteSpecificEvent)
+
+  void LogEvent(SpecificEvent event) const;
+
+  // Called when a logical inconsistency or other irrecoverable state is
+  // detected. This could be due to a bug or due to disk corruption. This will
+  // not/should not be called when SQLite reports an error. If SQLite does not
+  // report an error, but a logical inconsistency is found in the database, we
+  // assume that recovering will fail. Therefore this function marks the
+  // database for deletion.
+  Status Fatal(Status s, SpecificEvent event);
+
+  // Called when the records of an object store have been modified (inserted or
+  // deleted). This invalidates all cursor statements operating on that store.
+  void OnRecordsModified(int64_t object_store_id);
+
+  // Makes sure the given IDs exist in `metadata_`.
+  void ValidateInputs(int64_t object_store_id, int64_t index_id);
 
   // The expected path for `db_`, or empty for in-memory DBs.
   const base::FilePath path_;
@@ -288,10 +373,18 @@ class DatabaseConnection {
   // database at a time.
   std::unique_ptr<sql::Transaction> active_rw_transaction_;
 
-  // Long-lived statements (those used for cursor iteration) are owned by `this`
-  // to ensure that database resources are freed before closing `db_`.
+  // Cursor statements are owned by `this` to ensure that database resources are
+  // freed before closing `db_`. See `BackingStoreImpl::GetStatement()` for why
+  // cursor statements are not ephemeral (unlike other statements).
+  //
+  // The object store ID is also stored alongside the `sql::Statement` so that
+  // the statement can be invalidated when records change.
+  // TODO(crbug.com/436880910): Consider also storing the `IndexedDBKeyRange` of
+  // the statement for more precise invalidation.
+  using CursorStatementHolder =
+      std::tuple<std::unique_ptr<sql::Statement>, int64_t>;
   uint64_t next_statement_id_ = 0;
-  std::map<uint64_t, std::unique_ptr<sql::Statement>> statements_;
+  std::map<uint64_t, CursorStatementHolder> cursor_statements_;
 
   // Only set while a version change transaction is active.
   std::optional<blink::IndexedDBDatabaseMetadata> metadata_snapshot_;
@@ -335,14 +428,20 @@ class DatabaseConnection {
   // transaction is ultimately committed or rolled back.
   bool sync_active_blobs_after_transaction_ = false;
 
+  // True once `DeleteIdbDatabase` has been called, or if a fatal error occurred
+  // that we can't recover from.
+  bool marked_for_permanent_deletion_ = false;
+
   // TODO(crbug.com/419203257): this should invalidate its weak pointers when
   // `db_` is closed.
-  base::WeakPtrFactory<DatabaseConnection> record_iterator_weak_factory_{this};
+  base::WeakPtrFactory<DatabaseConnection> cursor_weak_factory_{this};
 
   // Only used for the callbacks passed to `blob_writers_`.
   base::WeakPtrFactory<DatabaseConnection> blob_writers_weak_factory_{this};
 
-  base::WeakPtrFactory<DatabaseConnection> weak_factory_{this};
+  // Used to vend pointers to the interfaces within `BackingStore`.
+  base::WeakPtrFactory<DatabaseConnection> interface_wrapper_weak_factory_{
+      this};
 };
 
 }  // namespace sqlite

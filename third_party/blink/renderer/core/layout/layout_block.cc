@@ -117,10 +117,11 @@ void LayoutBlock::WillBeDestroyed() {
 }
 
 void LayoutBlock::StyleWillChange(StyleDifference diff,
-                                  const ComputedStyle& new_style) {
+                                  const ComputedStyle& new_style,
+                                  StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   SetIsAtomicInlineLevel(ShouldBeHandledAsInline(new_style));
-  LayoutBox::StyleWillChange(diff, new_style);
+  LayoutBox::StyleWillChange(diff, new_style, style_change_context);
 }
 
 // Compute a local version of the "font size scale factor" used by SVG
@@ -134,8 +135,10 @@ static double ComputeSquaredLocalFontSizeScalingFactor(
   return affine.XScaleSquared() + affine.YScaleSquared();
 }
 
-void LayoutBlock::StyleDidChange(StyleDifference diff,
-                                 const ComputedStyle* old_style) {
+void LayoutBlock::StyleDidChange(
+    StyleDifference diff,
+    const ComputedStyle* old_style,
+    const StyleChangeContext& style_change_context) {
   NOT_DESTROYED();
   // Computes old scaling factor before PaintLayer::UpdateTransform()
   // updates Layer()->Transform().
@@ -145,7 +148,7 @@ void LayoutBlock::StyleDidChange(StyleDifference diff,
         ComputeSquaredLocalFontSizeScalingFactor(Layer()->Transform());
   }
 
-  LayoutBox::StyleDidChange(diff, old_style);
+  LayoutBox::StyleDidChange(diff, old_style, style_change_context);
 
   const ComputedStyle& new_style = StyleRef();
 
@@ -507,7 +510,7 @@ PositionWithAffinity LayoutBlock::PositionForPointIfOutsideAtomicInlineLevel(
   DCHECK(IsAtomicInlineLevel());
   LogicalOffset logical_offset =
       WritingModeConverter({StyleRef().GetWritingMode(), ResolvedDirection()},
-                           Size())
+                           StitchedSize())
           .ToLogical(point, PhysicalSize());
   if (logical_offset.inline_offset < 0)
     return FirstPositionInOrBeforeThis();
@@ -596,8 +599,11 @@ const LayoutBlock* LayoutBlock::FirstLineStyleParentBlock() const {
   // If we are not the first in-flow child of our parent, we cannot get
   // ::first-line style from our ancestors.
   const LayoutObject* first_child = parent_layout_block->FirstChild();
-  while (first_child->IsFloatingOrOutOfFlowPositioned())
+  while (first_child->IsFloatingOrOutOfFlowPositioned() ||
+         (RuntimeEnabledFeatures::FirstLineOnListItemEnabled() &&
+          first_child->IsListMarker())) {
     first_child = first_child->NextSibling();
+  }
   if (first_child != first_line_block)
     return nullptr;
 
@@ -622,7 +628,7 @@ LayoutBlockFlow* LayoutBlock::NearestInnerBlockWithFirstLine() {
 // so the firstChild() is nullptr if the only child is an empty inline-block.
 inline bool LayoutBlock::IsInlineBoxWrapperActuallyChild() const {
   NOT_DESTROYED();
-  return IsInline() && IsAtomicInlineLevel() && !Size().IsEmpty() &&
+  return IsInline() && IsAtomicInlineLevel() && !StitchedSize().IsEmpty() &&
          GetNode() && EditingIgnoresContent(*GetNode());
 }
 
@@ -638,7 +644,9 @@ PhysicalRect LayoutBlock::LocalCaretRect(int caret_offset,
   const ComputedStyle& style = StyleRef();
   const bool is_horizontal = style.IsHorizontalWritingMode();
 
-  LayoutUnit inline_size = is_horizontal ? Size().width : Size().height;
+  PhysicalSize stitched_size = StitchedSize();
+  LayoutUnit inline_size =
+      is_horizontal ? stitched_size.width : stitched_size.height;
   LogicalRect caret_rect = LocalCaretRectForEmptyElement(
       inline_size, TextIndentOffset(), caret_shape);
   return CreateWritingModeConverter().ToPhysical(caret_rect);
@@ -660,7 +668,7 @@ void LayoutBlock::AddOutlineRects(OutlineRectCollector& collector,
 
   // For anonymous blocks, the children add outline rects.
   if (!IsAnonymous()) {
-    collector.AddRect(PhysicalRect(additional_offset, Size()));
+    collector.AddRect(PhysicalRect(additional_offset, StitchedSize()));
   }
 
   if (ShouldIncludeBlockInkOverflow(include_block_overflows) &&

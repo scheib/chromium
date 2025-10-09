@@ -74,7 +74,6 @@ import org.chromium.base.Token;
 import org.chromium.base.supplier.LazyOneshotSupplier;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
@@ -101,7 +100,6 @@ import org.chromium.chrome.browser.tab.TabSelectionType;
 import org.chromium.chrome.browser.tab_group_sync.TabGroupSyncFeatures;
 import org.chromium.chrome.browser.tab_group_sync.TabGroupSyncFeaturesJni;
 import org.chromium.chrome.browser.tab_group_sync.TabGroupSyncServiceFactory;
-import org.chromium.chrome.browser.tab_ui.ActionConfirmationManager;
 import org.chromium.chrome.browser.tab_ui.RecyclerViewPosition;
 import org.chromium.chrome.browser.tabmodel.TabClosingSource;
 import org.chromium.chrome.browser.tabmodel.TabClosureParams;
@@ -157,7 +155,7 @@ import org.chromium.url.GURL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
+import java.util.function.Supplier;
 
 /** Tests for {@link TabGridDialogMediator}. */
 @SuppressWarnings({"ArraysAsListWithZeroOrOneArgument", "ResultOfMethodCallIgnored"})
@@ -203,7 +201,6 @@ public class TabGridDialogMediatorUnitTest {
     @Mock private Supplier<RecyclerViewPosition> mRecyclerViewPositionSupplier;
     @Mock private DataSharingTabManager mDataSharingTabManager;
     @Mock private Runnable mShowColorPickerPopupRunnable;
-    @Mock private ActionConfirmationManager mActionConfirmationManager;
     @Mock private ModalDialogManager mModalDialogManager;
     @Mock private IdentityServicesProvider mIdentityServicesProvider;
     @Mock private IdentityManager mIdentityManager;
@@ -456,6 +453,7 @@ public class TabGridDialogMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void onTitleTextChange_WithoutFocus() {
         TextWatcher textWatcher = mModel.get(TabGridDialogProperties.TITLE_TEXT_WATCHER);
         // Mock tab1 is the current tab for the dialog.
@@ -473,6 +471,7 @@ public class TabGridDialogMediatorUnitTest {
     }
 
     @Test
+    @SuppressWarnings("DirectInvocationOnMock")
     public void onTitleTextChange_WithFocus() {
         TextWatcher textWatcher = mModel.get(TabGridDialogProperties.TITLE_TEXT_WATCHER);
         // Mock tab1 is the current tab for the dialog.
@@ -1053,6 +1052,31 @@ public class TabGridDialogMediatorUnitTest {
                 .setTabGroupTitle(eq(TAB_GROUP_ID), eq(CUSTOMIZED_DIALOG_TITLE));
         assertThat(
                 mModel.get(TabGridDialogProperties.HEADER_TITLE), equalTo(CUSTOMIZED_DIALOG_TITLE));
+    }
+
+    @Test
+    public void hideDialog_StoreModifiedGroupTitle_DeletedGroup() {
+        mMediator.setCurrentTabGroupIdForTesting(TAB_GROUP_ID);
+        mModel.set(TabGridDialogProperties.HEADER_TITLE, TAB1_TITLE);
+        mModel.set(TabGridDialogProperties.IS_DIALOG_VISIBLE, true);
+
+        // Mock that tab1 is in a group.
+        createTabGroup(new ArrayList<>(Arrays.asList(mTab1, mTab2)), TAB1_ID, TAB_GROUP_ID);
+
+        // Mock that we have a modified group title before dialog is hidden.
+        TextWatcher textWatcher = mModel.get(TabGridDialogProperties.TITLE_TEXT_WATCHER);
+        View.OnFocusChangeListener onFocusChangeListener =
+                mModel.get(TabGridDialogProperties.TITLE_TEXT_ON_FOCUS_LISTENER);
+        onFocusChangeListener.onFocusChange(mTitleTextView, true);
+        textWatcher.afterTextChanged(mEditable);
+        assertThat(
+                mMediator.getCurrentGroupModifiedTitleForTesting(),
+                equalTo(CUSTOMIZED_DIALOG_TITLE));
+
+        // Now mark the group as deleted and the filter should not be called.
+        when(mTabGroupModelFilter.tabGroupExists(TAB_GROUP_ID)).thenReturn(false);
+        mMediator.hideDialog(false);
+        verify(mTabGroupModelFilter, never()).setTabGroupTitle(any(), anyString());
     }
 
     @Test
@@ -2137,15 +2161,14 @@ public class TabGridDialogMediatorUnitTest {
             messageList.add(makePersistentMessage(CollaborationEvent.TAB_UPDATED));
         }
         when(mMessagingBackendService.getMessagesForGroup(
-                        any(), eq(Optional.of(PersistentNotificationType.DIRTY_TAB))))
+                        any(), eq(PersistentNotificationType.DIRTY_TAB)))
                 .thenReturn(messageList);
 
         List<PersistentMessage> tombstonedMessageList = new ArrayList<>();
         for (int i = 0; i < removed; i++) {
             tombstonedMessageList.add(makePersistentMessage(CollaborationEvent.TAB_REMOVED));
         }
-        when(mMessagingBackendService.getMessages(
-                        eq(Optional.of(PersistentNotificationType.TOMBSTONED))))
+        when(mMessagingBackendService.getMessages(eq(PersistentNotificationType.TOMBSTONED)))
                 .thenReturn(tombstonedMessageList);
     }
 

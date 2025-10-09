@@ -39,7 +39,6 @@
 #import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
 #import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
-#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/chrome/test/app/mock_reauthentication_module.h"
 #import "ios/chrome/test/app/tab_test_util.h"
@@ -456,6 +455,11 @@ static std::unique_ptr<ScopedAutofillPaymentReauthModuleOverride>
                      autofill::AutofillProfile::RecordType::kAccountHome);
 }
 
++ (void)saveExampleAccountNameEmailProfile {
+  AddAutofillProfile([self personalDataManager],
+                     autofill::AutofillProfile::RecordType::kAccountNameEmail);
+}
+
 + (NSString*)exampleProfileName {
   autofill::AutofillProfile profile = autofill::test::GetFullProfile();
   std::u16string name = profile.GetInfo(
@@ -694,8 +698,11 @@ static std::unique_ptr<ScopedAutofillPaymentReauthModuleOverride>
       .SetPaymentMethodsMandatoryReauthEnabled(enabled);
 }
 
-+ (BOOL)isKeyboardAccessoryUpgradeEnabled {
-  return IsKeyboardAccessoryUpgradeEnabled();
++ (void)setPaymentCvcStorageEnabled:(BOOL)enabled {
+  autofill::PersonalDataManager* personalDataManager =
+      [self personalDataManager];
+  personalDataManager->payments_data_manager().SetPaymentsCvcStorageEnabled(
+      enabled);
 }
 
 + (BOOL)isDynamicallyLoadFieldsOnInputEnabled {

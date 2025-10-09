@@ -49,14 +49,18 @@ TestComposeboxQueryController::TestComposeboxQueryController(
     std::string locale,
     TemplateURLService* template_url_service,
     variations::VariationsClient* variations_client,
-    bool send_lns_surface)
+    bool send_lns_surface,
+    bool enable_multi_context_input_flow,
+    bool enable_viewport_images)
     : ComposeboxQueryController(identity_manager,
                                 url_loader_factory,
                                 channel,
                                 locale,
                                 template_url_service,
                                 variations_client,
-                                send_lns_surface) {}
+                                send_lns_surface,
+                                enable_multi_context_input_flow,
+                                enable_viewport_images) {}
 TestComposeboxQueryController::~TestComposeboxQueryController() = default;
 
 std::unique_ptr<EndpointFetcher>
@@ -95,8 +99,9 @@ TestComposeboxQueryController::CreateEndpointFetcher(
           google_apis::ApiErrorCode::HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    last_sent_file_upload_request_ = lens::LensOverlayServerRequest();
-    last_sent_file_upload_request_->ParseFromString(request_string);
+    lens::LensOverlayServerRequest sent_request;
+    sent_request.ParseFromString(request_string);
+    sent_upload_requests_.push_back(sent_request);
   }
 
   last_sent_cors_exempt_headers_.clear();

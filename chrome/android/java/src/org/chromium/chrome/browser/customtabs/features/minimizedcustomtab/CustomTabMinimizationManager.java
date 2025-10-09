@@ -29,7 +29,8 @@ import androidx.lifecycle.Lifecycle.State;
 import org.chromium.base.Log;
 import org.chromium.base.ObserverList;
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.base.supplier.Supplier;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
@@ -51,8 +52,10 @@ import org.chromium.url.GURL;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.ref.WeakReference;
+import java.util.function.Supplier;
 
 /** Class that manages minimizing a Custom Tab into picture-in-picture. */
+@NullMarked
 public class CustomTabMinimizationManager
         implements CustomTabMinimizeDelegate,
                 Consumer<PictureInPictureModeChangedInfo>,
@@ -78,7 +81,8 @@ public class CustomTabMinimizationManager
 
     @VisibleForTesting static final Rational ASPECT_RATIO = new Rational(16, 9);
 
-    @VisibleForTesting static WeakReference<CustomTabMinimizeDelegate> sLastMinimizeDelegate;
+    @VisibleForTesting
+    static @Nullable WeakReference<CustomTabMinimizeDelegate> sLastMinimizeDelegate;
 
     @VisibleForTesting static final String KEY_IS_CCT_MINIMIZED = "isCctMinimized";
 
@@ -101,8 +105,8 @@ public class CustomTabMinimizationManager
     private final ObserverList<Observer> mObservers = new ObserverList<>();
     private final ActivityLifecycleDispatcher mLifecycleDispatcher;
     private final Supplier<Bundle> mSavedInstanceStateSupplier;
-    private MinimizedCardCoordinator mCoordinator;
-    private PropertyModel mModel;
+    private @Nullable MinimizedCardCoordinator mCoordinator;
+    private @Nullable PropertyModel mModel;
     private boolean mMinimized;
 
     /**
@@ -153,7 +157,7 @@ public class CustomTabMinimizationManager
     @Override
     public void minimize() {
         if (mMinimized) return;
-        if (!mTabProvider.hasValue()) return;
+        if (!(mTabProvider.get() != null)) return;
         mFeatureEngagementDelegate.notifyUserEngaged();
         var builder = new PictureInPictureParams.Builder().setAspectRatio(ASPECT_RATIO);
         if (VERSION.SDK_INT >= VERSION_CODES.S) {
@@ -235,9 +239,10 @@ public class CustomTabMinimizationManager
         Tab tab = mTabProvider.get();
 
         if (tab == null) {
+            Bundle savedInstanceState = mSavedInstanceStateSupplier.get();
             boolean wasInitializedMinimized =
-                    mSavedInstanceStateSupplier.hasValue()
-                            && mSavedInstanceStateSupplier.get().getBoolean(KEY_IS_CCT_MINIMIZED);
+                    savedInstanceState != null
+                            && savedInstanceState.getBoolean(KEY_IS_CCT_MINIMIZED);
             String msg =
                     "Tab is null. Activity state is "
                             + mActivity.getLifecycle().getCurrentState()
@@ -272,9 +277,9 @@ public class CustomTabMinimizationManager
     }
 
     private void maybeInitializeAsMinimized() {
+        Bundle savedInstanceState = mSavedInstanceStateSupplier.get();
         mMinimized =
-                mSavedInstanceStateSupplier.hasValue()
-                        && mSavedInstanceStateSupplier.get().getBoolean(KEY_IS_CCT_MINIMIZED);
+                savedInstanceState != null && savedInstanceState.getBoolean(KEY_IS_CCT_MINIMIZED);
 
         if (mMinimized) {
             mLifecycleDispatcher.register(
@@ -297,7 +302,7 @@ public class CustomTabMinimizationManager
 
     private void showMinimizedCard(boolean fromSavedState) {
         if (fromSavedState) {
-            assert mSavedInstanceStateSupplier.hasValue();
+            assert mSavedInstanceStateSupplier.get() != null;
             mModel = toModel(mSavedInstanceStateSupplier.get());
         } else {
             Tab tab = mTabProvider.get();
@@ -351,7 +356,7 @@ public class CustomTabMinimizationManager
         }
     }
 
-    private CustomTabMinimizeDelegate getLastMinimizeDelegate() {
+    private @Nullable CustomTabMinimizeDelegate getLastMinimizeDelegate() {
         if (sLastMinimizeDelegate == null) return null;
 
         return sLastMinimizeDelegate.get();
@@ -392,7 +397,7 @@ public class CustomTabMinimizationManager
         }
     }
 
-    private static void putIntoBundleFromModel(Bundle out, PropertyModel model) {
+    private static void putIntoBundleFromModel(Bundle out, @Nullable PropertyModel model) {
         if (model == null) return;
 
         out.putString(TITLE.toString(), model.get(TITLE));

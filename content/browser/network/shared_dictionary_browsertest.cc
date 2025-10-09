@@ -690,13 +690,13 @@ class SharedDictionaryBrowserTestBase : public ContentBrowserTest {
     auto response = std::make_unique<net::test_server::BasicHttpResponse>();
     response->set_code(net::HTTP_OK);
 
-    if (request.GetURL().query() == "html") {
+    if (request.GetURL().GetQuery() == "html") {
       response->set_content_type("text/html");
     } else {
       response->set_content_type("application/javascript");
     }
 
-    if (request.GetURL().query() != "no_acao" &&
+    if (request.GetURL().GetQuery() != "no_acao" &&
         request.headers.find("origin") != request.headers.end()) {
       response->AddCustomHeader("Access-Control-Allow-Credentials", "true");
       response->AddCustomHeader("Access-Control-Allow-Origin",
@@ -731,13 +731,7 @@ class SharedDictionaryBrowserTest
     : public SharedDictionaryBrowserTestBase,
       public ::testing::WithParamInterface<BrowserType> {
  public:
-  SharedDictionaryBrowserTest() {
-    scoped_feature_list_.InitWithFeatures(
-        /*enabled_features=*/
-        {network::features::kCompressionDictionaryTransportBackend,
-         network::features::kCompressionDictionaryTransport},
-        /*disabled_features=*/{});
-  }
+  SharedDictionaryBrowserTest() {}
   SharedDictionaryBrowserTest(const SharedDictionaryBrowserTest&) = delete;
   SharedDictionaryBrowserTest& operator=(const SharedDictionaryBrowserTest&) =
       delete;
@@ -891,8 +885,7 @@ class SharedDictionaryBrowserTest
 
   void SendMemoryPressureToNetworkService() {
     content::GetNetworkService()->OnMemoryPressure(
-        base::MemoryPressureListener::MemoryPressureLevel::
-            MEMORY_PRESSURE_LEVEL_CRITICAL);
+        base::MEMORY_PRESSURE_LEVEL_CRITICAL);
     // To make sure that OnMemoryPressure has been received by the network
     // service, send a GetNetworkList IPC and wait for the result.
     base::RunLoop run_loop;
@@ -917,7 +910,7 @@ class SharedDictionaryBrowserTest
     }
     auto response = std::make_unique<net::test_server::BasicHttpResponse>();
     response->set_code(net::HTTP_MOVED_PERMANENTLY);
-    const std::string location = request.GetURL().query();
+    const std::string location = request.GetURL().GetQuery();
     response->AddCustomHeader("Location", location);
     if (request.headers.find("origin") != request.headers.end()) {
       response->AddCustomHeader("Access-Control-Allow-Credentials", "true");
@@ -948,11 +941,11 @@ class SharedDictionaryBrowserTest
                                 request.headers.at("origin"));
     }
 
-    if (request.GetURL().query() == "cache") {
+    if (request.GetURL().GetQuery() == "cache") {
       response->AddCustomHeader("Clear-Site-Data", "\"cache\"");
-    } else if (request.GetURL().query() == "cookies") {
+    } else if (request.GetURL().GetQuery() == "cookies") {
       response->AddCustomHeader("Clear-Site-Data", "\"cookies\"");
-    } else if (request.GetURL().query() == "storage") {
+    } else if (request.GetURL().GetQuery() == "storage") {
       response->AddCustomHeader("Clear-Site-Data", "\"storage\"");
     }
     response->set_content("");
@@ -997,7 +990,6 @@ class SharedDictionaryBrowserTest
 
   raw_ptr<Shell> off_the_record_shell_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> cross_origin_server_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 INSTANTIATE_TEST_SUITE_P(All,

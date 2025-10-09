@@ -32,8 +32,8 @@
 #include "components/commerce/core/commerce_feature_list.h"
 #include "components/data_sharing/public/features.h"
 #include "components/omnibox/browser/vector_icons.h"
+#include "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
 #include "components/plus_addresses/core/common/features.h"
-#include "components/plus_addresses/grit/plus_addresses_strings.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/strings/grit/components_strings.h"
@@ -42,7 +42,7 @@
 #include "ui/menus/simple_menu_model.h"
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#include "components/plus_addresses/resources/vector_icons.h"
+#include "components/plus_addresses/core/browser/resources/vector_icons.h"
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 ToastService::ToastService(BrowserWindowInterface* browser_window_interface) {
@@ -111,8 +111,7 @@ void ToastService::RegisterToasts(
           .AddGlobalScoped()
           .Build());
 
-  if (base::FeatureList::IsEnabled(commerce::kProductSpecifications) &&
-      base::FeatureList::IsEnabled(commerce::kCompareConfirmationToast)) {
+  if (base::FeatureList::IsEnabled(commerce::kProductSpecifications)) {
     toast_registry_->RegisterToast(
         ToastId::kAddedToComparisonTable,
         ToastSpecification::Builder(omnibox::kProductSpecificationsAddedIcon,
@@ -258,18 +257,15 @@ void ToastService::RegisterToasts(
         ToastSpecification::Builder(
             kTabGroupSharingIcon,
             IDS_COLLABORATION_SHARED_TAB_GROUPS_AVAILABLE_AGAIN_IPH_MESSAGE)
-            .AddCloseButton()
             .AddGlobalScoped()
             .Build());
   }
 
-  if (toast_features::IsEnabled(toast_features::kPinnedTabToastOnClose)) {
-    toast_registry_->RegisterToast(
-        ToastId::kClosePinnedTab,
-        ToastSpecification::Builder(kKeepIcon, IDS_CLOSE_PINNED_TAB_TOAST_BODY)
-            .SetToastAsActionable()
-            .Build());
-  }
+  toast_registry_->RegisterToast(
+      ToastId::kClosePinnedTab,
+      ToastSpecification::Builder(kKeepIcon, IDS_CLOSE_PINNED_TAB_TOAST_BODY)
+          .SetToastAsActionable()
+          .Build());
 
   if (features::kGlicActorUiToast.Get()) {
     toast_registry_->RegisterToast(
@@ -294,5 +290,11 @@ void ToastService::RegisterToasts(
                                },
                                base::Unretained(browser_window_interface)))
           .AddGlobalScoped()
+          .Build());
+
+  toast_registry_->RegisterToast(
+      ToastId::kEmailVerified,
+      ToastSpecification::Builder(vector_icons::kEmailIcon, IDS_EMAIL_VERIFIED)
+          .AddCloseButton()
           .Build());
 }  // RegisterToasts() end.

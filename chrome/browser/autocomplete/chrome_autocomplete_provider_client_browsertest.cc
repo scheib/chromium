@@ -8,6 +8,7 @@
 
 #include "base/functional/bind.h"
 #include "chrome/browser/ui/lens/test_lens_search_controller.h"
+#include "chrome/browser/ui/omnibox/omnibox_controller.h"
 #include "chrome/browser/ui/tabs/public/tab_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
@@ -16,7 +17,6 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/lens/lens_overlay_invocation_source.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
-#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/fake_service_worker_context.h"
@@ -105,11 +105,10 @@ IN_PROC_BROWSER_TEST_F(ChromeAutocompleteProviderClientTest,
                        OpenLensOverlay_Show) {
   EXPECT_CALL(*GetLensSearchController(), OpenLensOverlay(testing::_))
       .Times(1)
-      .WillOnce(testing::Invoke(
-          [](lens::LensOverlayInvocationSource invocation_source) {
-            EXPECT_EQ(lens::LensOverlayInvocationSource::kOmniboxPageAction,
-                      invocation_source);
-          }));
+      .WillOnce([](lens::LensOverlayInvocationSource invocation_source) {
+        EXPECT_EQ(lens::LensOverlayInvocationSource::kOmniboxPageAction,
+                  invocation_source);
+      });
 
   GetAutocompleteProviderClient()->OpenLensOverlay(/*show=*/true);
 }
@@ -118,11 +117,10 @@ IN_PROC_BROWSER_TEST_F(ChromeAutocompleteProviderClientTest,
                        OpenLensOverlay_DontShow) {
   EXPECT_CALL(*GetLensSearchController(), StartContextualization(testing::_))
       .Times(1)
-      .WillOnce(testing::Invoke(
-          [](lens::LensOverlayInvocationSource invocation_source) {
-            EXPECT_EQ(lens::LensOverlayInvocationSource::kOmnibox,
-                      invocation_source);
-          }));
+      .WillOnce([](lens::LensOverlayInvocationSource invocation_source) {
+        EXPECT_EQ(lens::LensOverlayInvocationSource::kOmnibox,
+                  invocation_source);
+      });
 
   GetAutocompleteProviderClient()->OpenLensOverlay(/*show=*/false);
 }

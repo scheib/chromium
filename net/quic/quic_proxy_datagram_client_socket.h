@@ -10,6 +10,7 @@
 #include <queue>
 #include <string_view>
 
+#include "net/base/completion_once_callback.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
 #include "net/log/net_log.h"
@@ -117,7 +118,7 @@ class NET_EXPORT_PRIVATE QuicProxyDatagramClientSocket
                         const quiche::UnknownCapsule& capsule) override;
 
   const HttpResponseInfo* GetConnectResponseInfo() const;
-  bool IsConnected() const;
+  bool IsConnectedForTesting() const;
 
   const std::queue<std::string>& GetDatagramsForTesting() { return datagrams_; }
 
@@ -136,6 +137,9 @@ class NET_EXPORT_PRIVATE QuicProxyDatagramClientSocket
     STATE_SEND_REQUEST_COMPLETE,
     STATE_READ_REPLY,
     STATE_READ_REPLY_COMPLETE,
+    STATE_PROCESS_RESPONSE_HEADERS,
+    STATE_PROCESS_RESPONSE_HEADERS_COMPLETE,
+    STATE_PROCESS_RESPONSE_CODE,
     STATE_CONNECT_COMPLETE
   };
 
@@ -157,6 +161,9 @@ class NET_EXPORT_PRIVATE QuicProxyDatagramClientSocket
   int DoSendRequestComplete(int result);
   int DoReadReply();
   int DoReadReplyComplete(int result);
+  int DoProcessResponseHeaders();
+  int DoProcessResponseHeadersComplete(int result);
+  int DoProcessResponseCode();
 
   // ProxyDelegate operates in terms of a full proxy chain and an
   // index into that chain identifying the "current" proxy. Emulate
@@ -185,6 +192,15 @@ class NET_EXPORT_PRIVATE QuicProxyDatagramClientSocket
   std::queue<std::string> datagrams_;
   // Visitor on stream is registered to receive HTTP/3 datagrams.
   bool datagram_visitor_registered_ = false;
+
+  // Tracks whether the CONNECT-UDP request has been sent (even if response not
+  // received yet).
+  bool connect_request_sent_ = false;
+
+  // True if the response from the CONNECT-UDP request has not been received or
+  // processed yet. Will only be true if the client isn't waiting for the
+  // response before performing writes.
+  bool awaiting_connect_response_ = false;
 
   // CONNECT request and response.
   HttpRequestInfo request_;

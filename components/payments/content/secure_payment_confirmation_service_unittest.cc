@@ -82,7 +82,8 @@ class SecurePaymentConfirmationServiceTestBase {
         new SecurePaymentConfirmationService(
             *web_contents_->GetPrimaryMainFrame(),
             /*receiver=*/std::move(receiver), mock_web_data_service_,
-            with_authenticator ? CreateMockInternalAuthenticator() : nullptr));
+            with_authenticator ? CreateMockInternalAuthenticator() : nullptr,
+            /*browser_bound_key_store_keychain_access_group=*/""));
   }
 
   content::BrowserTaskEnvironment task_environment_;
@@ -384,7 +385,8 @@ TEST_P(SecurePaymentConfirmationServiceCredentialTest,
 
   EXPECT_CALL(*mock_web_data_service_,
               SetBrowserBoundKey(fake_credential_id_, fake_relying_party_id_,
-                                 GetParam().fake_key.GetIdentifier(), _));
+                                 GetParam().fake_key.GetIdentifier(),
+                                 /*last_used=*/Eq(std::nullopt), _));
   ::blink::mojom::PaymentOptionsPtr actual_payment_options;
   EXPECT_CALL(*mock_internal_authenticator_, SetPaymentOptions(_))
       .Times(1)

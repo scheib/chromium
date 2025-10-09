@@ -11,7 +11,7 @@
 #include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/test_accessibility_controller_client.h"
 #include "ash/app_list/test/app_list_test_helper.h"
-#include "ash/frame/non_client_frame_view_ash.h"
+#include "ash/frame/frame_view_ash.h"
 #include "ash/keyboard/ui/keyboard_ui.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/keyboard/ui/keyboard_util.h"
@@ -124,7 +124,7 @@ class TestShellObserver : public ShellObserver {
 };
 
 display::Display GetDisplayNearestWindow(aura::Window* window) {
-  return display::Screen::GetScreen()->GetDisplayNearestWindow(window);
+  return display::Screen::Get()->GetDisplayNearestWindow(window);
 }
 
 display::ManagedDisplayInfo CreateDisplayInfo(int64_t id, gfx::Rect bounds) {
@@ -384,7 +384,7 @@ TEST_F(WorkspaceLayoutManagerTest, FullscreenInDisplayToBeRestored) {
 
 // aura::WindowObserver implementation used by
 // DontClobberRestoreBoundsWindowObserver. This code mirrors what
-// BrowserFrameAsh does. In particular when this code sees the window was
+// BrowserNativeWidgetAsh does. In particular when this code sees the window was
 // maximized it changes the bounds of a secondary window. The secondary window
 // mirrors the status window.
 class DontClobberRestoreBoundsWindowObserver : public aura::WindowObserver {
@@ -430,7 +430,7 @@ TEST_F(WorkspaceLayoutManagerTest, DontClobberRestoreBounds) {
   window->Init(ui::LAYER_TEXTURED);
   window->SetBounds(gfx::Rect(10, 20, 30, 40));
   // NOTE: for this test to exercise the failure the observer needs to be added
-  // before the parent set. This mimics what BrowserFrameAsh does.
+  // before the parent set. This mimics what BrowserNativeWidgetAsh does.
   window->AddObserver(&window_observer);
   ParentWindowInPrimaryRootWindow(window.get());
   window->Show();
@@ -650,7 +650,7 @@ TEST_F(WorkspaceLayoutManagerTest, AdjustSnappedBoundsWidth) {
   const WindowSnapWMEvent snap_left(WM_EVENT_SNAP_PRIMARY);
   window1_state->OnWMEvent(&snap_left);
   const gfx::Rect work_area =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   const gfx::Rect expected_left_snapped_bounds = gfx::Rect(
       work_area.x(), work_area.y(), work_area.width() / 2, work_area.height());
   EXPECT_EQ(expected_left_snapped_bounds, window1->bounds());
@@ -669,7 +669,7 @@ TEST_F(WorkspaceLayoutManagerTest, AdjustSnappedBoundsWidth) {
   Shelf* shelf = GetPrimaryShelf();
   shelf->SetAlignment(ShelfAlignment::kLeft);
   const gfx::Rect new_work_area =
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area();
+      display::Screen::Get()->GetPrimaryDisplay().work_area();
   EXPECT_NE(work_area, new_work_area);
 
   const gfx::Rect new_expected_left_snapped_bounds =
@@ -1122,7 +1122,7 @@ TEST_F(WorkspaceLayoutManagerTest, DragToSnapThenMaximize) {
   UpdateDisplay("800x600");
 
   auto get_drag_point = [](aura::Window* win) {
-    auto* frame = NonClientFrameViewAsh::Get(win);
+    auto* frame = FrameViewAsh::Get(win);
     return frame->GetHeaderView()->GetBoundsInScreen().CenterPoint();
   };
 
@@ -1696,7 +1696,7 @@ class WorkspaceLayoutManagerBackdropTest : public AshTestBase {
   // Turn tablet mode on / off.
   void SetTabletModeEnabled(bool enabled) {
     Shell::Get()->tablet_mode_controller()->SetEnabledForTest(enabled);
-    ASSERT_EQ(enabled, display::Screen::GetScreen()->InTabletMode());
+    ASSERT_EQ(enabled, display::Screen::Get()->InTabletMode());
   }
 
   aura::Window* CreateTestWindowInParent(aura::Window* root_window) {
@@ -2298,8 +2298,7 @@ TEST_F(WorkspaceLayoutManagerKeyboardTest,
   InitKeyboardBounds();
   auto* kb_controller = keyboard::KeyboardUIController::Get();
 
-  gfx::Rect work_area(
-      display::Screen::GetScreen()->GetPrimaryDisplay().work_area());
+  gfx::Rect work_area(display::Screen::Get()->GetPrimaryDisplay().work_area());
 
   gfx::Rect orig_window_bounds(0, 100, work_area.width(),
                                work_area.height() - 100);

@@ -67,6 +67,10 @@ suite('PeoplePageIndex', function() {
     assertActiveView('syncControls');
 
     // <if expr="not is_chromeos">
+    Router.getInstance().navigateTo(routes.IMPORT_DATA);
+    await microtasksFinished();
+    assertActiveView('parent');
+
     Router.getInstance().navigateTo(routes.MANAGE_PROFILE);
     await microtasksFinished();
     assertActiveView('manageProfile');
@@ -137,5 +141,20 @@ suite('PeoplePageIndex', function() {
               `#${id}[slot=view][data-parent-view-id=parent]`));
         }
       });
+
+  test('SearchReplaceSyncPromosWithSigninPromos', async function() {
+    loadTimeData.overrideValues({
+      replaceSyncPromosWithSignInPromos: true,
+    });
+    resetRouterForTesting();
+    await createPeoplePageIndex();
+
+    // Search for a keyword that is available on the settings pages `/account`
+    // and `/googleServices`.
+    const result = await index.searchContents('google');
+    assertFalse(result.canceled);
+    assertTrue(result.matchCount >= 2);
+    assertFalse(result.wasClearSearch);
+  });
   // </if>
 });

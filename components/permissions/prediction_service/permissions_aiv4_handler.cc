@@ -9,7 +9,8 @@
 #include "base/feature_list.h"
 #include "components/optimization_guide/core/delivery/optimization_guide_model_provider.h"
 #include "components/permissions/features.h"
-#include "components/permissions/prediction_service/permissions_aiv4_encoder.h"
+#include "components/permissions/prediction_service/permissions_aiv4_executor.h"
+#include "components/permissions/prediction_service/permissions_aiv4_model_metadata.pb.h"
 #include "components/version_info/version_info.h"
 
 namespace permissions {
@@ -25,7 +26,7 @@ PermissionsAiv4Handler::PermissionsAiv4Handler(
     optimization_guide::OptimizationGuideModelProvider* model_provider,
     optimization_guide::proto::OptimizationTarget optimization_target,
     RequestType request_type,
-    std::unique_ptr<PermissionsAiv4Encoder> model_executor,
+    std::unique_ptr<PermissionsAiv4Executor> model_executor,
     scoped_refptr<base::SequencedTaskRunner> model_executor_task_runner,
     scoped_refptr<base::SequencedTaskRunner> reply_task_runner)
     : ModelHandler<ModelOutput, const ModelInput&>(
@@ -35,6 +36,7 @@ PermissionsAiv4Handler::PermissionsAiv4Handler(
           /*model_inference_timeout=*/std::nullopt,
           optimization_target,
           /*model_metadata=*/std::nullopt,
+          /*model_loading_task_runner=*/nullptr,
           reply_task_runner) {}
 
 PermissionsAiv4Handler::PermissionsAiv4Handler(
@@ -46,7 +48,7 @@ PermissionsAiv4Handler::PermissionsAiv4Handler(
           optimization_target,
           request_type,
           /*model_executor=*/
-          std::make_unique<PermissionsAiv4Encoder>(request_type)) {}
+          std::make_unique<PermissionsAiv4Executor>(request_type)) {}
 
 PermissionsAiv4Handler::~PermissionsAiv4Handler() = default;
 
@@ -61,6 +63,8 @@ void PermissionsAiv4Handler::OnModelUpdated(
     // The parent class should always set the model availability to true after
     // having received an updated model.
     DCHECK(ModelAvailable());
+    model_metadata_ =
+        ParsedSupportedFeaturesForLoadedModel<PermissionsAiv4ModelMetadata>();
   }
 }
 
@@ -87,6 +91,8 @@ void PermissionsAiv4Handler::ExecuteModel(ExecutionCallback callback,
   }
   is_execution_in_progress_ = true;
   is_callback_valid_ = true;
+
+  model_input.metadata = model_metadata_;
 
   // It is OK to save the callback here because there is only one model
   // execution allowed at a time.

@@ -511,8 +511,8 @@ void DisplayLockContext::ScheduleStateChangeEventIfNeeded() {
         ->GetTaskRunner(TaskType::kMiscPlatformAPI)
         ->PostTask(
             FROM_HERE,
-            WTF::BindOnce(&DisplayLockContext::DispatchStateChangeEventIfNeeded,
-                          WrapPersistent(this)));
+            BindOnce(&DisplayLockContext::DispatchStateChangeEventIfNeeded,
+                     WrapPersistent(this)));
     state_change_task_pending_ = true;
   }
 }
@@ -1386,7 +1386,8 @@ void DisplayLockContext::RestoreScrollOffsetIfStashed() {
   // Restore the offset and reset the value.
   if (auto* area = GetScrollableArea(element_)) {
     area->SetScrollOffset(*stashed_scroll_offset_,
-                          mojom::blink::ScrollType::kAnchoring);
+                          mojom::blink::ScrollType::kAnchoring,
+                          cc::ScrollSourceType::kStationaryScroll);
     stashed_scroll_offset_.reset();
   }
 }

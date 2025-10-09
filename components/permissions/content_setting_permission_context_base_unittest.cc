@@ -37,6 +37,7 @@
 #include "components/ukm/content/source_url_recorder.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/permission_descriptor_util.h"
 #include "content/public/browser/permission_result.h"
@@ -131,8 +132,7 @@ class TestPermissionContext : public ContentSettingPermissionContextBase {
   void SetUsesAutomaticEmbargo(bool value) { uses_automatic_embargo_ = value; }
 
  protected:
-  void UpdateTabContext(const PermissionRequestID& id,
-                        const GURL& requesting_origin,
+  void UpdateTabContext(const PermissionRequestData& request_data,
                         bool allowed) override {
     tab_context_updated_ = true;
   }
@@ -191,13 +191,19 @@ class TestSecureOriginRestrictedPermissionContext
   bool IsRestrictedToSecureOrigins() const override { return true; }
 };
 
-class TestPermissionsClientBypassExtensionOriginCheck
-    : public TestPermissionsClient {
+class PermissionContextBaseTestClient : public TestPermissionsClient {
  public:
   bool CanBypassEmbeddingOriginCheck(const GURL& requesting_origin,
                                      const GURL& embedding_origin) override {
     return requesting_origin.SchemeIs("chrome-extension");
   }
+
+  bool IsActorOperatingOnWebContents(
+      content::WebContents* web_contents) const override {
+    return is_actor_acting_on_web_contents_;
+  }
+
+  bool is_actor_acting_on_web_contents_ = false;
 };
 
 class PermissionContextBaseTests : public content::RenderViewHostTestHarness {
@@ -812,6 +818,10 @@ class PermissionContextBaseTests : public content::RenderViewHostTestHarness {
     prompt_factory_->DocumentOnLoadCompletedInPrimaryMainFrame();
   }
 
+  void SetIsActorActingOnWebContents(bool is_actor_acting_on_web_contents) {
+    client_.is_actor_acting_on_web_contents_ = is_actor_acting_on_web_contents;
+  }
+
  private:
   // content::RenderViewHostTestHarness:
   void SetUp() override {
@@ -829,7 +839,7 @@ class PermissionContextBaseTests : public content::RenderViewHostTestHarness {
   }
 
   std::unique_ptr<MockPermissionPromptFactory> prompt_factory_;
-  TestPermissionsClientBypassExtensionOriginCheck client_;
+  PermissionContextBaseTestClient client_;
 };
 
 // Simulates clicking Accept. The permission should be granted and
@@ -1032,6 +1042,72 @@ TEST_F(PermissionContextBaseTests, ExpirationBlock) {
 
   // last_visited is not set for BLOCKed permissions.
   EXPECT_EQ(base::Time(), info.metadata.last_visited());
+}
+
+TEST_F(PermissionContextBaseTests, ActorBypass_WhenActive_DeniesPermission) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {features::kGlicActorPermissionsAutoReject}, {});
+  SetIsActorActingOnWebContents(true);
+  TestPermissionContext permission_context(browser_context(),
+                                           ContentSettingsType::GEOLOCATION);
+  GURL url("https://www.google.com");
+  SetUpUrl(url);
+  base::HistogramTester histograms;
+  // Pre-condition: User has granted the permission.
+  auto* map = PermissionsClient::Get()->GetSettingsMap(browser_context());
+  map->SetContentSettingDefaultScope(url, url, ContentSettingsType::GEOLOCATION,
+                                     CONTENT_SETTING_ALLOW);
+
+  content::PermissionResult result = permission_context.GetPermissionStatus(
+      content::PermissionDescriptorUtil::
+          CreatePermissionDescriptorForPermissionType(
+              permissions::PermissionUtil::ContentSettingsTypeToPermissionType(
+                  permission_context.content_settings_type())),
+      web_contents()->GetPrimaryMainFrame(), url, url);
+
+  EXPECT_EQ(PermissionStatus::DENIED, result.status);
+  EXPECT_EQ(content::PermissionStatusSource::ACTOR_OVERRIDE, result.source);
+  histograms.ExpectBucketCount(
+      "Permissions.Experimental.Usage." +
+          PermissionUtil::GetPermissionString(
+              permission_context.content_settings_type()) +
+          ".IsBlockedDueToActuation",
+      true, 1);
+}
+
+TEST_F(PermissionContextBaseTests,
+       ActorBypass_WhenInactive_RespectsPermission) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      {features::kGlicActorPermissionsAutoReject}, {});
+  // Actor is not currently active on the web contents.
+  SetIsActorActingOnWebContents(false);
+  TestPermissionContext permission_context(browser_context(),
+                                           ContentSettingsType::GEOLOCATION);
+  GURL url("https://www.google.com");
+  SetUpUrl(url);
+  base::HistogramTester histograms;
+  // Pre-condition: User has granted the permission.
+  auto* map = PermissionsClient::Get()->GetSettingsMap(browser_context());
+  map->SetContentSettingDefaultScope(url, url, ContentSettingsType::GEOLOCATION,
+                                     CONTENT_SETTING_ALLOW);
+
+  content::PermissionResult result = permission_context.GetPermissionStatus(
+      content::PermissionDescriptorUtil::
+          CreatePermissionDescriptorForPermissionType(
+              permissions::PermissionUtil::ContentSettingsTypeToPermissionType(
+                  permission_context.content_settings_type())),
+      web_contents()->GetPrimaryMainFrame(), url, url);
+
+  // The original user setting of GRANTED is respected.
+  EXPECT_EQ(PermissionStatus::GRANTED, result.status);
+  histograms.ExpectBucketCount(
+      "Permissions.Experimental.Usage." +
+          PermissionUtil::GetPermissionString(
+              permission_context.content_settings_type()) +
+          ".IsBlockedDueToActuation",
+      false, 1);
 }
 #endif  // !BUILDFLAG(IS_ANDROID)
 

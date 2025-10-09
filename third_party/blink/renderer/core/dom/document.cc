@@ -68,7 +68,8 @@
 #include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
-#include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink.h"
+#include "third_party/blink/public/mojom/css/preferred_contrast.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom-blink-forward.h"
@@ -172,6 +173,7 @@
 #include "third_party/blink/renderer/core/dom/processing_instruction.h"
 #include "third_party/blink/renderer/core/dom/scripted_animation_controller.h"
 #include "third_party/blink/renderer/core/dom/scroll_marker_group_data.h"
+#include "third_party/blink/renderer/core/dom/scroll_marker_group_pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/scroll_marker_pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/shadow_including_tree_order_traversal.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -330,6 +332,7 @@
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_controller.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_size.h"
+#include "third_party/blink/renderer/core/route_matching/route_map.h"
 #include "third_party/blink/renderer/core/sanitizer/sanitizer_api.h"
 #include "third_party/blink/renderer/core/script/detect_javascript_frameworks.h"
 #include "third_party/blink/renderer/core/script/script_runner.h"
@@ -1429,7 +1432,16 @@ std::pair<CustomElementRegistry*, AtomicString> FlattenCreateElementOptions(
           options->hasCustomElementRegistry()) {
         registry = options->customElementRegistry();
       }
-      // 3-2. If options["is"] exists, then set is to it.
+      // 3-2. If registry's "is scoped" is false and registry is not document's
+      // custom element registry, then throw a "NotSupportedError" DOMException.
+      if (registry && registry->IsGlobalRegistry() &&
+          registry != document->customElementRegistry()) {
+        exception_state.ThrowDOMException(
+            DOMExceptionCode::kNotSupportedError,
+            "The registry provided is a global registry from another document");
+        return std::pair(registry, is);
+      }
+      // 3-3. If options["is"] exists, then set is to it.
       if (options->hasIs())
         is = AtomicString(options->is());
       // 3-3. If registry is non-null and is is non-null, then throw a
@@ -1439,6 +1451,7 @@ std::pair<CustomElementRegistry*, AtomicString> FlattenCreateElementOptions(
             DOMExceptionCode::kNotSupportedError,
             "The custom element registry and is option can't be set at the "
             "same time.");
+        return std::pair(registry, is);
       }
       // 4. If registry is null then set registry to the result of looking up a
       // custom element registry given document.
@@ -1487,6 +1500,9 @@ Element* Document::CreateElementForBinding(
   // given options.
   auto [registry, is] =
       FlattenCreateElementOptions(this, string_or_options, exception_state);
+  if (exception_state.HadException()) {
+    return nullptr;
+  }
 
   // 5. Let element be the result of creating an element given ...
   Element* element = CreateElement(
@@ -1553,6 +1569,9 @@ Element* Document::createElementNS(
   // Let registry and is be the result of flattening element creation options.
   auto [registry, is] =
       FlattenCreateElementOptions(this, string_or_options, exception_state);
+  if (exception_state.HadException()) {
+    return nullptr;
+  }
 
   if (!IsValidElementName(this, qualified_name)) {
     exception_state.ThrowDOMException(
@@ -1597,7 +1616,7 @@ Element* Document::CreateElement(const QualifiedName& q_name,
   }
 
   if (definition) {
-    return definition->CreateElement(*this, q_name, flags, registry);
+    return definition->CreateElement(*this, q_name, flags);
   }
 
   return CustomElement::CreateUncustomizedOrUndefinedElement(
@@ -1693,7 +1712,7 @@ Node* Document::importNode(Node* imported_node,
   if (options->hasCustomElementRegistry()) {
     CHECK(RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled());
     registry = options->customElementRegistry();
-    // 5-3. If registry's is scoped is false and registry is not this's custom
+    // 5-3. If registry's "is scoped" is false and registry is not this's custom
     // element registry, then throw a "notSupportedError" DOMException.
     if (registry->IsGlobalRegistry() && registry != customElementRegistry()) {
       exception_state.ThrowDOMException(
@@ -1714,7 +1733,8 @@ Node* Document::importNode(Node* imported_node,
 Node* Document::importNode(Node* imported_node,
                            bool deep,
                            ExceptionState& exception_state) {
-  return importNode(imported_node, deep, nullptr, exception_state);
+  return importNode(imported_node, deep, customElementRegistry(),
+                    exception_state);
 }
 
 Node* Document::importNode(Node* imported_node,
@@ -2518,21 +2538,21 @@ static void AssertNodeClean(const Node& node) {
 }
 
 static void AssertLayoutTreeUpdatedForPseudoElements(const Element& element) {
-  WTF::Vector<PseudoId> pseudo_ids = {kPseudoIdFirstLetter,
-                                      kPseudoIdCheckMark,
-                                      kPseudoIdBefore,
-                                      kPseudoIdAfter,
-                                      kPseudoIdPickerIcon,
-                                      kPseudoIdInterestHint,
-                                      kPseudoIdMarker,
-                                      kPseudoIdBackdrop,
-                                      kPseudoIdScrollMarkerGroupBefore,
-                                      kPseudoIdScrollMarkerGroupAfter,
-                                      kPseudoIdScrollButtonBlockStart,
-                                      kPseudoIdScrollButtonInlineStart,
-                                      kPseudoIdScrollButtonInlineEnd,
-                                      kPseudoIdScrollButtonBlockEnd,
-                                      kPseudoIdScrollMarker};
+  Vector<PseudoId> pseudo_ids = {kPseudoIdFirstLetter,
+                                 kPseudoIdCheckMark,
+                                 kPseudoIdBefore,
+                                 kPseudoIdAfter,
+                                 kPseudoIdPickerIcon,
+                                 kPseudoIdInterestHint,
+                                 kPseudoIdMarker,
+                                 kPseudoIdBackdrop,
+                                 kPseudoIdScrollMarkerGroupBefore,
+                                 kPseudoIdScrollMarkerGroupAfter,
+                                 kPseudoIdScrollButtonBlockStart,
+                                 kPseudoIdScrollButtonInlineStart,
+                                 kPseudoIdScrollButtonInlineEnd,
+                                 kPseudoIdScrollButtonBlockEnd,
+                                 kPseudoIdScrollMarker};
   for (auto pseudo_id : pseudo_ids) {
     if (const PseudoElement* pseudo_element =
             element.GetPseudoElement(pseudo_id)) {
@@ -2549,8 +2569,9 @@ static void AssertLayoutTreeUpdatedForPseudoElements(const Element& element) {
   }
 }
 
-static void AssertLayoutTreeUpdated(Node& root,
-                                    bool allow_dirty_container_subtrees) {
+static void AssertLayoutTreeUpdated(
+    Node& root,
+    bool allow_dirty_container_subtrees = true) {
   Node* node = &root;
   while (node) {
     if (auto* element = DynamicTo<Element>(node)) {
@@ -2582,7 +2603,7 @@ static void AssertLayoutTreeUpdated(Node& root,
 
 #if EXPENSIVE_DCHECKS_ARE_ON()
 void Document::AssertLayoutTreeUpdatedAfterLayout() {
-  AssertLayoutTreeUpdated(*this, false /* allow_dirty_container_subtrees */);
+  AssertLayoutTreeUpdated(*this, /*allow_dirty_container_subtrees=*/false);
   DCHECK(!GetStyleEngine().SkippedContainerRecalc());
 }
 #endif
@@ -2648,8 +2669,7 @@ void Document::UpdateStyleAndLayoutTreeForThisDocument() {
                 .GetSlotAssignmentEngine()
                 .HasPendingSlotAssignmentRecalc());
     DCHECK(!owner->GetDocument().NeedsLayoutTreeUpdate());
-    AssertLayoutTreeUpdated(owner->GetDocument(),
-                            false /* allow_dirty_container_subtrees */);
+    AssertLayoutTreeUpdated(owner->GetDocument());
   }
 #endif  // EXPENSIVE_DCHECKS_ARE_ON()
 
@@ -2762,8 +2782,8 @@ void Document::UpdateStyleAndLayoutTreeForThisDocument() {
 
   if (GetFrame()->IsMainFrame() &&
       RuntimeEnabledFeatures::UpdateComplexSafaAreaConstraintsEnabled()) {
-    GetViewportData().SetHasComplexSafaAreaConstraint(
-        style_engine.HasComplexSafaAreaConstraints());
+    GetViewportData().SetHasComplexSafeAreaConstraint(
+        style_engine.HasComplexSafeAreaConstraints());
   }
 
   rendering_had_begun_for_last_style_update_ = RenderingHasBegun();
@@ -2790,7 +2810,7 @@ void Document::UpdateStyleAndLayoutTreeForThisDocument() {
   ElementRuleCollector::DumpAndClearRulesPerfMap();
 
 #if DCHECK_IS_ON()
-  AssertLayoutTreeUpdated(*this, true /* allow_dirty_container_subtrees */);
+  AssertLayoutTreeUpdated(*this);
 #endif
 }
 
@@ -2970,6 +2990,11 @@ DocumentPartRoot& Document::EnsureDocumentPartRoot() {
     document_part_root_ = MakeGarbageCollected<DocumentPartRoot>(*this);
   }
   return *document_part_root_;
+}
+
+RouteMap* Document::routeMap() {
+  DCHECK(RuntimeEnabledFeatures::RouteMatchingEnabled());
+  return &RouteMap::Ensure(*this);
 }
 
 void Document::ApplyScrollRestorationLogic() {
@@ -3651,6 +3676,10 @@ void Document::DisplayNoneChangedForFrame() {
   documentElement()->SetNeedsStyleRecalc(
       kLocalStyleChange,
       StyleChangeReasonForTracing::Create(style_change_reason::kFrame));
+  if (GetLayoutView() && GetFrame()->Owner() &&
+      !GetFrame()->Owner()->IsDisplayNone()) {
+    GetLayoutView()->CacheScrollDimensions();
+  }
 }
 
 bool Document::WillPrintSoon() {
@@ -4358,8 +4387,7 @@ void Document::CheckCompleted() {
 }
 
 void Document::FetchDictionaryFromLinkHeader() {
-  if (!CompressionDictionaryTransportFullyEnabled(GetExecutionContext()) ||
-      !Loader()) {
+  if (!Loader()) {
     return;
   }
   Loader()->DispatchLinkHeaderPreloads(
@@ -4394,7 +4422,7 @@ bool Document::CheckCompletedInternal() {
   DCHECK(fetcher_);
 
   fetcher_->ScheduleWarnUnusedPreloads(
-      WTF::BindOnce(&Document::OnWarnUnusedPreloads, WrapWeakPersistent(this)));
+      BindOnce(&Document::OnWarnUnusedPreloads, WrapWeakPersistent(this)));
 
   // The readystatechanged or load event may have disconnected this frame.
   if (!GetFrame() || !GetFrame()->IsAttached())
@@ -5195,10 +5223,10 @@ void Document::NotifyParserResumeByUserTiming() {
 void Document::DidLoadAllScriptBlockingResources() {
   // Use wrapWeakPersistent because the task should not keep this Document alive
   // just for executing scripts.
-  execute_scripts_waiting_for_resources_task_handle_ = PostCancellableTask(
-      *GetTaskRunner(TaskType::kNetworking), FROM_HERE,
-      WTF::BindOnce(&Document::ExecuteScriptsWaitingForResources,
-                    WrapWeakPersistent(this)));
+  execute_scripts_waiting_for_resources_task_handle_ =
+      PostCancellableTask(*GetTaskRunner(TaskType::kNetworking), FROM_HERE,
+                          BindOnce(&Document::ExecuteScriptsWaitingForResources,
+                                   WrapWeakPersistent(this)));
 
   if (IsA<HTMLDocument>(this) && body()) {
     // For HTML if we have no more stylesheets to load and we're past the body
@@ -5215,6 +5243,22 @@ void Document::ExecuteScriptsWaitingForResources() {
     return;
   if (ScriptableDocumentParser* parser = GetScriptableDocumentParser())
     parser->ExecuteScriptsWaitingForResources();
+}
+
+void Document::UnblockScriptExecutionForPrerenderActivation() {
+  if (!RuntimeEnabledFeatures::PrerenderUntilScriptEnabled()) {
+    return;
+  }
+  CHECK(!IsScriptBlockedUntilPrerenderActivation());
+  if (ScriptableDocumentParser* parser = GetScriptableDocumentParser()) {
+    parser->ExecuteScriptsWaitingForPrerenderActivation();
+  }
+
+  // TODO(https://crbug.com/42850021): Consider deactivating it later, because
+  // async scripts may not be critical for LCP.
+  if (prerender_script_runner_delayer_) {
+    prerender_script_runner_delayer_->Deactivate();
+  }
 }
 
 CSSStyleSheet& Document::ElementSheet() {
@@ -5508,7 +5552,7 @@ Node* Document::Clone(Document& factory,
     PartRoot::CloneParts(*this, *clone, data);
   }
   if (RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled()) {
-    // 2. If node's custom element registry's is scoped is true, then
+    // 2. If node's custom element registry's "is scoped" is true, then
     // set copy's custom element registry to node's custom element registry.
     if (fallback_registry && !fallback_registry->IsGlobalRegistry()) {
       clone->SetCustomElementRegistry(fallback_registry);
@@ -6084,6 +6128,18 @@ void Document::SetSequentialFocusNavigationStartingPoint(Node* node) {
       node, ASSERT_NO_EXCEPTION);
 }
 
+namespace {
+
+bool IsScrollerInTabsMode(const Element& scroller) {
+  std::optional<ScrollMarkerGroup::ScrollMarkerMode> scroller_mode =
+      scroller.ComputedStyleRef().ScrollMarkerGroupMode();
+  return scroller_mode.has_value() &&
+         scroller_mode.value() == ScrollMarkerGroup::ScrollMarkerMode::kTabs &&
+         RuntimeEnabledFeatures::CSSScrollMarkerGroupModesEnabled();
+}
+
+}  // namespace
+
 Element* Document::SequentialFocusNavigationStartingPoint(
     mojom::blink::FocusType type) const {
   if (focused_element_) {
@@ -6102,11 +6158,14 @@ Element* Document::SequentialFocusNavigationStartingPoint(
         sequential_focus_navigation_starting_point_->startContainer() !=
             focused_element_ &&
         type == mojom::blink::FocusType::kForward) {
-      if (auto* column_pseudo =
-              DynamicTo<ColumnPseudoElement>(scroll_marker->parentElement())) {
-        return column_pseudo;
+      Element* scroller = scroll_marker->ScrollMarkerGroup()->parentElement();
+      if (!IsScrollerInTabsMode(*scroller)) {
+        if (auto* column_pseudo = DynamicTo<ColumnPseudoElement>(
+                scroll_marker->parentElement())) {
+          return column_pseudo;
+        }
+        return &scroll_marker->UltimateOriginatingElement();
       }
-      return &scroll_marker->UltimateOriginatingElement();
     }
     return focused_element_.Get();
   }
@@ -6906,7 +6965,7 @@ std::optional<base::Time> Document::lastModifiedTime() const {
     }
   }
   if (!http_last_modified.empty()) {
-    return ParseDate(http_last_modified, const_cast<Document&>(*this));
+    return ParseDate(http_last_modified);
   }
   return std::nullopt;
 }
@@ -7011,7 +7070,7 @@ mojom::blink::PermissionService* Document::GetPermissionService(
     execution_context->GetBrowserInterfaceBroker().GetInterface(
         data_->permission_service_.BindNewPipeAndPassReceiver(
             execution_context->GetTaskRunner(TaskType::kPermission)));
-    data_->permission_service_.set_disconnect_handler(WTF::BindOnce(
+    data_->permission_service_.set_disconnect_handler(BindOnce(
         &Document::PermissionServiceConnectionError, WrapWeakPersistent(this)));
   }
   return data_->permission_service_.get();
@@ -7066,8 +7125,8 @@ ScriptPromise<IDLBoolean> Document::hasPrivateToken(
         data_->trust_token_query_answerer_.BindNewPipeAndPassReceiver(
             GetExecutionContext()->GetTaskRunner(TaskType::kInternalDefault)));
     data_->trust_token_query_answerer_.set_disconnect_handler(
-        WTF::BindOnce(&Document::TrustTokenQueryAnswererConnectionError,
-                      WrapWeakPersistent(this)));
+        BindOnce(&Document::TrustTokenQueryAnswererConnectionError,
+                 WrapWeakPersistent(this)));
   }
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(
       script_state, exception_state.GetContext());
@@ -7075,7 +7134,7 @@ ScriptPromise<IDLBoolean> Document::hasPrivateToken(
 
   data_->trust_token_query_answerer_->HasTrustTokens(
       issuer_origin,
-      WTF::BindOnce(
+      BindOnce(
           [](WeakPersistent<ScriptPromiseResolver<IDLBoolean>> resolver,
              WeakPersistent<Document> document,
              network::mojom::blink::HasTrustTokensResultPtr result) {
@@ -7178,15 +7237,15 @@ ScriptPromise<IDLBoolean> Document::hasRedemptionRecord(
         data_->trust_token_query_answerer_.BindNewPipeAndPassReceiver(
             GetExecutionContext()->GetTaskRunner(TaskType::kInternalDefault)));
     data_->trust_token_query_answerer_.set_disconnect_handler(
-        WTF::BindOnce(&Document::TrustTokenQueryAnswererConnectionError,
-                      WrapWeakPersistent(this)));
+        BindOnce(&Document::TrustTokenQueryAnswererConnectionError,
+                 WrapWeakPersistent(this)));
   }
 
   data_->pending_trust_token_query_resolvers_.insert(resolver);
 
   data_->trust_token_query_answerer_->HasRedemptionRecord(
       issuer_origin,
-      WTF::BindOnce(
+      BindOnce(
           [](WeakPersistent<ScriptPromiseResolver<IDLBoolean>> resolver,
              WeakPersistent<Document> document,
              network::mojom::blink::HasRedemptionRecordResultPtr result) {
@@ -8029,6 +8088,12 @@ void Document::FinishedParsing() {
     // Record the total taken time by UseCounter.
     Loader()->GetUseCounter().ReportTotalTakenTime(GetFrame(),
                                                    /*did_commit_load=*/false);
+    // Record the total taken time by subresource load observer update.
+    Loader()->ReportTotalTakenTimeToUpdateSubresourceLoadMetrics();
+    // Record the total taken time by resource load from memory cache.
+    base::UmaHistogramMicrosecondsTimes(
+        "Blink.MemoryCache.TotalTakenTimeForDidLoadResourceFromMemoryCache",
+        fetcher_->total_taken_time_for_did_load_resource_from_memory_cache());
   }
 }
 
@@ -8498,7 +8563,7 @@ void Document::AddToTopLayer(Element* element, const Element* before) {
   // element in the top layer list.
   if (PseudoElement* backdrop =
           element->GetPseudoElement(PseudoId::kPseudoIdBackdrop,
-                                    /*view_transition_name=*/g_null_atom)) {
+                                    /*pseudo_argument=*/g_null_atom)) {
     CHECK(!backdrop->IsInTopLayer());
     AddToTopLayer(backdrop, element);
   }
@@ -8572,7 +8637,7 @@ void Document::RemoveFromTopLayerImmediately(Element* element) {
   // element in the top layer list.
   if (PseudoElement* backdrop =
           element->GetPseudoElement(PseudoId::kPseudoIdBackdrop,
-                                    /*view_transition_name=*/g_null_atom)) {
+                                    /*pseudo_argument=*/g_null_atom)) {
     CHECK(backdrop->IsInTopLayer());
     RemoveFromTopLayerImmediately(backdrop);
   }
@@ -9374,6 +9439,7 @@ void Document::Trace(Visitor* visitor) const {
   visitor->Trace(popovers_waiting_to_hide_);
   visitor->Trace(all_open_popovers_);
   visitor->Trace(all_open_dialogs_);
+  visitor->Trace(elements_with_interest_);
   visitor->Trace(document_part_root_);
   visitor->Trace(load_event_delay_timer_);
   visitor->Trace(plugin_loading_timer_);
@@ -9520,10 +9586,9 @@ void Document::ProcessJavaScriptUrl(const KURL& url,
   pending_javascript_urls_.push_back(
       MakeGarbageCollected<PendingJavascriptUrl>(url, world));
   if (!javascript_url_task_handle_.IsActive()) {
-    javascript_url_task_handle_ =
-        PostCancellableTask(*GetTaskRunner(TaskType::kNetworking), FROM_HERE,
-                            WTF::BindOnce(&Document::ExecuteJavaScriptUrls,
-                                          WrapWeakPersistent(this)));
+    javascript_url_task_handle_ = PostCancellableTask(
+        *GetTaskRunner(TaskType::kNetworking), FROM_HERE,
+        BindOnce(&Document::ExecuteJavaScriptUrls, WrapWeakPersistent(this)));
   }
 }
 
@@ -9570,8 +9635,17 @@ void Document::SetShowBeforeUnloadDialog(bool show_dialog) {
       show_dialog);
 }
 
+bool Document::IsScriptBlockedUntilPrerenderActivation() const {
+  return is_prerendering_ &&
+         GetPage()->ShouldPauseJavaScriptExecutionOnPrerender();
+}
+
 mojom::blink::PreferredColorScheme Document::GetPreferredColorScheme() const {
-  return style_engine_->GetPreferredColorScheme();
+  return GetStyleEngine().GetPreferredColorScheme();
+}
+
+mojom::blink::PreferredContrast Document::GetPreferredContrast() const {
+  return GetStyleEngine().GetPreferredContrast();
 }
 
 void Document::ColorSchemeChanged() {
@@ -9599,8 +9673,7 @@ bool Document::InForcedColorsMode() const {
 
 bool Document::InDarkMode() {
   return !InForcedColorsMode() && !Printing() &&
-         GetStyleEngine().GetPreferredColorScheme() ==
-             mojom::blink::PreferredColorScheme::kDark;
+         GetPreferredColorScheme() == mojom::blink::PreferredColorScheme::kDark;
 }
 
 const ui::ColorProvider* Document::GetColorProviderForPainting(
@@ -9720,18 +9793,13 @@ void Document::ActivateForPrerendering(
   TRACE_EVENT_WITH_FLOW0("navigation", "Document::ActivateForPrerendering",
                          TRACE_ID_LOCAL(this),
                          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-
   DCHECK(is_prerendering_);
   is_prerendering_ = false;
 
   if (DocumentLoader* loader = Loader()) {
     loader->NotifyPrerenderingDocumentActivated(params);
   }
-  // TODO(https://crbug.com/42850021): Consider deactivating it later, because
-  // async scripts may not be critical for LCP.
-  if (prerender_script_runner_delayer_) {
-    prerender_script_runner_delayer_->Deactivate();
-  }
+  UnblockScriptExecutionForPrerenderActivation();
   Vector<base::OnceClosure> callbacks;
   callbacks.swap(will_dispatch_prerenderingchange_callbacks_);
   for (auto& callback : callbacks) {
@@ -9869,7 +9937,7 @@ void Document::EnqueuePageRevealEvent() {
 }
 
 Resource* Document::GetPendingLinkPreloadForTesting(const KURL& url) {
-  for (auto pending_preload : pending_link_header_preloads_) {
+  for (const auto& pending_preload : pending_link_header_preloads_) {
     Resource* resource = pending_preload->GetResourceForTesting();
     if (resource && resource->Url() == url) {
       return resource;
@@ -10173,6 +10241,15 @@ bool Document::CanThrottleFrameRate() {
     }
   }
   return true;
+}
+
+CustomElementRegistry* Document::EffectiveGlobalCustomElementRegistry() const {
+  DCHECK(RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled());
+  auto* registry = customElementRegistry();
+  if (registry && registry->IsGlobalRegistry()) {
+    return registry;
+  }
+  return nullptr;
 }
 
 template class CORE_TEMPLATE_EXPORT Supplement<Document>;

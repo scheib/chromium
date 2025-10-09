@@ -173,16 +173,15 @@ namespace internal {
 
 template <size_t, typename T>
 struct CheckGCedTypeRestriction {
-  static_assert(!std::is_pointer<T>::value,
-                "Raw pointers are not allowed to bind into WTF::Function. Wrap "
-                "it with either WrapPersistent, WrapWeakPersistent, "
-                "WrapCrossThreadPersistent, WrapCrossThreadWeakPersistent, "
-                "RetainedRef or Unretained.");
+  static_assert(
+      !std::is_pointer<T>::value,
+      "Raw pointers are not allowed to bind. Wrap it with either "
+      "WrapPersistent, WrapWeakPersistent, WrapCrossThreadPersistent, "
+      "WrapCrossThreadWeakPersistent, RetainedRef or Unretained.");
   static_assert(!IsMemberOrWeakMemberType<T>::value,
-                "Member and WeakMember are not allowed to bind into "
-                "WTF::Function. Wrap it with either WrapPersistent, "
-                "WrapWeakPersistent, WrapCrossThreadPersistent or "
-                "WrapCrossThreadWeakPersistent.");
+                "Member and WeakMember are not allowed to bind. Wrap it with "
+                "either WrapPersistent, WrapWeakPersistent, "
+                "WrapCrossThreadPersistent or WrapCrossThreadWeakPersistent.");
   static_assert(!IsGarbageCollectedTypeV<T>,
                 "GCed types are forbidden as bound parameters.");
   static_assert(!IsStackAllocatedTypeV<T>,
@@ -464,19 +463,5 @@ struct BindUnwrapTraits<blink::CrossThreadUnretainedWrapper<T>> {
 };
 
 }  // namespace base
-
-// TODO(crbug.com/422768753): Remove these `using` directives.
-namespace WTF {
-using blink::BindOnce;
-using blink::BindRepeating;
-using blink::CrossThreadFunction;
-using blink::CrossThreadOnceClosure;
-using blink::CrossThreadOnceFunction;
-using blink::CrossThreadRepeatingFunction;
-using blink::CrossThreadUnretained;
-using blink::RetainedRef;
-using blink::Unretained;
-using blink::UnretainedWrapper;
-}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_FUNCTIONAL_H_

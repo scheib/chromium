@@ -18,17 +18,17 @@
 namespace remoting {
 
 PipewireDesktopCapturer::PipewireDesktopCapturer(
-    base::WeakPtr<PipewireCaptureStream> stream)
+    base::WeakPtr<CaptureStream> stream)
     : stream_(stream) {}
 
 PipewireDesktopCapturer::~PipewireDesktopCapturer() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (stream_) {
-    stream_->StopVideoCapture();
+    stream_->SetCallback(nullptr);
   }
 }
 
-bool PipewireDesktopCapturer::SupportsFrameCallbacks() {
+bool PipewireDesktopCapturer::SupportsFrameCallbacks() const {
   return kSupportsFrameCallbacks;
 }
 
@@ -36,8 +36,7 @@ void PipewireDesktopCapturer::Start(Callback* callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   callback_ = callback;
   if (stream_) {
-    stream_->SetCallback(base::SequencedTaskRunner::GetCurrentDefault(),
-                         weak_factory_.GetWeakPtr());
+    stream_->SetCallback(weak_factory_.GetWeakPtr());
   }
 }
 

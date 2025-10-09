@@ -12,17 +12,24 @@
 #include "build/buildflag.h"
 #include "cc/paint/paint_op.h"
 #include "cc/test/paint_op_matchers.h"
+#include "components/viz/test/test_context_provider.h"
+#include "components/viz/test/test_raster_interface.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/abseil-cpp/absl/status/status.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_evaluation_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
+#include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context.h"
 #include "third_party/blink/renderer/core/html/canvas/recording_test_utils.h"
 #include "third_party/blink/renderer/core/page/page_animator.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/script/classic_script.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
+#include "third_party/blink/renderer/platform/graphics/test/gpu_memory_buffer_test_platform.h"
+#include "third_party/blink/renderer/platform/graphics/test/gpu_test_utils.h"
 #include "third_party/blink/renderer/platform/testing/paint_test_configurations.h"
+#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/perfetto/protos/perfetto/config/trace_config.gen.h"
 
 using ::blink_testing::ClearRectFlags;
@@ -52,6 +59,7 @@ INSTANTIATE_PAINT_TEST_SUITE_P(HTMLCanvasElementTest);
 void HTMLCanvasElementTest::TearDown() {
   RenderingTest::TearDown();
   CanvasRenderingContext::GetCanvasPerformanceMonitor().ResetForTesting();
+  SharedGpuContext::Reset();
 }
 
 TEST_P(HTMLCanvasElementTest, CleanCanvasResizeDoesntClearFrameBuffer) {
@@ -142,6 +150,90 @@ TEST_P(HTMLCanvasElementTest, CreateLayerUpdatesCompositing) {
                    ->FirstFragment()
                    .PaintProperties()
                    ->PaintOffsetTranslation());
+}
+
+TEST_P(HTMLCanvasElementTest, CanvasMemoryUsage) {
+  // Enable script so that the canvas will create a LayoutHTMLCanvas.
+  GetDocument().GetSettings()->SetScriptEnabled(true);
+
+  SetBodyInnerHTML("<canvas id='canvas' width='10px' height='10px'></canvas>");
+  auto* canvas = To<HTMLCanvasElement>(
+      GetDocument().getElementById(AtomicString("canvas")));
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
+
+  auto* script = GetDocument().CreateRawElement(html_names::kScriptTag);
+  script->setTextContent(R"JS(
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'green';
+    ctx.fillRect(0, 0, 10, 10);
+  )JS");
+  GetDocument().body()->appendChild(script);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(
+      base::ByteCount(10 * 10 * /* Buffer Count */ 1 * /* Bytes per pixel */ 4),
+      canvas->GetMemoryUsage());
+
+  canvas->NotifyGpuContextLost();
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
+}
+
+TEST_P(HTMLCanvasElementTest, CanvasMemoryUsageGpuAccelerated) {
+  // Enable script so that the canvas will create a LayoutHTMLCanvas.
+  GetDocument().GetSettings()->SetScriptEnabled(true);
+
+  auto raster_context_provider = viz::TestContextProvider::CreateRaster();
+  InitializeSharedGpuContextRaster(raster_context_provider.get());
+  ScopedTestingPlatformSupport<GpuMemoryBufferTestPlatform>
+      accelerated_platform;
+  GetDocument().GetSettings()->SetAcceleratedCompositingEnabled(true);
+
+  SetBodyInnerHTML("<canvas id='canvas' width='10px' height='10px'></canvas>");
+  auto* canvas = To<HTMLCanvasElement>(
+      GetDocument().getElementById(AtomicString("canvas")));
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
+
+  auto* script = GetDocument().CreateRawElement(html_names::kScriptTag);
+  script->setTextContent(R"JS(
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'green';
+    ctx.fillRect(0, 0, 10, 10);
+  )JS");
+  GetDocument().body()->appendChild(script);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(
+      base::ByteCount(10 * 10 * /* Buffer Count */ 3 * /* Bytes per pixel */ 4),
+      canvas->GetMemoryUsage());
+
+  canvas->NotifyGpuContextLost();
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
+}
+
+TEST_P(HTMLCanvasElementTest, CanvasMemoryUsageInvalidContext) {
+  // Enable script so that the canvas will create a LayoutHTMLCanvas.
+  GetDocument().GetSettings()->SetScriptEnabled(true);
+
+  SetBodyInnerHTML("<canvas id='canvas' width='10px' height='10px'></canvas>");
+  auto* canvas = To<HTMLCanvasElement>(
+      GetDocument().getElementById(AtomicString("canvas")));
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
+
+  // Create a canvas that too big to allocate, causing invalid context.
+  auto* script = GetDocument().CreateRawElement(html_names::kScriptTag);
+  script->setTextContent(R"JS(
+    var canvas = document.getElementById('canvas');
+    canvas.width = 1000000;
+    canvas.height = 1000000;
+    var ctx = canvas.getContext('%s');
+    ctx.fillStyle = 'green';
+    ctx.fillRect(0, 0, 10, 10);
+  )JS");
+  GetDocument().body()->appendChild(script);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_TRUE(canvas->RenderingContext() == nullptr ||
+              canvas->RenderingContext()->isContextLost());
+  EXPECT_TRUE(canvas->GetMemoryUsage().is_zero());
 }
 
 TEST_P(HTMLCanvasElementTest, CanvasInvalidation) {
@@ -264,24 +356,106 @@ TEST_P(HTMLCanvasElementTest, IsCanvasOrInCanvasSubtree) {
     <canvas id=canvas>
       <div id=nested_div></div>
       <canvas id=nested_canvas></canvas>
+      <input id=nested_input>
     </canvas>
   )HTML");
   auto* div = GetDocument().getElementById(AtomicString("div"));
   EXPECT_FALSE(div->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(div->IsInCanvasSubtree());
   auto* canvas = GetDocument().getElementById(AtomicString("canvas"));
   EXPECT_TRUE(canvas->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(canvas->IsInCanvasSubtree());
   auto* nested_div = GetDocument().getElementById(AtomicString("nested_div"));
   EXPECT_TRUE(nested_div->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_div->IsInCanvasSubtree());
   auto* nested_canvas =
       GetDocument().getElementById(AtomicString("nested_canvas"));
   EXPECT_TRUE(nested_canvas->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_canvas->IsInCanvasSubtree());
+  auto* nested_input =
+      GetDocument().getElementById(AtomicString("nested_input"));
+  EXPECT_TRUE(nested_input->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_input->IsInCanvasSubtree());
+  auto* nested_input_shadow =
+      To<Element>(nested_input->UserAgentShadowRoot()->firstChild());
+  EXPECT_TRUE(nested_input_shadow->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_input_shadow->IsInCanvasSubtree());
 
   // Check `IsCanvasOrInCanvasSubtree` after a dynamic change where the nested
-  // elements are moved out of the canvas subtree.
+  // elements are individually moved out of the canvas subtree.
   div->appendChild(nested_div);
   EXPECT_FALSE(nested_div->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(nested_div->IsInCanvasSubtree());
   div->appendChild(nested_canvas);
   EXPECT_TRUE(nested_canvas->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(nested_canvas->IsInCanvasSubtree());
+  div->appendChild(nested_input);
+  EXPECT_FALSE(nested_input->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(nested_input->IsInCanvasSubtree());
+  EXPECT_FALSE(nested_input_shadow->IsCanvasOrInCanvasSubtree());
+  EXPECT_FALSE(nested_input_shadow->IsInCanvasSubtree());
+
+  // Check `IsCanvasOrInCanvasSubtree` after a dynamic change where an
+  // entire subtree is moved under canvas.
+  canvas->appendChild(div);
+  EXPECT_TRUE(nested_div->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_div->IsInCanvasSubtree());
+  EXPECT_TRUE(nested_canvas->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_canvas->IsInCanvasSubtree());
+  EXPECT_TRUE(nested_input->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_input->IsInCanvasSubtree());
+  EXPECT_TRUE(nested_input_shadow->IsCanvasOrInCanvasSubtree());
+  EXPECT_TRUE(nested_input_shadow->IsInCanvasSubtree());
+}
+
+TEST_P(HTMLCanvasElementTest, CanvasReadbackBlocked) {
+  V8TestingScope scope;
+  GetDocument().GetSettings()->SetScriptEnabled(true);
+  SetBodyInnerHTML("<canvas id='c' width='10' height='20'></canvas>");
+
+  auto* canvas =
+      To<HTMLCanvasElement>(GetDocument().getElementById(AtomicString("c")));
+  canvas->GetCanvasRenderingContext(GetDocument().GetExecutionContext(), "2d",
+                                    CanvasContextCreationAttributesCore());
+  auto* callback = V8BlobCallback::Create(scope.GetContext()->Global());
+
+  {
+    // When the BlockCanvasReadback feature is enabled, reading back should
+    // throw a DOM exception.
+    ScopedBlockCanvasReadbackForTest scoped_feature(true);
+    DummyExceptionStateForTesting exception_state;
+    canvas->toDataURL("image/png", exception_state);
+    EXPECT_TRUE(exception_state.HadException());
+    EXPECT_EQ(exception_state.CodeAs<DOMExceptionCode>(),
+              DOMExceptionCode::kNotAllowedError);
+  }
+
+  {
+    // When the feature is disabled it should not throw.
+    ScopedBlockCanvasReadbackForTest scoped_feature(false);
+    DummyExceptionStateForTesting exception_state;
+    canvas->toDataURL("image/png", exception_state);
+    EXPECT_FALSE(exception_state.HadException());
+  }
+
+  {
+    // When the BlockCanvasReadback feature is enabled, reading back should
+    // throw a DOM exception.
+    ScopedBlockCanvasReadbackForTest scoped_feature(true);
+    DummyExceptionStateForTesting exception_state;
+    canvas->toBlob(callback, "image/png", exception_state);
+    EXPECT_TRUE(exception_state.HadException());
+    EXPECT_EQ(exception_state.CodeAs<DOMExceptionCode>(),
+              DOMExceptionCode::kNotAllowedError);
+  }
+
+  {
+    // When the feature is disabled it should not throw.
+    ScopedBlockCanvasReadbackForTest scoped_feature(false);
+    DummyExceptionStateForTesting exception_state;
+    canvas->toBlob(callback, "image/png", exception_state);
+    EXPECT_FALSE(exception_state.HadException());
+  }
 }
 
 class HTMLCanvasElementWithTracingTest : public RenderingTest {

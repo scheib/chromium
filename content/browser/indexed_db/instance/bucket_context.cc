@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <compare>
 #include <cstdint>
-#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -45,7 +44,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_traits.h"
-#include "base/task/updateable_sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -189,14 +188,12 @@ BucketContext::BucketContext(
     storage::BucketInfo bucket_info,
     const base::FilePath& data_path,
     Delegate&& delegate,
-    scoped_refptr<base::UpdateableSequencedTaskRunner> updateable_task_runner,
     scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
     mojo::PendingRemote<storage::mojom::BlobStorageContext>
         blob_storage_context,
     mojo::PendingRemote<storage::mojom::FileSystemAccessContext>
         file_system_access_context)
     : bucket_info_(std::move(bucket_info)),
-      updateable_task_runner_(updateable_task_runner),
       data_path_(data_path),
       quota_manager_proxy_(std::move(quota_manager_proxy)),
       blob_storage_context_(std::move(blob_storage_context)),
@@ -308,41 +305,6 @@ void BucketContext::ReportOutstandingBlobs(bool blobs_outstanding) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   has_blobs_outstanding_ = blobs_outstanding;
   MaybeStartClosing();
-}
-
-void BucketContext::OnConnectionPriorityUpdated() {
-  if (!updateable_task_runner_) {
-    return;
-  }
-  base::TaskPriority priority = CalculateSchedulingPriority() == 0
-                                    ? base::TaskPriority::USER_BLOCKING
-                                    : base::TaskPriority::USER_VISIBLE;
-  updateable_task_runner_->UpdatePriority(priority);
-}
-
-std::optional<int> BucketContext::CalculateSchedulingPriority() {
-  std::optional<int> scheduling_priority;
-  // Established connections:
-  for (const auto& [name, database] : databases_) {
-    for (auto* connection : database->connections()) {
-      scheduling_priority = std::min(
-          scheduling_priority.value_or(std::numeric_limits<int>::max()),
-          connection->scheduling_priority());
-    }
-  }
-  // Pending connections:
-  for (auto iter = pending_connections_.begin();
-       iter != pending_connections_.end();) {
-    if (iter->WasInvalidated()) {
-      iter = pending_connections_.erase(iter);
-    } else {
-      scheduling_priority = std::min(
-          scheduling_priority.value_or(std::numeric_limits<int>::max()),
-          (*iter)->scheduling_priority);
-      ++iter;
-    }
-  }
-  return scheduling_priority;
 }
 
 void BucketContext::CheckCanUseDiskSpace(
@@ -524,6 +486,11 @@ void BucketContext::GetDatabaseInfo(GetDatabaseInfoCallback callback) {
       InitBackingStoreIfNeeded(/*create_if_missing=*/false);
   DCHECK_EQ(s.ok(), !!backing_store_);
   if (!s.ok()) {
+    // Since `create_if_missing` is false, "not found" is a valid, non-error
+    // status.
+    CHECK_EQ(s.IsNotFound(),
+             error.code() == blink::mojom::IDBException::kNoError)
+        << error.code();
     std::move(callback).Run(
         {}, blink::mojom::IDBError::New(error.code(), error.message()));
 
@@ -607,11 +574,24 @@ void BucketContext::Open(
     database_ptr = CreateAndAddDatabase(name);
   } else {
     database_ptr = it->second.get();
+
+    // The `Database` might have been forced closed by dev tools, in which case
+    // no new connections should be added. The `Database` should be deleted
+    // *soon* in this case, but the request can arrive while `RunTasks()` is
+    // still queued. We could try to reschedule this open() request, but if the
+    // open request had already made it to ConnectionCoordinator, it would be
+    // pruned and errors reported: see `ShouldPruneForForceClose()`. So do that
+    // here too.
+    if (!database_ptr->IsAcceptingConnections()) {
+      connection->factory_client->OnError(
+          DatabaseError(blink::mojom::IDBException::kAbortError,
+                        "The connection was closed."));
+      connection->database_callbacks->OnForcedClose();
+      return;
+    }
   }
 
-  pending_connections_.push_back(connection->weak_factory.GetWeakPtr());
   database_ptr->ScheduleOpenConnection(std::move(connection));
-  OnConnectionPriorityUpdated();
 }
 
 void BucketContext::DeleteDatabase(
@@ -983,78 +963,89 @@ BucketContext::InitBackingStoreIfNeeded(bool create_if_missing) {
       return {Status::IOError("File path too long"), CreateDefaultError(),
               IndexedDBDataLossInfo()};
     }
-    if (ShouldUseSqlite() && !base::CreateDirectory(database_path)) {
-      ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_FAILED_DIRECTORY,
-                       bucket_locator());
-      return {Status::IOError("Unable to create IndexedDB database path"),
-              CreateDefaultError(), IndexedDBDataLossInfo()};
+    if (ShouldUseSqlite() && !base::DirectoryExists(database_path)) {
+      if (!create_if_missing) {
+        return {Status::NotFound("Backing store does not exist"),
+                DatabaseError(), IndexedDBDataLossInfo()};
+      }
+      if (!base::CreateDirectory(database_path)) {
+        ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_FAILED_DIRECTORY,
+                         bucket_locator());
+        return {Status::IOError("Unable to create IndexedDB database path"),
+                CreateDefaultError(), IndexedDBDataLossInfo()};
+      }
     }
   }
 
   auto lock_manager = std::make_unique<PartitionedLockManager>();
   IndexedDBDataLossInfo data_loss_info;
-  std::unique_ptr<BackingStore> backing_store;
-  bool disk_full = false;
-  base::ElapsedTimer open_timer;
-  Status status, first_try_status;
-  constexpr static const int kNumOpenTries = 2;
-  for (int i = 0; i < kNumOpenTries; ++i) {
-    const bool is_first_attempt = i == 0;
-    std::tie(backing_store, status, data_loss_info, disk_full) =
-        ShouldUseSqlite()
-            ? sqlite::BackingStoreImpl::OpenAndVerify(database_path,
-                                                      *blob_storage_context_)
-            : level_db::BackingStore::OpenAndVerify(
-                  *this, data_path_, database_path, blob_path,
-                  lock_manager.get(), is_first_attempt, create_if_missing);
-    if (is_first_attempt) [[likely]] {
-      first_try_status = status;
-    }
-    if (status.ok()) [[likely]] {
-      break;
-    }
-    if (!create_if_missing && status.IsNotFound()) {
-      return {status, DatabaseError(), data_loss_info};
-    }
-    DCHECK(!backing_store);
-    // If the disk is full, always exit immediately.
-    if (disk_full) {
-      break;
-    }
-  }
 
-  // Record this here because the !create_if_missing && not_found case shouldn't
-  // count as either a success or failure.
-  base::UmaHistogramEnumeration(kBackingStoreActionUmaName,
-                                IndexedDBAction::kBackingStoreOpenAttempt);
-
-  first_try_status.Log("WebCore.IndexedDB.BackingStore.OpenFirstTryResult");
-
-  if (first_try_status.ok()) [[likely]] {
-    UMA_HISTOGRAM_TIMES(
-        "WebCore.IndexedDB.BackingStore.OpenFirstTrySuccessTime",
-        open_timer.Elapsed());
-  }
-
-  if (status.ok()) [[likely]] {
-    base::UmaHistogramTimes("WebCore.IndexedDB.BackingStore.OpenSuccessTime",
-                            open_timer.Elapsed());
+  if (ShouldUseSqlite()) {
+    backing_store_ = std::make_unique<sqlite::BackingStoreImpl>(
+        database_path, *blob_storage_context_);
   } else {
-    base::UmaHistogramTimes("WebCore.IndexedDB.BackingStore.OpenFailureTime",
-                            open_timer.Elapsed());
-    if (disk_full) {
-      ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_DISK_FULL,
-                       bucket_locator());
-      quota_manager()->OnClientWriteFailed(bucket_locator().storage_key);
-      return {status,
-              DatabaseError(blink::mojom::IDBException::kQuotaError,
-                            u"Encountered full disk while opening "
-                            "backing store for indexedDB.open."),
-              data_loss_info};
+    std::unique_ptr<BackingStore> backing_store;
+    bool disk_full = false;
+    base::ElapsedTimer open_timer;
+    Status status, first_try_status;
+    constexpr static const int kNumOpenTries = 2;
+    for (int i = 0; i < kNumOpenTries; ++i) {
+      const bool is_first_attempt = i == 0;
+      std::tie(backing_store, status, data_loss_info, disk_full) =
+          level_db::BackingStore::OpenAndVerify(
+              *this, data_path_, database_path, blob_path, lock_manager.get(),
+              is_first_attempt, create_if_missing);
+      if (is_first_attempt) [[likely]] {
+        first_try_status = status;
+      }
+      if (status.ok()) [[likely]] {
+        break;
+      }
+      if (!create_if_missing && status.IsNotFound()) {
+        return {status, DatabaseError(), data_loss_info};
+      }
+      DCHECK(!backing_store);
+      // If the disk is full, always exit immediately.
+      if (disk_full) {
+        break;
+      }
     }
-    ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_NO_RECOVERY,
-                     bucket_locator());
-    return {status, CreateDefaultError(), data_loss_info};
+
+    // Record this here because the !create_if_missing && not_found case
+    // shouldn't count as either a success or failure.
+    base::UmaHistogramEnumeration(kBackingStoreActionUmaName,
+                                  IndexedDBAction::kBackingStoreOpenAttempt);
+
+    first_try_status.Log("WebCore.IndexedDB.BackingStore.OpenFirstTryResult");
+
+    if (first_try_status.ok()) [[likely]] {
+      UMA_HISTOGRAM_TIMES(
+          "WebCore.IndexedDB.BackingStore.OpenFirstTrySuccessTime",
+          open_timer.Elapsed());
+    }
+
+    if (status.ok()) [[likely]] {
+      base::UmaHistogramTimes("WebCore.IndexedDB.BackingStore.OpenSuccessTime",
+                              open_timer.Elapsed());
+    } else {
+      base::UmaHistogramTimes("WebCore.IndexedDB.BackingStore.OpenFailureTime",
+                              open_timer.Elapsed());
+      if (disk_full) {
+        ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_DISK_FULL,
+                         bucket_locator());
+        quota_manager()->OnClientWriteFailed(bucket_locator().storage_key);
+        return {status,
+                DatabaseError(blink::mojom::IDBException::kQuotaError,
+                              u"Encountered full disk while opening "
+                              "backing store for indexedDB.open."),
+                data_loss_info};
+      }
+      ReportOpenStatus(INDEXED_DB_BACKING_STORE_OPEN_NO_RECOVERY,
+                       bucket_locator());
+      return {status, CreateDefaultError(), data_loss_info};
+    }
+
+    backing_store_ = std::move(backing_store);
   }
 
   if (!in_memory()) {
@@ -1062,7 +1053,6 @@ BucketContext::InitBackingStoreIfNeeded(bool create_if_missing) {
   }
 
   lock_manager_ = std::move(lock_manager);
-  backing_store_ = std::move(backing_store);
   delegate().on_files_written.Run(/*flushed=*/true);
   return {Status::OK(), DatabaseError(), data_loss_info};
 }

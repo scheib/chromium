@@ -332,10 +332,12 @@ Başlamaq üçün aşağıdakıları yoxlaya bilərsiniz.</translation>
 <translation id="2083190527011054446">Gecəniz xeyir, <ph name="GIVEN_NAME" /></translation>
 <translation id="2086334242442703436">Emoji Seçicisini açın</translation>
 <translation id="2088116547584365419">oyunlar</translation>
+<translation id="2093792000875799555">Chromebook üçün Steam xəbərləri</translation>
 <translation id="209965399369889474">Şəbəkəyə qoşulmayıb</translation>
 <translation id="2107581415810719320">Digər düymə <ph name="BUTTON_NUMBER" /></translation>
 <translation id="2107914222138020205">USB-C kabeliniz Thunderbolt'u dəstəkləmir. Cihazın performansı məhdud ola bilər.</translation>
 <translation id="2108303511227308752">Alt + Geri klaviatura qısayolu dəyişib. Silmə düyməsindən istifadə etmək üçün <ph name="LAUNCHER_KEY_NAME" /> + geri düyməsini basın.</translation>
+<translation id="2115680839221566783">Batareya <ph name="PERCENTAGE" />%-dir. Şarj dayandırılıb.</translation>
 <translation id="2126242104232412123">Yeni iş masası</translation>
 <translation id="2132302418721800944">Tam ekranı çəkin</translation>
 <translation id="2135456203358955318">Daxili miqyas</translation>
@@ -1588,6 +1590,7 @@ Cihaz qoşulmayıb.</translation>
 <translation id="612734058257491180">Google Assistent qonaq sessiyasında əlçatan deyil.</translation>
 <translation id="6127395413317891856">Oflaynsınız. Bağlantını yoxlayıb, yenidən cəhd edin.</translation>
 <translation id="6129953537138746214">Boşluq</translation>
+<translation id="6136872094979134163">Chromebook üçün Steam xəbərlərini əldə etmək olmur.</translation>
 <translation id="6137566720514957455"><ph name="USER_EMAIL_ADDRESS" /> üçün silinmə dialoqunu açın</translation>
 <translation id="6141205840878048728">Nəyi fokuslamaq istərdiniz?</translation>
 <translation id="6141988275892716286">Endirməni təsdiq edin</translation>
@@ -1677,6 +1680,7 @@ Cihaz qoşulmayıb.</translation>
 <translation id="6445835306623867477"><ph name="RECEIVER_NAME" /> pəncərəsində <ph name="ROUTE_TITLE" /></translation>
 <translation id="6445915701151710649">cpu</translation>
 <translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> tədbir</translation>
+<translation id="6448529022565414427">Şarj dayandırılıb</translation>
 <translation id="6449483711453944360">Linux tətbiqləri və Anonim pəncərələr hazırda dəstəklənmir</translation>
 <translation id="6450245544201845082">Sağ düymə ilə klikləmə qısayolu deaktivdir</translation>
 <translation id="6452181791372256707">Rədd edin</translation>

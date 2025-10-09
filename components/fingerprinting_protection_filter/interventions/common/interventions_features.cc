@@ -10,13 +10,21 @@ namespace fingerprinting_protection_interventions::features {
 
 // Whether the canvas interventions should be enabled that add noise to the
 // readback values.
-BASE_FEATURE(kCanvasNoise,
-             "CanvasNoise",
-             base::FeatureState::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kCanvasNoise, base::FeatureState::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE_PARAM(bool,
                    kCanvasNoiseInRegularMode,
                    &kCanvasNoise,
+                   "enable_in_regular_mode",
+                   false);
+
+// [Experimental] Whether readback of canvases should be blocked.
+BASE_FEATURE(kBlockCanvasReadback,
+             base::FeatureState::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE_PARAM(bool,
+                   kBlockCanvasReadbackInRegularMode,
+                   &kBlockCanvasReadback,
                    "enable_in_regular_mode",
                    false);
 
@@ -28,6 +36,12 @@ bool IsCanvasInterventionsEnabledForIncognitoState(bool is_incognito) {
          kCanvasNoiseInRegularMode.Get();
 }
 
-// TODO(crbug.com/380463018): Add base::FeatureParams for signatures.
+bool ShouldBlockCanvasReadbackForIncognitoState(bool is_incognito) {
+  if (is_incognito) {
+    return base::FeatureList::IsEnabled(kBlockCanvasReadback);
+  }
+  return base::FeatureList::IsEnabled(kBlockCanvasReadback) &&
+         kBlockCanvasReadbackInRegularMode.Get();
+}
 
 }  // namespace fingerprinting_protection_interventions::features

@@ -219,10 +219,7 @@ const char kGuidedTourStepDidFinishHistogram[] = "IOS.GuidedTour.DidFinishStep";
   // UI.
   DCHECK(_presentingSceneState);
 
-  id<BrowserProvider> presentingInterface =
-      _presentingSceneState.browserProviderInterface.currentBrowserProvider;
-  Browser* browser = presentingInterface.browser;
-  ProfileIOS* profile = browser->GetProfile()->GetOriginalProfile();
+  ProfileIOS* profile = [self originalProfile];
 
   DCHECK(!_firstRunUIBlocker);
   _firstRunUIBlocker = std::make_unique<ScopedUIBlocker>(_presentingSceneState);
@@ -233,11 +230,15 @@ const char kGuidedTourStepDidFinishHistogram[] = "IOS.GuidedTour.DidFinishStep";
 
   FirstRunScreenProvider* provider =
       [[FirstRunScreenProvider alloc] initForProfile:profile];
-
-  _firstRunCoordinator = [[FirstRunCoordinator alloc]
-      initWithBaseViewController:presentingInterface.viewController
-                         browser:browser
-                  screenProvider:provider];
+  UIViewController* baseViewController =
+      _presentingSceneState.browserProviderInterface.currentBrowserProvider
+          .viewController;
+  Browser* mainBrowser = _presentingSceneState.browserProviderInterface
+                             .mainBrowserProvider.browser;
+  _firstRunCoordinator =
+      [[FirstRunCoordinator alloc] initWithBaseViewController:baseViewController
+                                                      browser:mainBrowser
+                                               screenProvider:provider];
   _firstRunCoordinator.delegate = self;
   [_firstRunCoordinator start];
 }
@@ -246,7 +247,8 @@ const char kGuidedTourStepDidFinishHistogram[] = "IOS.GuidedTour.DidFinishStep";
 // finished presenting.
 - (void)performNextPostFirstRunAction {
   if (!_postActionsProvider) {
-    _postActionsProvider = [[FirstRunPostActionProvider alloc] init];
+    _postActionsProvider = [[FirstRunPostActionProvider alloc]
+        initWithProfile:[self originalProfile]];
   }
   switch ([_postActionsProvider nextScreenType]) {
     case kGuidedTour:
@@ -430,6 +432,20 @@ const char kGuidedTourStepDidFinishHistogram[] = "IOS.GuidedTour.DidFinishStep";
 
 - (void)safariDataImportDidDismiss {
   [self performNextPostFirstRunAction];
+}
+
+#pragma mark - Private
+
+// Returns the original (i.e., not off-the-record) profile associated with the
+// current browser. May return nullptr.
+- (ProfileIOS*)originalProfile {
+  id<BrowserProvider> presentingInterface =
+      _presentingSceneState.browserProviderInterface.currentBrowserProvider;
+  Browser* browser = presentingInterface.browser;
+  if (!browser || !browser->GetProfile()) {
+    return nullptr;
+  }
+  return browser->GetProfile()->GetOriginalProfile();
 }
 
 @end

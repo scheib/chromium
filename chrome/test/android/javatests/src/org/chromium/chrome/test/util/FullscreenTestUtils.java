@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.test.util;
 
+import static android.view.Display.INVALID_DISPLAY;
+
 import android.app.Activity;
 import android.view.View;
 
@@ -11,7 +13,7 @@ import androidx.core.view.WindowInsetsCompat;
 
 import org.hamcrest.Matchers;
 
-import org.chromium.base.BuildInfo;
+import org.chromium.base.DeviceInfo;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.base.test.util.Criteria;
@@ -51,7 +53,13 @@ public class FullscreenTestUtils {
             Activity activity,
             boolean isFullscreenInsetsApiMigrationEnabled) {
         togglePersistentFullscreenAndAssert(
-                tab, state, activity, false, false, isFullscreenInsetsApiMigrationEnabled);
+                tab,
+                state,
+                activity,
+                false,
+                false,
+                isFullscreenInsetsApiMigrationEnabled,
+                INVALID_DISPLAY);
     }
 
     /**
@@ -71,7 +79,13 @@ public class FullscreenTestUtils {
             boolean prefersNavigationBar,
             boolean prefersStatusBar) {
         togglePersistentFullscreenAndAssert(
-                tab, state, activity, prefersNavigationBar, prefersStatusBar, false);
+                tab,
+                state,
+                activity,
+                prefersNavigationBar,
+                prefersStatusBar,
+                false,
+                INVALID_DISPLAY);
     }
 
     /**
@@ -91,10 +105,11 @@ public class FullscreenTestUtils {
             Activity activity,
             boolean prefersNavigationBar,
             boolean prefersStatusBar,
-            boolean isFullscreenInsetsApiMigrationEnabled) {
+            boolean isFullscreenInsetsApiMigrationEnabled,
+            int displayId) {
         final TabWebContentsDelegateAndroid delegate = TabTestUtils.getTabWebContentsDelegate(tab);
         FullscreenTestUtils.togglePersistentFullscreen(
-                delegate, state, prefersNavigationBar, prefersStatusBar);
+                delegate, state, prefersNavigationBar, prefersStatusBar, displayId);
         // In order for the status bar to be displayed, the fullscreen flag must not be set.
         // If we are entering fullscreen, then we expect the fullscreen flag state to match
         // negated |prefersStatusBar|:
@@ -114,7 +129,7 @@ public class FullscreenTestUtils {
      */
     public static void togglePersistentFullscreen(
             final TabWebContentsDelegateAndroid delegate, final boolean state) {
-        togglePersistentFullscreen(delegate, state, false, false);
+        togglePersistentFullscreen(delegate, state, false, false, INVALID_DISPLAY);
     }
 
     /**
@@ -129,13 +144,14 @@ public class FullscreenTestUtils {
             final TabWebContentsDelegateAndroid delegate,
             final boolean state,
             boolean prefersNavigationBar,
-            boolean prefersStatusBar) {
+            boolean prefersStatusBar,
+            int displayId) {
         PostTask.runOrPostTask(
                 TaskTraits.UI_DEFAULT,
                 () -> {
                     if (state) {
                         delegate.enterFullscreenModeForTab(
-                                0, prefersNavigationBar, prefersStatusBar);
+                                0, prefersNavigationBar, prefersStatusBar, displayId);
                     } else {
                         delegate.exitFullscreenModeForTab();
                     }
@@ -226,7 +242,7 @@ public class FullscreenTestUtils {
             final Tab tab, final boolean state, Activity activity) {
         // Status bars persist in fullscreen mode in automotive (see crrev.com/c/4569720) so system
         // UI flags are not set.
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             return true;
         }
         View view = tab.getContentView();
@@ -243,7 +259,7 @@ public class FullscreenTestUtils {
             final Tab tab, final boolean state, Activity activity) {
         // Status bars persist in fullscreen mode in automotive (see crrev.com/c/4569720) so system
         // UI flags are not set.
-        if (BuildInfo.getInstance().isAutomotive) {
+        if (DeviceInfo.isAutomotive()) {
             return true;
         }
         View view = tab.getContentView();

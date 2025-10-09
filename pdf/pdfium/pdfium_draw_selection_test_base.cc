@@ -22,21 +22,6 @@
 
 namespace chrome_pdf {
 
-namespace {
-
-bool IsBitmapBlank(const SkBitmap& bitmap) {
-  for (int i = 0; i < bitmap.width(); ++i) {
-    for (int j = 0; j < bitmap.height(); ++j) {
-      if (bitmap.getColor(i, j) != SK_ColorWHITE) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-}  // namespace
-
 void PDFiumDrawSelectionTestBase::DrawSelectionAndCompare(
     PDFiumEngine& engine,
     int page_index,
@@ -66,6 +51,16 @@ void PDFiumDrawSelectionTestBase::DrawHighlightsAndCompare(
                      expected_png_filename,
                      /*use_platform_suffix=*/false,
                      /*draw_caret=*/false);
+}
+
+void PDFiumDrawSelectionTestBase::DrawCaretAndCompare(
+    PDFiumEngine& engine,
+    int page_index,
+    std::string_view expected_png_filename) {
+  DrawAndCompareImpl(engine, page_index, FILE_PATH_LITERAL("caret"),
+                     expected_png_filename,
+                     /*use_platform_suffix=*/false,
+                     /*draw_caret=*/true);
 }
 
 void PDFiumDrawSelectionTestBase::DrawCaretAndCompareWithPlatformExpectations(
@@ -155,7 +150,7 @@ void PDFiumDrawSelectionTestBase::DrawAndCompareImpl(
 
   base::FilePath expectation_path = GetReferenceFilePath(
       sub_directory, expected_png_filename, use_platform_suffix);
-  EXPECT_TRUE(MatchesPngFile(page_bitmap.asImage().get(), expectation_path));
+  EXPECT_TRUE(MatchesPngFile(*page_bitmap.asImage(), expectation_path));
 }
 
 void PDFiumDrawSelectionTestBase::TestDrawBlank(

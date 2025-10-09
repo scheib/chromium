@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.share.share_sheet;
 
+import static org.chromium.build.NullUtil.assertNonNull;
+
 import android.app.Activity;
 import android.content.ComponentName;
 import android.graphics.drawable.Drawable;
@@ -11,7 +13,6 @@ import android.graphics.drawable.Drawable;
 import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.base.Callback;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
@@ -36,6 +37,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** Provides {@code PropertyModel}s of Chrome-provided sharing options. */
 @NullMarked
@@ -183,7 +185,7 @@ public class ChromeProvidedSharingOptionsProvider extends ChromeProvidedSharingO
                             LongScreenshotsCoordinator coordinator =
                                     LongScreenshotsCoordinator.create(
                                             mActivity,
-                                            mTabProvider.get(),
+                                            assertNonNull(mTabProvider.get()),
                                             mUrl,
                                             mChromeOptionShareCallback,
                                             mBottomSheetController);

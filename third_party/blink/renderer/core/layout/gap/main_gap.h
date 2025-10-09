@@ -12,45 +12,99 @@
 
 namespace blink {
 
+// Represents the type of a `MainGap` created by a multicol spanner.
+// * `kStart`: The gap is at the start of the spanner.
+// * `kEnd`: The gap is at the end of the spanner.
+// * `kNone`: The gap is not associated with a spanner.
+enum class SpannerMainGapType { kStart, kEnd, kNone };
+
 // Represents the gap in the primary axis. For example, in a row-based flex
 // container the MainGaps represent the gaps between flex lines, while the
 // CrossGaps represent the gaps between flex items in the same line. See
 // third_party/blink/renderer/core/layout/gap/README.md for more information.
 class CORE_EXPORT MainGap {
  public:
-  MainGap(LayoutUnit offset) : gap_start_offset_(offset) {}
+  MainGap() = default;
+  MainGap(LayoutUnit offset,
+          SpannerMainGapType spanner_main_gap_type = SpannerMainGapType::kNone)
+      : gap_offset_(offset), spanner_main_gap_type_(spanner_main_gap_type) {}
 
-  LayoutUnit GetGapStartOffset() const { return gap_start_offset_; }
+  void SetGapOffset(LayoutUnit offset) { gap_offset_ = offset; }
+  LayoutUnit GetGapOffset() const { return gap_offset_; }
 
-  CrossGapRange& RangeOfCrossGapsBefore() {
+  bool HasCrossGapsBefore() const {
+    return range_of_cross_gaps_before_.IsValid();
+  }
+
+  bool HasCrossGapsAfter() const {
+    return range_of_cross_gaps_after_.IsValid();
+  }
+
+  wtf_size_t GetCrossGapBeforeStart() const {
+    CHECK(HasCrossGapsBefore());
+    return range_of_cross_gaps_before_.Start();
+  }
+
+  wtf_size_t GetCrossGapBeforeEnd() const {
+    CHECK(HasCrossGapsBefore());
+    return range_of_cross_gaps_before_.End();
+  }
+
+  wtf_size_t GetCrossGapAfterStart() const {
+    CHECK(HasCrossGapsAfter());
+    return range_of_cross_gaps_after_.Start();
+  }
+
+  wtf_size_t GetCrossGapAfterEnd() const {
+    CHECK(HasCrossGapsAfter());
+    return range_of_cross_gaps_after_.End();
+  }
+
+  void IncrementRangeOfCrossGapsBefore(wtf_size_t cross_gap_index) {
+    range_of_cross_gaps_before_.Increment(cross_gap_index);
+  }
+
+  void IncrementRangeOfCrossGapsAfter(wtf_size_t cross_gap_index) {
+    range_of_cross_gaps_after_.Increment(cross_gap_index);
+  }
+
+  void SetRangeOfCrossGapsBefore(const CrossGapRange& range) {
+    range_of_cross_gaps_before_ = range;
+  }
+  const CrossGapRange& RangeOfCrossGapsBefore() const {
     return range_of_cross_gaps_before_;
   }
 
-  CrossGapRange& RangeOfCrossGapsAfter() { return range_of_cross_gaps_after_; }
+  void SetRangeOfCrossGapsAfter(const CrossGapRange& range) {
+    range_of_cross_gaps_after_ = range;
+  }
 
   blink::String ToString(bool verbose = false) const {
     blink::String str =
-        blink::String("MainOffset(") + gap_start_offset_.ToString() + "); ";
+        blink::String("MainOffset(") + gap_offset_.ToString() + "); ";
 
     if (verbose) {
-      str = str + "Before: " +
-            blink::String::Number(range_of_cross_gaps_before_.start_index) +
-            " -> " +
-            blink::String::Number(range_of_cross_gaps_before_.end_index) + "; ";
-      str = str + "After: " +
-            blink::String::Number(range_of_cross_gaps_after_.start_index) +
-            " -> " +
-            blink::String::Number(range_of_cross_gaps_after_.end_index) + "; ";
+      str = str + "Before: " + range_of_cross_gaps_before_.ToString() + ";";
+      str = str + "After: " + range_of_cross_gaps_after_.ToString() + ";";
     }
 
     return str;
   }
 
+  bool IsStartSpannerMainGap() const {
+    return spanner_main_gap_type_ == SpannerMainGapType::kStart;
+  }
+  bool IsEndSpannerMainGap() const {
+    return spanner_main_gap_type_ == SpannerMainGapType::kEnd;
+  }
+  bool IsSpannerMainGap() const {
+    return spanner_main_gap_type_ != SpannerMainGapType::kNone;
+  }
+
  private:
-  // This represents the offset (block or inline) of the start point for the
-  // gap. If the main direction is row it'll be the block offset otherwise
-  // it'll be the inline.
-  LayoutUnit gap_start_offset_;
+  // This represents the midpoint offset (block or inline) of the gap. If the main
+  // direction is row it'll be the block offset otherwise it'll be the inline.
+  LayoutUnit gap_offset_;
 
   // In Grid, because rows and columns neatly align, we can avoid duplication by
   // storing cross gaps once and share them across all main gaps. As a result,
@@ -61,6 +115,9 @@ class CORE_EXPORT MainGap {
   // falling either before or after that main gap).
   CrossGapRange range_of_cross_gaps_before_;
   CrossGapRange range_of_cross_gaps_after_;
+
+  // Only used for multicol.
+  SpannerMainGapType spanner_main_gap_type_ = SpannerMainGapType::kNone;
 };
 
 }  // namespace blink

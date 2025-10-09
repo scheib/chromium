@@ -28,8 +28,8 @@ export function getHtml(this: ViewerSaveToDriveBubbleElement) {
       <div id="file-content">
         <cr-icon icon="pdf:pdf-icon" id="pdf-icon"></cr-icon>
         <div id="filename-content">
-          <div id="filename">${this.fileName}</div>
-          <div id="file-metadata">${this.fileMetadata_}</div>
+          <div id="filename">${this.getFileName_()}</div>
+          <div id="file-metadata">${this.getMetadata_()}</div>
         </div>
         ${this.isSaveToDriveState_(SaveToDriveState.UPLOADING) ? html`
           <cr-icon-button id="cancel-upload-button"
@@ -43,18 +43,18 @@ export function getHtml(this: ViewerSaveToDriveBubbleElement) {
       <div id="footer">
         ${this.isSaveToDriveState_(SaveToDriveState.UPLOADING) ? html`
           <cr-progress
-              .max="${this.bytesToTransfer}"
-              .value="${this.bytesTransferred}">
+              .max="${this.getFileSizeBytes_()}"
+              .value="${this.getUploadedBytes_()}">
           </cr-progress>
         ` : ''}
         ${this.isSaveToDriveState_(SaveToDriveState.STORAGE_FULL_ERROR) ? html`
-          <cr-button id="manage-storage-button"
+          <cr-button id="manage-storage-button" role="link"
               @click="${this.onRequestButtonClick_}">
             $i18n{saveToDriveDialogManageStorageButtonLabel}
           </cr-button>
         ` : ''}
         ${this.isSaveToDriveState_(SaveToDriveState.SUCCESS) ? html`
-          <cr-button id="open-in-drive-button" class="action-button"
+          <cr-button id="open-in-drive-button" class="action-button" role="link"
               @click="${this.onRequestButtonClick_}">
             $i18n{saveToDriveDialogOpenInDriveButtonLabel}
           </cr-button>

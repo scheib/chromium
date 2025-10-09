@@ -88,21 +88,16 @@ base::Value MakeClientCertificateInfoValue(
   return base::Value(std::move(cert_info_value));
 }
 
-std::string ConvertValueToJson(const base::Value& value) {
-  std::string json;
-  CHECK(base::JSONWriter::Write(value, &json));
-  return json;
-}
-
 base::Value ParseJsonToValue(const std::string& json) {
-  std::optional<base::Value> value = base::JSONReader::Read(json);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   CHECK(value);
   return std::move(*value);
 }
 
 void SendReplyToJs(ExtensionTestMessageListener* message_listener,
                    const base::Value& response) {
-  message_listener->Reply(ConvertValueToJson(response));
+  message_listener->Reply(base::WriteJson(response).value());
   message_listener->Reset();
 }
 

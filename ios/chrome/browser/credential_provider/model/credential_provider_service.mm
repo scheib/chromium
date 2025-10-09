@@ -575,9 +575,7 @@ void CredentialProviderService::UpdateAutomaticPasskeyUpgradeSetting() {
     return;
   }
 
-  BOOL is_enabled = base::FeatureList::IsEnabled(
-                        kCredentialProviderAutomaticPasskeyUpgrade) &&
-                    saving_passwords_enabled_.GetValue() &&
+  BOOL is_enabled = saving_passwords_enabled_.GetValue() &&
                     saving_passkeys_enabled_.GetValue() &&
                     automatic_passkey_upgrades_enabled_.GetValue();
   [app_group::GetGroupUserDefaults()
@@ -664,6 +662,11 @@ void CredentialProviderService::OnStateChanged(syncer::SyncService* sync) {
   UpdateAccountId();
   UpdateUserEmail();
   UpdatePasswordSyncSetting();
+}
+
+void CredentialProviderService::OnSyncShutdown(syncer::SyncService* sync) {
+  // Unreachable, since this service is Shutdown() before the SyncService.
+  NOTREACHED();
 }
 
 // PasskeyModel::Observer:

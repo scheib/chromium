@@ -48,6 +48,7 @@ DEVICE_SUBSTITUTIONS = {
 ANDROID_VULKAN_DEVICES = {
     # Pixel 6 phones map to multiple GPU models.
     'oriole': GpuDevice('13b5', '92020010,92020000'),
+    'frankel': GpuDevice('1010', '71061212'),
 }
 
 
@@ -57,6 +58,17 @@ def AndroidDesktopForceMainUser(test_config, _, tester_config):
   if not _GetAndroidDesktopBoardName(test_config):
     return []
   return ['--force-main-user']
+
+
+def AndroidDesktopGtestRemote(test_config, _, tester_config):
+  """Substitutes the correct Android Desktop remote gtest arguments."""
+  assert _IsAndroid(tester_config)
+  if not _GetAndroidDesktopBoardName(test_config):
+    return []
+  return [
+      '--device=variable_lab_dut_hostname',
+      '--connect-over-network',
+  ]
 
 
 def AndroidDesktopTelemetryRemote(test_config, _, tester_config):

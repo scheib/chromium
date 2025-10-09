@@ -18,7 +18,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "content/browser/webid/fedcm_metrics.h"
+#include "content/browser/webid/metrics.h"
 #include "content/browser/webid/test/mock_api_permission_delegate.h"
 #include "content/browser/webid/test/mock_idp_network_request_manager.h"
 #include "content/browser/webid/test/mock_permission_delegate.h"
@@ -165,7 +165,7 @@ class TestIdpNetworkRequestManager : public MockIdpNetworkRequestManager {
                        endpoints, idp_metadata));
   }
 
-  void SendAccountsRequest(const url::Origin& idp_origin,
+  bool SendAccountsRequest(const url::Origin& idp_origin,
                            const GURL& accounts_url,
                            const std::string& client_id,
                            AccountsRequestCallback callback) override {
@@ -187,6 +187,7 @@ class TestIdpNetworkRequestManager : public MockIdpNetworkRequestManager {
         FROM_HERE,
         base::BindOnce(std::move(callback), config_.accounts_fetch_status,
                        std::move(accounts)));
+    return true;
   }
 
   bool DidFetchAnyEndpoint() {
@@ -388,7 +389,7 @@ TEST_F(UserInfoRequestTest, PreviouslySignedIn) {
   histogram_tester_.ExpectUniqueSample("Blink.FedCm.UserInfo.Status",
                                        UserInfoRequestResult::kSuccess, 1);
   histogram_tester_.ExpectUniqueSample("Blink.FedCm.UserInfo.NumAccounts",
-                                       FedCmMetrics::NumAccounts::kMultiple, 1);
+                                       Metrics::NumAccounts::kMultiple, 1);
   histogram_tester_.ExpectTotalCount(
       "Blink.FedCm.UserInfo.TimeToRequestCompleted", 1);
 }
@@ -433,7 +434,7 @@ TEST_F(UserInfoRequestTest, NotInApprovedClientsList) {
       "Blink.FedCm.UserInfo.Status",
       UserInfoRequestResult::kNoReturningUserFromFetchedAccounts, 1);
   histogram_tester_.ExpectUniqueSample("Blink.FedCm.UserInfo.NumAccounts",
-                                       FedCmMetrics::NumAccounts::kZero, 1);
+                                       Metrics::NumAccounts::kZero, 1);
   histogram_tester_.ExpectTotalCount(
       "Blink.FedCm.UserInfo.TimeToRequestCompleted", 1);
   ExpectConsoleMessage(

@@ -80,6 +80,7 @@
 #include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
 #include "chrome/browser/ui/web_applications/web_app_launch_utils.h"
 #include "chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome_page_handler.h"
+#include "chrome/browser/ui/webui/signin/signin_utils_desktop.h"
 #include "chrome/browser/ui/webui/whats_new/whats_new_util.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
@@ -95,6 +96,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
+#include "components/contextual_tasks/public/features.h"
 #include "components/dom_distiller/content/browser/distillable_page_utils.h"
 #include "components/dom_distiller/content/browser/uma_helper.h"
 #include "components/dom_distiller/core/dom_distiller_features.h"
@@ -114,6 +116,7 @@
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/sync/base/features.h"
 #include "components/user_education/common/feature_promo/feature_promo_controller.h"
 #include "components/vector_icons/vector_icons.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
@@ -157,6 +160,9 @@
 #include "chrome/browser/policy/system_features_disable_list_policy_handler.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "ui/display/screen.h"
+#else
+#include "chrome/browser/ui/webui/signin/signin_ui_error.h"
+#include "chrome/browser/ui/webui/signin/signin_utils_desktop.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -168,6 +174,7 @@
 using base::UserMetricsAction;
 using content::WebContents;
 
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(AppMenuModel, kCreateNewTabGroupTopLevel);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(AppMenuModel, kProfileMenuItem);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(AppMenuModel, kProfileOpenGuestItem);
 DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(AppMenuModel, kBookmarksMenuItem);
@@ -596,9 +603,14 @@ int ProfileSubMenuModel::GetAndIncrementNextMenuID() {
 }
 
 bool ProfileSubMenuModel::BuildSyncSection() {
-  if (!profile_->GetPrefs()->GetBoolean(prefs::kSigninAllowed)) {
+#if !BUILDFLAG(IS_CHROMEOS)
+  // TODO(crbug.com/440342282): Support personalized signin button.
+  if (!CanOfferSignin(profile_, GaiaId(), /*email=*/std::string(),
+                      /*allow_account_from_other_profile=*/true)
+           .IsOk()) {
     return false;
   }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   if (!SyncServiceFactory::IsSyncAllowed(profile_)) {
     return false;
@@ -610,9 +622,8 @@ bool ProfileSubMenuModel::BuildSyncSection() {
 
   // First, check for sync errors. They may exist even if sync-the-feature is
   // disabled and only sync-the-transport is running.
-  const std::optional<AvatarSyncErrorType> error =
-      GetAvatarSyncErrorType(profile_);
-  if (error.has_value()) {
+  const AvatarSyncErrorType error = GetAvatarSyncErrorType(profile_);
+  if (error != AvatarSyncErrorType::kNone) {
     if (error == AvatarSyncErrorType::kSyncPaused) {
       if (identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSync)) {
         // If sync is paused the menu item will be specific to the paused error.
@@ -639,9 +650,18 @@ bool ProfileSubMenuModel::BuildSyncSection() {
                                      IDS_PROFILE_ROW_SYNC_IS_ON,
                                      vector_icons::kSyncChromeRefreshIcon);
   } else {
-    AddItemWithStringIdAndVectorIcon(this, IDC_TURN_ON_SYNC,
-                                     IDS_PROFILE_ROW_TURN_ON_SYNC,
-                                     vector_icons::kSyncOffChromeRefreshIcon);
+    if (base::FeatureList::IsEnabled(
+            syncer::kReplaceSyncPromosWithSignInPromos)) {
+      if (!identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSignin)) {
+        AddItemWithStringIdAndVectorIcon(this, IDC_SHOW_SIGNIN,
+                                         IDS_PROFILE_MENU_SIGNIN_PROMO_BUTTON,
+                                         vector_icons::kAccountCircleIcon);
+      }
+    } else {
+      AddItemWithStringIdAndVectorIcon(this, IDC_TURN_ON_SYNC,
+                                       IDS_PROFILE_ROW_TURN_ON_SYNC,
+                                       vector_icons::kSyncOffChromeRefreshIcon);
+    }
   }
   return true;
 }
@@ -772,7 +792,7 @@ SaveAndShareSubMenuModel::SaveAndShareSubMenuModel(
                                    kDriveShortcutChromeRefreshIcon);
   SetElementIdentifierAt(GetItemCount() - 1, AppMenuModel::kCreateShortcutItem);
   if (!sharing_hub::SharingIsDisabledByPolicy(browser->profile()) ||
-      media_router::MediaRouterEnabled(browser->profile())) {
+      sharing_hub::DesktopScreenshotsFeatureEnabled(browser->profile())) {
     AddSeparator(ui::NORMAL_SEPARATOR);
     AddTitle(l10n_util::GetStringUTF16(IDS_SAVE_AND_SHARE_MENU_SHARE));
     if (!sharing_hub::SharingIsDisabledByPolicy(browser->profile())) {
@@ -785,11 +805,11 @@ SaveAndShareSubMenuModel::SaveAndShareSubMenuModel(
                                        IDS_APP_MENU_CREATE_QR_CODE,
                                        kQrCodeChromeRefreshIcon);
     }
-  }
-  if (sharing_hub::DesktopScreenshotsFeatureEnabled(browser->profile())) {
-    AddItemWithStringIdAndVectorIcon(this, IDC_SHARING_HUB_SCREENSHOT,
-                                     IDS_SHARING_HUB_SCREENSHOT_LABEL,
-                                     kSharingHubScreenshotIcon);
+    if (sharing_hub::DesktopScreenshotsFeatureEnabled(browser->profile())) {
+      AddItemWithStringIdAndVectorIcon(this, IDC_SHARING_HUB_SCREENSHOT,
+                                       IDS_SHARING_HUB_SCREENSHOT_LABEL,
+                                       kSharingHubScreenshotIcon);
+    }
   }
 }
 
@@ -888,7 +908,7 @@ void ToolsMenuModel::Build(Browser* browser) {
   // items.
   bool is_tablet_mode = false;
 #if BUILDFLAG(IS_CHROMEOS)
-  is_tablet_mode = display::Screen::GetScreen()->InTabletMode();
+  is_tablet_mode = display::Screen::Get()->InTabletMode();
 #endif  // BUILDFLAG(IS_CHROMEOS)
   if (!is_tablet_mode) {
     if (features::HasTabSearchToolbarButton()) {
@@ -930,6 +950,12 @@ void ToolsMenuModel::Build(Browser* browser) {
     AddItemWithStringIdAndVectorIcon(this, IDC_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL,
                                      IDS_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL,
                                      kEditChromeRefreshIcon);
+  }
+
+  if (base::FeatureList::IsEnabled(contextual_tasks::kContextualTasks)) {
+    AddItemWithStringIdAndVectorIcon(
+        this, IDC_SHOW_CONTEXTUAL_TASKS_SIDE_PANEL,
+        IDS_CONTEXTUAL_TASKS_CONTEXTUAL_TASKS_TITLE, vector_icons::kChatIcon);
   }
 
   AddSeparator(ui::NORMAL_SEPARATOR);
@@ -1220,6 +1246,13 @@ void AppMenuModel::LogMenuMetrics(int command_id) {
             "WrenchMenu.TimeToAction.LoginForDeviceTabs", delta);
       }
       LogMenuAction(MENU_ACTION_RECENT_TABS_LOGIN_FOR_DEVICE_TABS);
+      break;
+    case IDC_RECENT_TABS_SEE_DEVICE_TABS:
+      if (!uma_action_recorded_) {
+        base::UmaHistogramMediumTimes("WrenchMenu.TimeToAction.SeeDeviceTabs",
+                                      delta);
+      }
+      LogMenuAction(MENU_ACTION_RECENT_TABS_SEE_DEVICE_TABS);
       break;
     case IDC_FIND:
       if (!uma_action_recorded_) {
@@ -1586,6 +1619,13 @@ void AppMenuModel::LogMenuMetrics(int command_id) {
       }
       LogMenuAction(MENU_SHOW_SYNC_SETTINGS);
       break;
+    case IDC_SHOW_SIGNIN:
+      if (!uma_action_recorded_) {
+        base::UmaHistogramMediumTimes("WrenchMenu.TimeToAction.ShowSignin",
+                                      delta);
+      }
+      LogMenuAction(MENU_SHOW_SIGNIN);
+      break;
     case IDC_TURN_ON_SYNC:
       if (!uma_action_recorded_) {
         base::UmaHistogramMediumTimes("WrenchMenu.TimeToAction.ShowTurnOnSync",
@@ -1815,6 +1855,17 @@ void AppMenuModel::Build() {
           ? IDS_NEW_INCOGNITO_TAB
           : IDS_NEW_TAB,
       kNewTabRefreshIcon);
+
+  if (base::FeatureList::IsEnabled(
+          features::kCreateNewTabGroupAppMenuTopLevel)) {
+    AddItemWithStringIdAndVectorIcon(this, IDC_CREATE_NEW_TAB_GROUP_TOP_LEVEL,
+                                     IDS_CREATE_NEW_TAB_GROUP,
+                                     kCreateNewTabGroupIcon);
+    SetElementIdentifierAt(
+        GetIndexOfCommandId(IDC_CREATE_NEW_TAB_GROUP_TOP_LEVEL).value(),
+        kCreateNewTabGroupTopLevel);
+  }
+
   AddItemWithStringIdAndVectorIcon(this, IDC_NEW_WINDOW, IDS_NEW_WINDOW,
                                    kNewWindowIcon);
 
@@ -1976,7 +2027,7 @@ void AppMenuModel::Build() {
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Always show this option if we're in tablet mode on Chrome OS.
-  if (display::Screen::GetScreen()->InTabletMode()) {
+  if (display::Screen::Get()->InTabletMode()) {
     AddItemWithStringIdAndVectorIcon(this, IDC_TOGGLE_REQUEST_TABLET_SITE,
                                      IDS_TOGGLE_REQUEST_TABLET_SITE,
                                      chrome::IsRequestingTabletSite(browser_)
@@ -2090,10 +2141,7 @@ bool AppMenuModel::AddDefaultBrowserMenuItems() {
     return false;
   }
 
-  if ((app_menu_icon_controller_ &&
-       app_menu_icon_controller_->GetTypeAndSeverity().type ==
-           AppMenuIconController::IconType::DEFAULT_BROWSER_PROMPT) ||
-      (DefaultBrowserPromptManager::GetInstance()->show_app_menu_item())) {
+  if (DefaultBrowserPromptManager::GetInstance()->show_app_menu_item()) {
     AddItemWithIcon(
         IDC_SET_BROWSER_AS_DEFAULT,
         l10n_util::GetStringUTF16(IDS_SET_BROWSER_AS_DEFAULT_MENU_ITEM),

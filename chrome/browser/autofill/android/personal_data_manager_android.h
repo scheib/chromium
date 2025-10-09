@@ -17,6 +17,10 @@ class PrefService;
 
 namespace autofill {
 
+namespace payments {
+struct BnplIssuerContext;
+}  // namespace payments
+
 class AddressDataManager;
 class PaymentsDataManager;
 class PaymentInstrument;
@@ -250,6 +254,14 @@ class PersonalDataManagerAndroid : public PersonalDataManagerObserver {
   // Returns whether a card with the specified `guid` is eligible for card
   // benefits.
   jboolean IsCardEligibleForBenefits(JNIEnv* env, const std::string& guid);
+
+  // Create an object of Java BNPL issuer context from native BnplIssuerContext.
+  // TODO(crbug.com/449764859): Refactor BnplIssuerContext to use JNI type
+  // converters.
+  static base::android::ScopedJavaLocalRef<jobject>
+  CreateJavaBnplIssuerContextFromNative(
+      JNIEnv* env,
+      const payments::BnplIssuerContext& bnpl_issuer_context);
 
  private:
   ~PersonalDataManagerAndroid() override;

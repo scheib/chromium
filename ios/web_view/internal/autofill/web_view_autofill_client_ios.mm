@@ -38,13 +38,12 @@ namespace autofill {
 
 // static
 std::unique_ptr<WebViewAutofillClientIOS> WebViewAutofillClientIOS::Create(
-    FromWebStateImpl from_web_state_impl,
     web::WebState* web_state,
     id<CWVAutofillClientIOSBridge, AutofillDriverIOSBridge> bridge) {
   auto* browser_state = ios_web_view::WebViewBrowserState::FromBrowserState(
       web_state->GetBrowserState());
   return std::make_unique<autofill::WebViewAutofillClientIOS>(
-      from_web_state_impl, browser_state->GetPrefs(),
+      browser_state->GetPrefs(),
       ios_web_view::WebViewPersonalDataManagerFactory::GetForBrowserState(
           browser_state->GetRecordingBrowserState()),
       ios_web_view::WebViewAutocompleteHistoryManagerFactory::
@@ -61,17 +60,16 @@ std::unique_ptr<WebViewAutofillClientIOS> WebViewAutofillClientIOS::Create(
 }
 
 WebViewAutofillClientIOS::WebViewAutofillClientIOS(
-    FromWebStateImpl from_web_state_impl,
     PrefService* pref_service,
     PersonalDataManager* personal_data_manager,
     AutocompleteHistoryManager* autocomplete_history_manager,
     web::WebState* web_state,
     id<CWVAutofillClientIOSBridge, AutofillDriverIOSBridge> bridge,
     signin::IdentityManager* identity_manager,
-    StrikeDatabase* strike_database,
+    strike_database::StrikeDatabase* strike_database,
     syncer::SyncService* sync_service,
     LogRouter* log_router)
-    : AutofillClientIOS(from_web_state_impl, web_state, bridge),
+    : AutofillClientIOS(web_state, bridge),
       bridge_(bridge),
       pref_service_(pref_service),
       personal_data_manager_(personal_data_manager),
@@ -181,7 +179,7 @@ WebViewAutofillClientIOS::GetPaymentsAutofillClient() {
   return &payments_autofill_client_;
 }
 
-StrikeDatabase* WebViewAutofillClientIOS::GetStrikeDatabase() {
+strike_database::StrikeDatabase* WebViewAutofillClientIOS::GetStrikeDatabase() {
   return strike_database_;
 }
 
@@ -225,7 +223,7 @@ void WebViewAutofillClientIOS::ShowAutofillSettings(
 void WebViewAutofillClientIOS::ConfirmSaveAddressProfile(
     const AutofillProfile& profile,
     const AutofillProfile* original_profile,
-    bool is_migration_to_account,
+    SaveAddressBubbleType save_address_bubble_type,
     AddressProfileSavePromptCallback callback) {
   [bridge_ confirmSaveAddressProfile:profile
                      originalProfile:original_profile
@@ -262,6 +260,10 @@ bool WebViewAutofillClientIOS::IsAutofillPaymentMethodsEnabled() const {
   return prefs::IsAutofillPaymentMethodsEnabled(GetPrefs());
 }
 
+bool WebViewAutofillClientIOS::IsImportingToWalletEnabled() const {
+  return false;
+}
+
 bool WebViewAutofillClientIOS::IsAutocompleteEnabled() const {
   return false;
 }
@@ -276,6 +278,10 @@ void WebViewAutofillClientIOS::DidFillForm(AutofillTriggerSource trigger_source,
 
 bool WebViewAutofillClientIOS::IsContextSecure() const {
   return IsContextSecureForWebState(web_state());
+}
+
+bool WebViewAutofillClientIOS::IsCvcSavingSupported() const {
+  return false;
 }
 
 autofill::FormInteractionsFlowId

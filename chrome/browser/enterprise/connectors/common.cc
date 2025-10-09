@@ -7,11 +7,11 @@
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_downloads_delegate.h"
-#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/policy/dm_token_utils.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "components/enterprise/connectors/core/features.h"
 #include "extensions/common/constants.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -63,6 +63,7 @@ bool ContentAnalysisActionAllowsDataUse(TriggeredRule::Action action) {
       return true;
     case TriggeredRule::WARN:
     case TriggeredRule::BLOCK:
+    case TriggeredRule::FORCE_SAVE_TO_CLOUD:
       return false;
   }
 }
@@ -167,8 +168,16 @@ google::protobuf::RepeatedPtrField<std::string> CollectFrameUrlsImpl(
 
   content::RenderFrameHost* current_frame = web_contents->GetFocusedFrame();
 
-  // Traverse upwards and add URLs to the chain.
-  while (current_frame && frame_urls.size() < kMaxFrameUrls - 1) {
+  // Traverse upwards and add URLs to the chain, stopping before the outermost
+  // frame.
+  while (current_frame && frame_urls.size() < kMaxFrameUrls) {
+    content::RenderFrameHost* parent =
+        current_frame->GetParentOrOuterDocumentOrEmbedder();
+    if (!parent) {
+      // Already at outermost frame.
+      break;
+    }
+
     // Skip internal extension resources, blob URLs, and about:blank pages from
     // being scanned.
     const GURL& url = current_frame->GetLastCommittedURL();
@@ -177,19 +186,7 @@ google::protobuf::RepeatedPtrField<std::string> CollectFrameUrlsImpl(
       *frame_urls.Add() = url.spec();
     }
 
-    content::RenderFrameHost* parent =
-        current_frame->GetParentOrOuterDocumentOrEmbedder();
-    if (!parent) {
-      // Already at outermost frame.
-      return frame_urls;
-    }
     current_frame = parent;
-  }
-
-  // If we hit the limit, collect the top frame instead.
-  if (frame_urls.size() == kMaxFrameUrls - 1 && current_frame) {
-    current_frame = current_frame->GetOutermostMainFrame();
-    *frame_urls.Add() = current_frame->GetLastCommittedURL().spec();
   }
 
   return frame_urls;
@@ -323,15 +320,22 @@ google::protobuf::RepeatedPtrField<std::string> CollectFrameUrls(
     content::WebContents* web_contents,
     DeepScanAccessPoint access_point) {
 #if BUILDFLAG(ENTERPRISE_CONTENT_ANALYSIS)
+  if (!base::FeatureList::IsEnabled(kEnterpriseIframeDlpRulesSupport)) {
+    return google::protobuf::RepeatedPtrField<std::string>();
+  }
+
   google::protobuf::RepeatedPtrField<std::string> frame_urls =
       CollectFrameUrlsImpl(web_contents);
 
+  // For the histogram, we count the tab URL to differentiate between cases
+  // where there is no tab and tabs with no iframes.
+  size_t full_chain_size = web_contents ? frame_urls.size() + 1 : 0;
   base::UmaHistogramCustomCounts(
       base::JoinString(
           {"Enterprise.IframeDlpRulesSupport",
            DeepScanAccessPointToString(access_point), "UrlChainSize"},
           "."),
-      frame_urls.size(), 1, kMaxFrameUrls, 10);
+      full_chain_size, 1, kMaxFrameUrls, 10);
 
   return frame_urls;
 #else
@@ -343,12 +347,15 @@ google::protobuf::RepeatedPtrField<std::string> CollectFrameUrls(
 #if BUILDFLAG(FULL_SAFE_BROWSING)
 bool IsResumableUpload(
     const safe_browsing::BinaryUploadService::Request& request) {
-  // Currently resumable upload doesn't support paste or LBUS. If one day we do,
-  // we should update the logic here as well.
-  return !safe_browsing::IsConsumerScanRequest(request) &&
-         request.cloud_or_local_settings().is_cloud_analysis() &&
-         request.content_analysis_request().analysis_connector() !=
-             enterprise_connectors::AnalysisConnector::BULK_DATA_ENTRY;
+  if (safe_browsing::IsConsumerScanRequest(request) ||
+      !request.cloud_or_local_settings().is_cloud_analysis()) {
+    return false;
+  }
+  // Use the Resumable request protocol only for image pastes and
+  // non-paste requests.
+  return request.content_analysis_request().analysis_connector() !=
+             enterprise_connectors::AnalysisConnector::BULK_DATA_ENTRY ||
+         request.image_paste();
 }
 #endif  // BUILDFLAG(FULL_SAFE_BROWSING)
 
@@ -542,23 +549,17 @@ void ReportDataMaskingEvent(
     reporting_client->ReportEvent(std::move(event), settings.value());
   } else {
     base::Value::Dict event;
-    event.Set(extensions::SafeBrowsingPrivateEventRouter::kKeyUrl,
-              data_masking_event.url);
-    event.Set(extensions::SafeBrowsingPrivateEventRouter::kKeyTabUrl,
-              std::move(data_masking_event.url));
-    event.Set(extensions::SafeBrowsingPrivateEventRouter::kKeyEventResult,
+    event.Set(kKeyUrl, data_masking_event.url);
+    event.Set(kKeyTabUrl, std::move(data_masking_event.url));
+    event.Set(kKeyEventResult,
               EventResultToString(data_masking_event.event_result));
 
     base::Value::List triggered_rule_info;
     triggered_rule_info.reserve(data_masking_event.triggered_rule_info.size());
     for (auto& rule : data_masking_event.triggered_rule_info) {
       base::Value::Dict triggered_rule;
-      triggered_rule.Set(
-          extensions::SafeBrowsingPrivateEventRouter::kKeyTriggeredRuleId,
-          std::move(rule.rule_id));
-      triggered_rule.Set(
-          extensions::SafeBrowsingPrivateEventRouter::kKeyTriggeredRuleName,
-          std::move(rule.rule_name));
+      triggered_rule.Set(kKeyTriggeredRuleId, std::move(rule.rule_id));
+      triggered_rule.Set(kKeyTriggeredRuleName, std::move(rule.rule_name));
 
       base::Value::List matched_detectors;
       for (auto& detector : rule.matched_detectors) {
@@ -573,8 +574,7 @@ void ReportDataMaskingEvent(
 
       triggered_rule_info.Append(std::move(triggered_rule));
     }
-    event.Set(extensions::SafeBrowsingPrivateEventRouter::kKeyTriggeredRuleInfo,
-              std::move(triggered_rule_info));
+    event.Set(kKeyTriggeredRuleInfo, std::move(triggered_rule_info));
 
     reporting_client->ReportRealtimeEvent(
         enterprise_connectors::kKeySensitiveDataEvent,

@@ -16,6 +16,8 @@
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/interaction/browser_elements.h"
 #include "chrome/browser/ui/performance_controls/memory_saver_utils.h"
 #include "chrome/browser/ui/performance_controls/tab_resource_usage_tab_helper.h"
@@ -43,6 +45,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "chrome/test/interaction/interactive_browser_test.h"
 #include "components/collaboration/public/messaging/message.h"
+#include "components/data_sharing/public/features.h"
 #include "components/data_sharing/public/group_data.h"
 #include "components/lookalikes/core/safety_tip_test_utils.h"
 #include "components/performance_manager/public/decorators/process_metrics_decorator.h"
@@ -118,7 +121,10 @@ class TabHoverCardInteractiveUiTest
 
   void SetUp() override {
     set_open_about_blank_on_browser_launch(true);
-    scoped_feature_list_.InitAndEnableFeature(features::kTabHoverCardImages);
+    scoped_feature_list_.InitWithFeatures(
+        {features::kTabHoverCardImages,
+         data_sharing::features::kDataSharingFeature},
+        {});
     MemorySaverInteractiveTestMixin::SetUp();
   }
 
@@ -156,11 +162,8 @@ class TabHoverCardInteractiveUiTest
   }
 
   TabResourceUsageTabHelper* GetResourceUsageAt(int index) {
-    return browser()
-        ->tab_strip_model()
-        ->GetTabAtIndex(index)
-        ->GetTabFeatures()
-        ->resource_usage_helper();
+    return TabResourceUsageTabHelper::From(
+        browser()->tab_strip_model()->GetTabAtIndex(index));
   }
 
  private:
@@ -297,14 +300,17 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardInteractiveUiTest,
   ASSERT_EQ(2u, active_browser_list->size());
 
   // Choose one browser to be active; the other to be inactive.
-  Browser* active_window = active_browser_list->get(0);
-  Browser* inactive_window = active_browser_list->get(1);
+  BrowserWindowInterface* const active_window =
+      GetLastActiveBrowserWindowInterfaceWithAnyProfile();
+  BrowserWindowInterface* const inactive_window =
+      ui_test_utils::GetBrowserNotInSet({active_window});
 
   // Activate the active browser and wait for the inactive browser to be
   // inactive.
   BrowserView::GetBrowserViewForBrowser(active_window)->Activate();
   views::test::WaitForWidgetActive(
-      BrowserView::GetBrowserViewForBrowser(inactive_window)->frame(), false);
+      BrowserView::GetBrowserViewForBrowser(inactive_window)->GetWidget(),
+      false);
   ASSERT_FALSE(
       BrowserView::GetBrowserViewForBrowser(inactive_window)->IsActive());
 
@@ -791,17 +797,21 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardFadeFooterInteractiveUiTest,
 
   // Clear alert state. Alerts take precedence over all other footers.
   tab_renderer_data.alert_state = {};
-  tab_groups::CollaborationMessagingTabData data(browser()->profile());
-  tab_renderer_data.collaboration_messaging = data.GetWeakPtr();
+
+  tab_groups::CollaborationMessagingTabData* const data =
+      tab_groups::CollaborationMessagingTabData::From(
+          browser()->tab_strip_model()->GetTabAtIndex(1));
+
+  tab_renderer_data.collaboration_messaging = data->GetWeakPtr();
 
   // Do not make a network request for the user's avatar.
-  data.set_mocked_avatar_for_testing(gfx::Image());
+  data->set_mocked_avatar_for_testing(gfx::Image());
 
   // Create a mock PersistentMessage
   // Show collaboration messaging status with TAB_ADDED event.
   std::string given_name = "User";
   std::string avatar_url = "https://google.com/chrome/1";
-  data.SetMessage(
+  data->SetMessage(
       CreateMessage(given_name, avatar_url,
                     collaboration::messaging::CollaborationEvent::TAB_ADDED));
 
@@ -827,7 +837,7 @@ IN_PROC_BROWSER_TEST_F(TabHoverCardFadeFooterInteractiveUiTest,
   // event.
   std::string given_name2 = "Another User";
   std::string avatar_url2 = "https://google.com/chrome/2";
-  data.SetMessage(
+  data->SetMessage(
       CreateMessage(given_name2, avatar_url2,
                     collaboration::messaging::CollaborationEvent::TAB_UPDATED));
 

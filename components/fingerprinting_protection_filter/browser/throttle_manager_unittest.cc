@@ -33,6 +33,7 @@
 #include "components/url_pattern_index/proto/rules.pb.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/navigation_throttle.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/back_forward_cache_util.h"
@@ -173,19 +174,17 @@ class MockPageActivationThrottle : public content::NavigationThrottle {
       PageActivationNotificationTiming throttle_state) {
     if (throttle_state == activation_throttle_state_) {
       auto it = mock_page_activations_.find(navigation_handle()->GetURL());
-      auto* web_contents_helper =
-          navigation_handle()->GetWebContents()
-              ? FingerprintingProtectionWebContentsHelper::FromWebContents(
-                    navigation_handle()->GetWebContents())
-              : nullptr;
+      auto* throttle_manager =
+          FingerprintingProtectionWebContentsHelper::GetThrottleManager(
+              *navigation_handle());
       if (subresource_filter::IsInSubresourceFilterRoot(navigation_handle()) &&
-          web_contents_helper) {
+          throttle_manager) {
         if (it != mock_page_activations_.end()) {
-          web_contents_helper->NotifyPageActivationComputed(
+          throttle_manager->OnPageActivationComputed(
               navigation_handle(), it->second,
               subresource_filter::ActivationDecision::ACTIVATED);
         } else {
-          web_contents_helper->NotifyPageActivationComputed(
+          throttle_manager->OnPageActivationComputed(
               navigation_handle(), subresource_filter::mojom::ActivationState(),
               subresource_filter::ActivationDecision::ACTIVATED);
         }

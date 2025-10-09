@@ -33,6 +33,7 @@
 #include "chrome/browser/ui/singleton_tabs.h"
 #include "chrome/browser/ui/tabs/saved_tab_groups/most_recent_shared_tab_update_store.h"
 #include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_utils.h"
+#include "chrome/browser/ui/tabs/split_view_iph_controller.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/toolbar/bookmark_sub_menu_model.h"
@@ -51,6 +52,7 @@
 #include "chrome/browser/ui/views/user_education/autofill_help_bubble_factory.h"
 #include "chrome/browser/ui/views/user_education/browser_help_bubble.h"
 #include "chrome/browser/ui/views/user_education/browser_ntp_promos.h"
+#include "chrome/browser/ui/views/user_education/custom_webui_help_bubble.h"
 #include "chrome/browser/ui/views/user_education/impl/browser_feature_promo_controller.h"
 #include "chrome/browser/ui/views/user_education/impl/browser_feature_promo_controller_20.h"
 #include "chrome/browser/ui/views/user_education/impl/browser_feature_promo_controller_25.h"
@@ -67,6 +69,7 @@
 #include "chrome/browser/user_education/user_education_service_factory.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/common/chrome_features.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/branded_strings.h"
@@ -80,8 +83,8 @@
 #include "components/lens/lens_features.h"
 #include "components/password_manager/core/browser/features/password_features.h"
 #include "components/pdf/browser/pdf_document_helper.h"
+#include "components/plus_addresses/core/browser/grit/plus_addresses_strings.h"
 #include "components/plus_addresses/core/common/features.h"
-#include "components/plus_addresses/grit/plus_addresses_strings.h"
 #include "components/safe_browsing/core/common/safebrowsing_referral_methods.h"
 #include "components/saved_tab_groups/public/features.h"
 #include "components/strings/grit/components_strings.h"
@@ -115,7 +118,7 @@
 #include "ui/views/view_utils.h"
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#include "components/plus_addresses/resources/vector_icons.h"
+#include "components/plus_addresses/core/browser/resources/vector_icons.h"
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -138,6 +141,7 @@ constexpr std::initializer_list<Platforms> kComposePlatforms{
 
 constexpr char kTabGroupHeaderElementName[] = "TabGroupHeader";
 constexpr char kChromeThemeBackElementName[] = "ChromeThemeBackElement";
+constexpr char kLastInactiveTabElementName[] = "LastInactiveTab";
 
 class IfView : public user_education::TutorialDescription::If {
  public:
@@ -290,36 +294,28 @@ void MaybeRegisterChromeFeaturePromos(
                        "Triggered after a home/work suggestion is available to "
                        "user for filling")));
 
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForToastPromo(
+          feature_engagement::kIPHAutofillAccountNameEmailSuggestionFeature,
+          autofill::PopupViewViews::
+              kAutofillAccountNameEmailSuggestionElementId,
+          IDS_AUTOFILL_IPH_ACCOUNT_NAME_EMAIL_SUGGESTION,
+          IDS_AUTOFILL_IPH_ACCOUNT_NAME_EMAIL_SUGGESTION_SCREENREADER,
+          FeaturePromoSpecification::AcceleratorInfo())
+          .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
+          .SetBubbleTitleText(
+              IDS_AUTOFILL_IPH_ACCOUNT_NAME_EMAIL_SUGGESTION_TITLE)
+          .SetMetadata(
+              143, "sygiet@google.com",
+              "Triggered after a name and email suggestion is available to "
+              "user for filling")));
+
   // kIPHAutofillAiOptInFeature:
   registry.RegisterFeature(std::move(
       FeaturePromoSpecification::CreateForCustomAction(
           feature_engagement::kIPHAutofillAiOptInFeature,
           autofill::PopupViewViews::kAutofillAiOptInIphElementId,
-          IDS_AUTOFILL_AI_OPT_IN_IPH_BODY,
-          [&]() {
-            int index =
-                feature_engagement::kAutofillIphCTAVariationsStringValue.Get();
-            if (index < 0 ||
-                index > base::to_underlying(
-                            autofill::features::
-                                AutofillIphCTAVariationsStringVarations::
-                                    kMaxValue)) {
-              return IDS_AUTOFILL_AI_OPT_IN_IPH_SEE_HOW;
-            }
-            switch (static_cast<autofill::features::
-                                    AutofillIphCTAVariationsStringVarations>(
-                index)) {
-              case autofill::features::AutofillIphCTAVariationsStringVarations::
-                  kSeeHow:
-                return IDS_AUTOFILL_AI_OPT_IN_IPH_SEE_HOW;
-              case autofill::features::AutofillIphCTAVariationsStringVarations::
-                  kTryIt:
-                return IDS_AUTOFILL_AI_OPT_IN_IPH_TRY_IT;
-              case autofill::features::AutofillIphCTAVariationsStringVarations::
-                  kTurnOn:
-                return IDS_AUTOFILL_AI_OPT_IN_IPH_TURN_ON;
-            }
-          }(),
+          IDS_AUTOFILL_AI_OPT_IN_IPH_BODY, IDS_AUTOFILL_AI_OPT_IN_IPH_TURN_ON,
           base::BindRepeating(
               [](ContextPtr ctx,
                  user_education::FeaturePromoHandle promo_handle) {
@@ -345,6 +341,19 @@ void MaybeRegisterChromeFeaturePromos(
                        "The IPH is displayed when the user clicks on such an "
                        "input field and is anchored against it.")));
 
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForToastPromo(
+          feature_engagement::kIPHAutofillAiValuablesFeature,
+          autofill::PopupViewViews::kAutofillAiValuablesElementId,
+          IDS_AUTOFILL_AI_VALUABLES_IPH_BODY,
+          IDS_AUTOFILL_IPH_LOYALTY_CARD_SUGGESTION_SCREENREADER,
+          FeaturePromoSpecification::AcceleratorInfo())
+          .SetBubbleTitleText(IDS_AUTOFILL_AI_VALUABLES_IPH_TITLE)
+          .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
+          .SetMetadata(
+              143, "vizcay@google.com",
+              "Triggered after Wallet autofill suggestions are shown.")));
+
   // kIPHAutofillVirtualCardCVCSuggestionFeature:
   registry.RegisterFeature(std::move(
       FeaturePromoSpecification::CreateForToastPromo(
@@ -367,13 +376,22 @@ void MaybeRegisterChromeFeaturePromos(
           .SetMetadata(100, "siyua@chromium.org",
                        "Triggered after autofill popup appears.")));
 
+  bool bnpl_second_line_string_experiment_enabled =
+      base::FeatureList::IsEnabled(
+          autofill::features::
+              kAutofillEnableBuyNowPayLaterUpdatedSuggestionSecondLineString);
+
   // kIPHAutofillBnplAffirmOrZipSuggestionFeature:
   registry.RegisterFeature(std::move(
       FeaturePromoSpecification::CreateForToastPromo(
           feature_engagement::kIPHAutofillBnplAffirmOrZipSuggestionFeature,
           autofill::PopupViewViews::kAutofillBnplAffirmOrZipSuggestionElementId,
-          IDS_AUTOFILL_CARD_BNPL_AFFIRM_OR_ZIP_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP,
-          IDS_AUTOFILL_CARD_BNPL_AFFIRM_OR_ZIP_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER,
+          bnpl_second_line_string_experiment_enabled
+              ? IDS_AUTOFILL_CARD_BNPL_SUGGESTION_WITH_GOOGLE_PAY_IPH_BUBBLE_LABEL_DESKTOP
+              : IDS_AUTOFILL_CARD_BNPL_AFFIRM_OR_ZIP_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP,
+          bnpl_second_line_string_experiment_enabled
+              ? IDS_AUTOFILL_CARD_BNPL_SUGGESTION_WITH_GOOGLE_PAY_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER
+              : IDS_AUTOFILL_CARD_BNPL_AFFIRM_OR_ZIP_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER,
           FeaturePromoSpecification::AcceleratorInfo())
           .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
           .SetMetadata(137, "yiwenqian@google.com",
@@ -387,8 +405,12 @@ void MaybeRegisterChromeFeaturePromos(
               kIPHAutofillBnplAffirmZipOrKlarnaSuggestionFeature,
           autofill::PopupViewViews::
               kAutofillBnplAffirmZipOrKlarnaSuggestionElementId,
-          IDS_AUTOFILL_CARD_BNPL_AFFIRM_ZIP_OR_KLARNA_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP,
-          IDS_AUTOFILL_CARD_BNPL_AFFIRM_ZIP_OR_KLARNA_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER,
+          bnpl_second_line_string_experiment_enabled
+              ? IDS_AUTOFILL_CARD_BNPL_SUGGESTION_WITH_GOOGLE_PAY_IPH_BUBBLE_LABEL_DESKTOP
+              : IDS_AUTOFILL_CARD_BNPL_AFFIRM_ZIP_OR_KLARNA_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP,
+          bnpl_second_line_string_experiment_enabled
+              ? IDS_AUTOFILL_CARD_BNPL_SUGGESTION_WITH_GOOGLE_PAY_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER
+              : IDS_AUTOFILL_CARD_BNPL_AFFIRM_ZIP_OR_KLARNA_SUGGESTION_IPH_BUBBLE_LABEL_DESKTOP_SCREENREADER,
           FeaturePromoSpecification::AcceleratorInfo())
           .SetBubbleArrow(HelpBubbleArrow::kLeftCenter)
           .SetMetadata(
@@ -571,27 +593,6 @@ void MaybeRegisterChromeFeaturePromos(
                        "Triggered after user is updated to "
                        "the new Chrome Refresh design.")));
 
-  // kIPHDesktopNewTabPageModulesCustomizeFeature:
-  registry.RegisterFeature(std::move(
-      FeaturePromoSpecification::CreateForSnoozePromo(
-          feature_engagement::kIPHDesktopNewTabPageModulesCustomizeFeature,
-          NewTabPageUI::kModulesCustomizeIPHAnchorElement,
-          IDS_NTP_MODULES_CUSTOMIZE_IPH)
-          .SetBubbleArrow(HelpBubbleArrow::kBottomRight)
-          .SetBubbleIcon(kLightbulbOutlineIcon)
-          .SetInAnyContext(true)
-          // This provides backwards-compatibility with legacy conditions used
-          // before feature auto-configuration was enabled.
-          .SetAdditionalConditions(std::move(
-              AdditionalConditions().AddAdditionalCondition(AdditionalCondition{
-                  feature_engagement::events::kDesktopNTPModuleUsed,
-                  AdditionalConditions::Constraint::kAtMost, 0})))
-          // See: crbug.com/1494923
-          .OverrideFocusOnShow(false)
-          .SetMetadata(122, "romanarora@chromium.org",
-                       "Triggered when there is atleast one "
-                       "new module on the NTP page.")));
-
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // kIPHExtensionsMenuFeature:
   registry.RegisterFeature(std::move(
@@ -630,7 +631,7 @@ void MaybeRegisterChromeFeaturePromos(
               IDS_EXTENSIONS_ZERO_STATE_PROMO_CUSTOM_ACTION_IPH_DESCRIPTION,
               IDS_EXTENSIONS_ZERO_STATE_PROMO_CUSTOM_ACTION_IPH_ACCEPT,
               CreateNavigationAction(extension_urls::AppendUtmSource(
-                  extension_urls::GetWebstoreLaunchURL(),
+                  extension_urls::GetNewWebstoreLaunchURL(),
                   extension_urls::kCustomActionIphUtmSource)))
               .SetCustomActionIsDefault(true)
               .SetBubbleTitleText(IDS_EXTENSIONS_ZERO_STATE_PROMO_IPH_TITLE)
@@ -952,6 +953,43 @@ void MaybeRegisterChromeFeaturePromos(
                        "Triggered to encourage users to try out the reading "
                        "mode feature.")));
 
+  // kIPHSideBySidePinnableFeature:
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForCustomAction(
+          feature_engagement::kIPHSideBySidePinnableFeature,
+          kToolbarSplitTabsToolbarButtonElementId, IDS_SPLIT_VIEW_BODY_IPH,
+          IDS_SPLIT_VIEW_PIN_ACTION_IPH,
+          base::BindRepeating(
+              [](ContextPtr ctx,
+                 user_education::FeaturePromoHandle promo_handle) {
+                GetBrowser(ctx)->GetProfile()->GetPrefs()->SetBoolean(
+                    prefs::kPinSplitTabButton, true);
+              }))
+          .SetAdditionalConditions(std::move(
+              AdditionalConditions().AddAdditionalCondition(AdditionalCondition{
+                  feature_engagement::events::kSplitViewCreated,
+                  AdditionalConditions::Constraint::kAtLeast, 2})))
+          .SetBubbleTitleText(IDS_SPLIT_VIEW_TITLE_IPH)
+          .SetBubbleArrow(HelpBubbleArrow::kTopRight)
+          .SetCustomActionDismissText(IDS_NO_THANKS)
+          .SetCustomActionIsDefault(true)
+          .SetMetadata(
+              141, "lugli@google.com",
+              "Triggered when user tried to create split view twice.")));
+
+  // kIPHSideBySideTabSwitchFeature:
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForTutorialPromo(
+          feature_engagement::kIPHSideBySideTabSwitchFeature,
+          kTopContainerElementId, IDS_SPLIT_VIEW_TAB_SWITCH_ENTRY_IPH_BODY,
+          kSplitViewTutorialId)
+          .SetBubbleArrow(HelpBubbleArrow::kNone)
+          .SetBubbleIcon(kLightbulbOutlineIcon)
+          .SetBubbleTitleText(IDS_SPLIT_VIEW_TAB_SWITCH_ENTRY_IPH_TITLE)
+          .SetMetadata(141, "lugli@google.com",
+                       "Triggered when user swaps between two tabs three times "
+                       "quickly.")));
+
   // kIPHSidePanelGenericPinnableFeature:
   registry.RegisterFeature(std::move(
       FeaturePromoSpecification::CreateForToastPromo(
@@ -1090,8 +1128,8 @@ void MaybeRegisterChromeFeaturePromos(
                 "Triggered when a shared tab becomes the active tab.")));
   }
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-  // kIPHSupervisedUserProfileSigninFeature
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  // kIPHSupervisedUserProfileSigninFeature:
   registry.RegisterFeature(std::move(
       FeaturePromoSpecification::CreateForCustomAction(
           feature_engagement::kIPHSupervisedUserProfileSigninFeature,
@@ -1118,7 +1156,28 @@ void MaybeRegisterChromeFeaturePromos(
           .SetMetadata(128, "anthie@google.com",
                        "Triggered on signin-in a supervised user to "
                        "a new profile or an existing local profile")));
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+
+  // kIPHSignInBenefitsFeature:
+  registry.RegisterFeature(std::move(
+      FeaturePromoSpecification::CreateForCustomAction(
+          feature_engagement::kIPHSignInBenefitsFeature,
+          kToolbarAvatarButtonElementId, IDS_SIGN_IN_BENEFITS_IPH_TEXT,
+          IDS_PROMO_MANAGE_BUTTON,
+          base::BindRepeating(
+              [](ContextPtr ctx,
+                 user_education::FeaturePromoHandle promo_handle) {
+                // Open account settings page.
+                ShowSingletonTab(GetBrowser(ctx),
+                                 GURL(chrome::kChromeUIAccountSettingsURL));
+              }))
+          .SetPromoSubtype(user_education::FeaturePromoSpecification::
+                               PromoSubtype::kActionableAlert)
+          .SetBubbleArrow(HelpBubbleArrow::kTopRight)
+          .SetCustomActionIsDefault(false)
+          .SetMetadata(142, "ddac@google.com",
+                       "Triggered for a signed-in user who hasn't turned on "
+                       "sync yet, after the sync-to-signin migration.")));
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
   // kIPHTabOrganizationSuccessFeature:
   registry.RegisterFeature(std::move(
@@ -1682,6 +1741,56 @@ void MaybeRegisterChromeTutorials(
 
     tutorial_registry.AddTutorial(kLensOverlayTutorialId,
                                   std::move(lens_overlay_tutorial));
+  }
+
+  {  // Split view tutorial
+    auto split_view_tutorial =
+        TutorialDescription::Create<kSplitViewTutorialMetricPrefix>(
+            // Hidden step - name the last inactive tab
+            HiddenStep::WaitForShown(kBrowserViewElementId)
+                .NameElements(
+                    base::BindRepeating([](ui::InteractionSequence* sequence,
+                                           ui::TrackedElement* element) {
+                      BrowserView* const browser_view =
+                          views::AsViewClass<BrowserView>(
+                              element->AsA<views::TrackedElementViews>()
+                                  ->view());
+
+                      SplitViewIphController* split_view_iph_controller =
+                          SplitViewIphController::From(browser_view->browser());
+
+                      ui::TrackedElement* last_inactive_tab_element =
+                          split_view_iph_controller->GetTabSwitchIPHAnchor(
+                              browser_view);
+
+                      sequence->NameElement(
+                          last_inactive_tab_element,
+                          std::string_view(kLastInactiveTabElementName));
+                      return true;
+                    })),
+
+            // Bubble step - inactive tab to right click.
+            TutorialDescription::BubbleStep(kLastInactiveTabElementName)
+                .SetBubbleBodyText(IDS_SPLIT_VIEW_TAB_SWITCH_STEP_IPH_BODY)
+                .SetBubbleArrow(HelpBubbleArrow::kTopLeft),
+
+            HiddenStep::WaitForShown(kToolbarSplitTabsToolbarButtonElementId),
+
+            // Completion of the tutorial after split view appears.
+            TutorialDescription::BubbleStep(kTabStripRegionElementId)
+                .SetBubbleTitleText(IDS_TUTORIAL_GENERIC_SUCCESS_TITLE)
+                .SetBubbleBodyText(
+                    IDS_SPLIT_VIEW_TAB_SWITCH_COMPLETION_IPH_BODY)
+                .SetBubbleArrow(HelpBubbleArrow::kNone)
+                .InAnyContext());
+
+    split_view_tutorial.metadata.additional_description =
+        "Tutorial for the Split View.";
+    split_view_tutorial.metadata.launch_milestone = 141;
+    split_view_tutorial.metadata.owners = "lugli@google.com";
+
+    tutorial_registry.AddTutorial(kSplitViewTutorialId,
+                                  std::move(split_view_tutorial));
   }
 }
 

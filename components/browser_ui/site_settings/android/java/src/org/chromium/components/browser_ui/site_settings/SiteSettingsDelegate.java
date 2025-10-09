@@ -183,19 +183,9 @@ public interface SiteSettingsDelegate {
     boolean shouldShowTrackingProtectionUi();
 
     /**
-     * @return whether all 3pcs should be blocked in incognito.
-     */
-    boolean isAlwaysBlock3pcsIncognitoEnabled();
-
-    /**
      * @return true if all third-party cookies are blocked when Tracking Protection is on.
      */
     boolean isBlockAll3pcEnabledInTrackingProtection();
-
-    /**
-     * @return true if wildcards should be shown in content settings patterns.
-     */
-    boolean isDisplayWildcardInContentSettingsEnabled();
 
     /** Enables/disables Related Website Sets data access. */
     void setRelatedWebsiteSetsDataAccessEnabled(boolean enabled);

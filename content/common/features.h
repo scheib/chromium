@@ -68,6 +68,10 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(kEmbeddingRequiresOptIn);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kExperimentalContentSecurityPolicyFeatures);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmUseOtherAccountAndLabelsNewSyntax);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmSameSiteLax);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmNonStringToken);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmWellKnownEndpointValidation);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmPreservePortsForTesting);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmErrorAttribute);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kFilterInstalledAppsWebAppMatching);
 #if BUILDFLAG(IS_WIN)
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kFilterInstalledAppsWinMatching);
@@ -96,6 +100,7 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(kHidePastePopupOnGSB);
 #endif
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kHoldbackDebugReasonStringRemoval);
 
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kIgnoreDuplicateNavsOnlyWithUserGesture);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kInMemoryCodeCache);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kInterestGroupUpdateIfOlderThan);
 #if BUILDFLAG(IS_MAC)
@@ -116,6 +121,9 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(
 CONTENT_EXPORT BASE_DECLARE_FEATURE(
     kLocalNetworkAccessForFencedFrameNavigationsWarningOnly);
 
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kMainFrameProcessReuseAllowDevToolsAttached);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kMainFrameProcessReuseAllowIPAndLocalhost);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kMediaDevicesSystemMonitorCache);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kMediaStreamTrackTransfer);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kMojoDedicatedThread);
@@ -127,6 +135,7 @@ CONTENT_EXPORT BASE_DECLARE_FEATURE(kNavigationThrottleRunner2);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kPermissionsPolicyVerificationInContent);
 #endif
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchCookieIndices);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchDevtoolsUserAgentOverride);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kPreloadingConfig);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(
     kPrerenderMoreCorrectSpeculativeRFHCreation);
@@ -146,7 +155,7 @@ enum class ProgressiveAccessibilityMode {
 CONTENT_EXPORT BASE_DECLARE_FEATURE_PARAM(ProgressiveAccessibilityMode,
                                           kProgressiveAccessibilityModeParam);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kReloadHiddenTabsWithCrashedSubframes);
-CONTENT_EXPORT BASE_DECLARE_FEATURE(kReloadHiddenTabsWithActiveCrashedSubframes);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kReusePrerenderingProcessForMainFrames);
 #if BUILDFLAG(IS_ANDROID)
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kRestrictOrientationLockToPhones);
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kContinueGestureOnLosingFocus);

@@ -5,6 +5,7 @@
 #include "components/enterprise/data_controls/core/browser/rules_service_base.h"
 
 #include "components/enterprise/data_controls/core/browser/prefs.h"
+#include "components/policy/core/common/policy_types.h"
 #include "components/prefs/pref_service.h"
 
 namespace data_controls {
@@ -48,6 +49,17 @@ Verdict RulesServiceBase::GetCopyToOSClipboardVerdict(
                     });
 }
 
+Verdict RulesServiceBase::GetDownloadVerdict(const GURL& download_url) const {
+  return GetVerdict(Rule::Restriction::kFileDownload,
+                    {
+                        .source =
+                            {
+                                .url = download_url,
+                                .incognito = incognito_profile(),
+                            },
+                    });
+}
+
 Verdict RulesServiceBase::GetVerdict(Rule::Restriction restriction,
                                      const ActionContext& context) const {
   Rule::Level max_level = Rule::Level::kNotSet;
@@ -59,7 +71,10 @@ Verdict RulesServiceBase::GetVerdict(Rule::Restriction restriction,
       max_level = level;
     }
     if (level != Rule::Level::kNotSet) {
-      triggered_rules[i] = {
+      triggered_rules[Verdict::TriggeredRuleKey{
+          .index = i,
+          .machine_scope = MachineScopePolicy(),
+      }] = {
           .rule_id = rule.rule_id(),
           .rule_name = rule.name(),
       };
@@ -78,6 +93,11 @@ Verdict RulesServiceBase::GetVerdict(Rule::Restriction restriction,
     case Rule::Level::kAllow:
       return Verdict::Allow();
   }
+}
+
+bool RulesServiceBase::MachineScopePolicy() const {
+  return pref_registrar_.prefs()->GetInteger(kDataControlsRulesScopePref) ==
+         policy::POLICY_SCOPE_MACHINE;
 }
 
 void RulesServiceBase::OnDataControlsRulesUpdate() {

@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "skia/ext/font_utils.h"
@@ -208,6 +209,8 @@ const SimpleFontData* FontCache::GetLastResortFallbackFont(
   }
 #endif
 
+  base::UmaHistogramBoolean("Blink.Fonts.LastResortFallbackFound",
+                            font_platform_data != nullptr);
   DCHECK(font_platform_data);
   return FontDataFromFontPlatformData(font_platform_data);
 }
@@ -243,11 +246,7 @@ sk_sp<SkTypeface> FontCache::CreateTypeface(
       return typeface;
   }
 #endif  // BUILDFLAG(IS_ANDROID)
-
-  // TODO(https://crbug.com/1425390: Assign FontCache::font_manager_ in the
-  // ctor.
-  auto font_manager = font_manager_ ? font_manager_ : skia::DefaultFontMgr();
-  return sk_sp<SkTypeface>(font_manager->matchFamilyStyle(
+  return sk_sp<SkTypeface>(font_manager_->matchFamilyStyle(
       name.empty() ? nullptr : name.c_str(), font_description.SkiaFontStyle()));
 }
 

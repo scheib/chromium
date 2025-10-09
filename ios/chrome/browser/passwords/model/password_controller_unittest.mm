@@ -154,7 +154,8 @@ class MockPasswordManagerClient
  private:
   mutable FakeNetworkContext network_context_;
   raw_ptr<PrefService> const prefs_;
-  const raw_ptr<password_manager::PasswordStoreInterface> store_;
+  const raw_ptr<password_manager::PasswordStoreInterface, DanglingUntriaged>
+      store_;
 };
 
 // Creates PasswordController with the given `pref_service`, `web_state` and a
@@ -436,8 +437,10 @@ class PasswordControllerTest : public PlatformTest {
     EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool() {
       return block_was_called;
     }));
-    ASSERT_TRUE(
-        passwordController_.sharedPasswordController.isPasswordGenerated);
+
+    EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForActionTimeout, ^bool() {
+      return passwordController_.sharedPasswordController.isPasswordGenerated;
+    }));
   }
 
   void LoadHtml(NSString* html) {
@@ -1358,12 +1361,12 @@ TEST_F(PasswordControllerTest, SendingToStoreDynamicallyAddedFormsOnFocus) {
   // TODO(crbug.com/40621653): replace WillRepeatedly with WillOnce when the old
   // parser is gone.
   EXPECT_CALL(*store_, GetLogins(expected_form_digest, _))
-      .WillRepeatedly(testing::Invoke(
+      .WillRepeatedly(
           [&get_logins_called](
               const password_manager::PasswordFormDigest&,
               base::WeakPtr<password_manager::PasswordStoreConsumer>) {
             get_logins_called = true;
-          }));
+          });
 
   // Sets a focus on a username field.
   NSString* kSetUsernameInFocusScript =

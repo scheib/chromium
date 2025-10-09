@@ -328,17 +328,16 @@ class TestServerURLLoaderFactory {
     }
 
     // Extract request body.
-    std::string actual_body;
+    std::string_view actual_body;
     if (request.request_body) {
-      const std::vector<network::DataElement>* const elements =
-          request.request_body->elements();
-
       // We only support the simplest body structure.
-      if (elements && elements->size() == 1 &&
-          (*elements)[0].type() ==
+      const std::vector<network::DataElement>& elements =
+          *request.request_body->elements();
+      if (elements.size() == 1 &&
+          elements[0].type() ==
               network::mojom::DataElementDataView::Tag::kBytes) {
-        actual_body = std::string(
-            (*elements)[0].As<network::DataElementBytes>().AsStringPiece());
+        actual_body =
+            elements[0].As<network::DataElementBytes>().AsStringView();
       }
     }
 
@@ -362,13 +361,10 @@ class TestServerURLLoaderFactory {
 // Returns a "canonically" formatted version of a JSON string by parsing and
 // then rewriting it.
 std::string ReformatJson(const std::string& in) {
-  const std::optional<base::Value> json = base::JSONReader::Read(in);
-  CHECK(json);
-
-  std::string out;
-  base::JSONWriter::Write(*json, &out);
-
-  return out;
+  return base::WriteJson(
+             base::JSONReader::Read(in, base::JSON_PARSE_CHROMIUM_EXTENSIONS)
+                 .value())
+      .value_or("");
 }
 
 // Receives the result of an annotation request and writes the result data into

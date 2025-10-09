@@ -107,8 +107,11 @@
   flex-wrap: var(--toolbar-flex-wrap);
 }
 
-#more {
-  display: none;
+.announce-block {
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  position: absolute;
 }
 
 /*

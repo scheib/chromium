@@ -30,7 +30,6 @@
 #import "ios/chrome/browser/crash_report/model/crash_keys_helper.h"
 #import "ios/chrome/browser/default_promo/ui_bundled/default_promo_non_modal_presentation_delegate.h"
 #import "ios/chrome/browser/discover_feed/model/feed_constants.h"
-#import "ios/chrome/browser/find_in_page/model/util.h"
 #import "ios/chrome/browser/first_run/ui_bundled/first_run_util.h"
 #import "ios/chrome/browser/fullscreen/ui_bundled/fullscreen_animator.h"
 #import "ios/chrome/browser/fullscreen/ui_bundled/fullscreen_reason.h"
@@ -47,6 +46,7 @@
 #import "ios/chrome/browser/main_content/ui_bundled/web_scroll_view_main_content_ui_forwarder.h"
 #import "ios/chrome/browser/metrics/model/tab_usage_recorder_browser_agent.h"
 #import "ios/chrome/browser/ntp/model/new_tab_page_util.h"
+#import "ios/chrome/browser/ntp/ui_bundled/logo_animation_controller.h"
 #import "ios/chrome/browser/ntp/ui_bundled/new_tab_page_coordinator.h"
 #import "ios/chrome/browser/omnibox/public/omnibox_ui_features.h"
 #import "ios/chrome/browser/popup_menu/ui_bundled/overflow_menu/feature_flags.h"
@@ -76,8 +76,8 @@
 #import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
 #import "ios/chrome/browser/tab_switcher/tab_strip/coordinator/tab_strip_coordinator.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/swift_constants_for_objective_c.h"
-#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_strip/ui/tab_strip_utils.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/swift_constants_for_objective_c.h"
+#import "ios/chrome/browser/tab_switcher/tab_strip/ui/tab_strip_utils.h"
 #import "ios/chrome/browser/tabs/ui_bundled/background_tab_animation_view.h"
 #import "ios/chrome/browser/tabs/ui_bundled/foreground_tab_animation_view.h"
 #import "ios/chrome/browser/tabs/ui_bundled/switch_to_tab_animation_view.h"
@@ -167,6 +167,7 @@ const CGFloat kTopDynamicIslandInset = 24;
 // Note other delegates defined in the Delegates category header.
 @interface BrowserViewController () <CardSwipeViewDelegate,
                                      FullscreenUIElement,
+                                     LogoAnimationControllerOwnerOwner,
                                      MainContentUI,
                                      SideSwipeUIControllerDelegate,
                                      UIGestureRecognizerDelegate> {
@@ -229,10 +230,11 @@ const CGFloat kTopDynamicIslandInset = 24;
   UIView* _topBackgroundView;
 
   // The service used to load url parameters in current or new tab.
-  raw_ptr<UrlLoadingBrowserAgent> _urlLoadingBrowserAgent;
+  raw_ptr<UrlLoadingBrowserAgent, DanglingUntriaged> _urlLoadingBrowserAgent;
 
   // Used to report usage of a single Browser's tab.
-  raw_ptr<TabUsageRecorderBrowserAgent> _tabUsageRecorderBrowserAgent;
+  raw_ptr<TabUsageRecorderBrowserAgent, DanglingUntriaged>
+      _tabUsageRecorderBrowserAgent;
 
   // Used to get the layout guide center.
   LayoutGuideCenter* _layoutGuideCenter;
@@ -240,9 +242,6 @@ const CGFloat kTopDynamicIslandInset = 24;
   // Whether the Lens Overlay is currently active and visible for the browser
   // view.
   BOOL _lensOverlayVisible;
-
-  // Whether the find bar is currently visible.
-  BOOL _findBarVisible;
 
   // TODO(crbug.com/429955447): Remove when diamond prototype is cleaned.
   ToolbarType _diamondToolbarType;
@@ -463,7 +462,7 @@ const CGFloat kTopDynamicIslandInset = 24;
              BrowserViewVisibilityState::kCoveredByOmniboxPopup ||
          _visibilityState ==
              BrowserViewVisibilityState::kCoveredByVoiceSearch ||
-         _lensOverlayVisible || _findBarVisible;
+         _lensOverlayVisible;
 }
 
 - (void)setVisibilityState:(BrowserViewVisibilityState)state {
@@ -735,7 +734,6 @@ const CGFloat kTopDynamicIslandInset = 24;
 - (void)clearPresentedStateWithCompletion:(ProceduralBlock)completion
                            dismissOmnibox:(BOOL)dismissOmnibox {
   [_bookmarksCoordinator dismissBookmarkModalControllerAnimated:NO];
-  [_bookmarksCoordinator dismissSnackbar];
   if (dismissOmnibox) {
     [self.omniboxCommandsHandler cancelOmniboxEdit];
   }
@@ -924,15 +922,13 @@ const CGFloat kTopDynamicIslandInset = 24;
     self.view.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
   }
 
-  if (@available(iOS 17, *)) {
-    NSArray<UITrait>* traits = TraitCollectionSetForTraits(nil);
-    __weak __typeof(self) weakSelf = self;
-    UITraitChangeHandler handler = ^(id<UITraitEnvironment> traitEnvironment,
-                                     UITraitCollection* previousCollection) {
-      [weakSelf updateUIOnTraitChange:previousCollection];
-    };
-    [self registerForTraitChanges:traits withHandler:handler];
-  }
+  NSArray<UITrait>* traits = TraitCollectionSetForTraits(nil);
+  __weak __typeof(self) weakSelf = self;
+  UITraitChangeHandler handler = ^(id<UITraitEnvironment> traitEnvironment,
+                                   UITraitCollection* previousCollection) {
+    [weakSelf updateUIOnTraitChange:previousCollection];
+  };
+  [self registerForTraitChanges:traits withHandler:handler];
 }
 
 - (void)viewSafeAreaInsetsDidChange {
@@ -1017,7 +1013,6 @@ const CGFloat kTopDynamicIslandInset = 24;
     }
   }
 
-  [_bookmarksCoordinator dismissSnackbar];
   [super viewWillDisappear:animated];
 }
 
@@ -1044,16 +1039,6 @@ const CGFloat kTopDynamicIslandInset = 24;
     _sideSwipeCoordinator = nil;
   }
 }
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-  [self updateUIOnTraitChange:previousTraitCollection];
-}
-#endif
 
 - (void)viewWillTransitionToSize:(CGSize)size
        withTransitionCoordinator:
@@ -1150,7 +1135,10 @@ const CGFloat kTopDynamicIslandInset = 24;
       // view controller uses information that it should not know or care about:
       // this BVC is contained and its parent bounds to the full screen.
       launchScreenView.frame = self.parentViewController.view.bounds;
+      [self.parentViewController addChildViewController:launchScreenController];
       [self.parentViewController.view addSubview:launchScreenView];
+      [launchScreenController
+          didMoveToParentViewController:self.parentViewController];
       [launchScreenView setNeedsLayout];
       [launchScreenView layoutIfNeeded];
 
@@ -1368,8 +1356,11 @@ const CGFloat kTopDynamicIslandInset = 24;
   // area height.
   UIView* toolbarView =
       self.toolbarCoordinator.secondaryToolbarViewController.view;
+  CGFloat secondaryToolbarBaseHeight = [self secondaryToolbarHeightWithInset];
   self.secondaryToolbarHeightConstraint = [toolbarView.heightAnchor
-      constraintEqualToConstant:[self secondaryToolbarHeightWithInset]];
+      constraintEqualToConstant:secondaryToolbarBaseHeight];
+  [self.toolbarCoordinator
+      setBottomOmniboxOffsetForPopup:secondaryToolbarBaseHeight];
   // The bottom toolbar can be constraint to the keyboard in some cases.
   self.secondaryToolbarHeightConstraint.priority = UILayoutPriorityRequired - 1;
   self.secondaryToolbarHeightConstraint.active = YES;
@@ -1410,15 +1401,17 @@ const CGFloat kTopDynamicIslandInset = 24;
 
   if (initialLayout) {
     // Add the toolbars as child view controllers.
-    [self addChildViewController:self.toolbarCoordinator
-                                     .primaryToolbarViewController];
-    [self addChildViewController:self.toolbarCoordinator
-                                     .secondaryToolbarViewController];
+    UIViewController* primaryToolbarViewController =
+        self.toolbarCoordinator.primaryToolbarViewController;
+    [self addChildViewController:primaryToolbarViewController];
+
+    UIViewController* secondaryToolbarViewController =
+        self.toolbarCoordinator.secondaryToolbarViewController;
+    [self addChildViewController:secondaryToolbarViewController];
 
     // Add the primary toolbar. On iPad, it should be in front of the tab strip
     // because the tab strip slides behind it when showing the thumb strip.
-    UIView* primaryToolbarView =
-        self.toolbarCoordinator.primaryToolbarViewController.view;
+    UIView* primaryToolbarView = primaryToolbarViewController.view;
     if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
       if (self.tabStripCoordinator) {
         UIViewController* tabStripViewController =
@@ -1440,9 +1433,11 @@ const CGFloat kTopDynamicIslandInset = 24;
     } else {
       [self.view addSubview:primaryToolbarView];
     }
-    [self.view insertSubview:self.toolbarCoordinator
-                                 .secondaryToolbarViewController.view
+    [self.view insertSubview:secondaryToolbarViewController.view
                 aboveSubview:primaryToolbarView];
+
+    [primaryToolbarViewController didMoveToParentViewController:self];
+    [secondaryToolbarViewController didMoveToParentViewController:self];
 
     // TODO(crbug.com/40270239): Migrate kContentAreaGuide to LayoutGuideCenter.
     // Add guide kContentAreaGuide to the browser view.
@@ -1498,15 +1493,6 @@ const CGFloat kTopDynamicIslandInset = 24;
     }
 
     AddSameConstraintsToSides(self.view, contentAreaGuide, contentSides);
-
-    // Complete child UIViewController containment flow now that the views are
-    // finished being added.
-    [self.tabStripCoordinator.viewController
-        didMoveToParentViewController:self];
-    [self.toolbarCoordinator.primaryToolbarViewController
-        didMoveToParentViewController:self];
-    [self.toolbarCoordinator.secondaryToolbarViewController
-        didMoveToParentViewController:self];
   }
 
   // Resize the typing shield to cover the entire browser view and bring it to
@@ -1740,10 +1726,8 @@ const CGFloat kTopDynamicIslandInset = 24;
 
 // Notifies or modifies BVC owned UI elements when a UITrait has been changed.
 - (void)updateUIOnTraitChange:(UITraitCollection*)previousTraitCollection {
-  if (@available(iOS 17.0, *)) {
-    if (base::FeatureList::IsEnabled(kEnableTraitCollectionWorkAround)) {
-      [self updateTraitsIfNeeded];
-    }
+  if (base::FeatureList::IsEnabled(kEnableTraitCollectionWorkAround)) {
+    [self updateTraitsIfNeeded];
   }
 
   // After `-shutdown` is called, profile is invalid and will cause a
@@ -1760,15 +1744,6 @@ const CGFloat kTopDynamicIslandInset = 24;
   }
 
   self.fullscreenController->BrowserTraitCollectionChangedBegin();
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-  // TODO(crbug.com/41198852): - traitCollectionDidChange: is not always
-  // forwarded because in some cases the presented view controller isn't a child
-  // of the BVC in the view controller hierarchy (some intervening object isn't
-  // a view controller).
-  [self.presentedViewController
-      traitCollectionDidChange:previousTraitCollection];
-#endif
 
   if (self.currentWebState) {
     UIEdgeInsets contentPadding =
@@ -1794,9 +1769,6 @@ const CGFloat kTopDynamicIslandInset = 24;
   // updateToobar];
   if (ShouldShowCompactToolbar(previousTraitCollection) !=
       ShouldShowCompactToolbar(self)) {
-    if (!IsNativeFindInPageAvailable()) {
-      [self.findInPageCommandsHandler hideFindUI];
-    }
     [self.textZoomHandler hideTextZoomUI];
   }
 
@@ -1849,7 +1821,6 @@ const CGFloat kTopDynamicIslandInset = 24;
 
 // On iOS 26, returns the top inset with corner adapation, otherwise returns 0.
 - (CGFloat)topInsetWithCornerAdaptation {
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     UIViewLayoutRegion* safeAreaRegion =
         [UIViewLayoutRegion safeAreaLayoutRegionWithCornerAdaptation:
@@ -1858,7 +1829,7 @@ const CGFloat kTopDynamicIslandInset = 24;
         directionalEdgeInsetsForLayoutRegion:safeAreaRegion];
     return calculatedInsets.top;
   }
-#endif
+
   return 0;
 }
 
@@ -1866,7 +1837,6 @@ const CGFloat kTopDynamicIslandInset = 24;
 // of the tab strip. This is needed on iPad when the app is windowed and pinned
 // to the top with fullscreen is enabled.
 - (void)configureTopBackgroundView {
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     if (self.tabStripView) {
       _topBackgroundView = [[UIView alloc] init];
@@ -1888,7 +1858,6 @@ const CGFloat kTopDynamicIslandInset = 24;
       ]];
     }
   }
-#endif
 }
 
 #pragma mark - Private Methods: Tap handling
@@ -2162,14 +2131,13 @@ const CGFloat kTopDynamicIslandInset = 24;
 // progress of 1.0 fully shows the headers and a progress of 0.0 fully hides
 // them.
 - (void)updateHeadersForFullscreenProgress:(CGFloat)progress {
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     if (self.tabStripView) {
       self.tabStripView.alpha = progress;
       _fakeStatusBarView.alpha = progress;
     }
   }
-#endif
+
   CGFloat offset =
       AlignValueToPixel((1.0 - progress) * [self primaryToolbarHeightDelta]);
   [self setFramesForHeaders:[self headerViews] atOffset:offset];
@@ -2202,7 +2170,9 @@ const CGFloat kTopDynamicIslandInset = 24;
   DUMP_WILL_BE_CHECK(height >= (0.0 - FLT_EPSILON) &&
                      height <= (expandedToolbarHeight + FLT_EPSILON));
 
-  self.secondaryToolbarHeightConstraint.constant = height;
+  if (![self.toolbarCoordinator showingOmniboxPopup]) {
+    self.secondaryToolbarHeightConstraint.constant = height;
+  }
 }
 
 // Updates the browser container view such that its viewport is the space
@@ -2809,6 +2779,44 @@ const CGFloat kTopDynamicIslandInset = 24;
   self.secondaryToolbarHeightConstraint.priority = UILayoutPriorityRequired - 1;
 }
 
+- (void)adjustSecondaryToolbarForKeyboardHeight:(CGFloat)keyboardHeight
+                                       duration:(NSTimeInterval)duration
+                                          curve:(UIViewAnimationCurve)curve {
+  CHECK(ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET);
+  CGFloat keyboardAttachedOffset =
+      keyboardHeight +
+      self.toolbarCoordinator.keyboardAttachedBottomOmniboxHeight;
+  CGFloat baseHeight = [self secondaryToolbarHeightWithInset];
+  CGFloat offsetRequired = MAX(keyboardAttachedOffset, baseHeight);
+
+  // No need to start an animation when the offset is already set.
+  BOOL alreadyInPosition =
+      self.secondaryToolbarHeightConstraint.constant == offsetRequired;
+  // Always animate when keyboard is being hidden. When showing the keyboard,
+  // make sure to check editing to avoid manipulating the toolbar when other
+  // textfield is focused.
+  if (alreadyInPosition) {
+    [self.toolbarCoordinator setBottomOmniboxOffsetForPopup:offsetRequired];
+    return;
+  }
+
+  // The shift converts an animation curve to animation options.
+  // Shifting by 16 is a result of Apple reserving 4 bits in
+  // `UIViewAnimationOptions` for the type of curve.
+  UIViewAnimationOptions animationOptions = curve << 16;
+  [UIView animateWithDuration:duration
+                        delay:0.0
+                      options:animationOptions
+                   animations:^{
+                     self.secondaryToolbarHeightConstraint.constant =
+                         offsetRequired;
+                     [self.toolbarCoordinator
+                         setBottomOmniboxOffsetForPopup:offsetRequired];
+                     [self.view layoutIfNeeded];
+                   }
+                   completion:nil];
+}
+
 - (void)diamondToolbarTypeChanged:(ToolbarType)type {
   CHECK(IsDiamondPrototypeEnabled());
   _diamondToolbarType = type;
@@ -2826,34 +2834,11 @@ const CGFloat kTopDynamicIslandInset = 24;
   }
 }
 
-#pragma mark - FindBarPresentationDelegate
+#pragma mark - LogoAnimationControllerOwnerOwner (Public)
 
-- (void)setHeadersForFindBarCoordinator:
-    (FindBarCoordinator*)findBarCoordinator {
-  [self setFramesForHeaders:[self headerViews]
-                   atOffset:[self currentHeaderOffset]];
-}
-
-- (void)findBarDidAppearForFindBarCoordinator:
-    (FindBarCoordinator*)findBarCoordinator {
-  _findBarVisible = YES;
-  // When the Find bar is presented, hide underlying elements from VoiceOver.
-  self.contentArea.accessibilityElementsHidden = self.contentAreaObstructed;
-  self.toolbarCoordinator.primaryToolbarViewController.view
-      .accessibilityElementsHidden = YES;
-  self.toolbarCoordinator.secondaryToolbarViewController.view
-      .accessibilityElementsHidden = YES;
-}
-
-- (void)findBarDidDisappearForFindBarCoordinator:
-    (FindBarCoordinator*)findBarCoordinator {
-  _findBarVisible = NO;
-  // When the Find bar is dismissed, show underlying elements to VoiceOver.
-  self.contentArea.accessibilityElementsHidden = self.contentAreaObstructed;
-  self.toolbarCoordinator.primaryToolbarViewController.view
-      .accessibilityElementsHidden = NO;
-  self.toolbarCoordinator.secondaryToolbarViewController.view
-      .accessibilityElementsHidden = NO;
+- (id<LogoAnimationControllerOwner>)logoAnimationControllerOwner {
+  // This is required to enable voice search in the NTP.
+  return nil;
 }
 
 #pragma mark - LensPresentationDelegate
@@ -2899,7 +2884,7 @@ const CGFloat kTopDynamicIslandInset = 24;
 }
 
 - (NSDirectionalEdgeInsets)presentationInsetsForLensOverlay {
-  if (CanShowTabStrip(self)) {
+  if (IsRegularXRegularSizeClass(self)) {
     return NSDirectionalEdgeInsetsMake([self expandedTopToolbarHeight], 0, 0,
                                        0);
   }

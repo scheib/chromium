@@ -14,9 +14,12 @@
 #include "chrome/browser/chrome_content_browser_client_parts.h"
 #include "components/download/public/common/quarantine_connection.h"
 #include "content/public/browser/browser_or_resource_context.h"
+#include "extensions/buildflags/buildflags.h"
 #include "services/network/public/mojom/network_context.mojom-forward.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
 #include "ui/base/page_transition_types.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace content {
 class RenderFrameHost;
@@ -57,7 +60,7 @@ class ChromeContentBrowserClientExtensionsPart
   ~ChromeContentBrowserClientExtensionsPart() override;
 
   // Corresponds to the ChromeContentBrowserClient function of the same name.
-  static GURL GetEffectiveURL(Profile* profile, const GURL& url);
+  static std::optional<GURL> GetEffectiveURL(Profile* profile, const GURL& url);
   static bool ShouldCompareEffectiveURLsForSiteInstanceSelection(
       content::BrowserContext* browser_context,
       content::SiteInstance* candidate_site_instance,

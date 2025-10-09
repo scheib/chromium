@@ -84,7 +84,8 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
   void DidStartNavigation(
       const GURL& url,
       std::optional<blink::WebNavigationType> navigation_type) override;
-  void DidSetPageLifecycleState(bool restoring_from_bfcache) override;
+  void DidSetPageLifecycleState(
+      blink::BFCacheStateChange bfcache_change) override;
 
   void ReadyToCommitNavigation(
       blink::WebDocumentLoader* document_loader) override;
@@ -101,9 +102,8 @@ class MetricsRenderFrameObserver : public content::RenderFrameObserver,
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectangleChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
-  void OnMainFrameImageAdRectangleChanged(
-      int element_id,
-      const gfx::Rect& image_ad_rect) override;
+  void OnMainFrameAdRectangleChanged(int element_id,
+                                     const gfx::Rect& ad_rect) override;
 
   // blink::WebLocalFrameObserver implementation
   void OnFrameDetached() override;

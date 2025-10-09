@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/object_paint_properties.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
@@ -27,10 +28,8 @@ bool ScrollStateQuerySnapshot::UpdateSnapshot() {
       static_cast<ContainerScrollableFlags>(ContainerScrollable::kNone);
   ContainerScrollableFlags scrollable_vertical =
       static_cast<ContainerScrollableFlags>(ContainerScrollable::kNone);
-  ContainerScrollDirection scroll_direction_horizontal =
-      scroll_direction_horizontal_;
-  ContainerScrollDirection scroll_direction_vertical =
-      scroll_direction_vertical_;
+  ContainerScrolled scrolled_horizontal = scrolled_horizontal_;
+  ContainerScrolled scrolled_vertical = scrolled_vertical_;
 
   LayoutBoxModelObject* layout_object =
       DynamicTo<LayoutBoxModelObject>(container_->GetLayoutObject());
@@ -72,20 +71,9 @@ bool ScrollStateQuerySnapshot::UpdateSnapshot() {
         scrollable_vertical |=
             static_cast<ContainerScrollableFlags>(ContainerScrollable::kEnd);
       }
-      if (RuntimeEnabledFeatures::CSSScrollDirectionContainerQueriesEnabled()) {
-        if (previous_scroll_position_.x() > offset.x()) {
-          scroll_direction_horizontal = ContainerScrollDirection::kStart;
-        }
-        if (previous_scroll_position_.x() < offset.x()) {
-          scroll_direction_horizontal = ContainerScrollDirection::kEnd;
-        }
-        if (previous_scroll_position_.y() > offset.y()) {
-          scroll_direction_vertical = ContainerScrollDirection::kStart;
-        }
-        if (previous_scroll_position_.y() < offset.y()) {
-          scroll_direction_vertical = ContainerScrollDirection::kEnd;
-        }
-        previous_scroll_position_ = offset;
+      if (RuntimeEnabledFeatures::CSSScrolledContainerQueriesEnabled()) {
+        scrolled_vertical = scrollable_area->LastScrolledVertical();
+        scrolled_horizontal = scrollable_area->LastScrolledHorizontal();
       }
     }
   }
@@ -94,18 +82,18 @@ bool ScrollStateQuerySnapshot::UpdateSnapshot() {
   std::swap(scrollable_horizontal_, scrollable_horizontal);
   std::swap(scrollable_vertical_, scrollable_vertical);
 
-  if (RuntimeEnabledFeatures::CSSScrollDirectionContainerQueriesEnabled()) {
-    std::swap(scroll_direction_horizontal_, scroll_direction_horizontal);
-    std::swap(scroll_direction_vertical_, scroll_direction_vertical);
+  if (RuntimeEnabledFeatures::CSSScrolledContainerQueriesEnabled()) {
+    std::swap(scrolled_horizontal_, scrolled_horizontal);
+    std::swap(scrolled_vertical_, scrolled_vertical);
   }
 
   if (stuck_horizontal_ != stuck_horizontal ||
       stuck_vertical_ != stuck_vertical ||
       scrollable_horizontal_ != scrollable_horizontal ||
       scrollable_vertical_ != scrollable_vertical ||
-      (RuntimeEnabledFeatures::CSSScrollDirectionContainerQueriesEnabled() &&
-       (scroll_direction_horizontal_ != scroll_direction_horizontal ||
-        scroll_direction_vertical_ != scroll_direction_vertical))) {
+      (RuntimeEnabledFeatures::CSSScrolledContainerQueriesEnabled() &&
+       (scrolled_horizontal_ != scrolled_horizontal ||
+        scrolled_vertical_ != scrolled_vertical))) {
     // TODO(crbug.com/40268059): The kLocalStyleChange is not necessary for the
     // container itself, but it is a way to reach reach ApplyScrollState() in
     // Element::RecalcOwnStyle() for the next lifecycle update.

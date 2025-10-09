@@ -12,8 +12,10 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "components/content_settings/core/common/features.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/permissions/embedded_permission_control_checker.h"
 #include "content/browser/permissions/permission_controller_impl.h"
@@ -28,6 +30,7 @@
 #include "third_party/blink/public/common/features_generated.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-shared.h"
+#include "third_party/blink/public/mojom/permissions/permission_status.mojom-data-view.h"
 #include "url/origin.h"
 
 using blink::mojom::EmbeddedPermissionControlClient;
@@ -153,8 +156,11 @@ PermissionServiceImpl::~PermissionServiceImpl() {}
 
 void PermissionServiceImpl::RegisterPageEmbeddedPermissionControl(
     std::vector<PermissionDescriptorPtr> permissions,
+    blink::mojom::EmbeddedPermissionRequestDescriptorPtr descriptor,
     mojo::PendingRemote<EmbeddedPermissionControlClient> observer) {
-  if (!base::FeatureList::IsEnabled(blink::features::kPermissionElement)) {
+  if (!base::FeatureList::IsEnabled(blink::features::kPermissionElement) ||
+      (descriptor->geolocation &&
+       !base::FeatureList::IsEnabled(blink::features::kGeolocationElement))) {
     bad_message::ReceivedBadMessage(
         context_->render_frame_host()->GetProcess(),
         bad_message::PSI_REGISTER_PERMISSION_ELEMENT_WITHOUT_FEATURE);
@@ -177,8 +183,12 @@ void PermissionServiceImpl::RegisterPageEmbeddedPermissionControl(
     }
   }
 
+  auto source =
+      descriptor->geolocation
+          ? EmbeddedPermissionControlChecker::Source::kGeolocationElement
+          : EmbeddedPermissionControlChecker::Source::kPermissionElement;
   checker->CheckPageEmbeddedPermission(
-      std::move(permission_names), std::move(observer),
+      source, std::move(permission_names), std::move(observer),
       base::BindOnce(
           &PermissionServiceImpl::OnPageEmbeddedPermissionControlRegistered,
           weak_factory_.GetWeakPtr(), std::move(permissions)));
@@ -198,16 +208,19 @@ void PermissionServiceImpl::OnPageEmbeddedPermissionControlRegistered(
   std::vector<PermissionStatus> statuses(permissions.size());
   std::ranges::transform(
       permissions, statuses.begin(), [&](const auto& permission) {
-        return this->GetCombinedPermissionAndDeviceStatus(permission);
+        return this->GetCombinedPermissionAndDeviceResult(permission).status;
       });
   client->OnEmbeddedPermissionControlRegistered(/*allow=*/true,
                                                 std::move(statuses));
 }
 
 void PermissionServiceImpl::RequestPageEmbeddedPermission(
+    std::vector<PermissionDescriptorPtr> permissions,
     EmbeddedPermissionRequestDescriptorPtr descriptor,
     RequestPageEmbeddedPermissionCallback callback) {
-  if (!base::FeatureList::IsEnabled(blink::features::kPermissionElement)) {
+  if (!base::FeatureList::IsEnabled(blink::features::kPermissionElement) ||
+      (descriptor->geolocation &&
+       !base::FeatureList::IsEnabled(blink::features::kGeolocationElement))) {
     bad_message::ReceivedBadMessage(
         context_->render_frame_host()->GetProcess(),
         bad_message::PSI_REQUEST_EMBEDDED_PERMISSION_WITHOUT_FEATURE);
@@ -216,28 +229,16 @@ void PermissionServiceImpl::RequestPageEmbeddedPermission(
   }
 
   if (auto* browser_context = context_->GetBrowserContext()) {
-    if (HasDuplicatesOrInvalidPermissions(descriptor->permissions) ||
-        !CheckPageEmbeddedPermissionTypes(descriptor->permissions)) {
+    if (HasDuplicatesOrInvalidPermissions(permissions) ||
+        !CheckPageEmbeddedPermissionTypes(permissions)) {
       ReceivedBadMessage();
       return;
     }
 
-    std::vector<PermissionDescriptorPtr> permission_descriptors;
-    permission_descriptors.reserve(descriptor->permissions.size());
-
-    for (PermissionDescriptorPtr& permission : descriptor->permissions) {
-      permission_descriptors.push_back(permission.Clone());
-    }
-
-    auto element_position = descriptor->element_position;
-
     RequestPermissionsInternal(
         browser_context,
-        PermissionRequestDescription(
-            std::move(descriptor->permissions), /*user_gesture=*/true,
-            /*requesting_origin=*/GURL(),
-            /*embedded_permission_element_initiated=*/true,
-            /*anchor_element_position=*/element_position),
+        PermissionRequestDescription(std::move(permissions),
+                                     std::move(descriptor)),
         base::BindOnce(&EmbeddedPermissionRequestCallbackWrapper,
                        std::move(callback)));
   }
@@ -273,7 +274,7 @@ void PermissionServiceImpl::RequestPermissions(
   if (!context_->render_frame_host()) {
     std::vector<PermissionStatus> result(permissions.size());
     for (size_t i = 0; i < permissions.size(); ++i) {
-      result[i] = GetPermissionStatus(permissions[i]);
+      result[i] = GetPermissionResult(permissions[i]).status;
     }
     std::move(callback).Run(result);
     return;
@@ -336,7 +337,24 @@ void PermissionServiceImpl::OnRequestPermissionsResponse(
 
 void PermissionServiceImpl::HasPermission(PermissionDescriptorPtr permission,
                                           PermissionStatusCallback callback) {
-  std::move(callback).Run(GetPermissionStatus(permission));
+  auto permission_status = GetPermissionResult(permission).status;
+  if (base::FeatureList::IsEnabled(
+          content_settings::features::kApproximateGeolocationPermission) &&
+      blink::PermissionDescriptorToPermissionType(permission) ==
+          blink::PermissionType::GEOLOCATION &&
+      permission_status ==
+          blink::mojom::PermissionStatus::UNSATISFIED_OPTIONS) {
+    // TODO(crbug.com/430586927): This is a short-term solution. Once the
+    // geolocation permission descriptor supports isPrecise, the correct
+    // preciseness should be queried. The query API uses a permission descriptor
+    // to query the permission state. Since the coarse location MVP currently
+    // doesn't use a special permission descriptor, the query API can only query
+    // whether precise location is granted, which results in UNSATISFIED_OPTIONS
+    // for a coarse location granted. We can map this to a GRANTED for the
+    // purposes of the query API.
+    permission_status = PermissionStatus::GRANTED;
+  }
+  std::move(callback).Run(permission_status);
 }
 
 void PermissionServiceImpl::RevokePermission(
@@ -348,18 +366,19 @@ void PermissionServiceImpl::RevokePermission(
     ReceivedBadMessage();
     return;
   }
-  PermissionStatus status = GetPermissionStatusForCurrentContext(permission);
+  PermissionResult result = GetPermissionResultForCurrentContext(permission);
 
   // Resetting the permission should only be possible if the permission is
   // already granted.
-  if (status != PermissionStatus::GRANTED) {
-    std::move(callback).Run(status);
+  if (result.status != PermissionStatus::GRANTED) {
+    std::move(callback).Run(result.status);
     return;
   }
 
   ResetPermissionStatus(*permission_type);
 
-  std::move(callback).Run(GetPermissionStatusForCurrentContext(permission));
+  std::move(callback).Run(
+      GetPermissionResultForCurrentContext(permission).status);
 }
 
 void PermissionServiceImpl::AddPermissionObserver(
@@ -372,9 +391,9 @@ void PermissionServiceImpl::AddPermissionObserver(
     return;
   }
 
-  PermissionStatus current_status = GetPermissionStatus(permission);
+  PermissionResult current_result = GetPermissionResult(permission);
   context_->CreateSubscription(
-      permission, origin_, current_status, last_known_status,
+      permission, origin_, current_result, PermissionResult(last_known_status),
       /*should_include_device_status*/ false, std::move(observer));
 }
 
@@ -389,13 +408,13 @@ void PermissionServiceImpl::AddCombinedPermissionObserver(
   }
   bool should_include_device_status =
       PermissionUtil::IsDevicePermission(permission);
-  PermissionStatus current_status =
+  PermissionResult current_result =
       should_include_device_status
-          ? GetCombinedPermissionAndDeviceStatus(permission)
-          : GetPermissionStatusForCurrentContext(permission);
-  context_->CreateSubscription(permission, origin_, current_status,
-                               last_known_status, should_include_device_status,
-                               std::move(observer));
+          ? GetCombinedPermissionAndDeviceResult(permission)
+          : GetPermissionResultForCurrentContext(permission);
+  context_->CreateSubscription(
+      permission, origin_, current_result, PermissionResult(last_known_status),
+      should_include_device_status, std::move(observer));
 }
 
 void PermissionServiceImpl::NotifyEventListener(
@@ -429,12 +448,12 @@ void PermissionServiceImpl::NotifyEventListener(
       ->NotifyEventListener();
 }
 
-PermissionStatus PermissionServiceImpl::GetPermissionStatus(
+PermissionResult PermissionServiceImpl::GetPermissionResult(
     const PermissionDescriptorPtr& permission) {
   auto type = blink::MaybePermissionDescriptorToPermissionType(permission);
   if (!type) {
     ReceivedBadMessage();
-    return PermissionStatus::DENIED;
+    return PermissionResult(PermissionStatus::DENIED);
   }
   if (PermissionUtil::IsDomainOverride(permission) &&
       context_->render_frame_host()) {
@@ -447,60 +466,61 @@ PermissionStatus PermissionServiceImpl::GetPermissionStatus(
                                permisison_descriptor_ptr_array,
                                context_->render_frame_host(), permission)) {
       return PermissionControllerImpl::FromBrowserContext(browser_context)
-          ->GetPermissionStatusForEmbeddedRequester(
+          ->GetPermissionResultForEmbeddedRequester(
               permission, context_->render_frame_host(),
               PermissionUtil::ExtractDomainOverride(permission));
     }
   }
 
-  return GetPermissionStatusForCurrentContext(permission);
+  return GetPermissionResultForCurrentContext(permission);
 }
 
-PermissionStatus PermissionServiceImpl::GetPermissionStatusForCurrentContext(
+PermissionResult PermissionServiceImpl::GetPermissionResultForCurrentContext(
     const PermissionDescriptorPtr& permission) {
   BrowserContext* browser_context = context_->GetBrowserContext();
   if (!browser_context) {
-    return PermissionStatus::DENIED;
+    return PermissionResult(PermissionStatus::DENIED);
   }
 
   if (context_->render_frame_host()) {
     return browser_context->GetPermissionController()
-        ->GetPermissionStatusForCurrentDocument(permission,
+        ->GetPermissionResultForCurrentDocument(permission,
                                                 context_->render_frame_host());
   }
 
   if (context_->render_process_host()) {
     return browser_context->GetPermissionController()
-        ->GetPermissionStatusForWorker(
+        ->GetPermissionResultForWorker(
             permission, context_->render_process_host(), origin_);
   }
 
   DCHECK(!context_->GetEmbeddingOrigin().has_value());
   return browser_context->GetPermissionController()
-      ->GetPermissionResultForOriginWithoutContext(permission, origin_)
-      .status;
+      ->GetPermissionResultForOriginWithoutContext(permission, origin_);
 }
 
-PermissionStatus PermissionServiceImpl::GetCombinedPermissionAndDeviceStatus(
+PermissionResult PermissionServiceImpl::GetCombinedPermissionAndDeviceResult(
     const PermissionDescriptorPtr& permission) {
   BrowserContext* browser_context = context_->GetBrowserContext();
   if (!browser_context) {
-    return PermissionStatus::DENIED;
+    return PermissionResult(PermissionStatus::DENIED);
   }
 
   RenderFrameHost* render_frame_host = context_->render_frame_host();
   if (!render_frame_host) {
-    return PermissionStatus::DENIED;
+    return PermissionResult(PermissionStatus::DENIED);
   }
 
   auto type = blink::MaybePermissionDescriptorToPermissionType(permission);
   if (!type) {
     ReceivedBadMessage();
-    return PermissionStatus::DENIED;
+    return PermissionResult(PermissionStatus::DENIED);
   }
 
-  return PermissionControllerImpl::FromBrowserContext(browser_context)
-      ->GetCombinedPermissionAndDeviceStatus(permission, render_frame_host);
+  return PermissionResult(
+      PermissionControllerImpl::FromBrowserContext(browser_context)
+          ->GetCombinedPermissionAndDeviceStatus(permission,
+                                                 render_frame_host));
 }
 
 void PermissionServiceImpl::ResetPermissionStatus(blink::PermissionType type) {

@@ -7,6 +7,8 @@ package org.chromium.chrome.browser.omnibox.suggestions.action;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.chrome.browser.url_constants.UrlConstantResolver;
+import org.chromium.chrome.browser.url_constants.UrlConstantResolverFactory;
 import org.chromium.components.browser_ui.settings.SettingsNavigation.SettingsFragment;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.omnibox.R;
@@ -22,7 +24,7 @@ import org.chromium.components.omnibox.action.OmniboxPedalId;
 @NullMarked
 public class OmniboxPedal extends OmniboxAction {
     @VisibleForTesting
-    static final ChipIcon DINO_GAME_ICON = new ChipIcon(R.drawable.action_dino_game, true);
+    static final ActionIcon DINO_GAME_ICON = new ActionIcon(R.drawable.action_dino_game, true);
 
     /** The type of the underlying pedal. */
     public final @OmniboxPedalId int pedalId;
@@ -67,7 +69,9 @@ public class OmniboxPedal extends OmniboxAction {
                 delegate.openSettingsPage(SettingsFragment.ACCESSIBILITY);
                 break;
             case OmniboxPedalId.VIEW_CHROME_HISTORY:
-                delegate.loadPageInCurrentTab(UrlConstants.HISTORY_URL);
+                UrlConstantResolver resolver =
+                        UrlConstantResolverFactory.getForProfile(/* profile= */ null);
+                delegate.loadPageInCurrentTab(resolver.getHistoryPageUrl());
                 break;
             case OmniboxPedalId.PLAY_CHROME_DINO_GAME:
                 delegate.loadPageInCurrentTab(UrlConstants.CHROME_DINO_URL);

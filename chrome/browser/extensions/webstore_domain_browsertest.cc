@@ -13,11 +13,14 @@
 #include "content/public/test/test_navigation_observer.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_event_histogram_value.h"
+#include "extensions/buildflags/buildflags.h"
 #include "extensions/common/api/management.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "services/network/public/cpp/network_switches.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+
+static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 
 namespace extensions {
 namespace {
@@ -42,7 +45,7 @@ class WebstoreDomainBrowserTest : public ExtensionApiTest,
     // Override the test server SSL config with the webstore domain under test
     // and two other non-webstore domains used in the tests.
     net::EmbeddedTestServer::ServerCertificateConfig cert_config;
-    cert_config.dns_names = {GetParam().host(), "foo.com", "bar.com"};
+    cert_config.dns_names = {GetParam().GetHost(), "foo.com", "bar.com"};
     embedded_test_server()->SetSSLConfig(cert_config);
     // Add the extensions directory to the test server as it has a /webstore/
     // directory to serve files from, which the webstore hosted app requires as

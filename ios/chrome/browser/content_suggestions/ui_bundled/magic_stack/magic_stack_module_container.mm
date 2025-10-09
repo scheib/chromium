@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/content_suggestions/ui_bundled/magic_stack/magic_stack_module_container.h"
 
+#import "base/containers/contains.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/commerce/core/commerce_feature_list.h"
@@ -207,16 +208,13 @@ const CGFloat kSeparatorHeight = 0.5;
     [NSLayoutConstraint
         activateConstraints:@[ _contentStackViewBottomMarginAnchor ]];
 
-    if (@available(iOS 17, *)) {
-      NSArray<UITrait>* traits = TraitCollectionSetForTraits(
-          @[ UITraitPreferredContentSizeCategory.class ]);
-      [self registerForTraitChanges:traits
-                         withAction:@selector(updateCardSizing)];
-
-      if (IsNTPBackgroundCustomizationEnabled()) {
-        [self registerForTraitChanges:@[ NewTabPageTrait.class ]
-                           withAction:@selector(applyBackgroundColors)];
-      }
+    NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+        @[ UITraitPreferredContentSizeCategory.class ]);
+    [self registerForTraitChanges:traits
+                       withAction:@selector(updateCardSizing)];
+    if (IsNTPBackgroundCustomizationEnabled()) {
+      [self registerForTraitChanges:@[ NewTabPageTrait.class ]
+                         withAction:@selector(applyBackgroundColors)];
     }
     [self applyBackgroundColors];
   }
@@ -410,17 +408,8 @@ const CGFloat kSeparatorHeight = 0.5;
       }
       return l10n_util::GetNSString(IDS_IOS_TAB_RESUMPTION_TITLE);
     }
-    case ContentSuggestionsModuleType::kSetUpListDefaultBrowser:
-    case ContentSuggestionsModuleType::kSetUpListAutofill:
-    case ContentSuggestionsModuleType::kCompactedSetUpList:
-    case ContentSuggestionsModuleType::kSetUpListAllSet:
-    case ContentSuggestionsModuleType::kSetUpListNotifications:
-      return content_suggestions::SetUpListTitleString();
     case ContentSuggestionsModuleType::kSafetyCheck:
       return l10n_util::GetNSString(IDS_IOS_SAFETY_CHECK_TITLE);
-    case ContentSuggestionsModuleType::kParcelTracking:
-      return l10n_util::GetNSString(
-          IDS_IOS_CONTENT_SUGGESTIONS_PARCEL_TRACKING_MODULE_TITLE);
     case ContentSuggestionsModuleType::kPriceTrackingPromo:
     case ContentSuggestionsModuleType::kSendTabPromo:
       // Send Tab and Price Tracking Promo design do not use title.
@@ -436,8 +425,15 @@ const CGFloat kSeparatorHeight = 0.5;
             IDS_IOS_CONTENT_SUGGESTIONS_SHOPCARD_REVIEWS_ALT_TITLE);
       }
     }
+    case ContentSuggestionsModuleType::kSetUpListDefaultBrowser:
+    case ContentSuggestionsModuleType::kSetUpListAutofill:
+    case ContentSuggestionsModuleType::kCompactedSetUpList:
+    case ContentSuggestionsModuleType::kSetUpListAllSet:
+    case ContentSuggestionsModuleType::kSetUpListNotifications:
     case ContentSuggestionsModuleType::kTipsWithProductImage:
     case ContentSuggestionsModuleType::kTips:
+    case ContentSuggestionsModuleType::kAppBundlePromo:
+    case ContentSuggestionsModuleType::kDefaultBrowser:
       return l10n_util::GetNSString(IDS_IOS_MAGIC_STACK_TIP_TITLE);
     default:
       NOTREACHED();
@@ -463,12 +459,10 @@ const CGFloat kSeparatorHeight = 0.5;
                                              config:(MagicStackModule*)config {
   switch (type) {
     case ContentSuggestionsModuleType::kShopCard: {
-      if (commerce::kShopCardVariation.Get() == commerce::kShopCardArm1) {
-        ShopCardItem* shopCardItem = static_cast<ShopCardItem*>(config);
-        _seeMoreButton.accessibilityLabel = [@[
-          _seeMoreButton.titleLabel.text, shopCardItem.shopCardData.productTitle
-        ] componentsJoinedByString:@", "];
-      }
+      ShopCardItem* shopCardItem = static_cast<ShopCardItem*>(config);
+      _seeMoreButton.accessibilityLabel = [@[
+        _seeMoreButton.titleLabel.text, shopCardItem.shopCardData.productTitle
+      ] componentsJoinedByString:@", "];
       break;
     }
     default:
@@ -506,22 +500,6 @@ const CGFloat kSeparatorHeight = 0.5;
       break;
   }
 }
-
-#pragma mark - UITraitEnvironment
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  if (previousTraitCollection.preferredContentSizeCategory !=
-      self.traitCollection.preferredContentSizeCategory) {
-    [self updateCardSizing];
-  }
-}
-#endif
 
 #pragma mark - NewTabPageColorUpdating
 
@@ -602,6 +580,8 @@ const CGFloat kSeparatorHeight = 0.5;
     case ContentSuggestionsModuleType::kSetUpListNotifications:
     case ContentSuggestionsModuleType::kSafetyCheck:
     case ContentSuggestionsModuleType::kTips:
+    case ContentSuggestionsModuleType::kAppBundlePromo:
+    case ContentSuggestionsModuleType::kDefaultBrowser:
       return YES;
     case ContentSuggestionsModuleType::kTabResumption:
     case ContentSuggestionsModuleType::kTipsWithProductImage:

@@ -22,6 +22,7 @@ import org.junit.runners.Parameterized.UseParametersRunnerFactory;
 import org.chromium.android_webview.AwBrowserContext;
 import org.chromium.android_webview.AwContents;
 import org.chromium.android_webview.AwNoVarySearchData;
+import org.chromium.android_webview.AwOriginMatchedHeader;
 import org.chromium.android_webview.AwPrefetchParameters;
 import org.chromium.android_webview.AwWebResourceRequest;
 import org.chromium.android_webview.test.AwPrefetchTest.TestAwPrefetchCallback;
@@ -31,6 +32,7 @@ import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.components.embedder_support.util.WebResourceResponseInfo;
 import org.chromium.content_public.common.ContentSwitches;
 import org.chromium.net.test.ServerCertificate;
@@ -42,7 +44,9 @@ import org.chromium.url.GURL;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
@@ -145,10 +149,227 @@ public class ProfileExtraHeadersTest extends AwParameterizedTest {
                                 headerName, headerValue, originRules));
     }
 
+    private void addOriginMatchedHeaderOnUiThread(
+            String headerName, String headerValue, Set<String> originRules) {
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mAwBrowserContext.addOriginMatchedHeader(
+                                headerName, headerValue, originRules));
+    }
+
+    private List<AwOriginMatchedHeader> findOriginMatchedHeadersOnUiThread(
+            @Nullable String headerName, @Nullable String headerValue) {
+        return ThreadUtils.runOnUiThreadBlocking(
+                () -> mAwBrowserContext.findOriginMatchedHeaders(headerName, headerValue));
+    }
+
     @Test
     @Feature({"AndroidWebView"})
     @SmallTest
-    public void testHeaderNameAndValuesAreValidated() {
+    public void testCanSetAndReadAllReadHeaders() {
+        Set<String> originRules = Set.of("https://example.com", "http://*.example.com:8000");
+        setOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules);
+
+        List<AwOriginMatchedHeader> allConfiguredHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+        Assert.assertEquals(1, allConfiguredHeaders.size());
+        AwOriginMatchedHeader header = allConfiguredHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(originRules, header.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testDefaultPortNumbersAreDropped() {
+        Set<String> originRules = Set.of("https://example.com:443", "http://*.example.com:80");
+        setOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules);
+
+        List<AwOriginMatchedHeader> allConfiguredHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+        Assert.assertEquals(1, allConfiguredHeaders.size());
+        AwOriginMatchedHeader header = allConfiguredHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(
+                "Default port numbers should be dropped during round trip",
+                Set.of("https://example.com", "http://*.example.com"),
+                header.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanAddAndReadAllReadHeaders() {
+        Set<String> originRules = Set.of("https://example.com", "http://*.example.com:8000");
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "OtherValue", originRules);
+
+        List<AwOriginMatchedHeader> allConfiguredHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+        // Sort the list to make sure the index lookups below are in the correct order and this test
+        // doesn't assume output order.
+        allConfiguredHeaders.sort(Comparator.comparing(AwOriginMatchedHeader::getName));
+
+        Assert.assertEquals(2, allConfiguredHeaders.size());
+        AwOriginMatchedHeader header1 = allConfiguredHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header1.getName());
+        Assert.assertEquals("HeaderValue", header1.getValue());
+        Assert.assertEquals(originRules, header1.getRules());
+
+        AwOriginMatchedHeader header2 = allConfiguredHeaders.get(1);
+        Assert.assertEquals("X-OtherHeader", header2.getName());
+        Assert.assertEquals("OtherValue", header2.getValue());
+        Assert.assertEquals(originRules, header2.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanAddAndReadHeaderByName() {
+        Set<String> originRules = Set.of("https://example.com", "http://*.example.com:8000");
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "OtherValue", originRules);
+
+        List<AwOriginMatchedHeader> nonMatchingHeaders =
+                findOriginMatchedHeadersOnUiThread("X-UnknownHeader", null);
+        Assert.assertTrue(
+                "Did not expect to find any other headers configured",
+                nonMatchingHeaders.isEmpty());
+
+        List<AwOriginMatchedHeader> matchingHeaders =
+                findOriginMatchedHeadersOnUiThread("X-ExtraHeader", null);
+        Assert.assertEquals(1, matchingHeaders.size());
+        AwOriginMatchedHeader header = matchingHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(originRules, header.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanAddAndReadHeaderByNameAndValue() {
+        Set<String> originRules = Set.of("https://example.com", "http://*.example.com:8000");
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "OtherValue", originRules);
+
+        List<AwOriginMatchedHeader> nonMatchingHeaders =
+                findOriginMatchedHeadersOnUiThread("X-ExtraHeader", "OtherValue");
+        Assert.assertTrue(
+                "Did not expect to find any other headers configured",
+                nonMatchingHeaders.isEmpty());
+
+        List<AwOriginMatchedHeader> matchingHeaders =
+                findOriginMatchedHeadersOnUiThread("X-ExtraHeader", "HeaderValue");
+        Assert.assertEquals(1, matchingHeaders.size());
+        AwOriginMatchedHeader header = matchingHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(originRules, header.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testAddHeaderMergesOriginRules() {
+        Set<String> originRules1 = Set.of("https://example.com");
+
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules1);
+
+        List<AwOriginMatchedHeader> allConfiguredHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+        Assert.assertEquals(1, allConfiguredHeaders.size());
+        AwOriginMatchedHeader header = allConfiguredHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(Set.of("https://example.com"), header.getRules());
+
+        // Merge in a new set of origin rules
+        Set<String> originRules2 = Set.of("https://example.com", "http://*.example.com:8000");
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue", originRules2);
+        allConfiguredHeaders = findOriginMatchedHeadersOnUiThread(null, null);
+        Assert.assertEquals(1, allConfiguredHeaders.size());
+        header = allConfiguredHeaders.get(0);
+        Assert.assertEquals("X-ExtraHeader", header.getName());
+        Assert.assertEquals("HeaderValue", header.getValue());
+        Assert.assertEquals(
+                Set.of("https://example.com", "http://*.example.com:8000"), header.getRules());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanClearAllHeaders() {
+        Set<String> originRules = Set.of("https://example.com");
+
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue1", originRules);
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue2", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "HeaderValue3", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "HeaderValue4", originRules);
+
+        ThreadUtils.runOnUiThreadBlocking(mAwBrowserContext::clearAllOriginMatchedHeaders);
+
+        List<AwOriginMatchedHeader> remainingHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+
+        Assert.assertTrue(remainingHeaders.isEmpty());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanClearAllHeadersByName() {
+        Set<String> originRules = Set.of("https://example.com");
+
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue1", originRules);
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue2", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "HeaderValue3", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "HeaderValue4", originRules);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> mAwBrowserContext.clearOriginMatchedHeader("X-ExtraHeader", null));
+
+        List<AwOriginMatchedHeader> remainingHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+
+        Assert.assertEquals(2, remainingHeaders.size());
+        remainingHeaders.sort(Comparator.comparing(AwOriginMatchedHeader::getValue));
+        Assert.assertEquals("X-OtherHeader", remainingHeaders.get(0).getName());
+        Assert.assertEquals("X-OtherHeader", remainingHeaders.get(1).getName());
+        Assert.assertEquals("HeaderValue3", remainingHeaders.get(0).getValue());
+        Assert.assertEquals("HeaderValue4", remainingHeaders.get(1).getValue());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testCanClearSingleHeaderByNameAndValue() {
+        Set<String> originRules = Set.of("https://example.com");
+
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue1", originRules);
+        addOriginMatchedHeaderOnUiThread("X-ExtraHeader", "HeaderValue2", originRules);
+        addOriginMatchedHeaderOnUiThread("X-OtherHeader", "HeaderValue3", originRules);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> mAwBrowserContext.clearOriginMatchedHeader("X-ExtraHeader", "HeaderValue1"));
+
+        List<AwOriginMatchedHeader> remainingHeaders =
+                findOriginMatchedHeadersOnUiThread(null, null);
+
+        Assert.assertEquals(2, remainingHeaders.size());
+        remainingHeaders.sort(Comparator.comparing(AwOriginMatchedHeader::getValue));
+        Assert.assertEquals("X-ExtraHeader", remainingHeaders.get(0).getName());
+        Assert.assertEquals("X-OtherHeader", remainingHeaders.get(1).getName());
+        Assert.assertEquals("HeaderValue2", remainingHeaders.get(0).getValue());
+        Assert.assertEquals("HeaderValue3", remainingHeaders.get(1).getValue());
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testHeaderNameAndValuesAreValidatedWhenSetting() {
         ThreadUtils.runOnUiThreadBlocking(
                 () -> {
                     Assert.assertThrows(
@@ -178,8 +399,39 @@ public class ProfileExtraHeadersTest extends AwParameterizedTest {
 
     @Test
     @Feature({"AndroidWebView"})
+    @SmallTest
+    public void testHeaderNameAndValuesAreValidatedWhenAdding() {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    mAwBrowserContext.addOriginMatchedHeader(
+                                            "",
+                                            "NameShouldNotBeEmpty",
+                                            Set.of("https://*.example.com")));
+                    Assert.assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    mAwBrowserContext.addOriginMatchedHeader(
+                                            "X-ShouldNotHaveNewline\n",
+                                            "Value",
+                                            Set.of("https://*.example.com")));
+
+                    Assert.assertThrows(
+                            IllegalArgumentException.class,
+                            () ->
+                                    mAwBrowserContext.addOriginMatchedHeader(
+                                            "X-ShouldNotHaveNewline",
+                                            "Value\n",
+                                            Set.of("https://*.example.com")));
+                });
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
     @MediumTest
-    public void willAttachHeader() throws Exception {
+    public void willAttachHeaders() throws Exception {
         try (TestWebServer server = TestWebServer.start(); ) {
             String requestUrl = setMockResponse(server);
 
@@ -226,7 +478,7 @@ public class ProfileExtraHeadersTest extends AwParameterizedTest {
             Assert.assertEquals("active", lastRequest.headerValue("X-ExtraHeader"));
 
             ThreadUtils.runOnUiThreadBlocking(
-                    () -> mAwBrowserContext.clearOriginMatchedHeader("X-ExtraHeader"));
+                    () -> mAwBrowserContext.clearOriginMatchedHeader("X-ExtraHeader", null));
             Assert.assertFalse(
                     ThreadUtils.runOnUiThreadBlocking(
                             () -> mAwBrowserContext.hasOriginMatchedHeader("X-ExtraHeader")));
@@ -249,7 +501,36 @@ public class ProfileExtraHeadersTest extends AwParameterizedTest {
     @Test
     @Feature({"AndroidWebView"})
     @MediumTest
-    public void canClearAllHeaders() throws Exception {
+    public void willMergeAndAttachAllHeaders() throws Exception {
+        try (TestWebServer server = TestWebServer.start(); ) {
+            String requestUrl = setMockResponse(server);
+
+            addOriginMatchedHeaderOnUiThread(
+                    "X-ExtraHeader", "active", getPatternSetForUrl(requestUrl));
+            addOriginMatchedHeaderOnUiThread(
+                    "X-ExtraHeader", "superactive", getPatternSetForUrl(requestUrl));
+
+            try (HistogramWatcher watcher =
+                    HistogramWatcher.newBuilder()
+                            .expectBooleanRecordTimes(
+                                    "Android.WebView.AndroidX.Profile.ExtraHeaderAttached", true, 1)
+                            .build()) {
+                mActivityTestRule.loadUrlSync(
+                        mAwContents, mContentsClient.getOnPageFinishedHelper(), requestUrl);
+            }
+            Assert.assertEquals(1, server.getRequestCount(REQUEST_PATH));
+            HTTPRequest lastRequest = server.getLastRequest(REQUEST_PATH);
+            String actualHeader = lastRequest.headerValue("X-ExtraHeader");
+            Assert.assertTrue(
+                    "active,superactive".equals(actualHeader)
+                            || "superactive,active".equals(actualHeader));
+        }
+    }
+
+    @Test
+    @Feature({"AndroidWebView"})
+    @MediumTest
+    public void headersNotAttachedAfterClearing() throws Exception {
         try (TestWebServer server = TestWebServer.start()) {
             String requestUrl = setMockResponse(server);
 

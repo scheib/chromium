@@ -74,6 +74,12 @@ class Tracker;
 // if it should currently be displayed.
 - (void)displayContextualPanelEntrypointView:(BOOL)display;
 
+// Handles AI Hub "New" badge being tapped in the location bar.
+- (void)locationBarDidTapAIHubNewBadge;
+
+// Decides if AI Hub new badge should show.
+- (BOOL)shouldShowAIHubNewFeatureBadge;
+
 @end
 
 // The view controller displaying the location bar. Manages the two states of

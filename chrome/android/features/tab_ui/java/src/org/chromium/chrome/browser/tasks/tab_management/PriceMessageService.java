@@ -11,7 +11,6 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.price_tracking.PriceDropNotificationManagerFactory;
@@ -20,18 +19,21 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.state.ShoppingPersistedTabData.PriceDrop;
 import org.chromium.chrome.browser.tasks.tab_management.MessageCardView.ServiceDismissActionProvider;
+import org.chromium.chrome.browser.tasks.tab_management.TabProperties.UiType;
 import org.chromium.chrome.browser.tasks.tab_management.TabSwitcherMessageManager.MessageType;
+import org.chromium.chrome.tab_ui.R;
 import org.chromium.ui.modelutil.PropertyModel;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * One of the concrete {@link MessageService} that only serves {@link MessageType#PRICE_MESSAGE}.
  */
 @NullMarked
-public class PriceMessageService extends MessageService<@MessageType Integer> {
+public class PriceMessageService extends MessageService<@MessageType Integer, @UiType Integer> {
     private static final String WELCOME_MESSAGE_METRICS_IDENTIFIER = "PriceWelcomeMessageCard";
 
     // PRICE_WELCOME and PRICE_ALERTS are added to {@link TabListModel} at a different time and the
@@ -182,7 +184,11 @@ public class PriceMessageService extends MessageService<@MessageType Integer> {
             Supplier<@Nullable PriceWelcomeMessageProvider> priceWelcomeMessageProviderSupplier,
             Supplier<@Nullable PriceWelcomeMessageReviewActionProvider>
                     priceWelcomeMessageReviewActionProviderSupplier) {
-        super(MessageType.PRICE_MESSAGE);
+        super(
+                MessageType.PRICE_MESSAGE,
+                UiType.PRICE_MESSAGE,
+                R.layout.large_message_card_item,
+                LargeMessageCardViewBinder::bind);
         mProfile = profile;
         mPriceTabData = null;
         mPriceWelcomeMessageProviderSupplier = priceWelcomeMessageProviderSupplier;

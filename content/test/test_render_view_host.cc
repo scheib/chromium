@@ -79,17 +79,19 @@ TestRenderWidgetHostView::TestRenderWidgetHostView(RenderWidgetHost* rwh)
   SetIsFrameSinkIdOwner(true);
 
 #if defined(USE_AURA)
+  constexpr gfx::Rect kBounds = gfx::Rect(0, 0, 20, 20);
   window_ = std::make_unique<aura::Window>(
       aura::test::TestWindowDelegate::CreateSelfDestroyingDelegate());
   window_->set_owned_by_parent(false);
   window_->Init(ui::LayerType::LAYER_NOT_DRAWN);
+  window_->SetBounds(kBounds);
 #endif
 }
 
 TestRenderWidgetHostView::~TestRenderWidgetHostView() {
   viz::HostFrameSinkManager* manager = GetHostFrameSinkManager();
   if (manager)
-    manager->InvalidateFrameSinkId(frame_sink_id_, this);
+    manager->InvalidateFrameSinkId(frame_sink_id_, this, {});
 }
 
 gfx::NativeView TestRenderWidgetHostView::GetNativeView() {

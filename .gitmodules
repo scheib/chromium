@@ -5,10 +5,6 @@
 	path = chrome/browser/resources/preinstalled_web_apps/internal
 	url = https://chrome-internal.googlesource.com/chrome/components/default_apps
 	gclient-condition = checkout_src_internal
-[submodule "chrome/installer/mac/third_party/xz/xz"]
-	path = chrome/installer/mac/third_party/xz/xz
-	url = https://chromium.googlesource.com/chromium/deps/xz
-	gclient-condition = checkout_mac
 [submodule "third_party/compiler-rt/src"]
 	path = third_party/compiler-rt/src
 	url = https://chromium.googlesource.com/external/github.com/llvm/llvm-project/compiler-rt
@@ -64,46 +60,6 @@
 	path = ios/third_party/lottie/src
 	url = https://chromium.googlesource.com/external/github.com/airbnb/lottie-ios
 	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_components_ios/src"]
-	path = ios/third_party/material_components_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-components/material-components-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_font_disk_loader_ios/src"]
-	path = ios/third_party/material_font_disk_loader_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-foundation/material-font-disk-loader-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_internationalization_ios/src"]
-	path = ios/third_party/material_internationalization_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-foundation/material-internationalization-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_roboto_font_loader_ios/src"]
-	path = ios/third_party/material_roboto_font_loader_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-foundation/material-roboto-font-loader-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_sprited_animation_view_ios/src"]
-	path = ios/third_party/material_sprited_animation_view_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-foundation/material-sprited-animation-view-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/material_text_accessibility_ios/src"]
-	path = ios/third_party/material_text_accessibility_ios/src
-	url = https://chromium.googlesource.com/external/github.com/material-foundation/material-text-accessibility-ios
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/motion_interchange_objc/src"]
-	path = ios/third_party/motion_interchange_objc/src
-	url = https://chromium.googlesource.com/external/github.com/material-motion/motion-interchange-objc
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/motion_animator_objc/src"]
-	path = ios/third_party/motion_animator_objc/src
-	url = https://chromium.googlesource.com/external/github.com/material-motion/motion-animator-objc
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/motion_transitioning_objc/src"]
-	path = ios/third_party/motion_transitioning_objc/src
-	url = https://chromium.googlesource.com/external/github.com/material-motion/motion-transitioning-objc
-	gclient-condition = checkout_ios
-[submodule "ios/third_party/ochamcrest/src"]
-	path = ios/third_party/ochamcrest/src
-	url = https://chromium.googlesource.com/external/github.com/hamcrest/OCHamcrest
-	gclient-condition = checkout_ios
 [submodule "ios/third_party/webkit/src"]
 	path = ios/third_party/webkit/src
 	url = https://chromium.googlesource.com/external/github.com/WebKit/webkit
@@ -149,6 +105,9 @@
 [submodule "third_party/google_benchmark/src"]
 	path = third_party/google_benchmark/src
 	url = https://chromium.googlesource.com/external/github.com/google/benchmark
+[submodule "third_party/libpfm4/src"]
+	path = third_party/libpfm4/src
+	url = https://chromium.googlesource.com/external/git.code.sf.net/p/perfmon2/libpfm4
 [submodule "third_party/boringssl/src"]
 	path = third_party/boringssl/src
 	url = https://boringssl.googlesource.com/boringssl
@@ -274,6 +233,9 @@
 [submodule "third_party/emoji-segmenter/src"]
 	path = third_party/emoji-segmenter/src
 	url = https://chromium.googlesource.com/external/github.com/google/emoji-segmenter
+[submodule "third_party/oak/src"]
+	path = third_party/oak/src
+	url = https://chromium.googlesource.com/external/github.com/project-oak/oak
 [submodule "third_party/ots/src"]
 	path = third_party/ots/src
 	url = https://chromium.googlesource.com/external/github.com/khaledhosny/ots
@@ -461,6 +423,10 @@
 [submodule "third_party/microsoft_dxheaders/src"]
 	path = third_party/microsoft_dxheaders/src
 	url = https://chromium.googlesource.com/external/github.com/microsoft/DirectX-Headers
+	gclient-condition = checkout_win
+[submodule "third_party/microsoft_webauthn/src"]
+	path = third_party/microsoft_webauthn/src
+	url = https://chromium.googlesource.com/external/github.com/microsoft/webauthn
 	gclient-condition = checkout_win
 [submodule "third_party/minigbm/src"]
 	path = third_party/minigbm/src
@@ -670,6 +636,10 @@
 	path = chrome/app/theme/google_chrome
 	url = https://chrome-internal.googlesource.com/chrome/theme/google_chrome
 	gclient-condition = checkout_src_internal
+[submodule "chrome/browser/actor/resources/internal"]
+	path = chrome/browser/actor/resources/internal
+	url = https://chrome-internal.googlesource.com/chrome/browser/actor/resources/internal
+	gclient-condition = checkout_src_internal
 [submodule "chrome/browser/enterprise/connectors/internal"]
 	path = chrome/browser/enterprise/connectors/internal
 	url = https://chrome-internal.googlesource.com/chrome/browser/enterprise/connectors/internal
@@ -795,7 +765,7 @@
 	url = https://chrome-internal.googlesource.com/chrome/components/optimization_guide
 	gclient-condition = checkout_src_internal
 [submodule "components/plus_addresses/resources/internal"]
-	path = components/plus_addresses/resources/internal
+	path = components/plus_addresses/core/browser/resources/internal
 	url = https://chrome-internal.googlesource.com/chrome/components/plus_addresses/resources
 	gclient-condition = checkout_src_internal
 [submodule "components/resources/default_100_percent/google_chrome"]

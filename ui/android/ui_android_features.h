@@ -23,9 +23,13 @@ UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidHDR);
 // availWidth/availHeight/availTop/availLeft.
 UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidUseCorrectDisplayWorkArea);
 
-// TODO(crbug.com/401215712): Clean up the flag after making sure tha the Window
-// Management Web API works well.
-UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidWindowManagementWebApi);
+// Use Android WindowManager's WindowMetrics as the data source for top-level
+// browser window bounds in Blink.
+UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidUseCorrectWindowBounds);
+
+// Enables usage of the display topology API to obtain information about all
+// displays.
+UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidUseDisplayTopology);
 
 // Enables using occlusion information from Android to save CPU and memory.
 UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kAndroidWindowOcclusion);
@@ -42,10 +46,6 @@ UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kDisablePhotoPickerForVideoCapture);
 
 // Whether devices should use max window metrics for form factor check.
 UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kFormFactorUseMaxWindowMetrics);
-
-// Flip the back/forward direction of navigation gestures when the UI language
-// is an RTL language.
-UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kMirrorBackForwardGesturesInRTL);
 
 // Reports bottom overscrolls on the web page.
 UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kReportBottomOverscrolls);
@@ -65,6 +65,12 @@ UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(
 
 // Enables the new ETC1 encoder (used in tab and back/forward thumbnails).
 UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kUseNewEtc1Encoder);
+
+// Conducts a check to determine if the View is eligible to a Hit. This is a
+// mitigation of when the prerendered view (hidden) somehow receives the touch
+// event even though it is hidden, due to the ordering of the `children_` in
+// `ViewAndroid`. Refer to crbug.com/442832509 for more details.
+UI_ANDROID_EXPORT BASE_DECLARE_FEATURE(kCheckHitEligibility);
 
 }  // namespace ui
 

@@ -96,6 +96,8 @@ static_library("test_support") {
     "manual_hang_watcher.h",
     "metrics/action_suffix_reader.cc",
     "metrics/action_suffix_reader.h",
+    "metrics/action_variants_reader.cc",
+    "metrics/action_variants_reader.h",
     "metrics/histogram_enum_reader.cc",
     "metrics/histogram_enum_reader.h",
     "metrics/histogram_tester.cc",
@@ -141,6 +143,8 @@ static_library("test_support") {
     "scoped_command_line.h",
     "scoped_feature_list.cc",
     "scoped_feature_list.h",
+    "scoped_libc_timezone_override.cc",
+    "scoped_libc_timezone_override.h",
     "scoped_mock_clock_override.cc",
     "scoped_mock_clock_override.h",
     "scoped_mock_time_message_loop_task_runner.cc",
@@ -427,16 +431,6 @@ static_library("run_all_unittests") {
   deps = [ ":test_support" ]
 }
 
-# These sources are linked into both the base_unittests binary and the test
-# shared library target below.
-source_set("native_library_test_utils") {
-  testonly = true
-  sources = [
-    "native_library_test_utils.cc",
-    "native_library_test_utils.h",
-  ]
-}
-
 # This shared library is dynamically loaded by ImmediateCrash unittests.
 shared_library("immediate_crash_test_helper") {
   sources = [ "immediate_crash_test_helper.cc" ]
@@ -467,8 +461,6 @@ shared_library("immediate_crash_test_helper") {
 shared_library("test_shared_library") {
   testonly = true
   sources = [ "test_shared_library.cc" ]
-
-  deps = [ ":native_library_test_utils" ]
 }
 
 if (is_ios) {
@@ -478,8 +470,6 @@ if (is_ios) {
     info_plist = "ios/native-library-Info.plist"
 
     sources = [ "test_shared_library.cc" ]
-
-    deps = [ ":native_library_test_utils" ]
   }
 }
 

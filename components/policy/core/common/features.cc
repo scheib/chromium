@@ -4,26 +4,32 @@
 
 #include "components/policy/core/common/features.h"
 
+#include "base/metrics/field_trial_params.h"
+#include "base/time/time.h"
+
 namespace policy::features {
 
 BASE_FEATURE(kPolicyBlocklistProceedUntilResponse,
-             "PolicyBlocklistProceedUntilResponse",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kProfileSeparationDomainExceptionListRetroactive,
-             "ProfileSeparationDomainExceptionListRetroactive",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kEnhancedSecurityEventFields,
-             "EnhancedSecurityEventFields",
- #if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
-              base::FEATURE_DISABLED_BY_DEFAULT);
- #else
-              base::FEATURE_ENABLED_BY_DEFAULT);
- #endif
-
-BASE_FEATURE(kUseCECFlagInPolicyData,
-             "UseCECFlagInPolicyData",
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
              base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
+
+BASE_FEATURE(kUseCECFlagInPolicyData, base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables a configurable delay for policy registration.
+BASE_FEATURE(kCustomPolicyRegistrationDelay, base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<base::TimeDelta> kPolicyRegistrationDelay{
+    &kCustomPolicyRegistrationDelay, "PolicyRegistrationDelay", base::Hours(6)};
+
+// Used to add a captive portal check in SafeSitesNavigationThrottle.
+BASE_FEATURE(kSafeSitesCaptivePortalCheck, base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace policy::features

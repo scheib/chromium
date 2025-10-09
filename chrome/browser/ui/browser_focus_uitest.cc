@@ -16,6 +16,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
@@ -31,6 +32,8 @@
 #include "chrome/browser/ui/find_bar/find_bar_host_unittest_util.h"
 #include "chrome/browser/ui/frame/window_frame_util.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
+#include "chrome/browser/ui/omnibox/omnibox_controller.h"
+#include "chrome/browser/ui/omnibox/omnibox_view.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/find_bar_view.h"
@@ -45,8 +48,7 @@
 #include "chrome/test/interaction/interactive_browser_test.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/omnibox_client.h"
-#include "components/omnibox/browser/omnibox_controller.h"
-#include "components/omnibox/browser/omnibox_view.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -67,10 +69,6 @@
 
 #if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
-#endif
-
-#if BUILDFLAG(IS_WIN)
-#include "base/test/scoped_feature_list.h"
 #endif
 
 namespace {
@@ -101,7 +99,8 @@ class FocusChangeObserver : public views::FocusChangeListener,
   }
 
   // WebContentsObserver:
-  void OnFocusChangedInPage(content::FocusedNodeDetails* details) override {
+  void OnFocusChangedInPage(
+      const content::FocusedNodeDetails& details) override {
     SCOPED_TRACE(base::StrCat(
         {"Page element with id=",
          content::EvalJs(web_contents(), kGetFocusedElementJS).ExtractString(),
@@ -196,6 +195,14 @@ DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kWebContentsId);
 
 class BrowserFocusTest : public InteractiveBrowserTest {
  public:
+  BrowserFocusTest() {
+    // TODO(crbug.com/441102004): `kAiModeOmniboxEntryPoint` changes the focus
+    //   and popup opening order of the omnibox. If it launches, update the
+    //   tests to match the new expectations.
+    scoped_feature_list_.InitAndDisableFeature(
+        omnibox::kAiModeOmniboxEntryPoint);
+  }
+
   // InteractiveBrowserTest overrides:
   void SetUpOnMainThread() override {
     ASSERT_TRUE(embedded_test_server()->Start());
@@ -263,6 +270,7 @@ class BrowserFocusTest : public InteractiveBrowserTest {
   }
 
  private:
+  base::test::ScopedFeatureList scoped_feature_list_;
   constexpr static size_t kMaxIterations = 20;
 };
 

@@ -20,6 +20,7 @@
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
+#include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/network_context.h"
@@ -370,8 +371,8 @@ void SCTAuditingReporter::OnSendLookupQueryComplete(
     return;
   }
 
-  std::optional<base::Value::Dict> result =
-      base::JSONReader::ReadDict(*response_body);
+  std::optional<base::Value::Dict> result = base::JSONReader::ReadDict(
+      *response_body, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!result) {
     RecordLookupQueryResult(LookupQueryResult::kInvalidJson);
     MaybeRetryRequest();

@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
 
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_context.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -17,6 +18,7 @@
 #include "third_party/blink/renderer/core/editing/editing_boundary.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
 #include "third_party/blink/renderer/core/html/html_details_element.h"
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
@@ -45,10 +47,9 @@ class AncestorTraversal {
     explicit Iterator(const Node* start)
         : current_node_(const_cast<Node*>(start)) {}
 
-    bool operator==(const Iterator& other) {
+    bool operator==(const Iterator& other) const {
       return other.current_node_ == current_node_;
     }
-    bool operator!=(const Iterator& other) { return !(*this == other); }
     Iterator& operator++() {
       if (auto* element = DynamicTo<Element>(current_node_);
           element && element->IsScrollMarkerPseudoElement()) {
@@ -776,10 +777,32 @@ Element* DisplayLockUtilities::LockedAncestorPreventingPaint(const Node& node) {
 
 Element* DisplayLockUtilities::LockedAncestorPreventingPrePaint(
     const LayoutObject& object) {
-  return LockedAncestorPreventingUpdate(
-      object, [](DisplayLockContext* context) {
+  auto* result =
+      LockedAncestorPreventingUpdate(object, [](DisplayLockContext* context) {
         return !context->ShouldPrePaintChildren();
       });
+
+  if (!result || !IsA<HTMLCanvasElement>(result)) {
+    return result;
+  }
+
+  // If the locked ancestor preventing pre-paint is a canvas element, then
+  // `object` is potentially fallback content. But fallback content is only
+  // applicable if accessibility support is enabled.
+  if (!result->GetDocument().ExistingAXObjectCache()) {
+    return result;
+  }
+
+  // If an ancestor of the canvas is also preventing pre-paint, respect that.
+  // Otherwise, don't treat this canvas ancestor of fallback content as
+  // preventing pre-paint.
+  if (auto* parent = result->parentElement()) {
+    return LockedAncestorPreventingUpdate(
+        *parent, [](DisplayLockContext* context) {
+          return !context->ShouldPrePaintChildren();
+        });
+  }
+  return nullptr;
 }
 
 Element* DisplayLockUtilities::LockedAncestorPreventingLayout(

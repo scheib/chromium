@@ -21,7 +21,6 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
@@ -41,6 +40,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * A component for displaying a status icon (e.g. security icon or navigation icon) and optional
@@ -95,7 +95,8 @@ public class StatusCoordinator implements View.OnClickListener, LocationBarDataP
             PageInfoAction pageInfoAction,
             @Nullable Supplier<MerchantTrustSignalsCoordinator>
                     merchantTrustSignalsCoordinatorSupplier,
-            BrowserStateBrowserControlsVisibilityDelegate browserControlsVisibilityDelegate) {
+            @Nullable BrowserStateBrowserControlsVisibilityDelegate
+                    browserControlsVisibilityDelegate) {
         mIsTablet = isTablet;
         mStatusView = statusView;
         mLocationBarDataProvider = locationBarDataProvider;
@@ -110,7 +111,9 @@ public class StatusCoordinator implements View.OnClickListener, LocationBarDataP
         PageInfoIphController pageInfoIphController =
                 new PageInfoIphController(
                         new UserEducationHelper(
-                                activity, profileSupplier, new Handler(Looper.getMainLooper())),
+                                activity,
+                                (Supplier<@Nullable Profile>) profileSupplier,
+                                new Handler(Looper.getMainLooper())),
                         getSecurityIconView());
 
         mMediator =

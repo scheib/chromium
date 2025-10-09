@@ -33,7 +33,7 @@
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 #include "ui/snapshot/snapshot.h"
 
 #if defined(USE_AURA)
@@ -95,6 +95,8 @@ gfx::ImageSkia ScaleDesktopFrame(std::unique_ptr<webrtc::DesktopFrame> frame,
   SkBitmap result;
   result.allocN32Pixels(scaled_rect.width(), scaled_rect.height(), true);
 
+  // TODO(crbug.com/352187279): Support other pixel formats.
+  CHECK_EQ(frame->pixel_format(), webrtc::FOURCC_ARGB);
   uint8_t* pixels_data = reinterpret_cast<uint8_t*>(result.getPixels());
   libyuv::ARGBScale(frame->data(), frame->stride(), frame->size().width(),
                     frame->size().height(), pixels_data, result.rowBytes(),
@@ -769,9 +771,8 @@ NativeDesktopMediaList::NativeDesktopMediaList(
          !add_current_process_windows_);
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-  // webrtc::DesktopCapturer implementations on Windows, MacOS and Fuchsia
-  // expect to run on a thread with a UI message pump. Under Fuchsia the
-  // capturer needs an async loop to support FIDL I/O.
+  // webrtc::DesktopCapturer implementations on Windows and MacOS expect to
+  // run on a thread with a UI message pump.
   base::MessagePumpType thread_type = base::MessagePumpType::UI;
 #else
   base::MessagePumpType thread_type = base::MessagePumpType::DEFAULT;

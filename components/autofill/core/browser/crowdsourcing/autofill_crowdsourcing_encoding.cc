@@ -29,6 +29,7 @@
 #include "components/autofill/core/browser/form_structure_sectioning_util.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/metrics/log_event.h"
+#include "components/autofill/core/browser/proto/server.pb.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_internals/log_message.h"
 #include "components/autofill/core/common/autofill_internals/logging_scope.h"
@@ -77,6 +78,19 @@ FieldPrediction::Source ToSafeFieldPredictionSource(
       break;
   }
   return result;
+}
+
+[[nodiscard]] bool IsValidFormatString(FormatString_Type type,
+                                       std::u16string_view value) {
+  switch (type) {
+    case FormatString_Type_DATE:
+      return data_util::IsValidDateFormat(value);
+    case FormatString_Type_AFFIX:
+      return data_util::IsValidAffixFormat(value);
+    case FormatString_Type_FLIGHT_NUMBER:
+      return data_util::IsValidFlightNumberFormat(value);
+  }
+  return false;
 }
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
@@ -430,7 +444,9 @@ void EncodeFormFieldsForUpload(
     }
     // Do not upload fields that were filled with a fallback type, as this would
     // introduce unnecessary noise in the field votes.
-    if (field->WasAutofilledWithFallback()) {
+    if (field->WasAutofilledWithFallback() &&
+        !base::FeatureList::IsEnabled(
+            features::kAutofillUploadManualFallbackFieldsToServer)) {
       continue;
     }
 
@@ -465,15 +481,7 @@ void EncodeFormFieldsForUpload(
 
     if (field_options) {
       for (const auto& [type, string] : field_options->format_strings) {
-        DCHECK([&]() {
-          switch (type) {
-            case FormatString_Type_AFFIX:
-              return data_util::IsValidAffixFormat(string);
-            case FormatString_Type_DATE:
-              return data_util::IsValidDateFormat(string);
-          }
-          return false;
-        }());
+        DCHECK(IsValidFormatString(type, string));
         auto* added_format_string = added_field->add_format_string();
         added_format_string->set_type(type);
         added_format_string->set_format_string(base::UTF16ToUTF8(string));
@@ -707,6 +715,9 @@ std::optional<FieldSuggestion> GetFieldSuggestion(
       alternative_field_suggestion};
   base::optional_ref<FieldSuggestion> preferred_field_suggestion =
       *std::ranges::max_element(suggestions, {}, get_suggestion_priority);
+  if (!preferred_field_suggestion) {
+    return std::nullopt;
+  }
 
   // Add predictions for PasswordManager from `iframe_field_suggestions` if
   // `field_suggestion` is missing them. This is only relevant for
@@ -718,9 +729,7 @@ std::optional<FieldSuggestion> GetFieldSuggestion(
     MergePasswordManagerPredictions(*iframe_field_suggestion,
                                     *preferred_field_suggestion);
   }
-  return preferred_field_suggestion.has_value()
-             ? std::optional(std::move(*preferred_field_suggestion))
-             : std::nullopt;
+  return std::move(*preferred_field_suggestion);
 }
 
 // Builds a map from a pair of (form_signature, field_signature) to all the
@@ -849,8 +858,8 @@ std::vector<AutofillUploadContents> EncodeUploadRequest(
   upload.set_autofill_used(false);
   upload.set_data_present(data_present);
   upload.set_has_form_tag(form.is_form_element());
-  if (!form.current_page_language()->empty() && options.encoder) {
-    upload.set_language(form.current_page_language().value());
+  if (!options.current_page_language->empty() && options.encoder) {
+    upload.set_language(options.current_page_language.value());
   }
 
   if (options.form_associations.last_address_form_submitted) {
@@ -1048,14 +1057,14 @@ void ProcessServerPredictionsQueryResponse(
             field_suggestion->password_requirements());
       }
       if (field_suggestion->has_format_string()) {
-        switch (field_suggestion->format_string().type()) {
-          case FormatString_Type_AFFIX:
-          case FormatString_Type_DATE:
-            field->set_format_string_unless_overruled(
-                base::UTF8ToUTF16(
-                    field_suggestion->format_string().format_string()),
-                AutofillField::FormatStringSource::kServer);
-            break;
+        std::u16string format_string_value = base::UTF8ToUTF16(
+            field_suggestion->format_string().format_string());
+        if (IsValidFormatString(field_suggestion->format_string().type(),
+                                format_string_value)) {
+          field->set_format_string_unless_overruled(
+              AutofillFormatString(format_string_value,
+                                   field_suggestion->format_string().type()),
+              AutofillFormatStringSource::kServer);
         }
       }
       ++field_rank_map[field->GetFieldSignature()];

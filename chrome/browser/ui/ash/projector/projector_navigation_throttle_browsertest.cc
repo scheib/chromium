@@ -143,10 +143,8 @@ IN_PROC_BROWSER_TEST_P(ProjectorNavigationCapturingParameterizedTest,
 
   // We have to listen for both the browser being removed AND the new browser
   // being added.
-  ui_test_utils::BrowserChangeObserver removed_observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kRemoved);
-  ui_test_utils::BrowserChangeObserver added_observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserDestroyedObserver browser_destroyed_observer;
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   if (navigate_from_link()) {
     // Simulate the user clicking a link.
     NavigateParams params(browser(), gurl,
@@ -159,15 +157,15 @@ IN_PROC_BROWSER_TEST_P(ProjectorNavigationCapturingParameterizedTest,
         ui_test_utils::BrowserTestWaitFlags::BROWSER_TEST_WAIT_FOR_BROWSER);
   }
 
-  removed_observer.Wait();
-  added_observer.Wait();
+  browser_destroyed_observer.Wait();
+  BrowserWindowInterface* const swa_browser = browser_created_observer.Wait();
 
   // During the navigation, we closed the previous browser to prevent dangling
   // about:blank pages and opened a new app browser for the Projector SWA.
   // There is still only one browser available.
   EXPECT_EQ(BrowserList::GetInstance()->size(), 1u);
-  // Select the first available browser, which should be the SWA.
-  SelectFirstBrowser();
+  // Set the default browser to the swa browser.
+  SetBrowser(swa_browser);
   Browser* app_browser =
       FindSystemWebAppBrowser(profile(), SystemWebAppType::PROJECTOR);
   // Projector SWA is now open.
@@ -259,10 +257,8 @@ IN_PROC_BROWSER_TEST_P(ProjectorNavigationThrottleRedirectionParameterized,
           "screencast.apps.chrome&sa=D&source=hangouts&ust=1642759200000000")));
 
   // We wait for both the old browser to close and the new app browser to open.
-  ui_test_utils::BrowserChangeObserver removed_observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kRemoved);
-  ui_test_utils::BrowserChangeObserver added_observer(
-      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  ui_test_utils::BrowserDestroyedObserver browser_destroyed_observer;
+  ui_test_utils::BrowserCreatedObserver browser_created_observer;
   // The Google servers would redirect to the URL in the ?q= query parameter.
   // Simulate this behavior in this test without actually pinging the Google
   // servers to prevent flakiness.
@@ -270,15 +266,15 @@ IN_PROC_BROWSER_TEST_P(ProjectorNavigationThrottleRedirectionParameterized,
       browser(), GURL(kChromeUIUntrustedProjectorPwaUrl),
       WindowOpenDisposition::CURRENT_TAB,
       ui_test_utils::BrowserTestWaitFlags::BROWSER_TEST_WAIT_FOR_BROWSER);
-  removed_observer.Wait();
-  added_observer.Wait();
+  browser_destroyed_observer.Wait();
+  BrowserWindowInterface* const swa_browser = browser_created_observer.Wait();
 
   // During the navigation, we closed the previous browser to prevent dangling
   // blank redirect pages and opened a new app browser for the Projector SWA.
   // There is still only one browser available.
   EXPECT_EQ(BrowserList::GetInstance()->size(), 1u);
-  // Select the first available browser, which should be the SWA.
-  SelectFirstBrowser();
+  // Set the default browser to the swa browser.
+  SetBrowser(swa_browser);
   Browser* app_browser =
       FindSystemWebAppBrowser(profile(), SystemWebAppType::PROJECTOR);
 

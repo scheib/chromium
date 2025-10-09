@@ -8,10 +8,10 @@
 
 #include "base/notimplemented.h"
 #include "base/strings/to_string.h"
-#include "base/time/time.h"
 #include "chrome/common/actor/action_result.h"
 #include "chrome/common/actor/actor_constants.h"
 #include "chrome/common/actor/actor_logging.h"
+#include "chrome/common/actor/journal_details_builder.h"
 #include "chrome/renderer/actor/tool_utils.h"
 #include "content/public/renderer/render_frame.h"
 #include "third_party/abseil-cpp/absl/strings/str_format.h"
@@ -29,13 +29,8 @@ using ::blink::WebElement;
 using ::blink::WebLocalFrame;
 using ::blink::WebNode;
 
-namespace {
-// The default maximum duration for a scroll animation is 700ms.
-constexpr base::TimeDelta kSmoothScrollDelay = base::Milliseconds(700);
-}  // namespace
-
 ScrollTool::ScrollTool(content::RenderFrame& frame,
-                       Journal::TaskId task_id,
+                       TaskId task_id,
                        Journal& journal,
                        mojom::ScrollActionPtr action,
                        mojom::ToolTargetPtr target,
@@ -67,15 +62,12 @@ void ScrollTool::Execute(ToolFinishedCallback callback) {
   bool did_scroll =
       scrolling_element.SetScrollOffset(start_offset_css + offset_css);
 
-  targeting_smooth_scroller_ = scrolling_element.HasScrollBehaviorSmooth();
-
-  journal_->Log(
-      task_id_, "ScrollTool::Execute",
-      absl::StrFormat("Scrolling element %s from %s by offset %s (CSS "
-                      "pixels). Smooth scroll: %v.",
-                      base::ToString(scrolling_element),
-                      start_offset_css.ToString(), offset_css.ToString(),
-                      targeting_smooth_scroller_));
+  journal_->Log(task_id_, "ScrollTool::Execute",
+                JournalDetailsBuilder()
+                    .Add("element", scrolling_element)
+                    .Add("start_offset", start_offset_css)
+                    .Add("offset", offset_css)
+                    .Build());
 
   std::move(callback).Run(
       did_scroll
@@ -89,11 +81,6 @@ std::string ScrollTool::DebugString() const {
                          base::ToString(action_->direction), action_->distance);
 }
 
-base::TimeDelta ScrollTool::ExecutionObservationDelay() const {
-  return targeting_smooth_scroller_ ? kSmoothScrollDelay
-                                    : ToolBase::ExecutionObservationDelay();
-}
-
 ScrollTool::ValidatedResult ScrollTool::Validate() const {
   WebLocalFrame* web_frame = frame_->GetWebFrame();
   CHECK(web_frame);
@@ -101,11 +88,12 @@ ScrollTool::ValidatedResult ScrollTool::Validate() const {
 
   // The scroll distance should always be positive.
   if (action_->distance <= 0.0) {
-    return base::unexpected(MakeResult(
-        mojom::ActionResultCode::kArgumentsInvalid, "Negative Distance"));
+    return base::unexpected(
+        MakeResult(mojom::ActionResultCode::kArgumentsInvalid,
+                   /*requires_page_stabilization=*/false, "Negative Distance"));
   }
 
-  if (target_->is_coordinate()) {
+  if (target_->is_coordinate_dip()) {
     NOTIMPLEMENTED() << "Coordinate-based target not yet supported.";
     return base::unexpected(MakeErrorResult());
   }
@@ -150,6 +138,7 @@ ScrollTool::ValidatedResult ScrollTool::Validate() const {
       (offset_physical.y() && !scrolling_element.IsUserScrollableY())) {
     return base::unexpected(
         MakeResult(mojom::ActionResultCode::kScrollTargetNotUserScrollable,
+                   /*requires_page_stabilization=*/false,
                    absl::StrFormat("ScrollingElement [%s]",
                                    base::ToString(scrolling_element))));
   }

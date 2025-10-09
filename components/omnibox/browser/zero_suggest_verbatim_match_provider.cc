@@ -63,10 +63,10 @@ void ZeroSuggestVerbatimMatchProvider::Start(const AutocompleteInput& input,
   const auto& page_url = input.current_url();
   if (input.type() != metrics::OmniboxInputType::EMPTY &&
       !(page_url.is_valid() &&
-        ((page_url.scheme() == url::kHttpScheme) ||
-         (page_url.scheme() == url::kHttpsScheme) ||
-         (page_url.scheme() == url::kAboutScheme) ||
-         (page_url.scheme() ==
+        ((page_url.GetScheme() == url::kHttpScheme) ||
+         (page_url.GetScheme() == url::kHttpsScheme) ||
+         (page_url.GetScheme() == url::kAboutScheme) ||
+         (page_url.GetScheme() ==
           client_->GetEmbedderRepresentationOfAboutScheme())))) {
     return;
   }
@@ -89,7 +89,7 @@ void ZeroSuggestVerbatimMatchProvider::Start(const AutocompleteInput& input,
   // Attempt to retrieve `title` from historical records.
   done_ = false;
   history_service->QueryURL(
-      input.current_url(), false,
+      input.current_url(),
       base::BindOnce(&ZeroSuggestVerbatimMatchProvider::OnPageTitleRetrieved,
                      request_weak_ptr_factory_.GetWeakPtr(), input),
       &task_tracker_);

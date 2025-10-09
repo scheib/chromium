@@ -38,6 +38,7 @@ extern const char kHistogramServiceWorkerFirstContentfulPaintDocs[];
 extern const char kHistogramNoServiceWorkerFirstContentfulPaintDocs[];
 
 extern const char kHistogramServiceWorkerSubresourceTotalRouterEvaluationTime[];
+extern const char kHistogramSyntheticResponseSuffix[];
 
 }  // namespace internal
 

@@ -65,7 +65,10 @@
 #import "ios/chrome/browser/policy/model/policy_util.h"
 #import "ios/chrome/browser/shared/coordinator/alert/action_sheet_coordinator.h"
 #import "ios/chrome/browser/shared/coordinator/alert/alert_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
 #import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
 #import "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
@@ -424,11 +427,9 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 
   // Place the search bar in the navigation bar.
   self.navigationItem.searchController = self.searchController;
-#if defined(__IPHONE_26_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_26_0
   if (@available(iOS 26, *)) {
     self.navigationItem.searchBarPlacementAllowsToolbarIntegration = NO;
   }
-#endif
   self.navigationItem.hidesSearchBarWhenScrolling = NO;
 
   self.searchTerm = @"";
@@ -439,10 +440,8 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
     [self showLoadingSpinnerBackground];
   }
 
-  if (@available(iOS 17, *)) {
-    [self registerForTraitChanges:TraitCollectionSetForTraits(nil)
-                       withAction:@selector(stopEdittingBookmarkOnTraitChange)];
-  }
+  [self registerForTraitChanges:TraitCollectionSetForTraits(nil)
+                     withAction:@selector(stopEdittingBookmarkOnTraitChange)];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -508,17 +507,6 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 - (BOOL)prefersStatusBarHidden {
   return NO;
 }
-
-#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
-- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
-  [super traitCollectionDidChange:previousTraitCollection];
-  if (@available(iOS 17, *)) {
-    return;
-  }
-
-  [self stopEdittingBookmarkOnTraitChange];
-}
-#endif
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
   return UIStatusBarStyleDefault;
@@ -589,7 +577,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 - (void)cacheIndexPathRow {
   // Cache IndexPathRow for BookmarkTableView.
   int topMostVisibleIndexPathRow = [self topMostVisibleIndexPathRow];
-  if (self.displayedFolderNode) {
+  if (self.displayedFolderNode && self.profile) {
     [BookmarkPathCache
         cacheBookmarkTopMostRowWithPrefService:self.profile->GetPrefs()
                                       folderId:self.displayedFolderNode->id()
@@ -598,11 +586,6 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
                                                        self.displayedFolderNode,
                                                        _bookmarkModel.get())
                                     topMostRow:topMostVisibleIndexPathRow];
-  } else {
-    // TODO(crbug.com/40679851):Remove DCHECK once we know the root cause of the
-    // bug, for now this will cause a crash on Dev/Canary and we should get
-    // breadcrumbs.
-    DCHECK(NO);
   }
 }
 
@@ -714,7 +697,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
   }];
   _signinCoordinator = [SigninCoordinator
       signinCoordinatorWithCommand:command
-                           browser:_browser.get()
+                           browser:signin::GetRegularBrowser(_browser.get())
                 baseViewController:self.navigationController];
   [_signinCoordinator start];
 }
@@ -912,7 +895,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
   DCHECK_GE(nodes.size(), 1u);
   base::RecordAction(base::UserMetricsAction(userAction));
   [self.snackbarCommandsHandler
-      showSnackbarMessage:bookmark_utils_ios::DeleteBookmarksWithUndoToast(
+      showSnackbarMessage:bookmark_utils_ios::DeleteBookmarksWithUndoSnackbar(
                               nodes, _bookmarkModel.get(), self.profile,
                               FROM_HERE)];
   [self setTableViewEditing:NO];
@@ -1232,7 +1215,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 - (void)handleMoveNode:(const BookmarkNode*)node toPosition:(size_t)position {
   [self.snackbarCommandsHandler
       showSnackbarMessage:
-          bookmark_utils_ios::UpdateBookmarkPositionWithUndoToast(
+          bookmark_utils_ios::UpdateBookmarkPositionWithUndoSnackbar(
               node, self.displayedFolderNode, position, _bookmarkModel.get(),
               self.profile)];
 }
@@ -1257,6 +1240,9 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 #pragma mark - BookmarkTableCellTitleEditDelegate
 
 - (void)textDidChangeTo:(NSString*)newName {
+  if (!_bookmarkModel) {
+    return;
+  }
   DCHECK(self.mediator.editingFolderNode);
   self.mediator.addingNewFolder = NO;
   if (newName.length > 0) {
@@ -1294,7 +1280,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
   [self setTableViewEditing:NO];
   ProfileIOS* profile = self.profile;
   [self.snackbarCommandsHandler
-      showSnackbarMessage:bookmark_utils_ios::MoveBookmarksWithUndoToast(
+      showSnackbarMessage:bookmark_utils_ios::MoveBookmarksWithUndoSnackbar(
                               editedNodesVector, _bookmarkModel.get(), folder,
                               profile,
                               AuthenticationServiceFactory::GetForProfile(
@@ -2957,7 +2943,7 @@ BookmarkNodeIDSet GetBookmarkNodeIDSet(
 
   [self.snackbarCommandsHandler
       showSnackbarMessage:
-          bookmark_utils_ios::CreateBookmarkAtPositionWithUndoToast(
+          bookmark_utils_ios::CreateBookmarkAtPositionWithUndoSnackbar(
               base::SysUTF8ToNSString(URL.spec()), URL,
               self.displayedFolderNode, index, _bookmarkModel.get(),
               self.profile)];

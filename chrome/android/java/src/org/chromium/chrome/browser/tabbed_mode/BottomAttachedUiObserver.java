@@ -41,7 +41,6 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
 import org.chromium.ui.insets.InsetObserver;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * An observer class that listens for changes in UI components that are attached to the bottom of
@@ -93,6 +92,7 @@ public class BottomAttachedUiObserver
     private int mBottomControlsMinHeight;
     private @Nullable @ColorInt Integer mBottomControlsColor;
     private boolean mUseBottomControlsColor;
+    private boolean mIsSheetAnchoredToBottomControls;
 
     private final BottomControlsStacker mBottomControlsStacker;
 
@@ -105,7 +105,7 @@ public class BottomAttachedUiObserver
     private boolean mOverlayPanelVisible;
     @PanelState private int mOverlayPanelState;
 
-    private final Optional<OmniboxSuggestionsVisualState> mOmniboxSuggestionsVisualState;
+    private final @Nullable OmniboxSuggestionsVisualState mOmniboxSuggestionsVisualState;
     private boolean mOmniboxSuggestionsVisible;
     private @Nullable @ColorInt Integer mOmniboxSuggestionsColor;
 
@@ -153,7 +153,7 @@ public class BottomAttachedUiObserver
             SnackbarStateProvider snackbarStateProvider,
             ObservableSupplier<ContextualSearchManager> contextualSearchManagerSupplier,
             BottomSheetController bottomSheetController,
-            Optional<OmniboxSuggestionsVisualState> omniboxSuggestionsVisualState,
+            @Nullable OmniboxSuggestionsVisualState omniboxSuggestionsVisualState,
             ManualFillingComponentSupplier manualFillingComponentSupplier,
             InsetObserver insetObserver) {
         mObservers = new ObserverList<>();
@@ -232,9 +232,9 @@ public class BottomAttachedUiObserver
                 });
 
         mOmniboxSuggestionsVisualState = omniboxSuggestionsVisualState;
-        mOmniboxSuggestionsVisualState.ifPresent(
-                coordinator ->
-                        coordinator.setOmniboxSuggestionsVisualStateObserver(Optional.of(this)));
+        if (mOmniboxSuggestionsVisualState != null) {
+            mOmniboxSuggestionsVisualState.setOmniboxSuggestionsVisualStateObserver(this);
+        }
     }
 
     /**
@@ -252,10 +252,9 @@ public class BottomAttachedUiObserver
     }
 
     public void destroy() {
-        mOmniboxSuggestionsVisualState.ifPresent(
-                autocompleteCoordinator ->
-                        autocompleteCoordinator.setOmniboxSuggestionsVisualStateObserver(
-                                Optional.empty()));
+        if (mOmniboxSuggestionsVisualState != null) {
+            mOmniboxSuggestionsVisualState.setOmniboxSuggestionsVisualStateObserver(null);
+        }
         if (mAccessorySheetVisualStateProviderSupplier != null) {
             mAccessorySheetVisualStateProviderSupplier.removeObserver(
                     assumeNonNull(mAccessorySheetProviderSupplierObserver));
@@ -330,8 +329,7 @@ public class BottomAttachedUiObserver
             return mBottomSheetColor;
         }
         if (mOverlayPanelVisible
-                && (assumeNonNull(mOverlayPanelStateProvider).isFullWidthSizePanel()
-                        || !EdgeToEdgeUtils.isChromeEdgeToEdgeFeatureEnabled())) {
+                && assumeNonNull(mOverlayPanelStateProvider).isFullWidthSizePanel()) {
             // Return null if the overlay panel is visible but not peeked - the overlay panel's
             // content will be "bottom attached".
             return mOverlayPanelState == PanelState.PEEKED ? mOverlayPanelColor : null;
@@ -352,9 +350,6 @@ public class BottomAttachedUiObserver
     private boolean shouldShowDivider() {
         if (shouldMatchBottomSheetColor()) {
             return !mBottomSheetController.isFullWidth();
-        }
-        if (mOverlayPanelVisible && !EdgeToEdgeUtils.isChromeEdgeToEdgeFeatureEnabled()) {
-            return !assumeNonNull(mOverlayPanelStateProvider).isFullWidthSizePanel();
         }
         if (mSnackbarVisible) {
             return !mSnackbarStateProvider.isFullWidth();
@@ -424,7 +419,7 @@ public class BottomAttachedUiObserver
     private boolean shouldMatchBottomSheetColor() {
         if (!mBottomSheetVisible) return false;
 
-        if (mBottomSheetController.isAnchoredToBottomControls()) {
+        if (mIsSheetAnchoredToBottomControls) {
             // As long as the bottom sheet is anchored to the browser controls, match the sheet's
             // color when there's no other browser controls layer other than the bottom chin.
             // Bottom sheet's width setting does not matter in this case.
@@ -437,6 +432,11 @@ public class BottomAttachedUiObserver
             // sheet color should be used.
             return !mBottomControlsStacker.isLayerVisible(LayerType.BOTTOM_CHIN);
         }
+    }
+
+    private boolean isSheetAnchoredToBottomControls() {
+        return mBottomSheetController.isAnchoredToBottomControls()
+                || mBottomSheetController.getTargetSheetState() == SheetState.PEEK;
     }
 
     // Browser Controls (Tab group UI, Read Aloud)
@@ -543,35 +543,52 @@ public class BottomAttachedUiObserver
 
     @Override
     public void onSheetClosed(@StateChangeReason int reason) {
-        mBottomSheetVisible = false;
-        updateBottomAttachedColor();
+        maybeUpdateBottomSheetColor();
     }
 
     @Override
     public void onSheetOpened(@StateChangeReason int reason) {
-        mBottomSheetVisible = true;
-        updateBottomAttachedColor();
+        maybeUpdateBottomSheetColor();
     }
 
     @Override
     public void onSheetContentChanged(@Nullable BottomSheetContent newContent) {
-        if (newContent != null) {
-            mBottomSheetColor = mBottomSheetController.getSheetBackgroundColor();
-        }
-        updateBottomAttachedColor();
+        maybeUpdateBottomSheetColor();
     }
 
     @Override
     public void onSheetOffsetChanged(float heightFraction, float offsetPx) {
-        Integer newColor = mBottomSheetController.getSheetBackgroundColor();
-        if (Objects.equals(newColor, mBottomSheetColor)) return;
-
-        mBottomSheetColor = newColor;
-        updateBottomAttachedColor();
+        maybeUpdateBottomSheetColor();
     }
 
     @Override
-    public void onSheetStateChanged(@SheetState int newState, @StateChangeReason int reason) {}
+    public void onSheetStateChanged(@SheetState int newState, @StateChangeReason int reason) {
+        maybeUpdateBottomSheetColor();
+    }
+
+    @Override
+    public void onSheetBackgroundColorOverrideChanged() {
+        maybeUpdateBottomSheetColor();
+    }
+
+    private void maybeUpdateBottomSheetColor() {
+        @SheetState int currentState = mBottomSheetController.getSheetState();
+        boolean isSheetVisible =
+                currentState != SheetState.HIDDEN && currentState != SheetState.NONE;
+        boolean isSheetBottomAnchored = isSheetAnchoredToBottomControls();
+        Integer newColor = mBottomSheetController.getSheetBackgroundColor();
+
+        if (Objects.equals(newColor, mBottomSheetColor)
+                && isSheetVisible == mBottomSheetVisible
+                && mIsSheetAnchoredToBottomControls == isSheetBottomAnchored) {
+            return;
+        }
+
+        mBottomSheetVisible = isSheetVisible;
+        mIsSheetAnchoredToBottomControls = isSheetBottomAnchored;
+        mBottomSheetColor = newColor;
+        updateBottomAttachedColor();
+    }
 
     // Omnibox Suggestions
 

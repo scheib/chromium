@@ -10,9 +10,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/timer/elapsed_timer.h"
+#include "base/timer/timer.h"
+#include "chrome/browser/ui/webui/signin/history_sync_optin/history_sync_optin.mojom-data-view.h"
 #include "chrome/browser/ui/webui/signin/history_sync_optin/history_sync_optin.mojom.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "content/public/browser/web_ui_message_handler.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -28,7 +32,8 @@ class HistorySyncOptinHandler : public history_sync_optin::mojom::PageHandler,
       mojo::PendingReceiver<history_sync_optin::mojom::PageHandler> receiver,
       mojo::PendingRemote<history_sync_optin::mojom::Page> page,
       Browser* browser,
-      Profile* profile);
+      Profile* profile,
+      base::OnceClosure history_optin_completed_closure);
   ~HistorySyncOptinHandler() override;
 
   HistorySyncOptinHandler(const HistorySyncOptinHandler&) = delete;
@@ -49,11 +54,15 @@ class HistorySyncOptinHandler : public history_sync_optin::mojom::PageHandler,
   // Adds sync consent to the history data type.
   void AddHistorySyncConsent();
 
+  void OnScreenModeChanged(history_sync_optin::mojom::ScreenMode screen_mode);
   void OnAvatarChanged(const AccountInfo& info);
   void DispatchAccountInfoUpdate(const AccountInfo& info);
 
   // signin::IdentityManager::Observer:
   void OnExtendedAccountInfoUpdated(const AccountInfo& info) override;
+
+  // Called when `screen_mode_timeout_` times out.
+  void OnScreenModeTimeout();
 
   // Allows handling received messages from the web ui page.
   const mojo::Receiver<history_sync_optin::mojom::PageHandler> receiver_;
@@ -62,11 +71,22 @@ class HistorySyncOptinHandler : public history_sync_optin::mojom::PageHandler,
 
   const base::WeakPtr<Browser> browser_;
   const raw_ptr<Profile> profile_;
+  base::OnceClosure history_optin_completed_closure_;
+
   const raw_ptr<signin::IdentityManager> identity_manager_;
 
   base::ScopedObservation<signin::IdentityManager,
                           signin::IdentityManager::Observer>
       identity_manager_observation_{this};
+
+  bool screen_mode_changed_ = false;
+  history_sync_optin::mojom::ScreenMode screen_mode_ =
+      history_sync_optin::mojom::ScreenMode::kPending;
+  base::OneShotTimer screen_mode_timeout_;
+
+  // Tracks time that passes between the UI is fully initialized, but the
+  // Accept / Reject buttons are not ready yet.
+  std::optional<base::ElapsedTimer> user_visible_latency_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_HISTORY_SYNC_OPTIN_HISTORY_SYNC_OPTIN_HANDLER_H_

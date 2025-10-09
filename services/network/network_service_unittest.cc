@@ -1160,16 +1160,17 @@ TEST_P(NetworkServiceCookieTest, CookieEncryptionProvider) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(/*no prefix*/,
-                         NetworkServiceCookieTest,
-                         testing::Combine(testing::Bool(), testing::Bool()),
-                         [](const auto& info) {
-                           return base::StringPrintf(
-                               "%s_%s",
-                               std::get<0>(info.param) ? "crypt" : "no_crypt",
-                               std::get<1>(info.param) ? "provider"
-                                                       : "no_provider");
-                         });
+INSTANTIATE_TEST_SUITE_P(
+    /*no prefix*/,
+    NetworkServiceCookieTest,
+    testing::Values(std::make_tuple(true, true),     // crypt_provider
+                    std::make_tuple(false, true),    // no_crypt_provider
+                    std::make_tuple(false, false)),  // no_crypt_no_provider
+    [](const auto& info) {
+      return base::StringPrintf(
+          "%s_%s", std::get<0>(info.param) ? "crypt" : "no_crypt",
+          std::get<1>(info.param) ? "provider" : "no_provider");
+    });
 
 class NetworkServiceTestWithService : public testing::Test {
  public:
@@ -1419,10 +1420,13 @@ class NetworkServiceTestWithResolverMap : public NetworkServiceTestWithService {
 TEST_F(NetworkServiceTestWithService, SetNetworkConditions) {
   const base::UnguessableToken profile_id = base::UnguessableToken::Create();
   CreateNetworkContext();
-  mojom::NetworkConditionsPtr network_conditions =
-      mojom::NetworkConditions::New();
-  network_conditions->offline = true;
-  context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  {
+    std::vector<mojom::MatchedNetworkConditionsPtr> network_conditions;
+    network_conditions.emplace_back(mojom::MatchedNetworkConditions::New());
+    network_conditions.back()->conditions = mojom::NetworkConditions::New();
+    network_conditions.back()->conditions->offline = true;
+    context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  }
 
   ResourceRequest request;
   request.url = test_server()->GetURL("/nocache.html");
@@ -1440,23 +1444,31 @@ TEST_F(NetworkServiceTestWithService, SetNetworkConditions) {
   EXPECT_EQ(net::ERR_INTERNET_DISCONNECTED,
             client()->completion_status().error_code);
 
-  network_conditions = mojom::NetworkConditions::New();
-  network_conditions->offline = false;
-  context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  {
+    std::vector<mojom::MatchedNetworkConditionsPtr> network_conditions;
+    network_conditions.emplace_back(mojom::MatchedNetworkConditions::New());
+    network_conditions.back()->conditions = mojom::NetworkConditions::New();
+    network_conditions.back()->conditions->offline = false;
+    context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  }
   StartLoadingURL(request, 0);
   client()->RunUntilComplete();
   EXPECT_EQ(net::OK, client()->completion_status().error_code);
 
-  network_conditions = mojom::NetworkConditions::New();
-  network_conditions->offline = true;
-  context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  {
+    std::vector<mojom::MatchedNetworkConditionsPtr> network_conditions;
+    network_conditions.emplace_back(mojom::MatchedNetworkConditions::New());
+    network_conditions.back()->conditions = mojom::NetworkConditions::New();
+    network_conditions.back()->conditions->offline = true;
+    context()->SetNetworkConditions(profile_id, std::move(network_conditions));
+  }
 
   request.throttling_profile_id = profile_id;
   StartLoadingURL(request, 0);
   client()->RunUntilComplete();
   EXPECT_EQ(net::ERR_INTERNET_DISCONNECTED,
             client()->completion_status().error_code);
-  context()->SetNetworkConditions(profile_id, nullptr);
+  context()->SetNetworkConditions(profile_id, {});
   StartLoadingURL(request, 0);
   client()->RunUntilComplete();
   EXPECT_EQ(net::OK, client()->completion_status().error_code);

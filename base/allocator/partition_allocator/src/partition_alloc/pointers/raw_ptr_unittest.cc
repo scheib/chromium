@@ -1179,7 +1179,8 @@ TEST_F(RawPtrTest, FunctionParameters_Copy) {
                               &x);
 }
 
-TEST_F(RawPtrTest, SetLookupUsesGetForComparison) {
+// TODO(crbug.com/448368929): Re-enable after the next clang roll
+TEST_F(RawPtrTest, DISABLED_SetLookupUsesGetForComparison) {
   int x = 123;
   CountingRawPtr<int> ptr(&x);
   std::set<CountingRawPtr<int>> set;
@@ -1202,10 +1203,10 @@ TEST_F(RawPtrTest, SetLookupUsesGetForComparison) {
                   .wrap_raw_ptr_cnt = 0,
                   .get_for_dereference_cnt = 0,
                   .get_for_extraction_cnt = 0,
-                  // 2 items to compare to => 4 calls.
-                  .get_for_comparison_cnt = 4,
-                  // 1 element to compare to => 2 calls.
-                  .wrapped_ptr_less_cnt = 2,
+                  // 2 comparisons => 2 spaceship operator calls.
+                  .get_for_comparison_cnt = 2,
+                  // The comparisons above can be reused
+                  .wrapped_ptr_less_cnt = 0,
               }),
               CountersMatch());
 
@@ -1229,10 +1230,10 @@ TEST_F(RawPtrTest, SetLookupUsesGetForComparison) {
                   .wrap_raw_ptr_cnt = 0,
                   .get_for_dereference_cnt = 0,
                   .get_for_extraction_cnt = 0,
-                  // 2 comparisons => 4 extractions.
-                  .get_for_comparison_cnt = 4,
-                  // 2 items to compare to => 4 calls.
-                  .wrapped_ptr_less_cnt = 2,
+                  // 2 comparisons => 2 spaceship operator calls.
+                  .get_for_comparison_cnt = 2,
+                  // The comparisons above can be reused.
+                  .wrapped_ptr_less_cnt = 0,
               }),
               CountersMatch());
 }
@@ -1685,10 +1686,8 @@ TEST_F(BackupRefPtrTest, Basic) {
   // In debug builds, the use-after-free should be caught immediately.
   EXPECT_DEATH_IF_SUPPORTED(g_volatile_int_to_ignore = *wrapped_ptr1, "");
 #else   // DCHECK_IS_ON() || PA_BUILDFLAG(ENABLE_BACKUP_REF_PTR_SLOW_CHECKS)
-#if !PA_BUILDFLAG(IS_IOS)
   // The allocation should be poisoned since there's a raw_ptr alive.
   EXPECT_NE(*wrapped_ptr1, 42);
-#endif  // !PA_BUILDFLAG(IS_IOS)
 
   // The allocator should not be able to reuse the slot at this point.
   void* raw_ptr2 = allocator_.root()->Alloc(sizeof(int), "");
@@ -2471,7 +2470,7 @@ TEST_F(BackupRefPtrTest, RawPtrTraits_DisableBRP) {
     raw_ptr<unsigned int, DanglingUntriaged> dangling_ptr =
         partition_alloc::internal::TagPtr(ptr.get());
     EXPECT_DEATH_IF_SUPPORTED(*dangling_ptr = 0, "");
-#elif !PA_BUILDFLAG(IS_IOS)
+#else
     EXPECT_EQ(kQuarantined4Bytes,
               *partition_alloc::internal::TagPtr(ptr.get()));
 #endif

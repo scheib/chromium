@@ -14,7 +14,7 @@
 #include "components/page_load_metrics/browser/navigation_handle_user_data.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "ui/base/window_open_disposition.h"
-#include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/native_ui_types.h"
 
 class Browser;
 struct NavigateParams;
@@ -24,6 +24,10 @@ namespace content {
 class BrowserContext;
 class NavigationHandle;
 }  // namespace content
+
+namespace tab_groups {
+class TabGroupSyncService;
+}  // namespace tab_groups
 
 namespace bookmarks {
 class BookmarkNode;
@@ -133,6 +137,11 @@ void GetURLsAndFoldersForTabGroup(
     const Browser* browser,
     const TabGroup& tab_group,
     std::vector<BookmarkEditor::EditDetails::BookmarkData>* folder_data);
+
+// Suggest a unique name for tab group based on the bookmark folder's name.
+std::u16string SuggestUniqueTabGroupName(
+    std::u16string folder_title,
+    const tab_groups::TabGroupSyncService* tab_group_sync_service);
 
 }  // namespace bookmarks
 

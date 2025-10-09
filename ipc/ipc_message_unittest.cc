@@ -11,32 +11,25 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <limits>
-#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/platform_thread.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "ipc/ipc_message.h"
+#include "ipc/ipc_message_macros.h"
 #include "ipc/ipc_message_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-// IPC messages for testing ----------------------------------------------------
-
-#define IPC_MESSAGE_IMPL
-#include "ipc/ipc_message_macros.h"
-#include "ipc/ipc_message_start.h"
-
-#define IPC_MESSAGE_START TestMsgStart
-
-IPC_MESSAGE_CONTROL0(TestMsgClassEmpty)
-
-IPC_MESSAGE_CONTROL1(TestMsgClassI, int)
-
-IPC_SYNC_MESSAGE_CONTROL1_1(TestMsgClassIS, int, std::string)
 
 namespace IPC {
 
@@ -225,79 +218,102 @@ TEST(IPCMessageTest, FindNextOverflow) {
             message.header()->payload_size + sizeof(IPC::Message::Header));
 }
 
-namespace {
+TEST(IPCMessageIntegrity, ReadBeyondBufferStr) {
+  // This was BUG 984408.
+  uint32_t v1 = std::numeric_limits<uint32_t>::max() - 1;
+  int v2 = 666;
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(v1);
+  m.WriteInt(v2);
 
-class IPCMessageParameterTest : public testing::Test {
- public:
-  IPCMessageParameterTest() : extra_param_("extra_param"), called_(false) {}
+  base::PickleIterator iter(m);
+  std::string vs;
+  EXPECT_FALSE(iter.ReadString(&vs));
+}
 
-  bool OnMessageReceived(const IPC::Message& message) {
-    bool handled = true;
-    IPC_BEGIN_MESSAGE_MAP_WITH_PARAM(IPCMessageParameterTest, message,
-                                     &extra_param_)
-      IPC_MESSAGE_HANDLER(TestMsgClassEmpty, OnEmpty)
-      IPC_MESSAGE_HANDLER(TestMsgClassI, OnInt)
-      //IPC_MESSAGE_HANDLER(TestMsgClassIS, OnSync)
-      IPC_MESSAGE_UNHANDLED(handled = false)
-    IPC_END_MESSAGE_MAP()
+TEST(IPCMessageIntegrity, ReadBeyondBufferStr16) {
+  // This was BUG 984408.
+  uint32_t v1 = std::numeric_limits<uint32_t>::max() - 1;
+  int v2 = 777;
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(v1);
+  m.WriteInt(v2);
 
-    return handled;
-  }
+  base::PickleIterator iter(m);
+  std::u16string vs;
+  EXPECT_FALSE(iter.ReadString16(&vs));
+}
 
-  void OnEmpty(std::string* extra_param) {
-    EXPECT_EQ(extra_param, &extra_param_);
-    called_ = true;
-  }
+TEST(IPCMessageIntegrity, ReadBytesBadIterator) {
+  // This was BUG 1035467.
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(1);
+  m.WriteInt(2);
 
-  void OnInt(std::string* extra_param, int foo) {
-    EXPECT_EQ(extra_param, &extra_param_);
-    EXPECT_EQ(foo, 42);
-    called_ = true;
-  }
+  base::PickleIterator iter(m);
+  const char* data = nullptr;
+  EXPECT_TRUE(iter.ReadBytes(&data, sizeof(int)));
+}
 
-  /* TODO: handle sync IPCs
-    void OnSync(std::string* extra_param, int foo, std::string* out) {
-    EXPECT_EQ(extra_param, &extra_param_);
-    EXPECT_EQ(foo, 42);
-    called_ = true;
-    *out = std::string("out");
-  }
+TEST(IPCMessageIntegrity, ReadVectorNegativeSize) {
+  // A slight variation of BUG 984408. Note that the pickling of vector<char>
+  // has a specialized template which is not vulnerable to this bug. So here
+  // try to hit the non-specialized case vector<P>.
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(-1);  // This is the count of elements.
+  m.WriteInt(1);
+  m.WriteInt(2);
+  m.WriteInt(3);
 
-  bool Send(IPC::Message* reply) {
-    delete reply;
-    return true;
-  }*/
-
-  std::string extra_param_;
-  bool called_;
-};
-
-}  // namespace
-
-TEST_F(IPCMessageParameterTest, EmptyDispatcherWithParam) {
-  TestMsgClassEmpty message;
-  EXPECT_TRUE(OnMessageReceived(message));
-  EXPECT_TRUE(called_);
+  std::vector<double> vec;
+  base::PickleIterator iter(m);
+  EXPECT_FALSE(ReadParam(&m, &iter, &vec));
 }
 
 #if BUILDFLAG(IS_ANDROID)
-#define MAYBE_OneIntegerWithParam DISABLED_OneIntegerWithParam
+#define MAYBE_ReadVectorTooLarge1 DISABLED_ReadVectorTooLarge1
 #else
-#define MAYBE_OneIntegerWithParam OneIntegerWithParam
+#define MAYBE_ReadVectorTooLarge1 ReadVectorTooLarge1
 #endif
-TEST_F(IPCMessageParameterTest, MAYBE_OneIntegerWithParam) {
-  TestMsgClassI message(42);
-  EXPECT_TRUE(OnMessageReceived(message));
-  EXPECT_TRUE(called_);
+TEST(IPCMessageIntegrity, MAYBE_ReadVectorTooLarge1) {
+  // This was BUG 1006367. This is the large but positive length case. Again
+  // we try to hit the non-specialized case vector<P>.
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(0x21000003);  // This is the count of elements.
+  m.WriteInt64(1);
+  m.WriteInt64(2);
+
+  std::vector<int64_t> vec;
+  base::PickleIterator iter(m);
+  EXPECT_FALSE(ReadParam(&m, &iter, &vec));
 }
 
-/* TODO: handle sync IPCs
-TEST_F(IPCMessageParameterTest, Sync) {
-  std::string output;
-  TestMsgClassIS message(42, &output);
-  EXPECT_TRUE(OnMessageReceived(message));
-  EXPECT_TRUE(called_);
-  EXPECT_EQ(output, std::string("out"));
-}*/
+TEST(IPCMessageIntegrity, ReadVectorTooLarge2) {
+  // This was BUG 1006367. This is the large but positive with an additional
+  // integer overflow when computing the actual byte size. Again we try to hit
+  // the non-specialized case vector<P>.
+  IPC::Message m(0, 1, IPC::Message::PRIORITY_NORMAL);
+  m.WriteInt(0x71000000);  // This is the count of elements.
+  m.WriteInt64(1);
+  m.WriteInt64(2);
+
+  std::vector<int64_t> vec;
+  base::PickleIterator iter(m);
+  EXPECT_FALSE(ReadParam(&m, &iter, &vec));
+}
+
+// This test needs ~20 seconds in Debug mode, or ~4 seconds in Release mode.
+// See http://crbug.com/741866 for details.
+TEST(IPCMessageIntegrity, DISABLED_ReadVectorTooLarge3) {
+  base::Pickle pickle;
+  IPC::WriteParam(&pickle, 256 * 1024 * 1024);
+  IPC::WriteParam(&pickle, 0);
+  IPC::WriteParam(&pickle, 1);
+  IPC::WriteParam(&pickle, 2);
+
+  base::PickleIterator iter(pickle);
+  std::vector<int> vec;
+  EXPECT_FALSE(IPC::ReadParam(&pickle, &iter, &vec));
+}
 
 }  // namespace IPC

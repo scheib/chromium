@@ -105,7 +105,6 @@ void ProvisioningConfigFetcherImpl::RequestConfig(
   // Prepare request body
   base::Value::Dict request;
   base::Value::Dict device;
-  std::string request_body;
   request.Set("android_id", kAndroidId);
   request.Set("gcm_registration_id", fcm_token);
   device.Set("manufacturer", manufacturer);
@@ -115,7 +114,7 @@ void ProvisioningConfigFetcherImpl::RequestConfig(
              (!attested_id.empty() ? attested_id : serial));
   device.Set("imei", imei);
   request.Set("deviceIdentifier", std::move(device));
-  base::JSONWriter::Write(request, &request_body);
+  std::string request_body = base::WriteJson(request).value_or("");
 
   // Send message using URLLoader
   simple_url_loader_ = network::SimpleURLLoader::Create(
@@ -166,7 +165,8 @@ void ProvisioningConfigFetcherImpl::OnDownloadToStringComplete(
   }
 
   base::JSONReader::Result response_result =
-      base::JSONReader::ReadAndReturnValueWithError(*response_body);
+      base::JSONReader::ReadAndReturnValueWithError(
+          *response_body, base::JSON_PARSE_CHROMIUM_EXTENSIONS);
   if (!response_result.has_value()) {
     LOG(ERROR) << "Provisioning JSONReader failed: "
                << response_result.error().message;

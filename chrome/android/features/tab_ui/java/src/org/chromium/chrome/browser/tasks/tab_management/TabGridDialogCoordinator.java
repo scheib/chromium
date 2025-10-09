@@ -29,7 +29,6 @@ import org.chromium.base.TraceEvent;
 import org.chromium.base.supplier.LazyOneshotSupplier;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.base.supplier.Supplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.bookmarks.TabBookmarker;
@@ -73,6 +72,7 @@ import org.chromium.ui.widget.AnchoredPopupWindow;
 import org.chromium.ui.widget.ViewRectProvider;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * A coordinator for TabGridDialog component. Manages the communication with {@link
@@ -416,9 +416,10 @@ public class TabGridDialogCoordinator implements TabGridDialogMediator.DialogCon
                         mModel.get(TabGridDialogProperties.IS_INCOGNITO),
                         ColorPickerLayoutType.DOUBLE_ROW,
                         () -> {
-                            assumeNonNull(mColorIconPopupWindow);
-                            mColorIconPopupWindow.dismiss();
-                            mColorIconPopupWindow = null;
+                            if (mColorIconPopupWindow != null) {
+                                mColorIconPopupWindow.dismiss();
+                                mColorIconPopupWindow = null;
+                            }
                             onDismissListener.onDismiss();
                         });
         mColorPickerCoordinator.setSelectedColorItem(
